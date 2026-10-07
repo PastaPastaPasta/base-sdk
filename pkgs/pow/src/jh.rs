@@ -4,21 +4,21 @@
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
 
-//! SIMD JH-512 implementation.
+//! JH-512 hash function.
 
-use super::consts::{BLOCK, IV, ROUND_CONSTS};
+use crate::consts::jh::{BLOCK, IV, ROUND_CONSTS};
 use crate::util::memops::{load_u64_le, store_u64_le};
 
-use core::simd::{simd_swizzle, Simd};
+use wide::u32x4;
 
 /// One 128-bit JH row, stored as four 32-bit lanes.
-pub type Row = Simd<u32, 4>;
+pub type Row = u32x4;
 /// JH state as eight 128-bit rows.
 type State = [Row; 8];
 
 #[inline]
 pub fn row_from_u64_pair(pair: [u64; 2]) -> Row {
-  Row::from_array([
+  Row::new([
     pair[0] as u32,
     (pair[0] >> 32) as u32,
     pair[1] as u32,
@@ -67,31 +67,41 @@ fn apply_linear_layer(y: &mut [Row; 8]) {
 /// Swaps every adjacent bit pair: `(b0, b1) -> (b1, b0)`.
 #[inline]
 fn swap_adjacent_bits(x: Row) -> Row {
-  ((x & Row::splat(0x5555_5555)) << Simd::splat(1)) | ((x & Row::splat(0xaaaa_aaaa)) >> Simd::splat(1))
+  const LO: Row = Row::splat(0x5555_5555);
+  const HI: Row = Row::splat(0xaaaa_aaaa);
+  ((x & LO) << 1u32) | ((x & HI) >> 1u32)
 }
 
 /// Swaps 2-bit groups inside each 4-bit chunk.
 #[inline]
 fn swap_bit_pairs(x: Row) -> Row {
-  ((x & Row::splat(0x3333_3333)) << Simd::splat(2)) | ((x & Row::splat(0xcccc_cccc)) >> Simd::splat(2))
+  const LO: Row = Row::splat(0x3333_3333);
+  const HI: Row = Row::splat(0xcccc_cccc);
+  ((x & LO) << 2u32) | ((x & HI) >> 2u32)
 }
 
 /// Swaps the low and high nibble inside each byte.
 #[inline]
 fn swap_nibbles(x: Row) -> Row {
-  ((x & Row::splat(0x0f0f_0f0f)) << Simd::splat(4)) | ((x & Row::splat(0xf0f0_f0f0)) >> Simd::splat(4))
+  const LO: Row = Row::splat(0x0f0f_0f0f);
+  const HI: Row = Row::splat(0xf0f0_f0f0);
+  ((x & LO) << 4u32) | ((x & HI) >> 4u32)
 }
 
 /// Swaps the low and high byte inside each 16-bit chunk.
 #[inline]
 fn swap_bytes_in_half_words(x: Row) -> Row {
-  ((x & Row::splat(0x00ff_00ff)) << Simd::splat(8)) | ((x & Row::splat(0xff00_ff00)) >> Simd::splat(8))
+  const LO: Row = Row::splat(0x00ff_00ff);
+  const HI: Row = Row::splat(0xff00_ff00);
+  ((x & LO) << 8u32) | ((x & HI) >> 8u32)
 }
 
 /// Swaps the low and high 16-bit halves inside each 32-bit word.
 #[inline]
 fn swap_half_words(x: Row) -> Row {
-  ((x & Row::splat(0x0000_ffff)) << Simd::splat(16)) | ((x & Row::splat(0xffff_0000)) >> Simd::splat(16))
+  const LO: Row = Row::splat(0x0000_ffff);
+  const HI: Row = Row::splat(0xffff_0000);
+  ((x & LO) << 16u32) | ((x & HI) >> 16u32)
 }
 
 /// Applies the S-box and linear layer to all eight rows.
@@ -143,6 +153,8 @@ fn apply_round_core(state: &mut State, constants: [u64; 4]) {
 /// dispatch disappears entirely.
 #[inline(always)]
 fn apply_swap<const OP: usize>(state: &mut State) {
+  const SWAP_WORDS: Row = Row::new([1, 0, 3, 2]);
+  const SWAP_DWORDS: Row = Row::new([2, 3, 0, 1]);
   let mut row = 1;
   while row < 8 {
     match OP {
@@ -151,8 +163,8 @@ fn apply_swap<const OP: usize>(state: &mut State) {
       2 => state[row] = swap_nibbles(state[row]),
       3 => state[row] = swap_bytes_in_half_words(state[row]),
       4 => state[row] = swap_half_words(state[row]),
-      5 => state[row] = simd_swizzle!(state[row], [1, 0, 3, 2]),
-      6 => state[row] = simd_swizzle!(state[row], [2, 3, 0, 1]),
+      5 => state[row] = state[row].shuffle(SWAP_WORDS),
+      6 => state[row] = state[row].shuffle(SWAP_DWORDS),
       _ => {}
     }
     row += 2;
@@ -256,4 +268,15 @@ pub fn hash512(data: &[u8]) -> [u8; 64] {
     row += 1;
   }
   out
+}
+
+#[cfg(test)]
+mod tests {
+  use super::hash512;
+  use crate::tests::run_nist_kat;
+
+  #[test]
+  fn nist_kat() {
+    run_nist_kat("jh", hash512);
+  }
 }

@@ -9,4 +9,5 @@
 pub(crate) mod blake;
 pub(crate) mod bmw;
 pub(crate) mod groestl;
+pub(crate) mod jh;
 pub(crate) mod skein;

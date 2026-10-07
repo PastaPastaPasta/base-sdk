@@ -33,8 +33,6 @@ name = "cubehash"
 [[test]]
 name = "echo"
 [[test]]
-name = "jh"
-[[test]]
 name = "keccak"
 [[test]]
 name = "luffa"
