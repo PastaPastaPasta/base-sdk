@@ -4,21 +4,24 @@
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
 
-//! SIMD Groestl-512 implementation.
+//! Groestl-512 hash function.
 
-use super::consts::{BLOCK, IV_ROWS, RC_P, RC_Q, ROUNDS, SUBSH_P, SUBSH_Q};
-use crate::aes::{sub_shift as aes_sub_shift, Block};
+use crate::aes::sub_shift as aes_sub_shift;
+use crate::consts::groestl::{BLOCK, IV_ROWS, RC_P, RC_Q, ROUNDS, SUBSH_P, SUBSH_Q};
 
-use core::simd::num::{SimdInt, SimdUint};
-use core::simd::Simd;
+use wide::{i8x16, u8x16};
 
-type Row = Simd<u8, 16>;
+/// One row of the byte-sliced state, a byte per column.
+pub type Row = u8x16;
 
 /// Multiplies each byte by `x` in `GF(2^8)`.
+///
+/// Doubling by addition and a sign compare avoid byte shifts, which some
+/// backends lack.
 #[inline(always)]
 fn mul2(row: Row) -> Row {
-  let mask = (row.cast::<i8>() >> Simd::splat(7i8)).cast::<u8>();
-  (row << Simd::splat(1)) ^ (mask & Row::splat(0x1B))
+  let mask = row.cast_signed().simd_lt(i8x16::splat(0)).cast_unsigned();
+  (row + row) ^ (mask & Row::splat(0x1B))
 }
 
 /// Applies the byte-sliced MixBytes transform to eight rows.
@@ -114,7 +117,7 @@ fn mix_bytes(rows: &mut [Row; 8]) {
 
 #[inline(always)]
 fn add_rc_p(rows: &mut [Row; 8], round: usize) {
-  rows[0] ^= Row::from_array(RC_P[round]);
+  rows[0] ^= Row::new(RC_P[round]);
 }
 
 #[inline(always)]
@@ -127,7 +130,7 @@ fn add_rc_q(rows: &mut [Row; 8], round: usize) {
   rows[4] ^= ff;
   rows[5] ^= ff;
   rows[6] ^= ff;
-  rows[7] ^= Row::from_array(RC_Q[round]);
+  rows[7] ^= Row::new(RC_Q[round]);
 }
 
 /// Applies SubBytes and the row shifts with one AES instruction per row.
@@ -138,8 +141,7 @@ fn add_rc_q(rows: &mut [Row; 8], round: usize) {
 fn sub_shift(rows: &mut [Row; 8], masks: &[[u8; 16]; 8]) {
   let mut row = 0;
   while row < 8 {
-    let shifted = Block::new(rows[row].to_array()).shuffle(Block::new(masks[row]));
-    rows[row] = Row::from_array(aes_sub_shift(shifted).to_array());
+    rows[row] = aes_sub_shift(rows[row].shuffle(Row::new(masks[row])));
     row += 1;
   }
 }
@@ -183,7 +185,7 @@ fn load_block(block: &[u8; BLOCK]) -> [Row; 8] {
       bytes[col] = block[col * 8 + row];
       col += 1;
     }
-    rows[row] = Row::from_array(bytes);
+    rows[row] = Row::new(bytes);
     row += 1;
   }
   rows
@@ -246,7 +248,7 @@ pub fn hash512(data: &[u8]) -> [u8; 64] {
   let mut chaining_value = [Row::splat(0); 8];
   let mut row = 0;
   while row < 8 {
-    chaining_value[row] = Row::from_array(IV_ROWS[row]);
+    chaining_value[row] = Row::new(IV_ROWS[row]);
     row += 1;
   }
 
@@ -288,4 +290,15 @@ pub fn hash512(data: &[u8]) -> [u8; 64] {
   let mut out = [0u8; 64];
   extract_right_half(&chaining_value, &mut out);
   out
+}
+
+#[cfg(test)]
+mod tests {
+  use super::hash512;
+  use crate::tests::run_nist_kat;
+
+  #[test]
+  fn nist_kat() {
+    run_nist_kat("groestl", hash512);
+  }
 }

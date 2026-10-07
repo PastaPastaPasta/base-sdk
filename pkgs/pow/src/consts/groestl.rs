@@ -6,14 +6,8 @@
 
 //! Groestl-512 constants.
 
-use crate::aes::consts::SBOX;
-use crate::util::math::gf2_mul;
-
 pub(crate) const BLOCK: usize = 128;
 pub(crate) const ROUNDS: usize = 14;
-
-/// Groestl MDS column 0 in byte order from row 0 to row 7.
-const MDS_COL0: [u8; 8] = [0x02, 0x07, 0x05, 0x03, 0x05, 0x04, 0x03, 0x02];
 
 /// IV with the 512-bit output size encoded in the last column.
 pub(crate) const IV: [u64; 16] = {
@@ -24,7 +18,6 @@ pub(crate) const IV: [u64; 16] = {
 };
 
 /// IV unpacked into the row-wise layout used by the SIMD backend.
-#[cfg(any(test, feature = "simd"))]
 pub(crate) const IV_ROWS: [[u8; 16]; 8] = {
   let mut rows = [[0u8; 16]; 8];
   let mut row = 0;
@@ -39,37 +32,7 @@ pub(crate) const IV_ROWS: [[u8; 16]; 8] = {
   rows
 };
 
-/// `T0[s]` stores MDS column 0 multiplied by `SBOX[s]`.
-pub(crate) const T0: [u64; 256] = {
-  let mut table = [0u64; 256];
-  let mut i = 0;
-  while i < 256 {
-    let s = SBOX[i];
-    let mut word = 0u64;
-    let mut row = 0;
-    while row < 8 {
-      word |= (gf2_mul(MDS_COL0[row], s) as u64) << (row * 8);
-      row += 1;
-    }
-    table[i] = word;
-    i += 1;
-  }
-  table
-};
-
-/// `T4[s]` is `T0[s]` rotated by four byte positions.
-pub(crate) const T4: [u64; 256] = {
-  let mut table = [0u64; 256];
-  let mut i = 0;
-  while i < 256 {
-    table[i] = T0[i].rotate_left(32);
-    i += 1;
-  }
-  table
-};
-
 /// Round constants xored into row 0 of the `P` permutation.
-#[cfg(any(test, feature = "simd"))]
 pub(crate) const RC_P: [[u8; 16]; ROUNDS] = {
   let mut rc = [[0u8; 16]; ROUNDS];
   let mut round = 0;
@@ -85,7 +48,6 @@ pub(crate) const RC_P: [[u8; 16]; ROUNDS] = {
 };
 
 /// Round constants xored into row 7 of the `Q` permutation.
-#[cfg(any(test, feature = "simd"))]
 pub(crate) const RC_Q: [[u8; 16]; ROUNDS] = {
   let mut rc = [[0u8; 16]; ROUNDS];
   let mut round = 0;
@@ -101,7 +63,6 @@ pub(crate) const RC_Q: [[u8; 16]; ROUNDS] = {
 };
 
 /// AES ShiftRows source index for a 4x4 column-major row.
-#[cfg(any(test, feature = "simd"))]
 const fn aes_shift_rows_source(dst: usize) -> usize {
   let row = dst % 4;
   let col = dst / 4;
@@ -109,7 +70,6 @@ const fn aes_shift_rows_source(dst: usize) -> usize {
 }
 
 /// Fused SubBytes + ShiftBytes masks for the `P` permutation.
-#[cfg(any(test, feature = "simd"))]
 pub(crate) const SUBSH_P: [[u8; 16]; 8] = {
   const SHIFTS: [usize; 8] = [0, 1, 2, 3, 4, 5, 6, 11];
   let mut masks = [[0u8; 16]; 8];
@@ -126,7 +86,6 @@ pub(crate) const SUBSH_P: [[u8; 16]; 8] = {
 };
 
 /// Fused SubBytes + ShiftBytes masks for the `Q` permutation.
-#[cfg(feature = "simd")]
 pub(crate) const SUBSH_Q: [[u8; 16]; 8] = {
   const SHIFTS: [usize; 8] = [1, 3, 5, 11, 0, 2, 4, 6];
   let mut masks = [[0u8; 16]; 8];
@@ -145,17 +104,6 @@ pub(crate) const SUBSH_Q: [[u8; 16]; 8] = {
 #[cfg(test)]
 mod tests {
   use super::*;
-
-  #[test]
-  fn spot_check_t0() {
-    assert_eq!(T0[0x00], 0xc632f4a5f497a5c6_u64.swap_bytes());
-    assert_eq!(T0[0x01], 0xf86f978497eb84f8_u64.swap_bytes());
-  }
-
-  #[test]
-  fn spot_check_t4() {
-    assert_eq!(T4[0x00], T0[0x00].rotate_left(32));
-  }
 
   #[test]
   fn verify_iv() {

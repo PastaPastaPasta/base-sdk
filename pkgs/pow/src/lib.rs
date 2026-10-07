@@ -57,7 +57,7 @@ compile_error!("dash-pow requires 128-bit SIMD, build with `-C target-feature=+s
 
 #[cfg_attr(
   not(any(test, feature = "simd")),
-  expect(dead_code, unused_imports, reason = "only the SIMD backends use the block interface")
+  expect(dead_code, reason = "only the SIMD backends use the block interface")
 )]
 mod aes;
 mod blake;
