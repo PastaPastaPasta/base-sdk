@@ -14,4 +14,5 @@ pub(crate) mod jh;
 pub(crate) mod keccak;
 pub(crate) mod luffa;
 pub(crate) mod shavite;
+pub(crate) mod simd;
 pub(crate) mod skein;

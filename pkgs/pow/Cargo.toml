@@ -30,8 +30,6 @@ rstest = { workspace = true }
 
 [[test]]
 name = "echo"
-[[test]]
-name = "simd_hash"
 [[bench]]
 name = "pow"
 path = "bench/main.rs"

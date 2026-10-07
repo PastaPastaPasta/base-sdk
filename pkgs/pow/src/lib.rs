@@ -66,7 +66,7 @@ mod jh;
 mod keccak;
 mod luffa;
 mod shavite;
-mod simd_hash;
+mod simd;
 mod skein;
 #[cfg(test)]
 mod tests;
@@ -101,8 +101,8 @@ pub mod __private {
   pub mod shavite {
     pub use crate::shavite::*;
   }
-  pub mod simd_hash {
-    pub use crate::simd_hash::*;
+  pub mod simd {
+    pub use crate::simd::*;
   }
   pub mod skein {
     pub use crate::skein::*;
@@ -123,7 +123,7 @@ pub fn hash(data: &[u8]) -> [u8; 32] {
   let h = luffa::hash512(&h);
   let h = cubehash::hash512(&h);
   let h = shavite::hash512(&h);
-  let h = simd_hash::hash512(&h);
+  let h = simd::hash512(&h);
   let h = echo::hash512(&h);
   let mut out = [0u8; 32];
   out.copy_from_slice(&h[..32]);

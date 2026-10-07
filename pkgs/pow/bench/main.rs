@@ -46,7 +46,7 @@ bench_algo!(jh);
 bench_algo!(keccak);
 bench_algo!(luffa);
 bench_algo!(shavite);
-bench_algo!(simd_hash);
+bench_algo!(simd);
 bench_algo!(skein);
 
 fn main() {

@@ -4,19 +4,18 @@
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
 
-//! SIMD implementation of SIMD-512.
+//! SIMD-512 hash function.
 
-use super::consts::{ALPHA_TAB, BLOCK, IV, PP8K, WBP, YOFF_B_F, YOFF_B_N};
+use crate::consts::simd::{ALPHA_TAB, BLOCK, IV, PP8K, WBP, YOFF_B_F, YOFF_B_N};
 use crate::util::memops::{load_u32_le, store_u32_le};
 
-use core::simd::cmp::SimdPartialOrd;
-use core::simd::{simd_swizzle, Select, Simd};
+use wide::{i32x4, i32x8, u32x8};
 
 pub(super) type BlockWords = [u32; 32];
-type WordVec = Simd<u32, 8>;
-type IntVec = Simd<i32, 8>;
-type Int4 = Simd<i32, 4>;
-const FFT16_SHIFTS: IntVec = IntVec::from_array([0, 1, 2, 3, 4, 5, 6, 7]);
+type WordVec = u32x8;
+type IntVec = i32x8;
+type Int4 = i32x4;
+const FFT16_SHIFTS: IntVec = IntVec::new([0, 1, 2, 3, 4, 5, 6, 7]);
 
 #[inline(always)]
 fn reds1(x: i32) -> i32 {
@@ -31,22 +30,25 @@ fn reds2(x: i32) -> i32 {
 
 #[inline(always)]
 fn reds1_vec(x: IntVec) -> IntVec {
-  (x & IntVec::splat(0xFF)) - (x >> IntVec::splat(8))
+  const MASK: IntVec = IntVec::splat(0xFF);
+  (x & MASK) - (x >> 8u32)
 }
 
 #[inline(always)]
 fn reds2_vec(x: IntVec) -> IntVec {
-  (x & IntVec::splat(0xFFFF)) + (x >> IntVec::splat(16))
+  const MASK: IntVec = IntVec::splat(0xFFFF);
+  (x & MASK) + (x >> 16u32)
 }
 
 #[inline(always)]
 fn reds2_vec4(x: Int4) -> Int4 {
-  (x & Int4::splat(0xFFFF)) + (x >> Int4::splat(16))
+  const MASK: Int4 = Int4::splat(0xFFFF);
+  (x & MASK) + (x >> 16u32)
 }
 
 #[inline(always)]
 fn load_yoff_vec(yoff: &[u16; 256], index: usize) -> IntVec {
-  IntVec::from_array([
+  IntVec::new([
     yoff[index] as i32,
     yoff[index + 1] as i32,
     yoff[index + 2] as i32,
@@ -60,7 +62,7 @@ fn load_yoff_vec(yoff: &[u16; 256], index: usize) -> IntVec {
 
 #[inline(always)]
 fn load_alpha_vec(v: usize, a_stride: usize) -> Int4 {
-  Int4::from_array([
+  Int4::new([
     ALPHA_TAB[v],
     ALPHA_TAB[v + a_stride],
     ALPHA_TAB[v + 2 * a_stride],
@@ -70,7 +72,7 @@ fn load_alpha_vec(v: usize, a_stride: usize) -> Int4 {
 
 #[inline(always)]
 fn load_alpha_head(a_stride: usize) -> Int4 {
-  Int4::from_array([
+  Int4::new([
     ALPHA_TAB[0],
     ALPHA_TAB[a_stride],
     ALPHA_TAB[2 * a_stride],
@@ -80,7 +82,7 @@ fn load_alpha_head(a_stride: usize) -> Int4 {
 
 #[inline(always)]
 fn load_int4(words: &[i32], offset: usize) -> Int4 {
-  Int4::from_array([words[offset], words[offset + 1], words[offset + 2], words[offset + 3]])
+  Int4::new([words[offset], words[offset + 1], words[offset + 2], words[offset + 3]])
 }
 
 #[inline(always)]
@@ -94,7 +96,7 @@ fn store_int4(words: &mut [i32], offset: usize, value: Int4) {
 
 #[inline(always)]
 fn load_int8(words: &[i32], offset: usize) -> IntVec {
-  IntVec::from_array([
+  IntVec::new([
     words[offset],
     words[offset + 1],
     words[offset + 2],
@@ -131,8 +133,8 @@ fn fft8(x: &[u8], xb: usize, xs: usize, d: &mut [i32; 8]) {
   let b1 = reds1((x1 << 2) + (x3 << 6));
   let b2 = (x1 << 4) - (x3 << 4);
   let b3 = reds1((x1 << 6) + (x3 << 2));
-  let a = Int4::from_array([a0, a1, a2, a3]);
-  let b = Int4::from_array([b0, b1, b2, b3]);
+  let a = Int4::new([a0, a1, a2, a3]);
+  let b = Int4::new([b0, b1, b2, b3]);
   store_int4(d, 0, a + b);
   store_int4(d, 4, a - b);
 }
@@ -143,8 +145,8 @@ fn fft16(x: &[u8], xb: usize, xs: usize, q: &mut [i32], rb: usize) {
   let mut d2 = [0i32; 8];
   fft8(x, xb, xs << 1, &mut d1);
   fft8(x, xb + xs, xs << 1, &mut d2);
-  let left = IntVec::from_array(d1);
-  let right = IntVec::from_array(d2) << FFT16_SHIFTS;
+  let left = IntVec::new(d1);
+  let right = IntVec::new(d2) << FFT16_SHIFTS;
   store_int8(q, rb, left + right);
   store_int8(q, rb + 8, left - right);
 }
@@ -156,8 +158,8 @@ fn fft_loop(q: &mut [i32], rb: usize, hk: usize, a_stride: usize) {
   let m = load_int4(q, rb);
   let n = load_int4(q, rb + hk);
   let mut t = reds2_vec4(n * load_alpha_head(a_stride)).to_array();
-  t[0] = n[0];
-  let t = Int4::from_array(t);
+  t[0] = n.as_array()[0];
+  let t = Int4::new(t);
   store_int4(q, rb, m + t);
   store_int4(q, rb + hk, m - t);
 
@@ -204,6 +206,8 @@ fn fft256(x: &[u8], q: &mut [i32]) {
 /// Reduces each NTT output into the signed `[-128, 128]` range.
 #[inline(always)]
 fn reduce_fft(q: &mut [i32], yoff: &[u16; 256]) {
+  const MODULUS: IntVec = IntVec::splat(257);
+  const HALF: IntVec = IntVec::splat(128);
   let mut i = 0;
   while i < 256 {
     let mut tq = load_int8(q, i) + load_yoff_vec(yoff, i);
@@ -212,8 +216,8 @@ fn reduce_fft(q: &mut [i32], yoff: &[u16; 256]) {
     tq = reds1_vec(tq);
     // The transform works modulo 257. Values above 128 are rewritten as the
     // equivalent negative representative by subtracting one modulus.
-    let reduced = tq - IntVec::splat(257);
-    let mask = tq.simd_le(IntVec::splat(128));
+    let reduced = tq - MODULUS;
+    let mask = tq.simd_le(HALF);
     store_int8(q, i, mask.select(tq, reduced));
     i += 8;
   }
@@ -255,26 +259,36 @@ fn simd_maj(x: u32, y: u32, z: u32) -> u32 {
 
 #[inline(always)]
 fn rotate_left_vec(x: WordVec, shift: u32) -> WordVec {
-  (x << Simd::splat(shift)) | (x >> Simd::splat(32 - shift))
+  (x << shift) | (x >> (32 - shift))
 }
 
 #[inline(always)]
 fn xor_permute(x: WordVec, mask: usize) -> WordVec {
+  // Lane `i` reads lane `i ^ mask`.
+  const PERMS: [WordVec; 8] = {
+    let mut perms = [WordVec::splat(0); 8];
+    let mut mask = 0;
+    while mask < 8 {
+      let mut lanes = [0u32; 8];
+      let mut lane = 0;
+      while lane < 8 {
+        lanes[lane] = (lane ^ mask) as u32;
+        lane += 1;
+      }
+      perms[mask] = WordVec::new(lanes);
+      mask += 1;
+    }
+    perms
+  };
   match mask {
-    1 => simd_swizzle!(x, [1, 0, 3, 2, 5, 4, 7, 6]),
-    2 => simd_swizzle!(x, [2, 3, 0, 1, 6, 7, 4, 5]),
-    3 => simd_swizzle!(x, [3, 2, 1, 0, 7, 6, 5, 4]),
-    4 => simd_swizzle!(x, [4, 5, 6, 7, 0, 1, 2, 3]),
-    5 => simd_swizzle!(x, [5, 4, 7, 6, 1, 0, 3, 2]),
-    6 => simd_swizzle!(x, [6, 7, 4, 5, 2, 3, 0, 1]),
-    7 => simd_swizzle!(x, [7, 6, 5, 4, 3, 2, 1, 0]),
+    1..=7 => x.shuffle(PERMS[mask]),
     _ => x,
   }
 }
 
 #[inline(always)]
 fn load_word_vec(state: &[u32; 32], offset: usize) -> WordVec {
-  WordVec::from_array([
+  WordVec::new([
     state[offset],
     state[offset + 1],
     state[offset + 2],
@@ -288,7 +302,7 @@ fn load_word_vec(state: &[u32; 32], offset: usize) -> WordVec {
 
 #[inline(always)]
 fn load_schedule_vec(words: &[u32], offset: usize) -> WordVec {
-  WordVec::from_array([
+  WordVec::new([
     words[offset],
     words[offset + 1],
     words[offset + 2],
@@ -444,4 +458,15 @@ pub fn hash512(data: &[u8]) -> [u8; 64] {
     i += 1;
   }
   out
+}
+
+#[cfg(test)]
+mod tests {
+  use super::hash512;
+  use crate::tests::run_nist_kat;
+
+  #[test]
+  fn nist_kat() {
+    run_nist_kat("simd", hash512);
+  }
 }
