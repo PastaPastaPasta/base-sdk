@@ -4,46 +4,36 @@
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
 
-//! SIMD CubeHash-16/32-512 implementation.
+//! CubeHash-16/32-512 hash function.
 
-use super::consts::{BLOCK, IV};
+use crate::consts::cubehash::{BLOCK, IV};
+use crate::util::arx::rotl_u32x4;
 use crate::util::memops::{load_u32_le, store_u32_le};
 
-use core::simd::Simd;
+use wide::u32x4;
 
 /// Four neighbouring state words packed into one group.
-pub type U32x4 = Simd<u32, 4>;
-
-/// Rotate each lane of a `Simd<u32, 4>` value left by `shift` bits.
-#[inline]
-fn rotl_u32x4(words: U32x4, shift: u32) -> U32x4 {
-  if shift == 0 {
-    return words;
-  }
-  let left = words << Simd::splat(shift);
-  let right = words >> Simd::splat(32 - shift);
-  left | right
-}
+pub type U32x4 = u32x4;
 
 #[inline]
 /// Swaps the low and high 2-word halves inside one 4-word register.
 fn swap_halves(words: U32x4) -> U32x4 {
   let lanes = words.to_array();
-  U32x4::from_array([lanes[2], lanes[3], lanes[0], lanes[1]])
+  U32x4::new([lanes[2], lanes[3], lanes[0], lanes[1]])
 }
 
 #[inline]
 /// Swaps each adjacent 2-word pair inside one 4-word register.
 fn swap_pairs(words: U32x4) -> U32x4 {
   let lanes = words.to_array();
-  U32x4::from_array([lanes[1], lanes[0], lanes[3], lanes[2]])
+  U32x4::new([lanes[1], lanes[0], lanes[3], lanes[2]])
 }
 
 #[inline]
 /// Loads one 4-word register from the flat 32-word state.
 pub fn load_vec(words: &[u32; 32], index: usize) -> U32x4 {
   let base = index * 4;
-  U32x4::from_array([words[base], words[base + 1], words[base + 2], words[base + 3]])
+  U32x4::new([words[base], words[base + 1], words[base + 2], words[base + 3]])
 }
 
 #[inline]
@@ -61,13 +51,13 @@ fn store_vec(words: &mut [u32; 32], index: usize, value: U32x4) {
 /// Reads one 32-byte block as the two registers xored into state.
 fn load_block(block: &[u8]) -> (U32x4, U32x4) {
   (
-    U32x4::from_array([
+    U32x4::new([
       load_u32_le(block, 0),
       load_u32_le(block, 1),
       load_u32_le(block, 2),
       load_u32_le(block, 3),
     ]),
-    U32x4::from_array([
+    U32x4::new([
       load_u32_le(block, 4),
       load_u32_le(block, 5),
       load_u32_le(block, 6),
@@ -168,7 +158,7 @@ pub fn hash512(data: &[u8]) -> [u8; 64] {
 
   // Finalization: xor 1 into the last state word, then run ten more
   // 16-round sets.
-  state[7] ^= U32x4::from_array([0, 0, 0, 1]);
+  state[7] ^= U32x4::new([0, 0, 0, 1]);
   let mut i = 0;
   while i < 10 {
     sixteen_rounds(&mut state);
@@ -188,4 +178,15 @@ pub fn hash512(data: &[u8]) -> [u8; 64] {
     i += 1;
   }
   out
+}
+
+#[cfg(test)]
+mod tests {
+  use super::hash512;
+  use crate::tests::run_nist_kat;
+
+  #[test]
+  fn nist_kat() {
+    run_nist_kat("cubehash", hash512);
+  }
 }
