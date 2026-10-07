@@ -10,7 +10,8 @@
 //! constants are generated from the Appendix B-1 seeds with the Section 4.4
 //! Galois LFSR.
 
-/// Initial state for the five 256-bit branches.
+use wide::u32x4;
+
 /// Block size in bytes.
 pub(crate) const BLOCK: usize = 32;
 
@@ -81,39 +82,27 @@ pub(crate) const RC: [[[u32; 8]; 2]; 5] = {
   rc
 };
 
-#[cfg(feature = "simd")]
-mod simd_consts {
-  use super::RC;
+/// Packed constants for branches 0 through 3, word 0.
+pub(crate) const RC_FIRST4_LOW: [u32x4; 8] = {
+  let mut rc = [u32x4::splat(0); 8];
+  let mut round = 0;
+  while round < 8 {
+    rc[round] = u32x4::new([RC[0][0][round], RC[1][0][round], RC[2][0][round], RC[3][0][round]]);
+    round += 1;
+  }
+  rc
+};
 
-  use core::simd::Simd;
-
-  type WordVec = Simd<u32, 4>;
-
-  /// Packed constants for branches 0 through 3, word 0.
-  pub(crate) const RC_FIRST4_LOW: [WordVec; 8] = {
-    let mut rc = [Simd::splat(0); 8];
-    let mut round = 0;
-    while round < 8 {
-      rc[round] = Simd::from_array([RC[0][0][round], RC[1][0][round], RC[2][0][round], RC[3][0][round]]);
-      round += 1;
-    }
-    rc
-  };
-
-  /// Packed constants for branches 0 through 3, word 4.
-  pub(crate) const RC_FIRST4_HIGH: [WordVec; 8] = {
-    let mut rc = [Simd::splat(0); 8];
-    let mut round = 0;
-    while round < 8 {
-      rc[round] = Simd::from_array([RC[0][1][round], RC[1][1][round], RC[2][1][round], RC[3][1][round]]);
-      round += 1;
-    }
-    rc
-  };
-}
-
-#[cfg(feature = "simd")]
-pub(crate) use simd_consts::{RC_FIRST4_HIGH, RC_FIRST4_LOW};
+/// Packed constants for branches 0 through 3, word 4.
+pub(crate) const RC_FIRST4_HIGH: [u32x4; 8] = {
+  let mut rc = [u32x4::splat(0); 8];
+  let mut round = 0;
+  while round < 8 {
+    rc[round] = u32x4::new([RC[0][1][round], RC[1][1][round], RC[2][1][round], RC[3][1][round]]);
+    round += 1;
+  }
+  rc
+};
 
 #[cfg(test)]
 mod tests {

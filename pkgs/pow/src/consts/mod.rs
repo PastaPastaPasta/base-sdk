@@ -11,4 +11,5 @@ pub(crate) mod bmw;
 pub(crate) mod groestl;
 pub(crate) mod jh;
 pub(crate) mod keccak;
+pub(crate) mod luffa;
 pub(crate) mod skein;

@@ -4,15 +4,15 @@
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
 
-//! SIMD Luffa-512 implementation.
+//! Luffa-512 hash function.
 
-use super::consts::{BLOCK, IV, RC, RC_FIRST4_HIGH, RC_FIRST4_LOW};
+use crate::consts::luffa::{BLOCK, IV, RC, RC_FIRST4_HIGH, RC_FIRST4_LOW};
 use crate::util::arx::rotl_u32x4;
 use crate::util::memops::{load_u32_le, store_u32_le};
 
-use core::simd::Simd;
+use wide::u32x4;
 
-type WordVec = Simd<u32, 4>;
+type WordVec = u32x4;
 
 /// Applies the 4-input bitslice S-box to four selected words.
 #[inline(always)]
@@ -226,17 +226,17 @@ fn load_block_words(buf: &[u8]) -> [u32; 8] {
 /// permutation, then writes the results back.
 ///
 /// Each lane holds the same word index from one branch. That lets one
-/// `Simd<u32, 4>` instruction update four branches at once while keeping the
+/// `u32x4` instruction update four branches at once while keeping the
 /// branch-local message injection and finalization code unchanged.
 fn permute_first_four_branches(state: &mut [[u32; 8]; 5]) {
-  let mut x0 = WordVec::from_array([state[0][0], state[1][0], state[2][0], state[3][0]]);
-  let mut x1 = WordVec::from_array([state[0][1], state[1][1], state[2][1], state[3][1]]);
-  let mut x2 = WordVec::from_array([state[0][2], state[1][2], state[2][2], state[3][2]]);
-  let mut x3 = WordVec::from_array([state[0][3], state[1][3], state[2][3], state[3][3]]);
-  let mut x4 = WordVec::from_array([state[0][4], state[1][4], state[2][4], state[3][4]]);
-  let mut x5 = WordVec::from_array([state[0][5], state[1][5], state[2][5], state[3][5]]);
-  let mut x6 = WordVec::from_array([state[0][6], state[1][6], state[2][6], state[3][6]]);
-  let mut x7 = WordVec::from_array([state[0][7], state[1][7], state[2][7], state[3][7]]);
+  let mut x0 = WordVec::new([state[0][0], state[1][0], state[2][0], state[3][0]]);
+  let mut x1 = WordVec::new([state[0][1], state[1][1], state[2][1], state[3][1]]);
+  let mut x2 = WordVec::new([state[0][2], state[1][2], state[2][2], state[3][2]]);
+  let mut x3 = WordVec::new([state[0][3], state[1][3], state[2][3], state[3][3]]);
+  let mut x4 = WordVec::new([state[0][4], state[1][4], state[2][4], state[3][4]]);
+  let mut x5 = WordVec::new([state[0][5], state[1][5], state[2][5], state[3][5]]);
+  let mut x6 = WordVec::new([state[0][6], state[1][6], state[2][6], state[3][6]]);
+  let mut x7 = WordVec::new([state[0][7], state[1][7], state[2][7], state[3][7]]);
 
   let mut round = 0;
   while round < 8 {
@@ -304,4 +304,15 @@ pub fn hash512(data: &[u8]) -> [u8; 64] {
   }
 
   out
+}
+
+#[cfg(test)]
+mod tests {
+  use super::hash512;
+  use crate::tests::run_nist_kat;
+
+  #[test]
+  fn nist_kat() {
+    run_nist_kat("luffa", hash512);
+  }
 }

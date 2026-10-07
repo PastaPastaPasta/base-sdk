@@ -7,13 +7,23 @@
 //! SIMD CubeHash-16/32-512 implementation.
 
 use super::consts::{BLOCK, IV};
-use crate::util::arx::rotl_u32x4;
 use crate::util::memops::{load_u32_le, store_u32_le};
 
 use core::simd::Simd;
 
 /// Four neighbouring state words packed into one group.
 pub type U32x4 = Simd<u32, 4>;
+
+/// Rotate each lane of a `Simd<u32, 4>` value left by `shift` bits.
+#[inline]
+fn rotl_u32x4(words: U32x4, shift: u32) -> U32x4 {
+  if shift == 0 {
+    return words;
+  }
+  let left = words << Simd::splat(shift);
+  let right = words >> Simd::splat(32 - shift);
+  left | right
+}
 
 #[inline]
 /// Swaps the low and high 2-word halves inside one 4-word register.
