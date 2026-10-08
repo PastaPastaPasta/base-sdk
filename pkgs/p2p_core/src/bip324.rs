@@ -12,30 +12,26 @@ use crate::ctx::ProtoCtx;
 use crate::msg::{DecodedMsg, P2pMsg};
 use crate::prelude::*;
 use crate::short_id::ShortId;
+use crate::version::ProtocolVersion;
 use crate::P2pDecodeError;
 
 use dash_types::type_id::Unencodable;
 
-/// Encodes a `P2pMsg` into V2 framed bytes.
-pub fn encode_v2(msg: &P2pMsg, buf: &mut Vec<u8>) {
-  match msg.short_id() {
-    Some(id) => {
-      buf.push(id.0);
-    }
+/// Encodes a `P2pMsg` into V2 packet contents for a peer whose common
+/// version is `peer_version`, as Core's `V2Transport::SetMessageToSend` does.
+///
+/// The short ID goes out only from the version [`ShortId::for_send`] gives;
+/// otherwise the 13-byte long format, a zero byte and the command.
+pub fn encode_v2(msg: &P2pMsg, peer_version: ProtocolVersion, buf: &mut Vec<u8>) {
+  let command = msg.command();
+  match ShortId::for_send(&command, peer_version) {
+    Some(id) => buf.push(id.0),
     None => {
-      // Long format: ID 0 + 12-byte command string.
-      buf.push(0);
-      let cmd = msg.command();
-      buf.extend_from_slice(cmd.as_bytes());
+      buf.push(ShortId::LONG_FORMAT.0);
+      buf.extend_from_slice(command.as_bytes());
     }
   }
   msg.encode_payload(buf);
-}
-
-/// Whether Core gives the short ID a slot: Bitcoin's 1 to 32, Dash's 128 to
-/// 168 (`IsValidV2ShortID`). A slot without a message has the empty type.
-const fn is_core_short_id(id: u8) -> bool {
-  matches!(id, 1..=32 | 128..=168)
 }
 
 /// V2 packet contents Core's transport has typed: the type and its payload.
@@ -93,7 +89,7 @@ pub fn split_v2(contents: &[u8]) -> Result<V2Message<'_>, P2pDecodeError> {
   let Some((&short_id, rest)) = contents.split_first() else {
     return Err(P2pDecodeError::EmptyV2Contents);
   };
-  if short_id == 0 {
+  if short_id == ShortId::LONG_FORMAT.0 {
     // Long format: next 12 bytes are the command string.
     let Some((bytes, payload)) = rest.split_first_chunk::<12>() else {
       return Err(P2pDecodeError::TruncatedV2Type { remaining: rest.len() });
@@ -106,7 +102,7 @@ pub fn split_v2(contents: &[u8]) -> Result<V2Message<'_>, P2pDecodeError> {
   }
   let command = match ShortId(short_id).to_command() {
     Some(command) => command,
-    None if is_core_short_id(short_id) => CommandString::from_bytes([0; 12]),
+    None if ShortId(short_id).has_core_slot() => CommandString::from_bytes([0; 12]),
     None => return Err(P2pDecodeError::UnknownShortId { id: short_id }),
   };
   Ok(V2Message { command, payload: rest })
