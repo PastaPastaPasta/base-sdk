@@ -31,6 +31,9 @@ pub fn encode_v2(msg: &P2pMsg, buf: &mut Vec<u8>) {
 
 /// Decodes V2 framed bytes into a `P2pMsg` under `ctx`.
 ///
+/// [`DecodedMsg::consumed`] counts payload bytes after the 1-byte short ID or
+/// the 13-byte long-form type.
+///
 /// # Errors
 ///
 /// Returns `P2pDecodeError` for a malformed frame, an unassigned short ID, or

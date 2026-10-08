@@ -206,3 +206,23 @@ fn unknown_command_round_trips() {
   decoded.msg.encode_payload(&mut buf);
   assert_eq!(buf, [0, 1, 2]);
 }
+
+/// Core's transport refuses any message above `MAX_PROTOCOL_MESSAGE_LENGTH`
+/// (3 MiB, `net.h` at both pins), whatever its command.
+#[rstest]
+#[case::typed("ping")]
+#[case::empty("verack")]
+#[case::stub("tx")]
+#[case::unknown("bs4aprobe")]
+fn every_command_is_bound_by_the_protocol_limit(#[case] name: &str) {
+  let at_max = vec![0u8; 3 * 1024 * 1024];
+  assert!(!matches!(
+    P2pMsg::decode_with_policy(&command(name), &at_max, &ctx(70240)),
+    Err(P2pDecodeError::PayloadTooLarge { .. })
+  ));
+  let above = vec![0u8; 3 * 1024 * 1024 + 1];
+  assert!(matches!(
+    P2pMsg::decode_with_policy(&command(name), &above, &ctx(70240)),
+    Err(P2pDecodeError::PayloadTooLarge { .. })
+  ));
+}

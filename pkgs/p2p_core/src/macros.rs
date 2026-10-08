@@ -7,13 +7,14 @@
 //! Shared macro definitions.
 
 use crate::codec::MAX_P2P_PAYLOAD_SIZE;
+use crate::command::CommandString;
 use crate::P2pDecodeError;
 
 /// Reject payloads that exceed the protocol limit.
-pub(crate) fn check_payload(command: &'static str, payload: &[u8]) -> Result<(), P2pDecodeError> {
+pub(crate) fn check_payload(command: &CommandString, payload: &[u8]) -> Result<(), P2pDecodeError> {
   if payload.len() > MAX_P2P_PAYLOAD_SIZE {
     return Err(P2pDecodeError::PayloadTooLarge {
-      command,
+      command: *command,
       size: payload.len(),
       max: MAX_P2P_PAYLOAD_SIZE,
     });
@@ -164,7 +165,9 @@ macro_rules! define_p2p {
       /// An unknown command decodes to [`P2pMsg::Unknown`]. A command whose
       /// handler reads nothing ignores its payload, and a typed message
       /// reports the bytes its handler reads in [`DecodedMsg::consumed`].
-      /// Gates that depend on connection state run before this.
+      /// Every command is bound by Core's 3 MiB message limit. Gates that
+      /// depend on connection state, and the transport's command-string
+      /// checks, run before this.
       ///
       /// # Errors
       ///
@@ -175,18 +178,17 @@ macro_rules! define_p2p {
         payload: &[u8],
         ctx: &crate::ctx::ProtoCtx,
       ) -> Result<DecodedMsg, crate::P2pDecodeError> {
+        crate::macros::check_payload(cmd, payload)?;
         let mut cursor = payload;
         let msg = match *cmd {
           $(
             CommandString::$p_cmd => {
-              crate::macros::check_payload($p_wire, payload)?;
               Self::$p_variant(<$p_type as crate::codec::MsgDecode>::decode_msg(&mut cursor, ctx)?)
             }
           )*
           $( CommandString::$pe_cmd => Self::$pe_variant, )*
           $(
             CommandString::$s_cmd => {
-              crate::macros::check_payload($s_wire, payload)?;
               cursor = &[];
               Self::$s_variant(Vec::from(payload))
             }
