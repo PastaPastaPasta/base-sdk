@@ -219,6 +219,12 @@ predicate isSuppressed(TypeItem t, string trait) {
   isOpaqueType(t) and
   nameOf(t) = ["G1", "G2"] and
   trait = ["Eq", "PartialEq"]
+  or
+  // Lazy BLS fields decode inside `==` as Dash Core does, so equality is not
+  // an equivalence and no hash can agree with it: suppress Eq and Hash
+  isOpaqueCrate(fileOf(t)) and
+  nameOf(t) = "BlsLazy" and
+  trait = ["Eq", "Hash"]
 }
 
 /** Holds if `t` is exempt from serde derivation requirements. */
