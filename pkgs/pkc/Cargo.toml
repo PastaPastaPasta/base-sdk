@@ -53,6 +53,9 @@ serde = { workspace = true, features = [
   "derive",
 ], optional = true }
 sha2 = { version = "0.11", default-features = false, optional = true }
+spin = { version = "0.10", default-features = false, features = [
+  "spin_mutex",
+], optional = true }
 subtle = { workspace = true }
 zeroize = { workspace = true, features = ["alloc", "derive"] }
 
@@ -81,6 +84,7 @@ bls = [
   "dep:group",
   "dep:rand_core",
   "dep:sha2",
+  "dep:spin",
 ]
 codec = [
   "dash-num/codec",

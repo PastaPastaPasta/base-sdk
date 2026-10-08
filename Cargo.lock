@@ -512,6 +512,7 @@ dependencies = [
  "secp256k1",
  "serde",
  "sha2",
+ "spin",
  "subtle",
  "zeroize",
 ]
@@ -1559,6 +1560,12 @@ name = "smallvec"
 version = "1.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
+
+[[package]]
+name = "spin"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "023a211cb3138dbc438680b32560ad89f699977624c9f8dbb95a47d5b4c07dd3"
 
 [[package]]
 name = "stable_deref_trait"
