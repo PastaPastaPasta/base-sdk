@@ -31,7 +31,7 @@ pub struct BlsValue<K: BlsWire<N>, const N: usize> {
 /// out of hashes, compared in constant time and wiped on drop.
 #[cfg_attr(feature = "codec", derive(Unencodable))]
 struct Valid<K: BlsWire<N>, const N: usize> {
-  /// The basic-scheme encoding, from which the legacy one follows.
+  /// Core's basic-scheme serialization, from which the legacy one follows.
   basic: [u8; N],
   point: K::Point,
 }
@@ -50,6 +50,22 @@ impl<K: BlsWire<N>, const N: usize> BlsValue<K, N> {
   /// re-serializes under `scheme` to the same bytes.
   pub fn from_canonical(bytes: &[u8; N], scheme: BlsSchemeKind) -> Option<Self> {
     K::decode_canonical(bytes, scheme).map(|(basic, point)| Self {
+      valid: Some(Valid { basic, point }),
+    })
+  }
+
+  /// Decodes as Core's `SetBytes(bytes, false)` does, under the basic scheme
+  /// with no round trip and no fallback. Core reads governance and CoinJoin
+  /// signatures this way.
+  ///
+  /// Bytes of the wrong length, all-zero bytes and bytes that do not decode
+  /// give the invalid object. Otherwise this is canonical basic decoding,
+  /// unless `bytes` hold a G2 subgroup point with `y` in `Fp` and the sign
+  /// bit set, of which none is known; relic serializes it with the sign bit
+  /// clear. For secret keys the flag is Core's `modOrder`, also false.
+  pub fn from_set_bytes_basic(bytes: &[u8]) -> Self {
+    let decoded = <&[u8; N]>::try_from(bytes).ok().and_then(K::decode_set_basic);
+    decoded.map_or_else(Self::invalid, |(basic, point)| Self {
       valid: Some(Valid { basic, point }),
     })
   }
@@ -143,10 +159,11 @@ impl<K: BlsWire<N>, const N: usize> Hash for Valid<K, N> {
   }
 }
 
-/// The encoding determines the element, so comparing encodings compares
-/// elements.
+/// Core compares elements. A canonical encoding determines its element, but
+/// [`BlsValue::from_set_bytes_basic`] would give a G2 subgroup point with `y`
+/// in `Fp` and its negation one serialization, so points are compared too.
 impl<K: BlsWire<N>, const N: usize> PartialEq for Valid<K, N> {
   fn eq(&self, other: &Self) -> bool {
-    bool::from(self.basic.ct_eq(&other.basic))
+    bool::from(self.basic.ct_eq(&other.basic)) && self.point == other.point
   }
 }

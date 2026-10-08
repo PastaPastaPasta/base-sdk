@@ -25,7 +25,8 @@ use std::sync::Barrier;
 const LEGACY: BlsSchemeKind = BlsSchemeKind::Legacy;
 const BASIC: BlsSchemeKind = BlsSchemeKind::Basic;
 
-/// One input with Core's outcome under each flag, `T`, `I` or `V:<hex>`.
+/// One input with Core's outcome under each flag, `T`, `I` or `V:<hex>`, and
+/// under `SetBytes(basic)`, `I`, `V` or `V:<legacy hex>/<basic hex>`.
 #[derive(Deserialize)]
 struct EagerRow {
   class: String,
@@ -35,6 +36,8 @@ struct EagerRow {
   legacy: String,
   #[serde(rename = "B")]
   basic: String,
+  #[serde(rename = "SB")]
+  set_basic: String,
 }
 
 impl EagerRow {
@@ -98,8 +101,24 @@ fn eager_outcome<K: BlsWire<N>, const N: usize>(input: &[u8; N], scheme: BlsSche
   format!("V:{}", eager.to_bytes(scheme.opposite()).as_hex())
 }
 
+/// The outcome of Core's `SetBytes(input, false)`, in the corpus notation.
+fn set_basic_outcome<K: BlsWire<N>, const N: usize>(input: &[u8; N]) -> String {
+  let value = BlsValue::<K, N>::from_set_bytes_basic(input);
+  if !value.is_valid() {
+    assert_eq!(value, BlsValue::invalid());
+    return "I".into();
+  }
+  let canonical = BlsValue::from_canonical(input, BASIC);
+  if canonical.as_ref() == Some(&value) {
+    assert_eq!(&value.to_bytes(BASIC), input);
+    return "V".into();
+  }
+  let (legacy, basic) = (value.to_bytes(LEGACY), value.to_bytes(BASIC));
+  format!("V:{}/{}", legacy.as_hex(), basic.as_hex())
+}
+
 /// Checks one input under both flags, the outcome and, for a valid object, its
-/// serialization under the other scheme.
+/// serialization under the other scheme. Then checks `SetBytes(basic)`.
 fn assert_eager_row<K: BlsWire<N>, const N: usize>(kind: &str, row: &EagerRow) {
   let input: [u8; N] = arr_from_hex(&row.input);
   let label = [kind, &row.class, &row.input].join(" ");
@@ -107,6 +126,8 @@ fn assert_eager_row<K: BlsWire<N>, const N: usize>(kind: &str, row: &EagerRow) {
     let got = eager_outcome::<K, N>(&input, scheme);
     assert_eq!(got, row.outcome(scheme), "{label} under {scheme:?}");
   }
+  let got = set_basic_outcome::<K, N>(&input);
+  assert_eq!(got, row.set_basic, "{label} under SetBytes(basic)");
 }
 
 fn assert_eager_vectors<K: BlsWire<N>, const N: usize>(kind: &str) {
@@ -277,6 +298,22 @@ fn zero_bytes_are_never_canonical(#[case] scheme: BlsSchemeKind) {
   assert!(BlsValue::<G1, BLS_PK_LEN>::from_canonical(&[0u8; BLS_PK_LEN], scheme).is_none());
   assert!(BlsValue::<G2, BLS_SIG_LEN>::from_canonical(&[0u8; BLS_SIG_LEN], scheme).is_none());
   assert!(BlsValue::<Fr, BLS_SK_LEN>::from_canonical(&[0u8; BLS_SK_LEN], scheme).is_none());
+}
+
+/// Core's `SetBytes` resets bytes of the wrong length to the invalid object.
+#[test]
+fn set_bytes_basic_needs_the_exact_length() {
+  for (kind, class) in [("pk", "sub_100"), ("sig", "sub_basic_s0"), ("sk", "one")] {
+    let input = vec_from_hex(&first_rows(kind)[class].input);
+    let check = |bytes: &[u8]| match kind {
+      "pk" => BlsValue::<G1, BLS_PK_LEN>::from_set_bytes_basic(bytes).is_valid(),
+      "sig" => BlsValue::<G2, BLS_SIG_LEN>::from_set_bytes_basic(bytes).is_valid(),
+      _ => BlsValue::<Fr, BLS_SK_LEN>::from_set_bytes_basic(bytes).is_valid(),
+    };
+    assert!(check(&input), "{kind}/{class}");
+    assert!(!check(&input[1..]), "{kind}/{class} short");
+    assert!(!check(&[input.as_slice(), &[0]].concat()), "{kind}/{class} long");
+  }
 }
 
 /// A failed `get` turns the raw bytes into zeros for serialization, hashing

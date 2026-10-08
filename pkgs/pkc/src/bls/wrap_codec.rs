@@ -81,6 +81,14 @@ pub trait BlsWire<const N: usize>: sealed::Sealed + Sized + 'static {
   #[doc(hidden)]
   fn decode_canonical(bytes: &[u8; N], scheme: BlsSchemeKind) -> Option<([u8; N], Self::Point)>;
 
+  /// Core's `SetBytes(bytes, false)`, the basic scheme with no round trip.
+  ///
+  /// Returns the object's basic-scheme serialization and its point when the
+  /// bytes decode to a valid object. The serialization may differ from
+  /// `bytes`.
+  #[doc(hidden)]
+  fn decode_set_basic(bytes: &[u8; N]) -> Option<([u8; N], Self::Point)>;
+
   /// Whether [`Self::decode_canonical`] would succeed, possibly cheaper.
   #[doc(hidden)]
   fn is_canonical(bytes: &[u8; N], scheme: BlsSchemeKind) -> bool {
@@ -152,15 +160,16 @@ fn g2_basic_to_legacy(basic: &[u8; BLS_SIG_LEN]) -> [u8; BLS_SIG_LEN] {
 }
 
 /// Decodes a basic-layout G1 point as dashbls does, by uncompressing with the
-/// subgroup check. The identity never decodes here; Core resets it.
-fn g1_decode_basic(bytes: &[u8; BLS_PK_LEN]) -> Option<G1Affine> {
+/// subgroup check. The identity never decodes here; Core resets it. Returns
+/// the serialization, which always equals the bytes, and the point.
+fn g1_decode_basic(bytes: &[u8; BLS_PK_LEN]) -> Option<([u8; BLS_PK_LEN], G1Affine)> {
   if bytes[0] & (FLAG_HIGH | FLAG_INFINITY) != FLAG_HIGH {
     return None;
   }
   // blst rejects x >= p, x off the curve, and x = 0, the order-3 points
   // dashbls refuses for a coordinate that is zero once the flags are masked.
   let point = G1Affine::uncompress(bytes).ok()?;
-  point.to_projective().in_subgroup().then_some(point)
+  point.to_projective().in_subgroup().then_some((*bytes, point))
 }
 
 /// Decodes a legacy-layout G1 point as relic does, with no curve or subgroup
@@ -186,18 +195,26 @@ fn g1_decode_legacy(bytes: &[u8; BLS_PK_LEN]) -> Option<([u8; BLS_PK_LEN], Optio
   }
 }
 
-/// Decodes a basic-layout G2 point as dashbls does.
-fn g2_decode_basic(bytes: &[u8; BLS_SIG_LEN]) -> Option<G2Affine> {
+/// Uncompresses a basic-layout G2 point as dashbls does, without the
+/// subgroup check. Returns relic's serialization of it and the point.
+fn g2_uncompress_basic(bytes: &[u8; BLS_SIG_LEN]) -> Option<([u8; BLS_SIG_LEN], G2Affine)> {
   if bytes[0] & (FLAG_HIGH | FLAG_INFINITY) != FLAG_HIGH || bytes[BLS_SIG_LEN / 2] & !COORD_MASK != 0 {
     return None;
   }
   let point = G2Affine::uncompress(bytes).ok()?;
-  if !point.to_projective().in_subgroup() {
-    return None;
-  }
   // relic re-encodes the sign from y.c1 alone, so a set sign bit with
-  // y.c1 = 0 serializes differently.
-  (bytes[0] & FLAG_SIGN == 0 || point.y().c1() != Fp::default()).then_some(point)
+  // y.c1 = 0 serializes cleared.
+  let mut ser = *bytes;
+  if point.y().c1() == Fp::default() {
+    ser[0] &= !FLAG_SIGN;
+  }
+  Some((ser, point))
+}
+
+/// Decodes a basic-layout G2 point as dashbls does, with the subgroup check.
+/// Returns the serialization and the point.
+fn g2_decode_basic(bytes: &[u8; BLS_SIG_LEN]) -> Option<([u8; BLS_SIG_LEN], G2Affine)> {
+  g2_uncompress_basic(bytes).filter(|(_, point)| point.to_projective().in_subgroup())
 }
 
 /// Decodes a legacy-layout G2 point as relic does, with no curve or subgroup
@@ -235,7 +252,7 @@ macro_rules! impl_wire_point {
 
       fn decode_canonical(bytes: &[u8; $len], scheme: BlsSchemeKind) -> Option<([u8; $len], Self::Point)> {
         match scheme {
-          BlsSchemeKind::Basic => $decode_basic(bytes).map(|point| (*bytes, BlsPoint::Usable(point))),
+          BlsSchemeKind::Basic => Self::decode_set_basic(bytes).filter(|(ser, _)| ser == bytes),
           BlsSchemeKind::Legacy => $decode_legacy(bytes).map(|(basic, point)| {
             let usable = point.filter(|p| p.to_projective().in_subgroup());
             (basic, usable.map_or(BlsPoint::Exotic, BlsPoint::Usable))
@@ -243,9 +260,13 @@ macro_rules! impl_wire_point {
         }
       }
 
+      fn decode_set_basic(bytes: &[u8; $len]) -> Option<([u8; $len], Self::Point)> {
+        $decode_basic(bytes).map(|(ser, point)| (ser, BlsPoint::Usable(point)))
+      }
+
       fn is_canonical(bytes: &[u8; $len], scheme: BlsSchemeKind) -> bool {
         match scheme {
-          BlsSchemeKind::Basic => $decode_basic(bytes).is_some(),
+          BlsSchemeKind::Basic => $decode_basic(bytes).is_some_and(|(ser, _)| ser == *bytes),
           BlsSchemeKind::Legacy => $decode_legacy(bytes).is_some(),
         }
       }
@@ -298,7 +319,34 @@ impl BlsWire<BLS_SK_LEN> for Fr {
     bool::from(in_range & nonzero).then_some((*bytes, ()))
   }
 
+  /// Basic keys always re-serialize to their bytes.
+  fn decode_set_basic(bytes: &[u8; BLS_SK_LEN]) -> Option<([u8; BLS_SK_LEN], Self::Point)> {
+    Self::decode_canonical(bytes, BlsSchemeKind::Basic)
+  }
+
   fn encode(basic: &[u8; BLS_SK_LEN], _scheme: BlsSchemeKind) -> [u8; BLS_SK_LEN] {
     *basic
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  /// A point on the G2 curve outside the subgroup, with y in Fp and the sign
+  /// bit set; the corpus's first `realy_basic_s1` signature.
+  const REALY_BASIC_S1: [u8; BLS_SIG_LEN] = hex!("a9fe2de1602ea40da4d030d64bd648b98ff50450dacd18f4d937071fc5e5c22724028b4aa4af59474133c694e215547b163308bb5daa4f03cf2e40a3dfb07ccc0b7912431431364fcb5fe5655ff81b65f824cd7adc3e2a0ffc0874b5939d63d6");
+
+  /// relic serializes a point with y.c1 = 0 with the sign bit clear, whatever
+  /// sign selected it; only the subgroup check keeps it from `SetBytes`.
+  #[test]
+  fn g2_basic_sign_of_real_y_serializes_cleared() {
+    let decoded = g2_uncompress_basic(&REALY_BASIC_S1);
+    assert!(decoded.is_some_and(|(ser, point)| {
+      let mut cleared = REALY_BASIC_S1;
+      cleared[0] &= !FLAG_SIGN;
+      ser == cleared && point.y().c1() == Fp::default()
+    }));
+    assert!(g2_decode_basic(&REALY_BASIC_S1).is_none());
   }
 }
