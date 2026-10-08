@@ -51,6 +51,8 @@ pub enum DecodeError<E = Infallible> {
     /// The value that was decoded.
     actual: u64,
   },
+  /// BLS bytes canonical in neither scheme, Core's "malleable BLS object".
+  MalleableBls,
   /// CompactSize encoding is not minimal.
   NonMinimalCompactSize {
     /// The decoded value that was not minimally encoded.
@@ -73,6 +75,7 @@ impl DecodeError {
       Self::Eof { needed, remaining } => DecodeError::Eof { needed, remaining },
       Self::InvalidUtf8 => DecodeError::InvalidUtf8,
       Self::InvalidValue { expected, actual } => DecodeError::InvalidValue { expected, actual },
+      Self::MalleableBls => DecodeError::MalleableBls,
       Self::NonMinimalCompactSize { value } => DecodeError::NonMinimalCompactSize { value },
       Self::TrailingBytes { remaining } => DecodeError::TrailingBytes { remaining },
     }
@@ -96,6 +99,7 @@ impl<E: fmt::Display> fmt::Display for DecodeError<E> {
       Self::InvalidValue { expected, actual } => {
         write!(f, "invalid value: expected one of {expected:?}, got {actual}")
       }
+      Self::MalleableBls => write!(f, "malleable BLS object"),
       Self::NonMinimalCompactSize { value } => {
         write!(f, "non-minimal compact size encoding for value {value}",)
       }
