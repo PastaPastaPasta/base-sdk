@@ -9,12 +9,12 @@
 #![cfg(feature = "serde")]
 #![expect(clippy::unwrap_used, reason = "test code")]
 
-use std::collections::BTreeMap;
-
 use dash_dev::Corpus;
 use dash_p2p_core::{encode_v2, split_v2, CommandString, P2pDecodeError, P2pMsg, ProtoCtx, ProtocolVersion, ShortId};
 use dash_pkc::bls::BlsCtx;
 use rstest::rstest;
+
+use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, ::serde::Deserialize)]
 struct Slot {

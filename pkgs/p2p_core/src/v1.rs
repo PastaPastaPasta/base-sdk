@@ -12,10 +12,9 @@ use crate::magic::Magic;
 use crate::msg::P2pMsg;
 use crate::prelude::*;
 
+use bitcoin_hashes::sha256d;
 use dash_types::codec::BaseCodec;
 use dash_types::type_id::Unencodable;
-
-use bitcoin_hashes::sha256d;
 
 use core::fmt;
 

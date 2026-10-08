@@ -17,7 +17,6 @@ mod codec;
 mod command;
 mod ctx;
 mod error;
-pub mod limits;
 #[macro_use]
 mod macros;
 mod magic;
@@ -27,6 +26,8 @@ mod prelude;
 mod short_id;
 mod v1;
 mod version;
+
+pub mod limits;
 
 #[doc(hidden)]
 pub mod __private {

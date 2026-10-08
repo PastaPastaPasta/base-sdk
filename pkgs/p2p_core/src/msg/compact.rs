@@ -9,12 +9,11 @@
 use crate::codec::{codec_p2p, impl_p2p};
 use crate::prelude::*;
 
+use bitcoin_hashes::{sha256, siphash24};
 use dash_primitives::{hash_impl, BlockHash, BlockHeader, Transaction};
 use dash_types::codec::{take, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
 use dash_types::{CompactSize, CoreBool};
-
-use bitcoin_hashes::{sha256, siphash24};
 
 /// Most transactions a compact block may describe, Core's 16-bit index.
 const MAX_BLOCK_TXS: usize = u16::MAX as usize;

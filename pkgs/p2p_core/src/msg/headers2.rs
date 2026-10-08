@@ -16,7 +16,7 @@ use crate::P2pDecodeError;
 
 use dash_primitives::{hash_impl, BlockHash, BlockHeader, MerkleRoot};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
-use dash_types::type_id::TypeId;
+use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{CompactSize, Hashable};
 
 /// The fewest bytes a compressed header takes: flags, merkle root, a time
@@ -107,6 +107,8 @@ impl BaseCodec for CompressedHeader {
     self.header.nonce.encode(buf);
   }
 }
+
+hash_impl!(CompressedHeader);
 
 impl CompressedHeader {
   /// A header with every field on the wire.
@@ -200,7 +202,7 @@ impl CompressedHeader {
 /// Core's `last_unique_versions`: the most recent versions, newest first.
 ///
 /// It can hold a version twice, as Core's list does.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Unencodable)]
 struct VersionList {
   items: [i32; MAX_VERSIONS],
   len: usize,
