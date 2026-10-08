@@ -329,7 +329,7 @@ mod opt_str_u64 {
 mod tests {
   use super::*;
 
-  use dash_dev::{assert_json_rt, assert_serde_rt, check_wire, Corpus};
+  use dash_dev::{assert_json_rt, assert_serde_rt, check_wire, vec_from_hex, Corpus};
   use rstest::rstest;
 
   #[rstest]
@@ -339,6 +339,32 @@ mod tests {
   #[case::max(alloc::vec![0x80; MAX_USER_AGENT])]
   fn user_agent_json_round_trips(#[case] bytes: Vec<u8>) {
     assert_json_rt(&UserAgent(bytes));
+  }
+
+  /// A payload ending after `addr_recv`, as Core accepts it, keeps every
+  /// optional field absent through the wire and JSON, `nonce` included.
+  #[rstest]
+  fn head_only_version_round_trips() {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "decode_domain").into_value();
+    let raw = corpus["version"]
+      .as_array()
+      .and_then(|cases| cases.iter().find(|c| c["name"] == "cut_46_mandatory_only"))
+      .and_then(|c| c["raw"].as_str())
+      .map(vec_from_hex)
+      .unwrap_or_default();
+    let mut cursor = &raw[..];
+    let decoded = Version::decode(&mut cursor);
+    assert!(cursor.is_empty());
+    assert!(
+      matches!(&decoded, Ok(v) if v.addr_send.is_none() && v.nonce.is_none() && v.mn_connection.is_none()),
+      "{decoded:?}"
+    );
+    if let Ok(version) = decoded {
+      let mut buf = Vec::new();
+      version.encode(&mut buf);
+      assert_eq!(buf, raw);
+      assert_json_rt(&version);
+    }
   }
 
   #[rstest]
