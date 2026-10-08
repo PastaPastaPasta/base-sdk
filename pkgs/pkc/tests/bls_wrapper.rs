@@ -12,8 +12,8 @@
 use bitcoin_hashes::sha256d::Hash as Sha256d;
 use dash_dev::{arr_from_hex, vec_from_hex, Corpus};
 use dash_pkc::bls::{
-  BlsCtx, BlsEager, BlsEagerPk, BlsEagerSig, BlsEagerSk, BlsLazy, BlsLazyPk, BlsLazySig, BlsPoint, BlsSchemeKind,
-  BlsSchemeSource, BlsValue, BlsWire, BlsWirePoint, Fr, BLS_PK_LEN, BLS_SIG_LEN, BLS_SK_LEN, G1, G2,
+  BlsCtx, BlsEager, BlsEagerPk, BlsEagerSig, BlsEagerSk, BlsGlobal, BlsLazy, BlsLazyPk, BlsLazySig, BlsPoint,
+  BlsSchemeKind, BlsSchemeSource, BlsValue, BlsWire, BlsWirePoint, Fr, BLS_PK_LEN, BLS_SIG_LEN, BLS_SK_LEN, G1, G2,
 };
 use hex_conservative::DisplayHex;
 use rstest::rstest;
@@ -142,6 +142,54 @@ fn assert_eager_vectors<K: BlsWire<N>, const N: usize>(kind: &str) {
 #[case::sig(|| assert_eager_vectors::<G2, BLS_SIG_LEN>("sig"))]
 #[case::sk(|| assert_eager_vectors::<Fr, BLS_SK_LEN>("sk"))]
 fn quirk_35_eager_bls_decode_outcomes(#[case] check: fn()) {
+  check();
+}
+
+/// The outcome of reading `input` as a field under Core's process-wide flag,
+/// holding `scheme`, in the corpus notation.
+///
+/// Decoding takes no flag, so a throw is the outcome under both. A valid
+/// object written back under the flag gives the input, and written under the
+/// other flag gives the bytes the notation records.
+fn global_outcome<K: BlsWirePoint<N>, const N: usize>(input: &[u8; N], scheme: BlsSchemeKind) -> String {
+  let Ok(global) = BlsGlobal::<K, N>::decode(input) else {
+    return "T".into();
+  };
+  assert_eq!(&global.to_bytes(), input, "the field keeps its wire bytes");
+  let ctx = BlsCtx::new(scheme);
+  let eager = global.get(ctx);
+  assert_eq!(eager.scheme(), scheme);
+  let other = BlsGlobal::from_eager(&eager, BlsCtx::new(scheme.opposite())).to_bytes();
+  if !eager.is_valid() {
+    assert_eq!(other, [0u8; N]);
+    return "I".into();
+  }
+  assert_eq!(
+    &BlsGlobal::from_eager(&eager, ctx).to_bytes(),
+    input,
+    "valid object must round-trip"
+  );
+  format!("V:{}", other.as_hex())
+}
+
+fn assert_global_vectors<K: BlsWirePoint<N>, const N: usize>(kind: &str) {
+  for row in eager_rows(kind) {
+    let input: [u8; N] = arr_from_hex(&row.input);
+    let label = [kind, &row.class, &row.input].join(" ");
+    for scheme in [LEGACY, BASIC] {
+      let got = global_outcome::<K, N>(&input, scheme);
+      assert_eq!(got, row.outcome(scheme), "{label} under {scheme:?}");
+    }
+  }
+}
+
+/// A field under the process-wide flag decodes without it and gives Core's
+/// eager outcome under each flag, as Core's throw does not depend on the
+/// flag.
+#[rstest]
+#[case::pk(|| assert_global_vectors::<G1, BLS_PK_LEN>("pk"))]
+#[case::sig(|| assert_global_vectors::<G2, BLS_SIG_LEN>("sig"))]
+fn global_bls_fields_decode_without_the_flag(#[case] check: fn()) {
   check();
 }
 
