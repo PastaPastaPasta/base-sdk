@@ -91,7 +91,7 @@ impl<K: BlsWirePoint<N>, const N: usize> LazyState<K, N> {
 
   /// `GetHash()`, which refreshes the buffer exactly as serializing under
   /// the captured scheme does.
-  fn hash(&mut self) -> Hash256 {
+  fn serialize_hash(&mut self) -> Hash256 {
     let buf = self.serialize(self.scheme);
     Hash256::from_lendian(Sha256d::hash(&buf).to_byte_array())
   }
@@ -172,8 +172,8 @@ impl<K: BlsWirePoint<N>, const N: usize> BlsLazy<K, N> {
 
   /// The hash of the serialization under the captured scheme, Core's
   /// `GetHash`. It covers the raw bytes before any [`Self::get`].
-  pub fn hash(&self) -> Hash256 {
-    self.state.lock().hash()
+  pub fn serialize_hash(&self) -> Hash256 {
+    self.state.lock().serialize_hash()
   }
 
   /// The captured scheme, Core's `IsLegacy`.

@@ -285,13 +285,13 @@ fn failed_get_zeroes_the_lazy_object() {
   let input = pk_input("sub_000");
   let lazy = BlsLazyPk::from_bytes(&input, BlsSchemeSource::Version(BASIC));
   assert_eq!(lazy.to_bytes(), input);
-  assert_eq!(lazy.hash().as_bytes(), &Sha256d::hash(&input).to_byte_array());
+  assert_eq!(lazy.serialize_hash().as_bytes(), &Sha256d::hash(&input).to_byte_array());
   assert_ne!(lazy, BlsLazyPk::new(BASIC));
 
   assert!(!lazy.get().is_valid());
   assert_eq!(lazy.to_bytes(), [0u8; BLS_PK_LEN]);
   assert_eq!(
-    lazy.hash().as_bytes(),
+    lazy.serialize_hash().as_bytes(),
     &Sha256d::hash(&[0u8; BLS_PK_LEN]).to_byte_array()
   );
   assert_eq!(lazy, BlsLazyPk::new(BASIC));
@@ -435,7 +435,7 @@ fn step<K: BlsWirePoint<N>, const N: usize>(
         Some(tag) => Sha256d::hash(&resolve(tag, table)).to_byte_array().to_vec(),
         None => vec_from_hex(expected),
       };
-      assert_eq!(lazy.hash().as_bytes().to_vec(), want, "{at}");
+      assert_eq!(lazy.serialize_hash().as_bytes().to_vec(), want, "{at}");
     }
     ("legacy", flag) => lazy.set_scheme(scheme(flag)),
     ("islegacy", _) => assert_eq!(lazy.scheme(), scheme(expected), "{at}"),
