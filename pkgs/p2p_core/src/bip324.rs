@@ -80,8 +80,9 @@ impl<'a> V2Message<'a> {
 /// # Errors
 ///
 /// Returns `ContentsTooLarge` above the limit, on which Core disconnects.
-/// Returns `EmptyV2Contents`, `TruncatedV2Type` or `UnknownShortId` for
-/// contents Core cannot type, which it drops while keeping the peer.
+/// Returns `EmptyV2Contents`, `TruncatedV2Type`, `InvalidCommand` or
+/// `UnknownShortId` for contents Core cannot type, which it drops while
+/// keeping the peer.
 pub fn split_v2(contents: &[u8]) -> Result<V2Message<'_>, P2pDecodeError> {
   if contents.len() > MAX_V2_CONTENTS_SIZE {
     return Err(P2pDecodeError::ContentsTooLarge {
@@ -98,6 +99,9 @@ pub fn split_v2(contents: &[u8]) -> Result<V2Message<'_>, P2pDecodeError> {
       return Err(P2pDecodeError::TruncatedV2Type { remaining: rest.len() });
     };
     let command = CommandString::from_bytes(*bytes);
+    if !command.is_valid_v2() {
+      return Err(P2pDecodeError::InvalidCommand { command });
+    }
     return Ok(V2Message { command, payload });
   }
   let command = match ShortId(short_id).to_command() {

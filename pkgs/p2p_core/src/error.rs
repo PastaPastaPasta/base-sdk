@@ -43,6 +43,13 @@ pub enum P2pDecodeError {
     /// Maximum allowed size, in bytes.
     max: usize,
   },
+  /// A command or long-form type Core's transport refuses, which it drops.
+  ///
+  /// Core keeps the peer and never hands the message to its handlers.
+  InvalidCommand {
+    /// The command as received.
+    command: CommandString,
+  },
   /// V2 packet contents without a type byte, which Core drops.
   EmptyV2Contents,
   /// A V2 long-form type cut short, which Core drops.
@@ -97,6 +104,7 @@ impl fmt::Display for P2pDecodeError {
       Self::ContentsTooLarge { size, max } => {
         write!(f, "v2 contents too large: {size} bytes, max {max}")
       }
+      Self::InvalidCommand { command } => write!(f, "invalid command {:x?}", command.as_bytes()),
       Self::EmptyV2Contents => f.write_str("empty v2 contents"),
       Self::TruncatedV2Type { remaining } => {
         write!(f, "v2 long-form type cut short: {remaining} of 12 bytes")

@@ -165,21 +165,24 @@ macro_rules! define_p2p {
       /// An unknown command decodes to [`P2pMsg::Unknown`]. A command whose
       /// handler reads nothing ignores its payload, and a typed message
       /// reports the bytes its handler reads in [`DecodedMsg::consumed`].
-      /// The payload is bound by the V1 transport's 3 MiB limit;
-      /// [`crate::decode_v2`] applies the V2 limit instead. Gates that depend
-      /// on connection state, and the transport's command-string checks, run
-      /// before this.
+      /// The payload is bound by the V1 transport's 3 MiB limit, then the
+      /// command by its byte rules; [`crate::decode_v2`] applies the V2 rules
+      /// instead. Gates that depend on connection state run before this.
       ///
       /// # Errors
       ///
-      /// Returns `P2pDecodeError` where Core's transport refuses the payload,
-      /// or where its handler throws or stops before reading the rest.
+      /// Returns `PayloadTooLarge`, on which Core disconnects, `InvalidCommand`,
+      /// on which it drops the message, or a `P2pDecodeError` where its
+      /// handler throws or stops before reading the rest.
       pub fn decode_with_policy(
         cmd: &CommandString,
         payload: &[u8],
         ctx: &crate::ctx::ProtoCtx,
       ) -> Result<DecodedMsg, crate::P2pDecodeError> {
         crate::macros::check_payload(cmd, payload)?;
+        if !cmd.is_valid_v1() {
+          return Err(crate::P2pDecodeError::InvalidCommand { command: *cmd });
+        }
         Self::dispatch(cmd, payload, ctx)
       }
 

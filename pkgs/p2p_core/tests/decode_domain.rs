@@ -261,14 +261,17 @@ fn every_command_is_bound_by_the_protocol_limit(#[case] name: &str) {
 #[rstest]
 fn v2_contents_are_bound_as_core() {
   const NONCE: u64 = 0x0124_5678;
+  let commands = v1_commands();
   for v in corpus().vectors::<V2Vector>("v2_contents") {
-    let mut contents = match v.form.as_str() {
-      "short" => vec![18],
-      "long" => b"\0ping\0\0\0\0\0\0\0\0".to_vec(),
-      "unassigned" => vec![0xfe],
-      "unassigned_33" => vec![33],
-      "reserved_5" => vec![5],
-      other => panic!("unexpected form {other}"),
+    let long_form = v.form.strip_prefix("long_").map(|name| commands[name]);
+    let mut contents = match (v.form.as_str(), long_form) {
+      (_, Some(command)) => [&[0][..], command.as_bytes()].concat(),
+      ("short", _) => vec![18],
+      ("long", _) => b"\0ping\0\0\0\0\0\0\0\0".to_vec(),
+      ("unassigned", _) => vec![0xfe],
+      ("unassigned_33", _) => vec![33],
+      ("reserved_5", _) => vec![5],
+      (other, None) => panic!("unexpected form {other}"),
     };
     contents.extend_from_slice(&NONCE.to_le_bytes());
     contents.resize(contents.len() + v.payload_len - 8, 0);
@@ -288,15 +291,55 @@ fn v2_contents_are_bound_as_core() {
         matches!(decoded, Err(P2pDecodeError::ContentsTooLarge { .. })),
         "{label}: {decoded:?}"
       ),
+      "dropped: invalid message type" if long_form.is_some() => assert!(
+        matches!(decoded, Err(P2pDecodeError::InvalidCommand { .. })),
+        "{label}: {decoded:?}"
+      ),
       "dropped: invalid message type" => assert!(
         matches!(decoded, Err(P2pDecodeError::UnknownShortId { .. })),
         "{label}: {decoded:?}"
       ),
-      "accept: Unknown command" => assert!(
-        matches!(&decoded, Ok(DecodedMsg { msg: P2pMsg::Unknown { command, .. }, .. }) if command.as_bytes() == &[0; 12]),
-        "{label}: {decoded:?}"
-      ),
+      "accept: Unknown command" => {
+        let expected = long_form.unwrap_or(CommandString::from_bytes([0; 12]));
+        assert!(
+          matches!(&decoded, Ok(DecodedMsg { msg: P2pMsg::Unknown { command, .. }, .. }) if *command == expected),
+          "{label}: {decoded:?}"
+        );
+      }
       other => panic!("{label}: unexpected outcome {other}"),
+    }
+  }
+}
+
+/// The V1 commands of the corpus, by name.
+fn v1_commands() -> std::collections::HashMap<String, CommandString> {
+  corpus()
+    .vectors::<MsgVector>("v1_commands")
+    .into_iter()
+    .map(|v| {
+      let mut bytes = [0u8; 12];
+      bytes.copy_from_slice(&vec_from_hex(&v.command));
+      (v.name, CommandString::from_bytes(bytes))
+    })
+    .collect()
+}
+
+/// Core's V1 transport drops a message whose command breaks
+/// `IsCommandValid`; the handlers never see it, so no gate counts it.
+#[rstest]
+fn v1_commands_are_checked_as_core() {
+  let commands = v1_commands();
+  for v in corpus().vectors::<MsgVector>("v1_commands") {
+    let command = commands[&v.name];
+    let decoded = P2pMsg::decode_with_policy(&command, &vec_from_hex(&v.raw), &ctx(70240));
+    match v.core.as_str() {
+      "dropped" => assert_eq!(decoded, Err(P2pDecodeError::InvalidCommand { command }), "{}", v.name),
+      "accept: Unknown command" => assert!(
+        matches!(&decoded, Ok(DecodedMsg { msg: P2pMsg::Unknown { command: c, .. }, .. }) if *c == command),
+        "{}: {decoded:?}",
+        v.name
+      ),
+      other => panic!("{}: unexpected outcome {other}", v.name),
     }
   }
 }
