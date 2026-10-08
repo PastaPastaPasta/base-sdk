@@ -6,9 +6,10 @@
 
 """Builds special-payload vectors whose outcomes come from Dash Core.
 
-  gen.py v24 --fixtures DIR --out pkgs/primitives/corpus/v24.json5
+  gen.py v24 --fixtures DIR --header FILE \\
+    --out pkgs/primitives/corpus/v24.json5
   gen.py probe --release v23.1.8=DIR --release v24.0.0-rc.3=DIR \\
-    --work DIR --out pkgs/primitives/corpus/payload_core.json5
+    --work DIR --header FILE --out pkgs/primitives/corpus/payload_core.json5
 
 `v24` copies special transactions and Core's JSON for their payloads out of
 `getblock 2` fixtures. `probe` asks regtest dashds of each release, under
@@ -145,14 +146,14 @@ def proupservtx(version: int, net: bytes, sig: bytes) -> bytes:
   return head + bytes([9]) * 32 + net + var(b"") + bytes(32) + sig
 
 
-def svc4(ip: list[int], port: int) -> bytes:
-  """A NetInfo service entry: tag 1, BIP155 IPv4."""
-  return b"\x01\x01\x04" + bytes(ip) + port.to_bytes(2, "big")
-
-
 def svc(net: int, addr: bytes, port: int) -> bytes:
   """A NetInfo service entry of any BIP155 network and length."""
   return b"\x01" + bytes([net]) + var(addr) + port.to_bytes(2, "big")
+
+
+def svc4(ip: list[int], port: int) -> bytes:
+  """A NetInfo service entry: tag 1, BIP155 IPv4."""
+  return svc(1, bytes(ip), port)
 
 
 def domain(name: bytes, port: int) -> bytes:
@@ -175,11 +176,10 @@ def qctx(version: int, pk: bytes, sig: bytes) -> bytes:
   return u16(1) + u32(10) + commitment
 
 
-def corpus_tx(name: str, txid: str) -> bytes:
-  """A transaction from a base-sdk corpus, by txid."""
-  return bytes.fromhex(
-    load_json5(PRIM_CORPUS / f"{name}.json5")[name][txid]["raw"]
-  )
+def corpus_tx(name: str, section: str, txid: str) -> bytes:
+  """A transaction from a section of a base-sdk corpus, by txid."""
+  corpus = load_json5(PRIM_CORPUS / f"{name}.json5")
+  return bytes.fromhex(corpus[section][txid]["raw"])
 
 
 def cases() -> dict[str, tuple[bytes, str]]:
@@ -199,9 +199,9 @@ def cases() -> dict[str, tuple[bytes, str]]:
       add(f"proupregtx_v{v}_pk_{k}", 3, proupregtx(v, b[f"pk_{k}"]),
           "operator key; scheme from the version")  # fmt: skip
   # Version-sourced eager signatures; Core prints none, only the verdict.
+  net = protx_service([1, 2, 3, 4], 9999)
   for v in (1, 2):
     for k in ("legacy", "basic", "throw"):
-      net = protx_service([1, 2, 3, 4], 9999)
       add(f"proupservtx_v{v}_sig_{k}", 2, proupservtx(v, net, b[f"sig_{k}"]),
           "operator signature; scheme from the version")  # fmt: skip
       rev = u16(v) + bytes([9]) * 32 + u16(0) + bytes(32) + b[f"sig_{k}"]
@@ -230,6 +230,11 @@ def cases() -> dict[str, tuple[bytes, str]]:
     )  # fmt: skip
     add(f"proupsharedregtx_pk_{k}", 12, shared,
         "operator key; always basic (v24 type)")  # fmt: skip
+  # Only types 3 and 4 are probed; see PLAN §7 handling.
+  for tx_type, name in ((3, "proupregtx"), (4, "prouprevtx")):
+    for version, tail in ((0, b""), (4, b""), (0xFFFF, b""), (4, b"\x00")):
+      label = f"{name}_unknown_v{version}" + ("_trailing" if tail else "")
+      add(label, tx_type, u16(version) + tail, "unknown ProTx version")
   # CbTx version 4: v24 reads the asset-unlock root, v23.1 does not.
   sig = b["sig_basic"]
   add("cbtx_v4_root", 5, cbtx(4, sig, root=True), "v4 with the root")
@@ -273,7 +278,7 @@ def cases() -> dict[str, tuple[bytes, str]]:
     "ecf23a8aee664a60783d5db8b0bdd4d345dd4f71f9c9dcf0bf500f855ea800c0",
   ):
     out[f"proregtx_v3_v23_layout_{txid[:8]}"] = (
-      corpus_tx("proregtx", txid),
+      corpus_tx("proregtx", "proregtx_v23_layout", txid),
       "v3 ProRegTx with one payout script (rpc_netinfo.py)",
     )
   return out
@@ -347,7 +352,9 @@ def verdict(release: Path, datadir: Path, tx: bytes) -> object:
 
 
 def cmd_probe(args: argparse.Namespace) -> None:
-  releases = dict(r.split("=", 1) for r in args.release)
+  releases = {
+    rel: Path(path) for rel, path in (r.split("=", 1) for r in args.release)
+  }
   work = Path(args.work)
   todo = cases()
   core: dict[str, dict[str, dict[str, object]]] = {k: {} for k in todo}
@@ -355,15 +362,13 @@ def cmd_probe(args: argparse.Namespace) -> None:
   for rel, path in releases.items():
     for flag, extra in FLAGS.items():
       datadir = work / f"{rel}-{flag}"
-      start(Path(path), datadir, port, extra)
+      start(path, datadir, port, extra)
       port += 1
       try:
         for name, (tx, _) in todo.items():
-          core[name].setdefault(rel, {})[flag] = verdict(
-            Path(path), datadir, tx
-          )
+          core[name].setdefault(rel, {})[flag] = verdict(path, datadir, tx)
       finally:
-        stop(Path(path), datadir)
+        stop(path, datadir)
   lines = [args.header.rstrip("\n"), "{"]
   for name, (tx, note) in todo.items():
     entry = {"note": note, "raw": tx.hex(), "core": core[name]}
@@ -406,8 +411,7 @@ def main() -> None:
   probe.add_argument("--header", type=argparse.FileType(), required=True)
   probe.add_argument("--out", required=True)
   args = p.parse_args()
-  if hasattr(args, "header"):
-    args.header = args.header.read()
+  args.header = args.header.read()
   if args.cmd == "v24":
     cmd_v24(args)
   else:

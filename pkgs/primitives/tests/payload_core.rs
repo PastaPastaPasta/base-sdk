@@ -13,9 +13,9 @@
 #![expect(clippy::panic, clippy::unwrap_used, reason = "test code")]
 
 use dash_dev::{Corpus, Value};
-use dash_pkc::bls::{BlsCtx, BlsSchemeKind};
+use dash_pkc::bls::{BlsCtx, BlsEager, BlsLazyPk, BlsSchemeKind, BlsWire};
 use dash_primitives::{
-  CoinbaseCommitment, MnType, NIEntry, NITrait, NetInfo, PayloadDecode, ProRegTx, SpecialPayload, Transaction,
+  CoinbaseCommitment, MnType, NIEntry, NITrait, NetInfo, PayloadDecode, SpecialPayload, Transaction,
 };
 use dash_types::codec::BaseCodec;
 use dash_types::Numeric;
@@ -232,7 +232,7 @@ fn compare(label: &str, payload: &SpecialPayload, core: &Value, bls: BlsCtx) {
       f.eq("collateralIndex", p.collateral_index);
       let platform = (p.platform_p2p_port, p.platform_http_port);
       f.eq("addresses", render_net_info(&p.net_info, p.mn_type, platform));
-      f.eq("pubKeyOperator", lazy_hex(p));
+      f.eq("pubKeyOperator", lazy_hex(&p.pub_key_operator));
       // Core prints the reward in percent.
       f.eq("operatorReward", f64::from(p.operator_reward) / 100.0);
       f.eq("inputsHash", p.inputs_hash.to_string());
@@ -268,8 +268,7 @@ fn compare(label: &str, payload: &SpecialPayload, core: &Value, bls: BlsCtx) {
     SpecialPayload::ProviderUpdateRegistrar(p) => {
       f.eq("version", p.version);
       f.eq("proTxHash", p.pro_tx_hash.to_string());
-      let key = p.pub_key_operator.get();
-      f.eq("pubKeyOperator", hex(&key.to_bytes(p.pub_key_operator.scheme())));
+      f.eq("pubKeyOperator", lazy_hex(&p.pub_key_operator));
       for (i, payout) in p.payouts.iter().enumerate() {
         f.eq(&format!("payouts[{i}].script"), hex(payout.script_payout.as_bytes()));
         f.eq(&format!("payouts[{i}].reward"), payout.reward);
@@ -293,17 +292,10 @@ fn compare(label: &str, payload: &SpecialPayload, core: &Value, bls: BlsCtx) {
       f.eq("commitment.quorumIndex", qc.quorum_index.unwrap_or(0));
       f.eq("commitment.signersCount", qc.signers.count_ones());
       f.eq("commitment.validMembersCount", qc.valid_members.count_ones());
-      let pk = &qc.quorum_public_key;
-      f.eq("commitment.quorumPublicKey", hex(&pk.to_bytes(pk.scheme())));
+      f.eq("commitment.quorumPublicKey", eager_hex(&qc.quorum_public_key));
       f.eq("commitment.quorumVvecHash", qc.quorum_vvec_hash.to_string());
-      f.eq(
-        "commitment.quorumSig",
-        hex(&qc.quorum_sig.to_bytes(qc.quorum_sig.scheme())),
-      );
-      f.eq(
-        "commitment.membersSig",
-        hex(&qc.members_sig.to_bytes(qc.members_sig.scheme())),
-      );
+      f.eq("commitment.quorumSig", eager_hex(&qc.quorum_sig));
+      f.eq("commitment.membersSig", eager_hex(&qc.members_sig));
     }
     SpecialPayload::MnhfSignal(p) => {
       f.eq("version", p.version);
@@ -345,10 +337,22 @@ fn compare(label: &str, payload: &SpecialPayload, core: &Value, bls: BlsCtx) {
     SpecialPayload::ProviderUpdateSharedRegistrar(p) => {
       f.eq("version", p.version);
       f.eq("proTxHash", p.pro_tx_hash.to_string());
-      let key = p.pub_key_operator.get();
-      f.eq("pubKeyOperator", hex(&key.to_bytes(BlsSchemeKind::Basic)));
+      f.eq("pubKeyOperator", lazy_hex(&p.pub_key_operator));
       f.eq("inputsHash", p.inputs_hash.to_string());
       f.eq("sigCount", p.sigs.len());
+    }
+    SpecialPayload::UnknownProTxVersion { version, .. } => {
+      // Core read the version alone and prints its defaults for the rest.
+      f.eq("version", *version);
+      let mut rest = BTreeSet::new();
+      collect_leaves(core, String::new(), &mut rest);
+      rest.retain(|leaf| !f.seen.contains(leaf) && !SKIP.contains(&leaf.as_str()));
+      for leaf in rest {
+        let v = &core[leaf.as_str()];
+        let zero = v.as_u64() == Some(0) || v.as_str().is_some_and(|s| s.bytes().all(|b| b == b'0'));
+        assert!(zero, "{label}: {leaf} = {v}, not Core's default");
+        f.seen.insert(leaf);
+      }
     }
     other => panic!("{label}: no Core object expected for {other:?}"),
   }
@@ -374,8 +378,13 @@ fn compare_cbtx(f: &mut Fields<'_>, p: &CoinbaseCommitment, bls: BlsCtx) {
 }
 
 /// Core's lazy `ToString`, `Get()` printed under the captured scheme.
-fn lazy_hex(p: &ProRegTx) -> String {
-  hex(&p.pub_key_operator.get().to_bytes(p.pub_key_operator.scheme()))
+fn lazy_hex(key: &BlsLazyPk) -> String {
+  hex(&key.get().to_bytes(key.scheme()))
+}
+
+/// A version-sourced eager field as Core prints it, under its own scheme.
+fn eager_hex<K: BlsWire<N>, const N: usize>(field: &BlsEager<K, N>) -> String {
+  hex(&field.to_bytes(field.scheme()))
 }
 
 /// Core's `RewardScript`: the refund script when the reward script is empty.
