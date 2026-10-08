@@ -182,6 +182,20 @@ impl fmt::Display for TxInvalid {
   }
 }
 
+/// An encode target that counts the bytes written instead of storing them.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Unencodable)]
+struct ByteCount(usize);
+
+impl EncodeBuf for ByteCount {
+  fn push(&mut self, _byte: u8) {
+    self.0 += 1;
+  }
+
+  fn extend_from_slice(&mut self, data: &[u8]) {
+    self.0 += data.len();
+  }
+}
+
 /// A Dash transaction.
 ///
 /// The wire format packs `version` (i16) and `tx_type` (u16) into a single
@@ -259,10 +273,10 @@ impl Checkable for Transaction {
       return Some(TxInvalid::EmptyOutputs);
     }
 
-    let mut buf = Vec::new();
-    self.encode(&mut buf);
-    if buf.len() > MAX_LEGACY_BLOCK_SIZE {
-      return Some(TxInvalid::Oversize { size: buf.len() });
+    let mut size = ByteCount::default();
+    self.encode(&mut size);
+    if size.0 > MAX_LEGACY_BLOCK_SIZE {
+      return Some(TxInvalid::Oversize { size: size.0 });
     }
 
     if !self.has_extra_payload() && !self.extra_payload.is_empty() {
@@ -479,10 +493,6 @@ mod tests {
       assert_eq!(decoded.extra_payload.len(), v.payload_len);
       // Core's size rules, in Core's order. `check` also runs the payload
       // rules Core leaves to `CheckSpecialTx`, which the padding breaks.
-      // Past the first oversize vector, re-encoding in `check` is only slow.
-      if v.payload_len > 1_000_000 {
-        continue;
-      }
       let reason = decoded.check().map(|e| e.to_string()).unwrap_or_default();
       if v.core == "accept" {
         assert!(!reason.contains("oversize"), "{}: {reason}", v.payload_len);
