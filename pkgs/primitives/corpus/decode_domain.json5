@@ -41,4 +41,21 @@
     { "payload_len": 33554432, "core": "bad-txns-oversize" },
     { "payload_len": 33554433, "core": "decode: ReadCompactSize(): size too large" },
   ],
+  // Real mainnet special transactions (from the named corpus file and
+  // section) with "trailing" zero bytes appended to the extra payload. At
+  // v23.1.8 and v24.0.0-rc.3, decoderawtransaction decodes each transaction
+  // but omits the payload object, because GetTxPayload returns nullopt when
+  // its stream is not empty after the payload.
+  "payload_trailing": [
+    {
+      "corpus": "proregtx",
+      "txid": "a9e25c9aa56874c5703fc78ce8541364560d5b21eb12812cf452a27776b1f840",
+      "trailing": 1,
+    },
+    {
+      "corpus": "cbtx",
+      "txid": "ac9fc5d0c7229a1c9fb834d8c6f6be200ae5b55d1b731c38afd83adc0c54aa31",
+      "trailing": 1,
+    },
+  ],
 }

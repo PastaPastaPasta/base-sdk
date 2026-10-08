@@ -39,9 +39,9 @@ pub use gov::{
 };
 pub use payload::{
   AssetLock, AssetLockInvalid, AssetUnlock, AssetUnlockInvalid, CbTxInvalid, CoinbaseCommitment, Commitment,
-  CommitmentInvalid, FinalCommitment, InputsHash, MnHardFork, MnHardForkInvalid, MnType, PayloadError, PayloadInvalid,
-  PlatformNodeId, ProRegTx, ProTxInvalid, ProUpRegTx, ProUpRevTx, ProUpServTx, QuorumHash, QuorumVvecHash,
-  SpecialPayload, TxType, VERSIONBITS_NUM_BITS,
+  CommitmentInvalid, FinalCommitment, InputsHash, MnHardFork, MnHardForkInvalid, MnType, PayloadDecode, PayloadError,
+  PayloadInvalid, PlatformNodeId, ProRegTx, ProTxInvalid, ProUpRegTx, ProUpRevTx, ProUpServTx, QuorumHash,
+  QuorumVvecHash, SpecialPayload, TxType, VERSIONBITS_NUM_BITS,
 };
 pub use support::{DynBitset, DynBitsetIterator, LlmqType, RevocationReason};
 pub use transaction::{

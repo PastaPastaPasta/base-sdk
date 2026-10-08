@@ -229,6 +229,28 @@ pub enum SpecialPayload {
   },
 }
 
+/// A special payload decoded from the front of a transaction's extra payload.
+///
+/// Core's `GetTxPayload` rejects a payload its decoder does not read to the
+/// end. That rule is the caller's, applied by comparing `consumed` with `len`.
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Unencodable)]
+pub struct PayloadDecode {
+  /// The decoded payload.
+  pub payload: SpecialPayload,
+  /// Bytes the payload's decoder read.
+  pub consumed: usize,
+  /// Bytes in the extra payload.
+  pub len: usize,
+}
+
+impl PayloadDecode {
+  /// Returns `true` when the decoder read every byte, as `GetTxPayload`
+  /// requires.
+  pub fn is_complete(&self) -> bool {
+    self.consumed == self.len
+  }
+}
+
 /// Error decoding a special payload.
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Unencodable)]
 pub struct PayloadError {

@@ -7,7 +7,7 @@
 //! Dash transaction with version/type packing and optional extra payload for
 //! special transactions.
 
-use crate::payload::{PayloadError, PayloadInvalid, TxType};
+use crate::payload::{PayloadDecode, PayloadError, PayloadInvalid, SpecialPayload, TxType};
 use crate::prelude::*;
 use crate::{codec_type, hash_impl};
 
@@ -315,11 +315,17 @@ impl Checkable for Transaction {
 
     if let Some(result) = self.decode_payload() {
       match result {
-        Ok(ref payload) if payload.is_unknown() => {
+        Ok(decoded) if !decoded.is_complete() => {
+          return Some(TxInvalid::PayloadDecode(PayloadError {
+            tx_type: self.tx_type,
+            message: format!("trailing bytes: {} remaining", decoded.len - decoded.consumed),
+          }));
+        }
+        Ok(decoded) if decoded.payload.is_unknown() => {
           return Some(TxInvalid::PayloadCheck(PayloadInvalid::UnknownType(self.tx_type)));
         }
-        Ok(payload) => {
-          if let Some(e) = payload.check() {
+        Ok(decoded) => {
+          if let Some(e) = decoded.payload.check() {
             return Some(TxInvalid::PayloadCheck(e));
           }
         }
@@ -354,29 +360,26 @@ impl Transaction {
     self.version >= 3 && self.tx_type != TxType::Spend
   }
 
-  /// Decodes the special transaction payload, if present.
+  /// Decodes the special transaction payload, if present, reporting how many
+  /// of its bytes the decoder read.
   ///
   /// Returns `None` for spend/coinbase transactions that carry no extra
-  /// payload.
+  /// payload. Unread bytes are not an error here, see [`PayloadDecode`].
   ///
   /// # Errors
   ///
   /// Returns `PayloadError` if the payload bytes cannot be decoded for the
   /// declared transaction type.
-  pub fn decode_payload(&self) -> Option<Result<crate::payload::SpecialPayload, crate::payload::PayloadError>> {
+  pub fn decode_payload(&self) -> Option<Result<PayloadDecode, PayloadError>> {
     if !self.has_extra_payload() {
       return None;
     }
     let mut cursor = &self.extra_payload[..];
-    let result = crate::payload::SpecialPayload::decode(self.tx_type, &mut cursor);
-    Some(result.and_then(|payload| {
-      if !cursor.is_empty() {
-        return Err(crate::payload::PayloadError {
-          tx_type: self.tx_type,
-          message: format!("trailing bytes: {} remaining", cursor.len()),
-        });
-      }
-      Ok(payload)
+    let result = SpecialPayload::decode(self.tx_type, &mut cursor);
+    Some(result.map(|payload| PayloadDecode {
+      payload,
+      consumed: self.extra_payload.len() - cursor.len(),
+      len: self.extra_payload.len(),
     }))
   }
 
@@ -471,6 +474,36 @@ mod tests {
           v.payload_len
         );
       }
+    }
+  }
+
+  #[derive(::serde::Deserialize)]
+  struct TrailingVector {
+    corpus: String,
+    txid: String,
+    trailing: usize,
+  }
+
+  /// The decoder reports unread payload bytes; rejecting them is the caller's
+  /// `GetTxPayload` rule.
+  #[rstest]
+  fn payload_consumption_is_reported() {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "decode_domain");
+    for v in corpus.vectors::<TrailingVector>("payload_trailing") {
+      let source = Corpus::open(env!("CARGO_MANIFEST_DIR"), &v.corpus).into_value();
+      let raw = source[&v.corpus][&v.txid]["raw"].as_str().map(vec_from_hex).unwrap();
+      let mut tx = Transaction::decode(&mut &raw[..]).unwrap();
+      let len = tx.extra_payload.len();
+
+      let exact = tx.decode_payload().unwrap().unwrap();
+      assert!(exact.is_complete(), "{}", v.txid);
+
+      tx.extra_payload.resize(len + v.trailing, 0);
+      let padded = tx.decode_payload().unwrap().unwrap();
+      assert_eq!((padded.consumed, padded.len), (len, len + v.trailing), "{}", v.txid);
+      assert!(!padded.is_complete(), "{}", v.txid);
+      assert_eq!(padded.payload, exact.payload, "{}", v.txid);
+      assert!(matches!(tx.check(), Some(TxInvalid::PayloadDecode(_))), "{}", v.txid);
     }
   }
 

@@ -28,8 +28,13 @@ fn enrich_tx(tx: &Transaction, val: &mut Value) -> Option<String> {
     None => return None,
   };
   match tx.decode_payload() {
-    Some(Ok(payload)) => {
-      if let Ok(v) = serde_json::to_value(&payload) {
+    Some(Ok(decoded)) if !decoded.is_complete() => Some(format!(
+      "{} payload: trailing bytes: {} remaining",
+      tx.tx_type,
+      decoded.len - decoded.consumed
+    )),
+    Some(Ok(decoded)) => {
+      if let Ok(v) = serde_json::to_value(&decoded.payload) {
         obj.insert("extra_payload".into(), v);
       }
       None
