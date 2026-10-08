@@ -11,8 +11,14 @@ use crate::P2pDecodeError;
 
 use dash_types::codec::BaseCodec;
 
-/// Maximum buffered P2P message payload.
+/// Core's `MAX_PROTOCOL_MESSAGE_LENGTH`, the V1 payload limit.
 pub(crate) const MAX_P2P_PAYLOAD_SIZE: usize = 3_145_728;
+
+/// Core's V2 `MAX_CONTENTS_LEN`: the long-form type and a V1-sized payload.
+///
+/// Core checks it on the whole contents before reading the type, so a
+/// short-ID message may carry 12 payload bytes more than the V1 limit.
+pub(crate) const MAX_V2_CONTENTS_SIZE: usize = 1 + 12 + MAX_P2P_PAYLOAD_SIZE;
 
 /// A message payload decoded the way Core's handler reads it.
 ///
@@ -28,8 +34,8 @@ pub trait MsgDecode: BaseCodec {
   ///
   /// # Errors
   ///
-  /// Returns `P2pDecodeError` where Core's handler throws or rejects the
-  /// payload before acting on it.
+  /// Returns `P2pDecodeError` where Core's handler throws, or stops before
+  /// reading the rest of the payload.
   fn decode_msg(data: &mut &[u8], _ctx: &ProtoCtx) -> Result<Self, P2pDecodeError> {
     Ok(Self::decode(data)?)
   }

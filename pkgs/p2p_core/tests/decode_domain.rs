@@ -11,7 +11,8 @@
 
 use dash_dev::{vec_from_hex, Corpus};
 use dash_p2p_core::{
-  CommandString, DecodedMsg, P2pDecodeError, P2pMsg, ProtoCtx, ProtocolVersion, QSendRecSigs, SendDsq, Version,
+  decode_v2, CommandString, DecodedMsg, P2pDecodeError, P2pMsg, Ping, ProtoCtx, ProtocolVersion, QSendRecSigs, SendDsq,
+  Version,
 };
 use dash_pkc::bls::BlsCtx;
 use dash_types::codec::BaseCodec;
@@ -25,6 +26,14 @@ struct VersionVector {
   core: String,
   relaytxes: Option<bool>,
   groups: Option<usize>,
+}
+
+#[derive(::serde::Deserialize)]
+struct V2Vector {
+  form: String,
+  payload_len: usize,
+  contents_len: usize,
+  core: String,
 }
 
 #[derive(::serde::Deserialize)]
@@ -207,8 +216,10 @@ fn unknown_command_round_trips() {
   assert_eq!(buf, [0, 1, 2]);
 }
 
-/// Core's transport refuses any message above `MAX_PROTOCOL_MESSAGE_LENGTH`
-/// (3 MiB, `net.h` at both pins), whatever its command.
+/// Core's V1 transport refuses a payload above `MAX_PROTOCOL_MESSAGE_LENGTH`
+/// (3 MiB, `net.h` and `net.cpp` `readHeader` at both pins) before it reads
+/// the command. The bound is from source; the r1 review saw both pins
+/// disconnect at 3 MiB + 1 for every command.
 #[rstest]
 #[case::typed("ping")]
 #[case::empty("verack")]
@@ -225,4 +236,42 @@ fn every_command_is_bound_by_the_protocol_limit(#[case] name: &str) {
     P2pMsg::decode_with_policy(&command(name), &above, &ctx(70240)),
     Err(P2pDecodeError::PayloadTooLarge { .. })
   ));
+}
+
+/// Core's V2 transport bounds the whole contents, type included, before it
+/// reads the type, so a short-ID payload may exceed the V1 limit by 12 bytes.
+#[rstest]
+fn v2_contents_are_bound_as_core() {
+  const NONCE: u64 = 0x0124_5678;
+  for v in corpus().vectors::<V2Vector>("v2_contents") {
+    let mut contents = match v.form.as_str() {
+      "short" => vec![18],
+      "long" => b"\0ping\0\0\0\0\0\0\0\0".to_vec(),
+      _ => vec![0xfe],
+    };
+    contents.extend_from_slice(&NONCE.to_le_bytes());
+    contents.resize(contents.len() + v.payload_len - 8, 0);
+    assert_eq!(contents.len(), v.contents_len);
+    let decoded = decode_v2(&contents, &ctx(70240));
+    let label = format!("{} {}", v.form, v.payload_len);
+    match v.core.as_str() {
+      "accept" => assert_eq!(
+        decoded,
+        Ok(DecodedMsg {
+          msg: P2pMsg::Ping(Ping { nonce: NONCE }),
+          consumed: 8,
+        }),
+        "{label}"
+      ),
+      "disconnect: packet too large" => assert!(
+        matches!(decoded, Err(P2pDecodeError::ContentsTooLarge { .. })),
+        "{label}: {decoded:?}"
+      ),
+      "dropped: invalid message type" => assert!(
+        matches!(decoded, Err(P2pDecodeError::UnknownShortId { .. })),
+        "{label}: {decoded:?}"
+      ),
+      other => panic!("{label}: unexpected outcome {other}"),
+    }
+  }
 }

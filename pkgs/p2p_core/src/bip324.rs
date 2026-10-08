@@ -6,6 +6,7 @@
 
 //! BIP324 V2 message framing.
 
+use crate::codec::MAX_V2_CONTENTS_SIZE;
 use crate::command::CommandString;
 use crate::ctx::ProtoCtx;
 use crate::msg::{DecodedMsg, P2pMsg};
@@ -29,43 +30,46 @@ pub fn encode_v2(msg: &P2pMsg, buf: &mut Vec<u8>) {
   msg.encode_payload(buf);
 }
 
-/// Decodes V2 framed bytes into a `P2pMsg` under `ctx`.
+/// Decodes V2 packet contents into a `P2pMsg` under `ctx`.
 ///
 /// [`DecodedMsg::consumed`] counts payload bytes after the 1-byte short ID or
-/// the 13-byte long-form type.
+/// the 13-byte long-form type. The contents are bound by Core's V2 limit,
+/// checked before the type, and the V1 payload limit does not apply.
 ///
 /// # Errors
 ///
-/// Returns `P2pDecodeError` for a malformed frame, an unassigned short ID, or
-/// a payload [`P2pMsg::decode_with_policy`] rejects.
-pub fn decode_v2(payload: &[u8], ctx: &ProtoCtx) -> Result<DecodedMsg, P2pDecodeError> {
-  if payload.is_empty() {
+/// Returns `ContentsTooLarge` above the limit, on which Core disconnects.
+/// Returns another `P2pDecodeError` for empty contents, a cut long-form type
+/// or an unassigned short ID, which Core drops, or for a payload
+/// [`P2pMsg::decode_with_policy`] rejects.
+pub fn decode_v2(contents: &[u8], ctx: &ProtoCtx) -> Result<DecodedMsg, P2pDecodeError> {
+  if contents.len() > MAX_V2_CONTENTS_SIZE {
+    return Err(P2pDecodeError::ContentsTooLarge {
+      size: contents.len(),
+      max: MAX_V2_CONTENTS_SIZE,
+    });
+  }
+  let Some((&short_id, rest)) = contents.split_first() else {
     return Err(P2pDecodeError::Consensus(String::from(
       "unexpected eof: needed 1 byte, 0 remaining",
     )));
-  }
-
-  let short_id = payload[0];
-  let rest = &payload[1..];
+  };
 
   if short_id == 0 {
     // Long format: next 12 bytes are the command string.
-    if rest.len() < 12 {
+    let Some((cmd_bytes, payload)) = rest.split_first_chunk::<12>() else {
       return Err(P2pDecodeError::Consensus(format!(
         "unexpected eof: needed 12 bytes, {} remaining",
         rest.len()
       )));
-    }
-    let mut cmd_bytes = [0u8; 12];
-    cmd_bytes.copy_from_slice(&rest[..12]);
-    let cmd = CommandString::from_bytes(cmd_bytes);
-    P2pMsg::decode_with_policy(&cmd, &rest[12..], ctx)
+    };
+    let cmd = CommandString::from_bytes(*cmd_bytes);
+    P2pMsg::dispatch(&cmd, payload, ctx)
   } else {
     // Short ID: resolve to command, then decode payload.
-    let sid = ShortId(short_id);
-    let cmd = sid
+    let cmd = ShortId(short_id)
       .to_command()
       .ok_or(P2pDecodeError::UnknownShortId { id: short_id })?;
-    P2pMsg::decode_with_policy(&cmd, rest, ctx)
+    P2pMsg::dispatch(&cmd, rest, ctx)
   }
 }

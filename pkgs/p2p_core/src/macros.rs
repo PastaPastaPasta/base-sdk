@@ -10,7 +10,7 @@ use crate::codec::MAX_P2P_PAYLOAD_SIZE;
 use crate::command::CommandString;
 use crate::P2pDecodeError;
 
-/// Reject payloads that exceed the protocol limit.
+/// Rejects a V1 payload above Core's `MAX_PROTOCOL_MESSAGE_LENGTH`.
 pub(crate) fn check_payload(command: &CommandString, payload: &[u8]) -> Result<(), P2pDecodeError> {
   if payload.len() > MAX_P2P_PAYLOAD_SIZE {
     return Err(P2pDecodeError::PayloadTooLarge {
@@ -160,25 +160,35 @@ macro_rules! define_p2p {
         matches!(self, Self::Unknown { .. })
       }
 
-      /// Decodes a message as Core's handler for `cmd` reads its payload.
+      /// Decodes a V1 message as Core's handler for `cmd` reads its payload.
       ///
       /// An unknown command decodes to [`P2pMsg::Unknown`]. A command whose
       /// handler reads nothing ignores its payload, and a typed message
       /// reports the bytes its handler reads in [`DecodedMsg::consumed`].
-      /// Every command is bound by Core's 3 MiB message limit. Gates that
-      /// depend on connection state, and the transport's command-string
-      /// checks, run before this.
+      /// The payload is bound by the V1 transport's 3 MiB limit;
+      /// [`crate::decode_v2`] applies the V2 limit instead. Gates that depend
+      /// on connection state, and the transport's command-string checks, run
+      /// before this.
       ///
       /// # Errors
       ///
-      /// Returns `P2pDecodeError` where Core's handler throws or rejects the
-      /// payload before acting on it.
+      /// Returns `P2pDecodeError` where Core's transport refuses the payload,
+      /// or where its handler throws or stops before reading the rest.
       pub fn decode_with_policy(
         cmd: &CommandString,
         payload: &[u8],
         ctx: &crate::ctx::ProtoCtx,
       ) -> Result<DecodedMsg, crate::P2pDecodeError> {
         crate::macros::check_payload(cmd, payload)?;
+        Self::dispatch(cmd, payload, ctx)
+      }
+
+      /// Decodes as `cmd`'s handler reads, once the transport bound passed.
+      pub(crate) fn dispatch(
+        cmd: &CommandString,
+        payload: &[u8],
+        ctx: &crate::ctx::ProtoCtx,
+      ) -> Result<DecodedMsg, crate::P2pDecodeError> {
         let mut cursor = payload;
         let msg = match *cmd {
           $(

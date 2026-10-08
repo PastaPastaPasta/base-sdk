@@ -34,6 +34,15 @@ pub enum P2pDecodeError {
     /// Maximum allowed size, in bytes.
     max: usize,
   },
+  /// V2 packet contents exceed the transport limit.
+  ///
+  /// Core disconnects on the decrypted length, before reading the type.
+  ContentsTooLarge {
+    /// Size of the contents, type included, in bytes.
+    size: usize,
+    /// Maximum allowed size, in bytes.
+    max: usize,
+  },
   /// A message lists more entries than its handler accepts.
   ///
   /// Core checks the count before reading any entry and penalises the peer.
@@ -77,6 +86,9 @@ impl fmt::Display for P2pDecodeError {
       }
       Self::PayloadTooLarge { command, size, max } => {
         write!(f, "{command} payload too large: {size} bytes, max {max}")
+      }
+      Self::ContentsTooLarge { size, max } => {
+        write!(f, "v2 contents too large: {size} bytes, max {max}")
       }
       Self::TooManyEntries { command, count, max } => {
         write!(f, "{command} lists {count} entries, max {max}")
