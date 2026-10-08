@@ -46,8 +46,15 @@ serde = { workspace = true, features = [
 
 [dev-dependencies]
 dash-dev = { version = "0.0.0", path = "../dev", features = ["full"] }
+divan = { workspace = true }
 hex-conservative = { workspace = true, features = ["std"] }
 rstest = { workspace = true }
+
+[[bench]]
+name = "p2p_core"
+path = "bench/main.rs"
+harness = false
+required-features = ["serde"]
 
 [lints]
 workspace = true
