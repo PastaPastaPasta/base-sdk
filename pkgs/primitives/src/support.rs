@@ -259,6 +259,7 @@ mod tests {
   #[rstest]
   fn llmq_types_match_core() {
     use super::LlmqType;
+
     use dash_types::Numeric;
 
     let core: [(u8, &str); 14] = [

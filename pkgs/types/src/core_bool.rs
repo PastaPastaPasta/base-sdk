@@ -22,13 +22,6 @@ use core::fmt;
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, TypeId)]
 pub struct CoreBool(pub bool);
 
-impl CoreBool {
-  /// Returns the boolean value.
-  pub const fn get(self) -> bool {
-    self.0
-  }
-}
-
 impl BaseCodec for CoreBool {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     Ok(Self(take::<1>(data)?[0] != 0))
@@ -36,6 +29,13 @@ impl BaseCodec for CoreBool {
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
     buf.push(u8::from(self.0));
+  }
+}
+
+impl CoreBool {
+  /// Returns the boolean value.
+  pub const fn get(self) -> bool {
+    self.0
   }
 }
 

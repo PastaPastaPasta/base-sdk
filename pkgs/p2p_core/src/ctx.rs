@@ -9,12 +9,13 @@
 use crate::version::ProtocolVersion;
 
 use dash_pkc::bls::BlsCtx;
+use dash_types::type_id::Unencodable;
 
 /// The state Core consults while it reads a message from a peer.
 ///
 /// Some payloads decode differently by the version negotiated with the peer
 /// or by the BLS scheme in force when the message is processed.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
 #[non_exhaustive]
 pub struct ProtoCtx {
   /// The negotiated version, Core's `GetCommonVersion()`.
