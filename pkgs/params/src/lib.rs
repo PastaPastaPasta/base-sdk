@@ -22,6 +22,7 @@ mod types;
 use dash_primitives::Block;
 use dash_script::AddrParams;
 
+pub use dash_primitives::LlmqType;
 pub use types::*;
 
 /// Dash network identifier.
