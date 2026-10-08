@@ -18,7 +18,7 @@ use dash_primitives::{
   CoinbaseCommitment, MnType, NIEntry, NITrait, NetInfo, PayloadDecode, SpecialPayload, Transaction,
 };
 use dash_types::codec::BaseCodec;
-use dash_types::Numeric;
+use dash_types::{Checkable, Numeric};
 use hex_conservative::DisplayHex;
 
 use std::collections::BTreeSet;
@@ -437,6 +437,8 @@ fn v24_payloads_match_core() {
     let decoded = accepted(&tx, BlsCtx::BASIC).unwrap_or_else(|| panic!("{txid}: payload"));
     let core = entry["core"].as_object().unwrap().values().next().unwrap();
     compare(txid, &decoded.payload, core, BlsCtx::BASIC);
+    // Core mined these, so base-sdk's partial checks must pass them.
+    assert_eq!(decoded.payload.check(), None, "{txid}: check");
     types.insert(tx.tx_type.to_base());
     assert_eq!(reencode(&decoded.payload), tx.extra_payload, "{txid}: re-encode");
   }

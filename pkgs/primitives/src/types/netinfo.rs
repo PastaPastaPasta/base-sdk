@@ -386,7 +386,8 @@ pub trait NITrait: fmt::Display {
   /// Returns the primary service if available.
   fn primary(&self) -> Option<ServiceV2>;
 
-  /// Returns `true` when this value carries no addresses.
+  /// Returns `true` when this value is empty as Core's `IsEmpty` sees it: no
+  /// address for legacy info, a known version with no groups for extended.
   fn is_empty(&self) -> bool;
 
   /// Returns `true` if entries exist for the given purpose.
@@ -1132,6 +1133,16 @@ mod tests {
     assert!(!valid_v2().is_empty());
     assert!(valid_v2().has_entries(NIPurpose::CoreP2p));
     assert!(valid_v2().stores_platform());
+  }
+
+  /// Core's `ExtNetInfo::IsEmpty` is a known version with no groups: an
+  /// unknown version, or a group with no entries, is not empty.
+  #[rstest]
+  #[case::unknown_version(NetInfoV2 { version: 2, entries: vec![] }, false)]
+  #[case::empty_group(NetInfoV2 { version: 1, entries: vec![(NIPurpose::CoreP2p, vec![])] }, false)]
+  #[case::no_groups(NetInfoV2 { version: 1, entries: vec![] }, true)]
+  fn v2_is_empty_as_core(#[case] info: NetInfoV2, #[case] empty: bool) {
+    assert_eq!(info.is_empty(), empty);
   }
 
   #[rstest]
