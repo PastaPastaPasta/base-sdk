@@ -14,6 +14,8 @@ use crate::prelude::*;
 use crate::short_id::ShortId;
 use crate::P2pDecodeError;
 
+use dash_types::type_id::Unencodable;
+
 /// Encodes a `P2pMsg` into V2 framed bytes.
 pub fn encode_v2(msg: &P2pMsg, buf: &mut Vec<u8>) {
   match msg.short_id() {
@@ -36,6 +38,39 @@ const fn is_core_short_id(id: u8) -> bool {
   matches!(id, 1..=32 | 128..=168)
 }
 
+/// V2 packet contents Core's transport has typed: the type and its payload.
+///
+/// Only [`split_v2`] builds one, so its payload is within the V2 limit.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
+pub struct V2Message<'a> {
+  command: CommandString,
+  payload: &'a [u8],
+}
+
+impl<'a> V2Message<'a> {
+  /// The message type; the empty type for a short ID Core reserves.
+  pub const fn command(&self) -> CommandString {
+    self.command
+  }
+
+  /// The payload after the 1-byte short ID or the 13-byte long-form type.
+  pub const fn payload(&self) -> &'a [u8] {
+    self.payload
+  }
+
+  /// Decodes the payload as Core's handler for the type reads it.
+  ///
+  /// [`DecodedMsg::consumed`] counts payload bytes.
+  ///
+  /// # Errors
+  ///
+  /// Returns `P2pDecodeError` where Core's handler throws, or stops before
+  /// reading the rest of the payload.
+  pub fn decode(self, ctx: &ProtoCtx) -> Result<DecodedMsg, P2pDecodeError> {
+    P2pMsg::dispatch(&self.command, self.payload, ctx)
+  }
+}
+
 /// Splits V2 packet contents into the message type and its payload.
 ///
 /// The contents are bound by Core's V2 limit, checked before the type. A
@@ -47,7 +82,7 @@ const fn is_core_short_id(id: u8) -> bool {
 /// Returns `ContentsTooLarge` above the limit, on which Core disconnects.
 /// Returns `EmptyV2Contents`, `TruncatedV2Type` or `UnknownShortId` for
 /// contents Core cannot type, which it drops while keeping the peer.
-pub fn split_v2(contents: &[u8]) -> Result<(CommandString, &[u8]), P2pDecodeError> {
+pub fn split_v2(contents: &[u8]) -> Result<V2Message<'_>, P2pDecodeError> {
   if contents.len() > MAX_V2_CONTENTS_SIZE {
     return Err(P2pDecodeError::ContentsTooLarge {
       size: contents.len(),
@@ -59,28 +94,28 @@ pub fn split_v2(contents: &[u8]) -> Result<(CommandString, &[u8]), P2pDecodeErro
   };
   if short_id == 0 {
     // Long format: next 12 bytes are the command string.
-    return match rest.split_first_chunk::<12>() {
-      Some((cmd, payload)) => Ok((CommandString::from_bytes(*cmd), payload)),
-      None => Err(P2pDecodeError::TruncatedV2Type { remaining: rest.len() }),
+    let Some((bytes, payload)) = rest.split_first_chunk::<12>() else {
+      return Err(P2pDecodeError::TruncatedV2Type { remaining: rest.len() });
     };
+    let command = CommandString::from_bytes(*bytes);
+    return Ok(V2Message { command, payload });
   }
-  match ShortId(short_id).to_command() {
-    Some(cmd) => Ok((cmd, rest)),
-    None if is_core_short_id(short_id) => Ok((CommandString::from_bytes([0; 12]), rest)),
-    None => Err(P2pDecodeError::UnknownShortId { id: short_id }),
-  }
+  let command = match ShortId(short_id).to_command() {
+    Some(command) => command,
+    None if is_core_short_id(short_id) => CommandString::from_bytes([0; 12]),
+    None => return Err(P2pDecodeError::UnknownShortId { id: short_id }),
+  };
+  Ok(V2Message { command, payload: rest })
 }
 
 /// Decodes V2 packet contents into a `P2pMsg` under `ctx`.
 ///
-/// [`split_v2`], then [`P2pMsg::decode_v2_payload`]. [`DecodedMsg::consumed`]
-/// counts payload bytes after the type. A policy that needs the command of a
-/// payload its handler rejects calls the two itself.
+/// [`split_v2`], then [`V2Message::decode`]. A policy that needs the type of
+/// a payload its handler rejects calls the two itself.
 ///
 /// # Errors
 ///
 /// Returns the error of [`split_v2`] or of the payload's handler.
 pub fn decode_v2(contents: &[u8], ctx: &ProtoCtx) -> Result<DecodedMsg, P2pDecodeError> {
-  let (cmd, payload) = split_v2(contents)?;
-  P2pMsg::decode_v2_payload(&cmd, payload, ctx)
+  split_v2(contents)?.decode(ctx)
 }

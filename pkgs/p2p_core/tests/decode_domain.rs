@@ -311,14 +311,14 @@ fn v2_type_errors_differ_from_payload_errors() {
     Err(P2pDecodeError::TruncatedV2Type { remaining: 4 })
   );
   // A ping cut short: the transport has typed it, its handler throws.
-  let (cmd, payload) = split_v2(&[18, 0x2a]).unwrap();
-  assert_eq!((cmd, payload), (CommandString::PING, &[0x2a][..]));
-  assert!(matches!(
-    P2pMsg::decode_v2_payload(&cmd, payload, &ctx(70240)),
-    Err(P2pDecodeError::Consensus(_))
-  ));
+  let message = split_v2(&[18, 0x2a]).unwrap();
+  assert_eq!(
+    (message.command(), message.payload()),
+    (CommandString::PING, &[0x2a][..])
+  );
+  assert!(matches!(message.decode(&ctx(70240)), Err(P2pDecodeError::Consensus(_))));
   // Short IDs 29 to 32 are reserved like 5; 169 is past Dash's slots.
-  assert_eq!(split_v2(&[32, 1]).map(|(c, _)| *c.as_bytes()), Ok([0; 12]));
+  assert_eq!(split_v2(&[32, 1]).map(|m| *m.command().as_bytes()), Ok([0; 12]));
   assert_eq!(split_v2(&[169]), Err(P2pDecodeError::UnknownShortId { id: 169 }));
 }
 
