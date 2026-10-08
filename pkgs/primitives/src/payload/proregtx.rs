@@ -10,7 +10,6 @@ use super::{
   check_sptx_netinfo, InputsHash, MnType, ProTxInvalid, MAX_OPERATOR_REWARD, PROTX_VERSION_BASIC_BLS,
   PROTX_VERSION_EXT_ADDR,
 };
-use crate::codec::impl_payload;
 use crate::payload::PlatformNodeId;
 use crate::prelude::*;
 use crate::types::{NITrait, NetInfo, NetInfoV1, NetInfoV2, ServiceV1};
@@ -21,7 +20,7 @@ use dash_pkc::bls::{BlsPkBytes, BlsScIetf};
 use dash_script::{PubKeyHash, Recipient};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
-use dash_types::{Checkable, Numeric};
+use dash_types::{impl_type, Checkable, Numeric};
 
 use core::fmt;
 
@@ -71,7 +70,7 @@ pub struct ProRegTx {
   pub vch_sig: Vec<u8>,
 }
 
-impl_payload!(ProRegTx);
+impl_type!(ProRegTx);
 
 /// Checks that platform fields are consistent with mn_type and version.
 pub(super) fn check_platform_fields(

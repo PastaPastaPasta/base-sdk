@@ -6,7 +6,7 @@
 
 //! AssetLock (type 8): L1 to Platform.
 
-use crate::codec::codec_payload;
+use crate::codec_type;
 use crate::prelude::*;
 use crate::transaction::{money_range, TxOut};
 
@@ -27,7 +27,7 @@ pub struct AssetLock {
   pub credit_outputs: Vec<TxOut>,
 }
 
-codec_payload!(AssetLock {
+codec_type!(AssetLock {
   version,
   credit_outputs
 });

@@ -7,7 +7,6 @@
 //! LLMQ final commitment payload (type 6).
 
 use super::QuorumHash;
-use crate::codec::impl_payload;
 use crate::hash_impl;
 use crate::support::{DynBitset, LlmqType};
 
@@ -15,7 +14,7 @@ use dash_num::make_hash;
 use dash_pkc::bls::{BlsPkBytes, BlsScIetf, BlsSigBytes};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{Checkable, Numeric};
+use dash_types::{impl_type, Checkable, Numeric};
 
 use core::fmt;
 
@@ -58,7 +57,7 @@ pub struct Commitment {
   pub members_sig: BlsSigBytes<BlsScIetf>,
 }
 
-impl_payload!(Commitment);
+impl_type!(Commitment);
 
 impl BaseCodec for Commitment {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
@@ -130,7 +129,7 @@ pub struct FinalCommitment {
   pub commitment: Commitment,
 }
 
-impl_payload!(FinalCommitment);
+impl_type!(FinalCommitment);
 
 impl BaseCodec for FinalCommitment {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {

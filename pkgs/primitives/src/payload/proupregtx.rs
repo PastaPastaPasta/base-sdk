@@ -7,7 +7,7 @@
 //! ProUpRegTx registrar-update payload (type 3).
 
 use super::{InputsHash, ProTxInvalid};
-use crate::codec::codec_payload;
+use crate::codec_type;
 use crate::prelude::*;
 use crate::TxHash;
 
@@ -46,7 +46,7 @@ pub struct ProUpRegTx {
   pub vch_sig: Vec<u8>,
 }
 
-codec_payload!(ProUpRegTx {
+codec_type!(ProUpRegTx {
   version,
   pro_tx_hash,
   mode,

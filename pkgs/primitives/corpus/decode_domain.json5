@@ -28,4 +28,17 @@
       "core": "bad-txns-txouttotal-toolarge",
     },
   ],
+  // Mainnet CbTx ac9fc5d0... (block 000000000000003bb55596232b23ffe0dd9f88b8d1c5cc4123184a61b132dafa,
+  // section "cbtx" of cbtx.json5) with its extra payload zero-padded to
+  // "payload_len" bytes. Core reads vExtraPayload as a std::vector, so any
+  // length up to MAX_SIZE decodes and CheckTransaction enforces the limits;
+  // one byte more fails in ReadCompactSize ("size too large").
+  "tx_payload_size": [
+    { "payload_len": 10000, "core": "accept" },
+    { "payload_len": 10001, "core": "bad-txns-payload-oversize" },
+    { "payload_len": 10241, "core": "bad-txns-payload-oversize" },
+    { "payload_len": 1000000, "core": "bad-txns-oversize" },
+    { "payload_len": 33554432, "core": "bad-txns-oversize" },
+    { "payload_len": 33554433, "core": "decode: ReadCompactSize(): size too large" },
+  ],
 }

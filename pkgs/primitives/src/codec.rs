@@ -6,9 +6,6 @@
 
 //! Codec helpers for primitives payload types.
 
-/// Maximum special-transaction payload size over the wire (10 KiB).
-pub const MAX_SPTX_PAYLOAD_SIZE: usize = 10_240;
-
 /// Blanket `Hashable<Hash = Hash256>` via SHA256d of wire encoding.
 ///
 /// Also asserts that the type implements `TypeId`, producing a
@@ -40,14 +37,6 @@ macro_rules! hash_impl {
     };
   )* };
 }
-
-/// Generates `Encode` + `Decode` with payload size limit.
-macro_rules! impl_payload {
-  ($ty:ty) => {
-    $crate::__private::dash_types::impl_type!($ty, crate::codec::MAX_SPTX_PAYLOAD_SIZE);
-  };
-}
-pub(crate) use impl_payload;
 
 /// Generates `BaseCodec` + `Encode` + `Decode` for flat structs
 /// without `Hashable`.
@@ -86,13 +75,3 @@ macro_rules! codec_type {
     $crate::hash_impl!($ty);
   };
 }
-
-/// Generates `BaseCodec` + `Encode` + `Decode` + `Hashable` for
-/// flat structs with payload size limit.
-macro_rules! codec_payload {
-  ($ty:ty { $($field:ident),+ $(,)? }) => {
-    $crate::codec_base!($ty, crate::codec::MAX_SPTX_PAYLOAD_SIZE, { $($field),+ });
-    $crate::hash_impl!($ty);
-  };
-}
-pub(crate) use codec_payload;

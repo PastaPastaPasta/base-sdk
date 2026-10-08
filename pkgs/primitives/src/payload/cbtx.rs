@@ -6,14 +6,13 @@
 
 //! CoinbaseCommitment coinbase commitment payload (type 5).
 
-use crate::codec::impl_payload;
 use crate::{hash_impl, MerkleRoot};
 
 use bitcoin_units::BlockHeight;
 use dash_pkc::bls::{BlsScIetf, BlsSigBytes};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{Checkable, CompactSize, Numeric};
+use dash_types::{impl_type, Checkable, CompactSize, Numeric};
 
 use core::fmt;
 
@@ -42,7 +41,7 @@ pub struct CoinbaseCommitment {
   pub credit_pool_balance: Option<i64>,
 }
 
-impl_payload!(CoinbaseCommitment);
+impl_type!(CoinbaseCommitment);
 
 impl BaseCodec for CoinbaseCommitment {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
@@ -56,7 +55,7 @@ impl BaseCodec for CoinbaseCommitment {
     };
     let (best_cl_height_diff, best_cl_signature, credit_pool_balance) = if version >= 3 {
       (
-        Some(CompactSize::decode(data)?.to_base()),
+        Some(CompactSize::decode_size(data)?.to_base()),
         Some(BlsSigBytes::<BlsScIetf>::decode(data)?),
         Some(i64::decode(data)?),
       )

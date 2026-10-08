@@ -222,7 +222,7 @@ impl BaseCodec for Transaction {
       outputs: Vec::decode(data)?,
       lock_time: u32::decode(data)?,
       extra_payload: if version >= 3 && tx_type != TxType::Spend {
-        let len = CompactSize::decode(data)?.into_len(crate::codec::MAX_SPTX_PAYLOAD_SIZE)?;
+        let len = CompactSize::decode_size(data)?.into_len(data.len())?;
         codec::read_bytes(data, len)?.to_vec()
       } else {
         Vec::new()
@@ -431,6 +431,46 @@ mod tests {
       assert_eq!(buf, raw, "{}: re-encode", v.name);
       let reason = tx.check().map(|e| e.to_string()).unwrap_or_default();
       assert!(reason.starts_with(&v.core), "{}: {reason}", v.name);
+    }
+  }
+
+  #[derive(::serde::Deserialize)]
+  struct PayloadVector {
+    payload_len: usize,
+    core: String,
+  }
+
+  /// Core caps `vExtraPayload` only at `MAX_SIZE` while decoding.
+  #[rstest]
+  fn payload_decodes_up_to_max_size() {
+    let cbtx = Corpus::open(env!("CARGO_MANIFEST_DIR"), "cbtx");
+    let base = cbtx.into_value()["cbtx"]["ac9fc5d0c7229a1c9fb834d8c6f6be200ae5b55d1b731c38afd83adc0c54aa31"]["raw"]
+      .as_str()
+      .map(vec_from_hex)
+      .unwrap();
+    let base = Transaction::decode(&mut &base[..]).unwrap();
+
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "decode_domain");
+    for v in corpus.vectors::<PayloadVector>("tx_payload_size") {
+      let mut tx = base.clone();
+      tx.extra_payload.resize(v.payload_len, 0);
+      let mut raw = Vec::new();
+      tx.encode(&mut raw);
+      let decoded = Transaction::decode(&mut &raw[..]);
+      if v.core.starts_with("decode:") {
+        assert!(
+          matches!(decoded, Err(DecodeError::CompactSizeExceedsLimit { .. })),
+          "{}: {decoded:?}",
+          v.payload_len
+        );
+      } else {
+        assert_eq!(
+          decoded.map(|t| t.extra_payload.len()),
+          Ok(v.payload_len),
+          "{}",
+          v.payload_len
+        );
+      }
     }
   }
 

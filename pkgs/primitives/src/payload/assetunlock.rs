@@ -7,7 +7,7 @@
 //! AssetUnlock (type 9): Platform to L1.
 
 use super::QuorumHash;
-use crate::codec::codec_payload;
+use crate::codec_type;
 
 use dash_pkc::bls::{BlsScIetf, BlsSigBytes};
 use dash_types::type_id::{TypeId, Unencodable};
@@ -34,7 +34,7 @@ pub struct AssetUnlock {
   pub quorum_sig: BlsSigBytes<BlsScIetf>,
 }
 
-codec_payload!(AssetUnlock {
+codec_type!(AssetUnlock {
   version,
   index,
   fee,
