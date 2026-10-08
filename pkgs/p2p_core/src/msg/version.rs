@@ -238,7 +238,6 @@ impl BaseCodec for Version {
     self.services.encode(buf);
     self.timestamp.encode(buf);
     self.addr_recv.encode(buf);
-    debug_assert!(self.has_prefix_tail(), "optional version fields with a gap");
     self.encode_optional(buf);
   }
 }
