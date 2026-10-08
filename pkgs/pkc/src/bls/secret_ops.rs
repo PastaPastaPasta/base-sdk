@@ -229,6 +229,13 @@ impl BlsSkBytes {
   pub fn to<S: BlsScheme>(&self) -> Result<BlsSecretKey<S>, BlsError> {
     BlsSecretKey::try_from(self)
   }
+
+  /// Whether `S` decodes the bytes to a secret key that re-encodes to them.
+  ///
+  /// Null bytes pass, so pair with [`is_null`](Self::is_null) to require a key.
+  pub fn is_canonical<S: BlsScheme>(&self) -> bool {
+    self.is_null() || self.to::<S>().is_ok()
+  }
 }
 
 type_cvrt!(for[S: BlsScheme] TryFrom<BlsSecretKey<S>> for Zeroizing<Fr>, BlsError, |sk| {
@@ -250,6 +257,72 @@ mod tests {
   use hex_conservative::DisplayHex;
   use rstest::rstest;
   use serde::Deserialize;
+
+  /// Returns `GROUP_ORDER + delta` for a `delta` that leaves the high bytes
+  /// unchanged.
+  fn order_plus(delta: i8) -> [u8; 32] {
+    let mut bytes = GROUP_ORDER;
+    bytes[31] = bytes[31].wrapping_add_signed(delta);
+    bytes
+  }
+
+  fn small_scalar(v: u8) -> [u8; 32] {
+    let mut bytes = [0u8; 32];
+    bytes[31] = v;
+    bytes
+  }
+
+  type CanonicalFn = fn([u8; 32], bool);
+
+  fn assert_sk_bytes_canonical<S: BlsScheme>(bytes: [u8; 32], canonical: bool) {
+    assert_eq!(BlsSkBytes::from_bytes(bytes).is_canonical::<S>(), canonical);
+  }
+
+  #[rstest]
+  #[case::zero([0u8; 32], true)]
+  #[case::one(small_scalar(1), true)]
+  #[case::order_minus_one(order_plus(-1), true)]
+  #[case::order(GROUP_ORDER, false)]
+  #[case::order_plus_one(order_plus(1), false)]
+  #[case::max([0xFF; 32], false)]
+  fn sk_bytes_canonical_iff_null_or_scalar_in_range(
+    #[case] bytes: [u8; 32],
+    #[case] canonical: bool,
+    #[values(assert_sk_bytes_canonical::<BlsScChia>, assert_sk_bytes_canonical::<BlsScIetf>)] assertion: CanonicalFn,
+  ) {
+    assertion(bytes, canonical);
+  }
+
+  /// Bytes from every constructor parse back to the key they came from, which
+  /// lets `is_canonical` skip a re-encoding comparison.
+  fn assert_constructed_sk_is_canonical<S: BlsScheme>() {
+    let base = BlsSecretKey::<S>::from_ikm(&RSEED[1]).unwrap();
+    let other = BlsSecretKey::<S>::from_ikm(&RSEED[2]).unwrap();
+    let tweak = small_scalar(7);
+    let keys = [
+      BlsSecretKey::<S>::try_from(Fr::from_bendian_reduce(&order_plus(1)).unwrap()).unwrap(),
+      BlsSecretKey::<S>::try_from(Fr::from_bendian_reduce(&[0xFF; 32]).unwrap()).unwrap(),
+      BlsSecretKey::<S>::from_bytes(&order_plus(-1)).unwrap(),
+      base.add_tweak(&tweak).unwrap(),
+      base.mul_tweak(&tweak).unwrap(),
+      base.negate().unwrap(),
+      BlsSecretKey::aggregate(&[&base, &other]).unwrap(),
+      base.to_scheme::<BlsScIetf>().unwrap().to_scheme::<S>().unwrap(),
+      base,
+    ];
+    for sk in keys {
+      let bytes = BlsSkBytes::from(sk.clone());
+      assert!(bytes.is_canonical::<S>());
+      assert_eq!(*bytes.to::<S>().unwrap().to_bytes(), *sk.to_bytes());
+    }
+  }
+
+  #[rstest]
+  #[case::chia(assert_constructed_sk_is_canonical::<BlsScChia>)]
+  #[case::ietf(assert_constructed_sk_is_canonical::<BlsScIetf>)]
+  fn constructed_sk_is_canonical(#[case] assertion: fn()) {
+    assertion();
+  }
 
   #[derive(Clone, Copy, Debug)]
   enum Tweak {
