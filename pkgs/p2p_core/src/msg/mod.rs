@@ -7,6 +7,9 @@
 //! P2P message types and dispatch.
 
 mod addr;
+mod bloom;
+mod cfilter;
+mod compact;
 mod control;
 mod gov;
 mod headers;
@@ -21,13 +24,16 @@ use crate::command::CommandString;
 use crate::prelude::*;
 use crate::short_id::ShortId;
 
-use dash_primitives::{GovObject, GovVote};
+use dash_primitives::{Block, GovObject, GovVote, Transaction};
 use dash_types::type_id::Unencodable;
 
 pub use addr::{Addr, AddrV2Entry, AddrV2Msg, TimestampedAddr};
-pub use control::{QSendRecSigs, SendDsq};
+pub use bloom::{FilterAdd, FilterLoad, MerkleBlock, PartialMerkleTree};
+pub use cfilter::{CFCheckpt, CFHeaders, CFilter, GetCFCheckpt, GetCFHeaders, GetCFilters};
+pub use compact::{short_id_with_keys, BlockTxn, CmpctBlock, GetBlockTxn, PrefilledTx, SendCmpct, ShortTxId};
+pub use control::{QSendRecSigs, SendDsq, SendTxRcncl, Ssc};
 pub use gov::GovSync;
-pub use headers::{GetHeaders, Headers};
+pub use headers::{GetBlocks, GetHeaders, Headers};
 pub use headers2::{CompressedHeader, GetHeaders2, Headers2};
 pub use inv::{AssetUnlockInv, GetData, Inv, InvType, Inventory, NotFound};
 pub use mn_list::{DeletedQuorum, GetMnListDiff, MnListDiff, MnListDiffPayload, QuorumClSig, SimplifiedMnListEntry};
@@ -74,6 +80,34 @@ define_p2p! {
     SendDsq(SendDsq) => SENDDSQ "senddsq" @ 130,
     /// LLMQ: send recovered signatures.
     QSendRecSigs(QSendRecSigs) => QSENDRECSIGS "qsendrecsigs" @ 145,
+    /// Block data.
+    Block(Block) => BLOCK "block" @ 2,
+    /// Transaction.
+    Tx(Transaction) => TX "tx" @ 21,
+    /// Request block hashes.
+    GetBlocks(GetBlocks) => GETBLOCKS "getblocks" @ 9,
+    /// BIP37: load bloom filter.
+    FilterLoad(FilterLoad) => FILTERLOAD "filterload" @ 8,
+    /// BIP37: add data to bloom filter.
+    FilterAdd(FilterAdd) => FILTERADD "filteradd" @ 6,
+    /// BIP152: signal compact block support.
+    SendCmpct(SendCmpct) => SENDCMPCT "sendcmpct" @ 20,
+    /// BIP152: compact block.
+    CmpctBlock(CmpctBlock) => CMPCTBLOCK "cmpctblock" @ 4,
+    /// BIP152: request compact block transactions.
+    GetBlockTxn(GetBlockTxn) => GETBLOCKTXN "getblocktxn" @ 10,
+    /// BIP152: compact block transactions.
+    BlockTxn(BlockTxn) => BLOCKTXN "blocktxn" @ 3,
+    /// BIP157: request compact filters.
+    GetCFilters(GetCFilters) => GETCFILTERS "getcfilters" @ 22,
+    /// BIP157: request compact filter headers.
+    GetCFHeaders(GetCFHeaders) => GETCFHEADERS "getcfheaders" @ 24,
+    /// BIP157: request compact filter checkpoints.
+    GetCFCheckpt(GetCFCheckpt) => GETCFCHECKPT "getcfcheckpt" @ 26,
+    /// BIP330: transaction reconciliation.
+    SendTxRcncl(SendTxRcncl) => SENDTXRCNCL "sendtxrcncl",
+    /// Masternode sync status count.
+    Ssc(Ssc) => SSC "ssc" @ 139,
   }
 
   parsed_empty {
@@ -87,43 +121,26 @@ define_p2p! {
     SendHeaders => SENDHEADERS "sendheaders",
     /// Prefer compressed header announcements.
     SendHeaders2 => SENDHEADERS2 "sendheaders2" @ 164,
+    /// BIP37: clear bloom filter.
+    FilterClear => FILTERCLEAR "filterclear" @ 7,
+    /// Request mempool contents.
+    Mempool => MEMPOOL "mempool" @ 15,
+    /// LLMQ: watch quorums.
+    QWatch => QWATCH "qwatch" @ 151,
+  }
+
+  send_only {
+    /// BIP37: filtered block.
+    MerkleBlock(MerkleBlock) => MERKLEBLOCK "merkleblock" @ 16,
+    /// BIP157: compact block filter.
+    CFilter(CFilter) => CFILTER "cfilter" @ 23,
+    /// BIP157: compact filter headers.
+    CFHeaders(CFHeaders) => CFHEADERS "cfheaders" @ 25,
+    /// BIP157: compact filter checkpoints.
+    CFCheckpt(CFCheckpt) => CFCHECKPT "cfcheckpt" @ 27,
   }
 
   stub {
-    /// Block data.
-    Block => BLOCK "block" @ 2,
-    /// BIP152: compact block transactions.
-    BlockTxn => BLOCKTXN "blocktxn" @ 3,
-    /// BIP152: compact block.
-    CmpctBlock => CMPCTBLOCK "cmpctblock" @ 4,
-    /// BIP37: add data to bloom filter.
-    FilterAdd => FILTERADD "filteradd" @ 6,
-    /// BIP37: load bloom filter.
-    FilterLoad => FILTERLOAD "filterload" @ 8,
-    /// Request block hashes.
-    GetBlocks => GETBLOCKS "getblocks" @ 9,
-    /// BIP152: request compact block transactions.
-    GetBlockTxn => GETBLOCKTXN "getblocktxn" @ 10,
-    /// BIP37: filtered block.
-    MerkleBlock => MERKLEBLOCK "merkleblock" @ 16,
-    /// BIP152: signal compact block support.
-    SendCmpct => SENDCMPCT "sendcmpct" @ 20,
-    /// Transaction.
-    Tx => TX "tx" @ 21,
-    /// Request compact filters.
-    GetCFilters => GETCFILTERS "getcfilters" @ 22,
-    /// Compact block filter.
-    CFilter => CFILTER "cfilter" @ 23,
-    /// Request compact filter headers.
-    GetCFHeaders => GETCFHEADERS "getcfheaders" @ 24,
-    /// Compact filter headers.
-    CFHeaders => CFHEADERS "cfheaders" @ 25,
-    /// Request compact filter checkpoints.
-    GetCFCheckpt => GETCFCHECKPT "getcfcheckpt" @ 26,
-    /// Compact filter checkpoints.
-    CFCheckpt => CFCHECKPT "cfcheckpt" @ 27,
-    /// BIP330: transaction reconciliation.
-    SendTxRcncl => SENDTXRCNCL "sendtxrcncl",
     /// Spork broadcast/request.
     Spork => SPORK "spork" @ 128,
     /// CoinJoin: accept denomination.
@@ -142,8 +159,6 @@ define_p2p! {
     Dstx => DSTX "dstx" @ 137,
     /// CoinJoin: queue entry.
     Dsq => DSQ "dsq" @ 138,
-    /// Sync status count.
-    Ssc => SSC "ssc" @ 139,
     /// LLMQ: final commitment.
     QfCommit => QFCOMMIT "qfcommit" @ 146,
     /// LLMQ: contribution.
@@ -185,14 +200,8 @@ define_p2p! {
   }
 
   stub_empty {
-    /// BIP37: clear bloom filter.
-    FilterClear => FILTERCLEAR "filterclear" @ 7,
-    /// Request mempool contents.
-    Mempool => MEMPOOL "mempool" @ 15,
     /// Request active sporks.
     GetSporks => GETSPORKS "getsporks" @ 129,
-    /// LLMQ: watch quorums.
-    QWatch => QWATCH "qwatch" @ 151,
   }
 }
 
@@ -212,3 +221,17 @@ impl MsgDecode for GetMnListDiff {}
 impl MsgDecode for MnListDiff {}
 impl MsgDecode for SendDsq {}
 impl MsgDecode for QSendRecSigs {}
+impl MsgDecode for Block {}
+impl MsgDecode for Transaction {}
+impl MsgDecode for GetBlocks {}
+impl MsgDecode for FilterLoad {}
+impl MsgDecode for FilterAdd {}
+impl MsgDecode for SendCmpct {}
+impl MsgDecode for CmpctBlock {}
+impl MsgDecode for GetBlockTxn {}
+impl MsgDecode for BlockTxn {}
+impl MsgDecode for GetCFilters {}
+impl MsgDecode for GetCFHeaders {}
+impl MsgDecode for GetCFCheckpt {}
+impl MsgDecode for SendTxRcncl {}
+impl MsgDecode for Ssc {}

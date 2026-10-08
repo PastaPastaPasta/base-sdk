@@ -39,6 +39,14 @@ macro_rules! define_p2p {
         $pe_variant:ident => $pe_cmd:ident $pe_wire:literal $(@ $pe_sid:literal)?
       ),* $(,)?
     }
+    // Typed messages Core sends but has no handler for; decoding reads
+    // nothing and yields `Unread`.
+    send_only {
+      $(
+        $(#[$o_attr:meta])*
+        $o_variant:ident ( $o_type:ty ) => $o_cmd:ident $o_wire:literal $(@ $o_sid:literal)?
+      ),* $(,)?
+    }
     // Recognised but not-yet-implemented (raw `Vec<u8>` payload).
     stub {
       $(
@@ -64,6 +72,10 @@ macro_rules! define_p2p {
         pub const $pe_cmd: Self = Self::from_static($pe_wire);
       )*
       $(
+        #[doc = concat!("Command string for `", $o_wire, "` messages.")]
+        pub const $o_cmd: Self = Self::from_static($o_wire);
+      )*
+      $(
         #[doc = concat!("Command string for `", $s_wire, "` messages.")]
         pub const $s_cmd: Self = Self::from_static($s_wire);
       )*
@@ -79,6 +91,7 @@ macro_rules! define_p2p {
         match self.0 {
           $( $( $p_sid => Some($p_wire), )? )*
           $( $( $pe_sid => Some($pe_wire), )? )*
+          $( $( $o_sid => Some($o_wire), )? )*
           $( $( $s_sid => Some($s_wire), )? )*
           $( $( $se_sid => Some($se_wire), )? )*
           _ => None,
@@ -93,6 +106,7 @@ macro_rules! define_p2p {
         match *cmd {
           $( $( CommandString::$p_cmd => Some(Self($p_sid)), )? )*
           $( $( CommandString::$pe_cmd => Some(Self($pe_sid)), )? )*
+          $( $( CommandString::$o_cmd => Some(Self($o_sid)), )? )*
           $( $( CommandString::$s_cmd => Some(Self($s_sid)), )? )*
           $( $( CommandString::$se_cmd => Some(Self($se_sid)), )? )*
           _ => None,
@@ -106,8 +120,18 @@ macro_rules! define_p2p {
     pub enum P2pMsg {
       $( $(#[$p_attr])* $p_variant($p_type), )*
       $( $(#[$pe_attr])* $pe_variant, )*
+      $(
+        $(#[$o_attr])*
+        ///
+        /// Never decoded: Core has no handler, so decoding yields
+        /// [`P2pMsg::Unread`].
+        $o_variant($o_type),
+      )*
       $( $(#[$s_attr])* $s_variant(Vec<u8>), )*
       $( $(#[$se_attr])* $se_variant, )*
+      /// A command Core knows but has no handler for, which it ignores
+      /// without reading or logging.
+      Unread(CommandString),
       /// A command no handler knows, which Core logs and ignores.
       Unknown {
         /// The command as received.
@@ -133,9 +157,10 @@ macro_rules! define_p2p {
         match self {
           $( Self::$p_variant(_) => CommandString::$p_cmd, )*
           $( Self::$pe_variant => CommandString::$pe_cmd, )*
+          $( Self::$o_variant(_) => CommandString::$o_cmd, )*
           $( Self::$s_variant(_) => CommandString::$s_cmd, )*
           $( Self::$se_variant => CommandString::$se_cmd, )*
-          Self::Unknown { command, .. } => *command,
+          Self::Unread(command) | Self::Unknown { command, .. } => *command,
         }
       }
 
@@ -149,9 +174,10 @@ macro_rules! define_p2p {
         match self {
           $( Self::$p_variant(_) => false, )*
           $( Self::$pe_variant => false, )*
+          $( Self::$o_variant(_) => false, )*
           $( Self::$s_variant(_) => true, )*
           $( Self::$se_variant => true, )*
-          Self::Unknown { .. } => false,
+          Self::Unread(_) | Self::Unknown { .. } => false,
         }
       }
 
@@ -200,6 +226,7 @@ macro_rules! define_p2p {
             }
           )*
           $( CommandString::$pe_cmd => Self::$pe_variant, )*
+          $( CommandString::$o_cmd => Self::Unread(*cmd), )*
           $(
             CommandString::$s_cmd => {
               cursor = &[];
@@ -224,6 +251,12 @@ macro_rules! define_p2p {
             }
           )*
           $( Self::$pe_variant => {} )*
+          $(
+            Self::$o_variant(m) => {
+              $crate::__private::dash_types::codec::BaseCodec::encode(m, buf);
+            }
+          )*
+          Self::Unread(_) => {}
           $( Self::$s_variant(raw) => buf.extend_from_slice(raw), )* // nosemgrep: codec-no-raw-extend
           $( Self::$se_variant => {} )*
           Self::Unknown { payload, .. } => buf.extend_from_slice(payload), // nosemgrep: codec-no-raw-extend

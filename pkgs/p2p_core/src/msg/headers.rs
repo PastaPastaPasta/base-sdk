@@ -62,6 +62,27 @@ codec_p2p!(GetHeaders {
   hash_stop
 });
 
+/// Requests an `inv` of the blocks after a locator, Core's `getblocks`.
+///
+/// The wire form equals [`GetHeaders`]'s: Core's `CBlockLocator` and a stop
+/// hash.
+#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
+pub struct GetBlocks {
+  /// The sender's stream version, which Core reads and ignores.
+  pub version: ProtocolVersion,
+  /// Block locator hashes (newest first).
+  pub locator_hashes: Vec<BlockHash>,
+  /// Stop hash (zero to get as many as possible).
+  pub hash_stop: BlockHash,
+}
+
+codec_p2p!(GetBlocks {
+  version,
+  locator_hashes,
+  hash_stop
+});
+
 /// Response carrying block headers.
 ///
 /// Each header is followed by a CompactSize transaction count
