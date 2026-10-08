@@ -15,11 +15,11 @@ mod mn_list;
 mod ping;
 mod version;
 
+use crate::codec::MsgDecode;
 use crate::command::CommandString;
 use crate::prelude::*;
 use crate::short_id::ShortId;
 
-use bitcoin_consensus_encoding as encoding;
 use dash_primitives::{GovObject, GovVote};
 use dash_types::type_id::Unencodable;
 
@@ -176,6 +176,10 @@ define_p2p! {
     QrInfo => QRINFO "qrinfo" @ 167,
     /// DIP-0031: platform ban.
     PlatformBan => PLATFORMBAN "platformban" @ 168,
+    /// Signal CoinJoin queue relay.
+    SendDsq => SENDDSQ "senddsq" @ 130,
+    /// LLMQ: send recovered signatures.
+    QSendRecSigs => QSENDRECSIGS "qsendrecsigs" @ 145,
   }
 
   stub_empty {
@@ -185,11 +189,23 @@ define_p2p! {
     Mempool => MEMPOOL "mempool" @ 15,
     /// Request active sporks.
     GetSporks => GETSPORKS "getsporks" @ 129,
-    /// Signal CoinJoin queue relay.
-    SendDsq => SENDDSQ "senddsq" @ 130,
-    /// LLMQ: send recovered signatures.
-    QSendRecSigs => QSENDRECSIGS "qsendrecsigs" @ 145,
     /// LLMQ: watch quorums.
     QWatch => QWATCH "qwatch" @ 151,
   }
 }
+
+impl MsgDecode for Version {}
+impl MsgDecode for Ping {}
+impl MsgDecode for Pong {}
+impl MsgDecode for Addr {}
+impl MsgDecode for AddrV2Msg {}
+impl MsgDecode for Inv {}
+impl MsgDecode for GetData {}
+impl MsgDecode for NotFound {}
+impl MsgDecode for GetHeaders {}
+impl MsgDecode for GetHeaders2 {}
+impl MsgDecode for GovSync {}
+impl MsgDecode for GovObject {}
+impl MsgDecode for GovVote {}
+impl MsgDecode for GetMnListDiff {}
+impl MsgDecode for MnListDiff {}

@@ -1,0 +1,37 @@
+// P2P payloads Dash Core reads, for the decode domain of base-sdk's
+// P2P messages. Each was sent to a regtest dashd of each pinned release,
+// v23.1.8 and v24.0.0-rc.3 (release binaries, -debug=net), over a raw V1
+// connection from 127.0.0.1, and "core" is the outcome both reported.
+// "throw" is the "ProcessMessages(...): Exception ... caught" log line,
+// which Core handles without a penalty.
+{
+  // After a full handshake at common version 70240. The headers are the
+  // regtest genesis header (getblockheader false); "count" payloads stop
+  // after the count. "misbehaving 20" is "headers message size = N".
+  "headers": [
+    {"name": "headers_txcount_5", "command": "headers", "version": 70240, "raw": "01010000000000000000000000000000000000000000000000000000000000000000000000c762a6567f3cc092f0684bb62b7e00a84890b990f07cc71a6bb58d64b98e02e0b9968054ffff7f20ffba100005", "core": "accept"},
+    {"name": "headers_txcount_fd", "command": "headers", "version": 70240, "raw": "01010000000000000000000000000000000000000000000000000000000000000000000000c762a6567f3cc092f0684bb62b7e00a84890b990f07cc71a6bb58d64b98e02e0b9968054ffff7f20ffba1000fdfd00", "core": "accept"},
+    {"name": "headers_txcount_noncanonical", "command": "headers", "version": 70240, "raw": "01010000000000000000000000000000000000000000000000000000000000000000000000c762a6567f3cc092f0684bb62b7e00a84890b990f07cc71a6bb58d64b98e02e0b9968054ffff7f20ffba1000fd0500", "core": "throw"},
+    {"name": "headers_count_2001", "command": "headers", "version": 70240, "raw": "fdd107", "core": "misbehaving 20"},
+    {"name": "headers_count_2000_short", "command": "headers", "version": 70240, "raw": "fdd007", "core": "throw"},
+    {"name": "headers2_count_2001_short", "command": "headers2", "version": 70240, "raw": "fdd107", "core": "throw"},
+    {"name": "headers2_count_8001", "command": "headers2", "version": 70240, "raw": "fd411f", "core": "misbehaving 20"},
+    {"name": "headers_trailing", "command": "headers", "version": 70240, "raw": "01010000000000000000000000000000000000000000000000000000000000000000000000c762a6567f3cc092f0684bb62b7e00a84890b990f07cc71a6bb58d64b98e02e0b9968054ffff7f20ffba1000009999", "core": "accept"},
+    {"name": "headers2_count_2001_at_70230", "command": "headers2", "version": 70230, "raw": "fdd107", "core": "misbehaving 20"},
+    {"name": "headers2_count_2001_at_70234", "command": "headers2", "version": 70234, "raw": "fdd107", "core": "misbehaving 20"},
+    {"name": "headers2_count_2001_at_70235", "command": "headers2", "version": 70235, "raw": "fdd107", "core": "throw"},
+  ],
+  // After a full handshake. Core logs an unknown command and keeps the peer;
+  // a verack with a payload still completes the handshake (the node sends
+  // its post-verack messages); sendheaders2 never reads its payload (no
+  // exception logged).
+  "ignored_payload": [
+    {"name": "unknown_command", "command": "bs4aprobe", "raw": "000102", "core": "accept: Unknown command"},
+    {"name": "verack_with_payload", "command": "verack", "raw": "deadbeef", "core": "accept"},
+    {"name": "sendheaders2_with_payload", "command": "sendheaders2", "raw": "0707", "core": "accept"},
+  ],
+  // senddsq as both nodes sent it (-capturemessages): a one-byte bool.
+  "senddsq": [
+    {"name": "captured", "command": "senddsq", "raw": "01", "core": "accept"},
+  ],
+}

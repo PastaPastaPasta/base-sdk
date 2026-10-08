@@ -7,7 +7,8 @@
 //! BIP324 V2 message framing.
 
 use crate::command::CommandString;
-use crate::msg::P2pMsg;
+use crate::ctx::ProtoCtx;
+use crate::msg::{DecodedMsg, P2pMsg};
 use crate::prelude::*;
 use crate::short_id::ShortId;
 use crate::P2pDecodeError;
@@ -28,8 +29,13 @@ pub fn encode_v2(msg: &P2pMsg, buf: &mut Vec<u8>) {
   msg.encode_payload(buf);
 }
 
-/// Decodes V2 framed bytes into a `P2pMsg`.
-pub fn decode_v2(payload: &[u8]) -> Result<P2pMsg, P2pDecodeError> {
+/// Decodes V2 framed bytes into a `P2pMsg` under `ctx`.
+///
+/// # Errors
+///
+/// Returns `P2pDecodeError` for a malformed frame, an unassigned short ID, or
+/// a payload [`P2pMsg::decode_with_policy`] rejects.
+pub fn decode_v2(payload: &[u8], ctx: &ProtoCtx) -> Result<DecodedMsg, P2pDecodeError> {
   if payload.is_empty() {
     return Err(P2pDecodeError::Consensus(String::from(
       "unexpected eof: needed 1 byte, 0 remaining",
@@ -50,13 +56,13 @@ pub fn decode_v2(payload: &[u8]) -> Result<P2pMsg, P2pDecodeError> {
     let mut cmd_bytes = [0u8; 12];
     cmd_bytes.copy_from_slice(&rest[..12]);
     let cmd = CommandString::from_bytes(cmd_bytes);
-    P2pMsg::decode_payload(&cmd, &rest[12..])
+    P2pMsg::decode_with_policy(&cmd, &rest[12..], ctx)
   } else {
     // Short ID: resolve to command, then decode payload.
     let sid = ShortId(short_id);
     let cmd = sid
       .to_command()
       .ok_or(P2pDecodeError::UnknownShortId { id: short_id })?;
-    P2pMsg::decode_payload(&cmd, rest)
+    P2pMsg::decode_with_policy(&cmd, rest, ctx)
   }
 }

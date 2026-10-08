@@ -18,11 +18,6 @@ use core::fmt;
 pub enum P2pDecodeError {
   /// Underlying consensus decoding error.
   Consensus(String),
-  /// Unrecognised 12-byte command string.
-  UnknownCommand {
-    /// The raw command bytes.
-    bytes: [u8; 12],
-  },
   /// V2 short ID does not map to a known message.
   UnknownShortId {
     /// The short ID byte.
@@ -37,12 +32,16 @@ pub enum P2pDecodeError {
     /// Maximum allowed size, in bytes.
     max: usize,
   },
-  /// Message carries a payload where none is permitted.
-  PayloadNotEmpty {
+  /// A message lists more entries than its handler accepts.
+  ///
+  /// Core checks the count before reading any entry and penalises the peer.
+  TooManyEntries {
     /// Wire command name.
     command: &'static str,
-    /// Size of the raw payload, in bytes.
-    size: usize,
+    /// The decoded entry count.
+    count: u64,
+    /// The handler's limit.
+    max: u64,
   },
   /// A field value is outside the valid range.
   InvalidValue {
@@ -61,28 +60,14 @@ impl fmt::Display for P2pDecodeError {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
       Self::Consensus(e) => write!(f, "{e}"),
-      Self::UnknownCommand { bytes } => {
-        write!(f, "unknown command: ")?;
-        for &b in bytes {
-          if b == 0 {
-            break;
-          }
-          if b.is_ascii_graphic() || b == b' ' {
-            write!(f, "{}", b as char)?;
-          } else {
-            write!(f, "\\x{b:02x}")?;
-          }
-        }
-        Ok(())
-      }
       Self::UnknownShortId { id } => {
         write!(f, "unknown v2 short id: {id}")
       }
       Self::PayloadTooLarge { command, size, max } => {
         write!(f, "{command} payload too large: {size} bytes, max {max}")
       }
-      Self::PayloadNotEmpty { command, size } => {
-        write!(f, "{command} must have an empty payload, got {size} bytes")
+      Self::TooManyEntries { command, count, max } => {
+        write!(f, "{command} lists {count} entries, max {max}")
       }
       Self::InvalidValue { field } => {
         write!(f, "invalid value for {field}")

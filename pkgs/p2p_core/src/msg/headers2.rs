@@ -6,17 +6,17 @@
 
 //! Compressed header messages.
 
-use crate::codec::{codec_p2p, impl_p2p};
+use super::headers::{read_header_count, MAX_HEADERS_COMPRESSED, MAX_HEADERS_UNCOMPRESSED};
+use crate::codec::{codec_p2p, impl_p2p, MsgDecode};
+use crate::ctx::ProtoCtx;
 use crate::prelude::*;
 use crate::version::ProtocolVersion;
+use crate::P2pDecodeError;
 
 use dash_primitives::{hash_impl, BlockHash, BlockHeader, MerkleRoot};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{CompactSize, Hashable};
-
-/// Maximum headers per message.
-const MAX_HEADERS: usize = 2_000;
 
 /// Maximum entries in the MRU version cache.
 const MAX_VERSION_CACHE: usize = 7;
@@ -253,15 +253,34 @@ pub struct Headers2 {
 
 impl_p2p!(Headers2);
 
-impl BaseCodec for Headers2 {
-  fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let count = CompactSize::decode(data)?.into_len(MAX_HEADERS)?;
+impl Headers2 {
+  /// Reads `count` compressed headers with a fresh compression state.
+  fn read(data: &mut &[u8], count: usize) -> Result<Self, DecodeError> {
     let mut state = CompressionState::new();
     let mut headers = Vec::with_capacity(count);
     for _ in 0..count {
       headers.push(state.decode_header(data)?);
     }
     Ok(Self { headers })
+  }
+}
+
+impl MsgDecode for Headers2 {
+  fn decode_msg(data: &mut &[u8], ctx: &ProtoCtx) -> Result<Self, P2pDecodeError> {
+    let max = if ctx.version >= ProtocolVersion::INCREASE_MAX_HEADERS2 {
+      MAX_HEADERS_COMPRESSED
+    } else {
+      MAX_HEADERS_UNCOMPRESSED
+    };
+    let count = read_header_count(data, "headers2", max)?;
+    Ok(Self::read(data, count)?)
+  }
+}
+
+impl BaseCodec for Headers2 {
+  fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
+    let count = CompactSize::decode_size(data)?.into_len(data.len())?;
+    Self::read(data, count)
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
