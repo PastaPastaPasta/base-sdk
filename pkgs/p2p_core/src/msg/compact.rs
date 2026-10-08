@@ -50,9 +50,7 @@ impl BaseCodec for ShortTxId {
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
     let [a, b, c, d, e, f, ..] = self.0.to_le_bytes();
-    for byte in [a, b, c, d, e, f] {
-      byte.encode(buf);
-    }
+    [a, b, c, d, e, f].encode(buf);
   }
 }
 
@@ -75,7 +73,8 @@ impl ShortTxId {
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct PrefilledTx {
-  /// Offset from the previous prefilled transaction's index, plus one.
+  /// The transaction's index in the block less the previous prefilled
+  /// transaction's index and one; the first one's index itself.
   ///
   /// Core reads it as `COMPACTSIZE` into a `uint16_t`, so a larger value
   /// fails.
@@ -88,11 +87,8 @@ impl_p2p!(PrefilledTx);
 
 impl BaseCodec for PrefilledTx {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let index = CompactSize::decode_size(data)?;
-    let index = u16::try_from(u64::from(index)).map_err(|_| DecodeError::CompactSizeExceedsLimit {
-      limit: MAX_BLOCK_TXS,
-      value: u64::from(index),
-    })?;
+    // Within u16 once `into_len` bounds it by MAX_BLOCK_TXS.
+    let index = CompactSize::decode_size(data)?.into_len(MAX_BLOCK_TXS)? as u16;
     Ok(Self {
       index,
       tx: Transaction::decode(data)?,
@@ -190,7 +186,8 @@ pub fn short_id_with_keys(k0: u64, k1: u64, tx_hash: &[u8; 32]) -> ShortTxId {
 /// `BlockTransactionsRequest` and the `getblocktxn` payload.
 ///
 /// The indexes go on the wire as differences, Core's `DifferenceFormatter`,
-/// so they must strictly increase; a decoded request always does.
+/// so they must strictly increase, as [`GetBlockTxn::new`] checks; a decoded
+/// request always does. Core refuses to serialize any other list.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct GetBlockTxn {
@@ -217,18 +214,14 @@ impl BaseCodec for GetBlockTxn {
       let diff = u64::from(CompactSize::decode_size(data)?);
       // Core's overflow checks: a wrapped sum, the u64 sentinel and the
       // element type's range.
-      shift = shift.wrapping_add(diff);
-      let index = match u16::try_from(shift) {
-        Ok(index) if shift >= diff => index,
-        _ => {
-          return Err(DecodeError::CompactSizeExceedsLimit {
-            limit: MAX_BLOCK_TXS,
-            value: shift,
-          });
-        }
+      let Some(index) = shift.checked_add(diff).and_then(|s| u16::try_from(s).ok()) else {
+        return Err(DecodeError::CompactSizeExceedsLimit {
+          limit: MAX_BLOCK_TXS,
+          value: shift.wrapping_add(diff),
+        });
       };
       indexes.push(index);
-      shift += 1;
+      shift = u64::from(index) + 1;
     }
     Ok(Self { block_hash, indexes })
   }
@@ -246,6 +239,17 @@ impl BaseCodec for GetBlockTxn {
 
 hash_impl!(GetBlockTxn);
 
+impl GetBlockTxn {
+  /// A request for `indexes` of a block, `None` unless they strictly
+  /// increase.
+  pub fn new(block_hash: BlockHash, indexes: Vec<u16>) -> Option<Self> {
+    indexes
+      .windows(2)
+      .all(|w| w[0] < w[1])
+      .then_some(Self { block_hash, indexes })
+  }
+}
+
 /// Transactions of a compact block, Core's `BlockTransactions` and the
 /// `blocktxn` payload.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
@@ -258,3 +262,20 @@ pub struct BlockTxn {
 }
 
 codec_p2p!(BlockTxn { block_hash, txs });
+
+#[cfg(test)]
+#[expect(clippy::unwrap_used, reason = "test code")]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn getblocktxn_indexes_round_trip_as_differences() {
+    let req = GetBlockTxn::new(BlockHash::default(), vec![0, 1, 7, u16::MAX]).unwrap();
+    let mut buf = Vec::new();
+    req.encode(&mut buf);
+    // Differences 0, 0, 5 and 65527, as Core's DifferenceFormatter writes.
+    assert_eq!(&buf[32..], [4, 0, 0, 5, 0xfd, 0xf7, 0xff]);
+    assert_eq!(GetBlockTxn::decode(&mut &buf[..]).unwrap(), req);
+    assert_eq!(GetBlockTxn::new(BlockHash::default(), vec![5, 5]), None);
+  }
+}

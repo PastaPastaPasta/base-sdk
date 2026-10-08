@@ -193,7 +193,9 @@ macro_rules! define_p2p {
       /// reports the bytes its handler reads in [`DecodedMsg::consumed`].
       /// The payload is bound by the V1 transport's 3 MiB limit, then the
       /// command by its byte rules; [`crate::decode_v2`] applies the V2 rules
-      /// instead. Gates that depend on connection state run before this.
+      /// instead. Gates that depend on connection state, node configuration
+      /// or sync state run before this: Core does not read `sendtxrcncl`
+      /// without `-txreconciliation`, nor `ssc` once its sync has finished.
       ///
       /// # Errors
       ///

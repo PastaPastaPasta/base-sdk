@@ -24,6 +24,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `InvType` names every type Core knows, with Core's `command`, `is_known`, `is_gen_tx`, `is_gen_blk` and
   `request_interval`; `AssetUnlockInv` selects whether type 34 is known (v24.0) or not (v23.1.8).
 - `Headers2::reply` and `Headers2::announce`, Core's two `headers2` encoders, and `Headers2::decode_with_hasher`.
+- `GetBlockTxn::new`, which refuses indexes that do not strictly increase, as Core's serializer does.
+- `CommandString::EMPTY`, the all-zero type.
 
 ### Changed
 
