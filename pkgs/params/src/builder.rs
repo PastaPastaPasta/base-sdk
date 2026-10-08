@@ -11,15 +11,17 @@ use crate::llmq::MAX_LLMQ_SIZE;
 use crate::network::{NetworkKind, Release};
 use crate::parse::{int_arg, interpret_bool, parse_i32, parse_i64};
 use crate::prelude::*;
-use crate::types::{BlockHeight, BuriedDeployment, ChainParams};
+use crate::spork::spork_key_id;
+use crate::types::{BlockHeight, BuriedDeployment, ChainParams, SporkSigners};
 use crate::{devnet, mainnet, regtest, testnet};
 
 use dash_primitives::LlmqType;
 
 /// A Core command-line option that changes chain parameters.
 ///
-/// These are the options `SetupChainParamsOptions` registers, plus
-/// `-fastprune`, which regtest's prune height reads.
+/// These are the options `SetupChainParamsOptions` registers, plus three
+/// `init.cpp` registers: `-fastprune`, which regtest's prune height reads,
+/// and the spork signer options, which startup reads after the chain params.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ChainOption {
   /// `-budgetparams=<masternode>:<budget>:<superblock>` (regtest).
@@ -54,8 +56,12 @@ pub enum ChainOption {
   LlmqTestPlatformParams,
   /// `-minimumdifficultyblocks=<n>` (devnet).
   MinimumDifficultyBlocks,
+  /// `-minsporkkeys=<n>` (every chain, v23 only).
+  MinSporkKeys,
   /// `-powtargetspacing=<n>` (devnet).
   PowTargetSpacing,
+  /// `-sporkaddr=<address>` (every chain, repeatable at v23).
+  SporkAddr,
   /// `-testactivationheight=name@height` (regtest, repeatable).
   TestActivationHeight,
   /// `-vbparams=<deployment>:<start>:<end>...` (regtest, repeatable).
@@ -64,7 +70,7 @@ pub enum ChainOption {
 
 impl ChainOption {
   /// Every option, in name order.
-  pub const ALL: [Self; 19] = [
+  pub const ALL: [Self; 21] = [
     Self::BudgetParams,
     Self::Devnet,
     Self::Dip3Params,
@@ -81,7 +87,9 @@ impl ChainOption {
     Self::LlmqTestParams,
     Self::LlmqTestPlatformParams,
     Self::MinimumDifficultyBlocks,
+    Self::MinSporkKeys,
     Self::PowTargetSpacing,
+    Self::SporkAddr,
     Self::TestActivationHeight,
     Self::VbParams,
   ];
@@ -105,7 +113,9 @@ impl ChainOption {
       Self::LlmqTestParams => "-llmqtestparams",
       Self::LlmqTestPlatformParams => "-llmqtestplatformparams",
       Self::MinimumDifficultyBlocks => "-minimumdifficultyblocks",
+      Self::MinSporkKeys => "-minsporkkeys",
       Self::PowTargetSpacing => "-powtargetspacing",
+      Self::SporkAddr => "-sporkaddr",
       Self::TestActivationHeight => "-testactivationheight",
       Self::VbParams => "-vbparams",
     }
@@ -133,6 +143,13 @@ enum Rotation {
 /// A single-valued option reads its last occurrence and a repeatable one the
 /// values after its last negation. A bare option is the empty string, and a
 /// double negation such as `-nofastprune=0` is the value `1`.
+///
+/// The occurrences have command-line semantics only. Core merges other
+/// sources by other rules (a config file keeps its first value, network
+/// sections apply to their chain). A caller with other sources passes the
+/// resolved settings: one occurrence per single-valued option and the
+/// resolved list for the repeatable ones.
+///
 /// [`build`](Self::build) applies the options of the chain's kind in Core's
 /// order and ignores the others, as Core does, so an error Core reports is
 /// reported first.
@@ -206,13 +223,66 @@ impl ChainParamsBuilder {
   ///
   /// Core's refusal of an override, or one of the inputs this crate
   /// refuses where Core accepts or asserts (see [`ParamsError`]).
+  ///
+  /// The phases follow Core's startup: argument parsing (an option the
+  /// release lacks), the chain params, then the spork signers.
   pub fn build(&self) -> Result<ChainParams, ParamsError> {
-    match self.network {
-      NetworkKind::Mainnet => Ok(mainnet::params(self.release)),
-      NetworkKind::Testnet => Ok(testnet::params(self.release)),
-      NetworkKind::Devnet => self.devnet(),
-      NetworkKind::Regtest => self.regtest(),
+    if !self.release.has_min_spork_keys() {
+      if let Some((_, value)) = self.args.iter().find(|(o, _)| *o == ChainOption::MinSporkKeys) {
+        return Err(ParamsError::InvalidParameter(match value.as_deref() {
+          None => String::from("-nominsporkkeys"),
+          Some("") => String::from("-minsporkkeys"),
+          Some(v) => format!("-minsporkkeys={v}"),
+        }));
+      }
     }
+    let mut p = match self.network {
+      NetworkKind::Mainnet => mainnet::params(self.release),
+      NetworkKind::Testnet => testnet::params(self.release),
+      NetworkKind::Devnet => self.devnet()?,
+      NetworkKind::Regtest => self.regtest()?,
+    };
+    p.spork_signers = self.spork_signers(&p)?;
+    Ok(p)
+  }
+
+  /// `-sporkaddr` and `-minsporkkeys` as Core's `AppInitMain` applies them
+  /// (v23 init.cpp:1699-1714, v24 :1746-1752).
+  fn spork_signers(&self, p: &ChainParams) -> Result<SporkSigners, ParamsError> {
+    let key = |a: &str| spork_key_id(a, &p.addr_params, p.platform_hrp).ok_or(ParamsError::SporkAddress);
+    if self.release.has_min_spork_keys() {
+      let addresses: Vec<&str> = if self.args.iter().any(|(o, _)| *o == ChainOption::SporkAddr) {
+        self.all(ChainOption::SporkAddr).collect()
+      } else {
+        p.spork.addresses.to_vec()
+      };
+      let mut key_ids = BTreeSet::new();
+      for address in addresses {
+        key_ids.insert(key(address)?);
+      }
+      let default = p.spork.min_spork_keys.unwrap_or(1);
+      let min = self.last(ChainOption::MinSporkKeys).map_or(default, int_arg);
+      let max = i32::try_from(key_ids.len()).unwrap_or(i32::MAX);
+      if min <= max / 2 || min > max {
+        return Err(ParamsError::MinSporkKeys);
+      }
+      return Ok(SporkSigners {
+        key_ids: key_ids.into_iter().collect(),
+        min_spork_keys: Some(min),
+        warning: None,
+      });
+    }
+    let address = match self.last(ChainOption::SporkAddr) {
+      Some(a) => a,
+      None => p.spork.addresses.first().copied().ok_or(ParamsError::SporkAddress)?,
+    };
+    let warning = (self.all(ChainOption::SporkAddr).count() > 1)
+      .then(|| format!("More than one spork address is provided. Using {address}."));
+    Ok(SporkSigners {
+      key_ids: vec![key(address)?],
+      min_spork_keys: None,
+      warning,
+    })
   }
 
   /// The last setting of `option` (Core's `GetArg`); a negation reads `0`.
@@ -277,33 +347,37 @@ impl ChainParamsBuilder {
 
   /// Core's `CRegTestParams` constructor.
   ///
-  /// A negative height Core accepts is refused only after every option Core
-  /// itself would refuse has been read, so Core's errors keep precedence.
+  /// Heights Core parses into an `int` stay signed while the options are
+  /// replayed, so a later occurrence can replace a negative one. A height
+  /// still negative in the final parameters is refused, after every check
+  /// Core itself makes, so Core's errors keep precedence (BL-31).
   fn regtest(&self) -> Result<ChainParams, ParamsError> {
     let mut p = regtest::params(self.release);
-    let mut negative = Negative::default();
     if self.last(ChainOption::FastPrune).is_some_and(interpret_bool) {
       p.prune_after_height = 100;
     }
     self.activation_heights(&mut p)?;
-    self.version_bits(&mut p, &mut negative)?;
+    let mut min_heights: Vec<i32> = p
+      .consensus
+      .deployments
+      .iter()
+      .map(|d| i32::try_from(d.min_activation_height.to_u32()).unwrap_or(i32::MAX))
+      .collect();
+    self.version_bits(&mut p, &mut min_heights)?;
+    let mut dip3 = None;
     if let Some(v) = self.last(ChainOption::Dip3Params) {
       let [activation, enforcement] = fields(v).ok_or(ParamsError::Dip3Malformed)?;
       let activation = int32(activation, ParamsError::Dip3Activation)?;
       let enforcement = int32(enforcement, ParamsError::Dip3Enforcement)?;
-      let c = &mut p.consensus;
-      c.dip0003_height = negative.height(ChainOption::Dip3Params, activation);
-      c.dip0003_enforcement.0 = negative.height(ChainOption::Dip3Params, enforcement);
+      dip3 = Some([activation, enforcement]);
     }
+    let mut budget_starts = None;
     if let Some(v) = self.last(ChainOption::BudgetParams) {
       let [mn, budget, superblock] = fields(v).ok_or(ParamsError::BudgetMalformed)?;
       let mn = int32(mn, ParamsError::BudgetMasternode)?;
       let budget = int32(budget, ParamsError::BudgetBudget)?;
       let superblock = int32(superblock, ParamsError::BudgetSuperblock)?;
-      let c = &mut p.consensus;
-      c.masternode_payments_start_block = negative.height(ChainOption::BudgetParams, mn);
-      c.budget_payments_start_block = negative.height(ChainOption::BudgetParams, budget);
-      c.superblock_start.0 = negative.height(ChainOption::BudgetParams, superblock);
+      budget_starts = Some([mn, budget, superblock]);
     }
     self.llmq_size(&mut p, ChainOption::LlmqTestParams, "LLMQ_TEST", LlmqType::LlmqTest)?;
     self.llmq_size(
@@ -321,10 +395,19 @@ impl ChainParamsBuilder {
     if let Some(t) = self.llmq_role(&p, ChainOption::LlmqTestInstantSendDip0024, Rotation::Any)? {
       p.consensus.llmq_type_dip0024_instant_send = t;
     }
-    if let Some(err) = negative.0 {
-      return Err(err);
+    let c = &mut p.consensus;
+    for (d, h) in c.deployments.iter_mut().zip(min_heights) {
+      d.min_activation_height = height(ChainOption::VbParams, h)?;
     }
-    let c = &p.consensus;
+    if let Some([activation, enforcement]) = dip3 {
+      c.dip0003_height = height(ChainOption::Dip3Params, activation)?;
+      c.dip0003_enforcement.0 = height(ChainOption::Dip3Params, enforcement)?;
+    }
+    if let Some([mn, budget, superblock]) = budget_starts {
+      c.masternode_payments_start_block = height(ChainOption::BudgetParams, mn)?;
+      c.budget_payments_start_block = height(ChainOption::BudgetParams, budget)?;
+      c.superblock_start.0 = height(ChainOption::BudgetParams, superblock)?;
+    }
     if c.v20_height < c.dip0003_height {
       return Err(ParamsError::V20BelowDip3);
     }
@@ -373,7 +456,10 @@ impl ChainParamsBuilder {
   }
 
   /// Core's `-vbparams` loop in `UpdateActivationParametersFromArgs`.
-  fn version_bits(&self, p: &mut ChainParams, negative: &mut Negative) -> Result<(), ParamsError> {
+  ///
+  /// Minimum activation heights go to `min_heights`, one per deployment, as
+  /// Core's signed `int`.
+  fn version_bits(&self, p: &mut ChainParams, min_heights: &mut [i32]) -> Result<(), ParamsError> {
     for arg in self.all(ChainOption::VbParams) {
       let f: Vec<&str> = arg.split(':').collect();
       if !matches!(f.len(), 3 | 4 | 6 | 9) {
@@ -404,17 +490,18 @@ impl ChainParamsBuilder {
       } else {
         (-1, -1, -1)
       };
-      let (_, d) = self
+      let ((_, d), min) = self
         .release
         .deployments()
         .iter()
         .zip(&mut p.consensus.deployments)
-        .find(|(pos, _)| pos.name() == f[0])
+        .zip(min_heights.iter_mut())
+        .find(|((pos, _), _)| pos.name() == f[0])
         .ok_or_else(|| ParamsError::VbParamsDeployment(f[0].into()))?;
       // Core's UpdateVersionBitsParameters; -1 leaves a field unchanged.
       d.start_time = start;
       d.timeout = timeout;
-      d.min_activation_height = negative.height(ChainOption::VbParams, min_height);
+      *min = min_height;
       if window != -1 {
         d.window_size = window;
       }
@@ -488,21 +575,11 @@ impl ChainParamsBuilder {
   }
 }
 
-/// The first negative height Core accepted, refused once Core's own checks
-/// have passed (BL-31).
-#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
-struct Negative(Option<ParamsError>);
-
-impl Negative {
-  /// `value` of `option` as a height; a negative one is recorded and read
-  /// as 0 until the build fails.
-  fn height(&mut self, option: ChainOption, value: i32) -> BlockHeight {
-    let height = u32::try_from(value).ok();
-    if height.is_none() && self.0.is_none() {
-      self.0 = Some(ParamsError::NegativeHeight(option, i64::from(value)));
-    }
-    BlockHeight::from_u32(height.unwrap_or(0))
-  }
+/// `value` of `option` as a height; a negative one is refused (BL-31).
+fn height(option: ChainOption, value: i32) -> Result<BlockHeight, ParamsError> {
+  u32::try_from(value)
+    .map(BlockHeight::from_u32)
+    .map_err(|_| ParamsError::NegativeHeight(option, i64::from(value)))
 }
 
 /// Core's `SplitString(value, ':')` when it has exactly `N` fields.

@@ -7,7 +7,7 @@
 //! Builder behaviour beyond Core's corpus: typed setters, the inputs this
 //! crate refuses where Core accepts or asserts, and the hard-coded pins.
 
-#![expect(clippy::unwrap_used, clippy::expect_used, reason = "test code")]
+#![expect(clippy::unwrap_used, reason = "test code")]
 
 use dash_params::{
   BuriedDeployment, ChainOption, ChainParams, ChainParamsBuilder, DeploymentPos, LlmqParams, NetworkKind, ParamsError,
@@ -119,6 +119,34 @@ fn negative_heights_are_refused(#[case] option: ChainOption, #[case] value: &str
   }
 }
 
+/// A later `-vbparams` replaces an earlier negative minimum height, so only
+/// a height still negative in the final parameters is refused.
+#[rstest]
+fn overwritten_negative_heights_are_accepted(#[values(Release::V23_1, Release::V24_0)] release: Release) {
+  for second in ["v24:0:9:0", "v24:0:9"] {
+    let p = build(
+      regtest(release)
+        .arg(ChainOption::VbParams, "v24:0:9:-1")
+        .arg(ChainOption::VbParams, second),
+    );
+    let d = p.consensus.deployments[1];
+    assert_eq!(
+      (d.start_time, d.timeout, d.min_activation_height),
+      (0, 9, h(0)),
+      "{second}"
+    );
+  }
+  let err = regtest(release)
+    .arg(ChainOption::VbParams, "testdummy:0:9:-5")
+    .arg(ChainOption::VbParams, "v24:0:9:-1")
+    .arg(ChainOption::VbParams, "v24:0:9:0")
+    .build()
+    .unwrap_err();
+  assert_eq!(err, ParamsError::NegativeHeight(ChainOption::VbParams, -5));
+  let p = build(regtest(release).arg(ChainOption::Dip3Params, "-1:5").dip3(h(4), h(5)));
+  assert_eq!(p.consensus.dip0003_height, h(4));
+}
+
 /// Core's own errors take precedence over the BL-31 refusal, within one
 /// option and across options read later.
 #[rstest]
@@ -199,7 +227,9 @@ fn options_of_other_chains_are_ignored(
   #[values(Release::V23_1, Release::V24_0)] release: Release,
 ) {
   let mut builder = ChainParamsBuilder::new(network, release);
-  for option in ChainOption::ALL {
+  // The spork options are read on every chain.
+  let chain_only = |o: &ChainOption| !matches!(o, ChainOption::SporkAddr | ChainOption::MinSporkKeys);
+  for option in ChainOption::ALL.into_iter().filter(chain_only) {
     builder = builder.arg(option, "x");
   }
   assert_eq!(build(builder), build(ChainParamsBuilder::new(network, release)));
@@ -209,26 +239,46 @@ fn options_of_other_chains_are_ignored(
 /// validation.cpp (ConnectBlock `bad-sb-start`, ContextualCheckBlockHeader
 /// `bad-diffbits`, IsQuorumTypeEnabled) and deterministicmns.cpp
 /// (`bad-dip3-enf-block`).
+/// Quirk 34: Core's hard-coded network pins, with their rule sites in
+/// validation.cpp (ConnectBlock `bad-sb-start`, ContextualCheckBlockHeader
+/// `bad-diffbits`, IsQuorumTypeEnabled) and deterministicmns.cpp
+/// (`bad-dip3-enf-block`). Each value is checked on all four kinds.
 #[rstest]
 fn hard_coded_pins(#[values(Release::V23_1, Release::V24_0)] release: Release) {
-  let main = build(ChainParamsBuilder::new(NetworkKind::Mainnet, release));
-  assert_eq!(main.consensus.superblock_start.0, h(614_820));
-  assert_eq!(main.consensus.dip0003_enforcement.0, h(1_047_200));
-  assert_eq!(main.pins.pre_dgw_tolerance_until, Some(h(68_589)));
-  for network in [NetworkKind::Testnet, NetworkKind::Devnet, NetworkKind::Regtest] {
+  for network in NetworkKind::ALL {
     let p = build(ChainParamsBuilder::new(network, release));
-    assert_eq!(p.pins.pre_dgw_tolerance_until, None, "{network:?}");
+    let main = network == NetworkKind::Mainnet;
+    // Core's TESTNET_LLMQ_25_67_ACTIVATION_HEIGHT is one global constant.
     assert_eq!(p.pins.llmq_25_67_activation_height, h(847_000), "{network:?}");
-    let pinned = p.consensus.superblock_start.1 != Default::default();
-    assert!(!pinned, "{network:?} has no bad-sb-start hash");
+    // NetworkIDString() == MAIN && nHeight <= 68589.
+    assert_eq!(p.pins.pre_dgw_tolerance_until, main.then_some(h(68_589)), "{network:?}");
+    // Only mainnet pins the superblock start and DIP3 enforcement hashes.
+    assert_eq!(
+      p.consensus.superblock_start.1 != Default::default(),
+      main,
+      "{network:?}"
+    );
+    let enforcement_pinned = p.consensus.dip0003_enforcement.1 != Default::default();
+    assert_eq!(
+      enforcement_pinned,
+      matches!(network, NetworkKind::Mainnet | NetworkKind::Testnet),
+      "{network:?}"
+    );
+    let expected = match network {
+      NetworkKind::Mainnet => (614_820, 1_047_200),
+      NetworkKind::Testnet => (4200, 7300),
+      NetworkKind::Devnet => (4200, 2),
+      NetworkKind::Regtest => (1500, 500),
+    };
+    assert_eq!(p.consensus.superblock_start.0, h(expected.0), "{network:?}");
+    assert_eq!(p.consensus.dip0003_enforcement.0, h(expected.1), "{network:?}");
+    let has_25_67 = p.consensus.llmq(LlmqType::Llmq25_67).is_some();
+    assert_eq!(has_25_67, network == NetworkKind::Testnet, "{network:?}");
   }
-  let test = build(ChainParamsBuilder::new(NetworkKind::Testnet, release));
-  assert!(test.consensus.llmq(LlmqType::Llmq25_67).is_some());
-  assert!(main.consensus.llmq(LlmqType::Llmq25_67).is_none());
 }
 
 #[rstest]
-fn spork_key_ids_decode(
+fn default_spork_signers(
   #[values(
     NetworkKind::Mainnet,
     NetworkKind::Testnet,
@@ -239,19 +289,56 @@ fn spork_key_ids_decode(
   #[values(Release::V23_1, Release::V24_0)] release: Release,
 ) {
   let p = build(ChainParamsBuilder::new(network, release));
-  let ids = p.spork.key_ids(&p.addr_params).expect("P2PKH spork addresses");
-  assert_eq!(ids.len(), 1);
-  assert_eq!(p.spork.min_spork_keys.is_some(), release == Release::V23_1);
-  // Another network's address prefixes do not decode them.
-  let other = build(ChainParamsBuilder::new(
-    if network == NetworkKind::Mainnet {
-      NetworkKind::Testnet
-    } else {
-      NetworkKind::Mainnet
-    },
-    release,
-  ));
-  assert!(p.spork.key_ids(&other.addr_params).is_none());
+  assert_eq!(p.spork_signers.key_ids.len(), 1);
+  assert_eq!(p.spork_signers.min_spork_keys, (release == Release::V23_1).then_some(1));
+  assert_eq!(p.spork_signers.warning, None);
+}
+
+const REGTEST_SIGNER: &str = "yj949n1UH6fDhw6HtVE5VMj2iSTaSWBMcW";
+const TESTNET_SIGNER: &str = "yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55";
+
+#[rstest]
+fn spork_overrides_follow_the_release() {
+  let two = |release| {
+    regtest(release)
+      .arg(ChainOption::SporkAddr, REGTEST_SIGNER)
+      .arg(ChainOption::SporkAddr, TESTNET_SIGNER)
+  };
+  // v23: a set of signers, whose threshold must be a majority of them.
+  assert_eq!(two(Release::V23_1).build().unwrap_err(), ParamsError::MinSporkKeys);
+  let p = build(two(Release::V23_1).arg(ChainOption::MinSporkKeys, "2"));
+  assert_eq!(
+    (p.spork_signers.key_ids.len(), p.spork_signers.min_spork_keys),
+    (2, Some(2))
+  );
+  // v24: the last address, with Core's warning, and no threshold option.
+  let p = build(two(Release::V24_0));
+  assert_eq!(p.spork_signers.key_ids.len(), 1);
+  let warning = format!("More than one spork address is provided. Using {TESTNET_SIGNER}.");
+  assert_eq!(p.spork_signers.warning, Some(warning));
+  let err = two(Release::V24_0)
+    .arg(ChainOption::MinSporkKeys, "2")
+    .build()
+    .unwrap_err();
+  assert_eq!(err.to_string(), "Invalid parameter -minsporkkeys=2");
+  for release in Release::ALL {
+    let err = regtest(release)
+      .arg(ChainOption::SporkAddr, "invalid")
+      .build()
+      .unwrap_err();
+    assert_eq!(err.to_string(), "Invalid spork address specified with -sporkaddr");
+    // Core's whitespace around a base58 address is skipped.
+    let spaced = build(regtest(release).arg(ChainOption::SporkAddr, format!(" {TESTNET_SIGNER}\t")));
+    let plain = build(regtest(release).arg(ChainOption::SporkAddr, TESTNET_SIGNER));
+    assert_eq!(spaced.spork_signers, plain.spork_signers);
+    // Chain params errors come before spork errors (startup order).
+    let err = regtest(release)
+      .arg(ChainOption::SporkAddr, "invalid")
+      .arg(ChainOption::Dip3Params, "x")
+      .build()
+      .unwrap_err();
+    assert_eq!(err, ParamsError::Dip3Malformed);
+  }
 }
 
 #[rstest]

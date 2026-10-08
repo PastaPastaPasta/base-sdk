@@ -117,11 +117,15 @@ mod magic {
   const KNOWN_NETWORKS: [NetworkKind; 3] = [NetworkKind::Mainnet, NetworkKind::Testnet, NetworkKind::Regtest];
 
   fn detect(magic: MessageStart) -> Result<ChainParams, BootstrapError> {
-    KNOWN_NETWORKS
-      .iter()
-      .filter_map(|network| ChainParamsBuilder::new(*network, Release::V24_0).build().ok())
-      .find(|p| p.message_start == magic)
-      .ok_or(BootstrapError::UnknownMagic { magic })
+    for network in KNOWN_NETWORKS {
+      let params = ChainParamsBuilder::new(network, Release::V24_0)
+        .build()
+        .map_err(|e| BootstrapError::Config(format!("{network:?} parameters: {e}")))?;
+      if params.message_start == magic {
+        return Ok(params);
+      }
+    }
+    Err(BootstrapError::UnknownMagic { magic })
   }
 
   /// Identify the network from magic bytes and log the result.

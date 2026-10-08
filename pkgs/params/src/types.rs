@@ -13,7 +13,7 @@ use crate::prelude::*;
 pub(crate) use bitcoin_units::BlockHeight;
 use dash_num::{Arith256, Hash256};
 use dash_primitives::{Block, LlmqType};
-use dash_script::{AddrParams, PubKeyHash, Recipient};
+use dash_script::{AddrParams, PubKeyHash};
 
 /// P2P network message start bytes (magic).
 pub type MessageStart = [u8; 4];
@@ -201,6 +201,7 @@ impl BuriedDeployment {
 
 /// Parameters that influence chain consensus.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[non_exhaustive]
 pub struct ConsensusParams {
   /// Hash of the genesis block.
   pub hash_genesis_block: Hash256,
@@ -382,6 +383,7 @@ impl ConsensusParams {
 
 /// The spork signers a chain trusts by default.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[non_exhaustive]
 pub struct SporkParams {
   /// Base58 addresses of the spork signers (v23 `vSporkAddresses`, v24's
   /// single `strSporkAddress`).
@@ -391,19 +393,18 @@ pub struct SporkParams {
   pub min_spork_keys: Option<i32>,
 }
 
-impl SporkParams {
-  /// The key IDs of [`addresses`](Self::addresses) under `addr`, or `None`
-  /// if one is not a P2PKH address of those parameters.
-  pub fn key_ids(&self, addr: &AddrParams) -> Option<Vec<PubKeyHash>> {
-    self
-      .addresses
-      .iter()
-      .map(|a| match Recipient::from_base58c(a, addr) {
-        Some(Recipient::PubKeyHash(hash)) => Some(hash),
-        _ => None,
-      })
-      .collect()
-  }
+/// The spork signers a node trusts once Core's startup has applied
+/// `-sporkaddr` and `-minsporkkeys` to the chain's [`SporkParams`], as
+/// `CSporkManager` holds them. Verifying sporks is not this crate's job.
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+#[non_exhaustive]
+pub struct SporkSigners {
+  /// Signer key IDs; v23 holds a set (ascending, distinct), v24 one key.
+  pub key_ids: Vec<PubKeyHash>,
+  /// Signatures a spork needs (v23 `nMinSporkKeys`); `None` at v24.
+  pub min_spork_keys: Option<i32>,
+  /// Core's startup warning when v24 is given several `-sporkaddr` values.
+  pub warning: Option<String>,
 }
 
 /// An assumeutxo snapshot Core trusts (`AssumeutxoData`).
@@ -424,7 +425,14 @@ pub struct AssumeutxoData {
 /// The `bad-sb-start` and `bad-dip3-enf-block` pins are chain parameters
 /// already, [`ConsensusParams::superblock_start`] and
 /// [`ConsensusParams::dip0003_enforcement`].
+///
+/// Deliberately absent: Core literals that decide a rule's path by network
+/// rather than pin a height of one, which stay at their rule sites. These
+/// are the mainnet `nPrevHeight <= 4500` subsidy branch, the devnet subsidy
+/// path and the `LLMQ_50_60` testnet and devnet branch of
+/// `IsQuorumTypeEnabled`.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[non_exhaustive]
 pub struct HardCodedPins {
   /// Last height whose header nBits only needs to be within 50% of DGW's
   /// (`bad-diffbits`); Core applies it on mainnet only.
@@ -444,7 +452,11 @@ pub struct HardCodedPins {
 
 /// Complete chain parameters for a network, as Core's `CChainParams` plus
 /// its `CBaseChainParams`.
+///
+/// Built by [`ChainParamsBuilder`](crate::ChainParamsBuilder) only; fields
+/// stay public to read and to adjust in tests.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct ChainParams {
   /// Kind of chain.
   pub network: NetworkKind,
@@ -505,8 +517,10 @@ pub struct ChainParams {
   pub fulfilled_request_expire_time: i32,
   /// Number of blocks in a credit-pool accounting period.
   pub credit_pool_period_blocks: i32,
-  /// Default spork signers.
+  /// Default spork signers, as the chain parameters hold them.
   pub spork: SporkParams,
+  /// Spork signers after the spork options.
+  pub spork_signers: SporkSigners,
   /// Hard-coded checkpoints for fast validation.
   pub checkpoints: Vec<Checkpoint>,
   /// Trusted assumeutxo snapshots.

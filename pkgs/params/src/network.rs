@@ -72,6 +72,11 @@ impl Release {
     }
   }
 
+  /// Whether the release has a spork signature threshold (`-minsporkkeys`).
+  pub const fn has_min_spork_keys(self) -> bool {
+    matches!(self, Self::V23_1)
+  }
+
   /// Whether Core caps the LLMQ size overrides at
   /// [`MAX_LLMQ_SIZE`](crate::MAX_LLMQ_SIZE).
   pub const fn caps_llmq_size(self) -> bool {

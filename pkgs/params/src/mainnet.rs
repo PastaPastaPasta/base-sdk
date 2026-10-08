@@ -140,6 +140,7 @@ pub(crate) fn params(release: Release) -> ChainParams {
       addresses: &["Xgtyuk76vhuFW2iT7UAiHgNdWXCf3J34wh"],
       min_spork_keys: v23_only(release, 1),
     },
+    spork_signers: SporkSigners::default(),
     checkpoints: MAINNET_CHECKPOINTS.to_vec(),
     assumeutxo: &[],
     chain_tx_data: ChainTxData {

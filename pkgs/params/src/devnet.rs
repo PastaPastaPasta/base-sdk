@@ -126,6 +126,7 @@ pub(crate) fn params(release: Release, name: String) -> Option<ChainParams> {
       addresses: &["yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55"],
       min_spork_keys: v23_only(release, 1),
     },
+    spork_signers: SporkSigners::default(),
     checkpoints: vec![
       (BlockHeight::from_u32(0), REGTEST_GENESIS_HASH),
       (BlockHeight::from_u32(1), devnet_hash),

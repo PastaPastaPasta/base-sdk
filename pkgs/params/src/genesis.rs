@@ -91,6 +91,7 @@ fn push_data(script: &mut Vec<u8>, data: &[u8]) {
       script.push(Opcode::PushData4.to_base());
       script.extend_from_slice(&len.to_le_bytes());
     }
+    // A name of 4 GiB or more cannot come from a command line.
     Err(_) => return,
   }
   script.extend_from_slice(data);

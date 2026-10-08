@@ -8,7 +8,10 @@
 //!
 //! [`ChainParamsBuilder`] builds the parameters of a [`NetworkKind`] at a
 //! [`Release`], applying Core's command-line overrides with Core's errors.
-//! Negative heights Core would accept are refused, since heights are unsigned.
+//!
+//! One deviation is deliberate. Core accepts a negative regtest height from
+//! `-vbparams`, `-dip3params` or `-budgetparams`; heights here are unsigned,
+//! so a height still negative in the final parameters is refused.
 
 #![no_std]
 
@@ -28,6 +31,7 @@ mod parse;
 #[allow(unused_imports, reason = "ergonomic shim, exports may be unused")]
 mod prelude;
 mod regtest;
+mod spork;
 mod testnet;
 mod types;
 

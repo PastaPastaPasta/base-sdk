@@ -117,6 +117,7 @@ pub(crate) fn params(release: Release) -> ChainParams {
       addresses: &["yj949n1UH6fDhw6HtVE5VMj2iSTaSWBMcW"],
       min_spork_keys: v23_only(release, 1),
     },
+    spork_signers: SporkSigners::default(),
     checkpoints: vec![(BlockHeight::from_u32(0), REGTEST_GENESIS_HASH)],
     assumeutxo: match release {
       Release::V23_1 => &ASSUMEUTXO_V23,

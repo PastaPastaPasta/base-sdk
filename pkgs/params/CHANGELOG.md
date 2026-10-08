@@ -8,3 +8,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 - Initial release.
+- `Network` and its `&'static` per-network tables are replaced by `NetworkKind` (with devnets), `Release` and an owned
+  `ChainParams` built by `ChainParamsBuilder`, which applies Dash Core's chain-params and spork command-line options
+  with Core's errors.
