@@ -14,7 +14,7 @@ use dash_num::Hash256;
 use dash_primitives::{hash_impl, ServiceV1};
 use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{make_num, CompactSize};
+use dash_types::{make_num, CompactSize, CoreBool};
 
 use core::fmt;
 use core::ops::{BitAnd, BitOr, BitOrAssign};
@@ -93,7 +93,7 @@ impl_p2p!(UserAgent);
 
 impl BaseCodec for UserAgent {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let len = CompactSize::decode(data)?.into_len(MAX_USER_AGENT)?;
+    let len = CompactSize::decode_size(data)?.into_len(MAX_USER_AGENT)?;
     let raw = codec::read_bytes(data, len)?;
     Ok(Self(raw.to_vec()))
   }
@@ -180,6 +180,12 @@ impl fmt::Display for VersionAddr {
 ///
 /// Dash extends the Bitcoin version message with two additional
 /// fields for masternode authentication.
+///
+/// Core reads the fields up to `addr_recv` unconditionally, then each later
+/// field only while payload bytes remain, `addr_send` and `nonce` together.
+/// A field is `None` when the payload ends before it, and a field cut short
+/// is a decode error. Encoding stops at the first absent field, so decode
+/// from a cursor that ends with the payload.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct Version {
@@ -187,40 +193,106 @@ pub struct Version {
   pub protocol_version: ProtocolVersion,
   /// Sender's advertised services.
   pub services: ServiceFlags,
-  /// Unix timestamp of the sender.
+  /// Unix timestamp of the sender, unchecked.
   pub timestamp: i64,
   /// Receiver's address as seen by the sender.
   pub addr_recv: VersionAddr,
-  /// Sender's own address.
-  pub addr_send: VersionAddr,
+  /// Sender's own address, present with `nonce`.
+  pub addr_send: Option<VersionAddr>,
   /// Random nonce for connection deduplication.
-  #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::str_u64"))]
-  pub nonce: u64,
+  #[cfg_attr(feature = "serde", serde(default, with = "opt_str_u64"))]
+  pub nonce: Option<u64>,
   /// User agent string.
-  pub user_agent: UserAgent,
+  pub user_agent: Option<UserAgent>,
   /// Sender's best block height.
-  pub start_height: i32,
+  pub start_height: Option<i32>,
   /// Whether the sender wants transaction relay.
-  pub relay: bool,
+  pub relay: Option<CoreBool>,
   /// Dash: masternode authentication challenge.
-  pub mnauth_challenge: Hash256,
+  pub mnauth_challenge: Option<Hash256>,
   /// Dash: whether the sender identifies as a masternode.
-  pub mn_connection: bool,
+  pub mn_connection: Option<CoreBool>,
 }
 
-codec_p2p!(Version {
-  protocol_version,
-  services,
-  timestamp,
-  addr_recv,
-  addr_send,
-  nonce,
-  user_agent,
-  start_height,
-  relay,
-  mnauth_challenge,
-  mn_connection,
-});
+impl_p2p!(Version);
+
+/// Decodes `T` when bytes remain, as Core's `if (!vRecv.empty())`.
+fn read_if_any<T: BaseCodec>(data: &mut &[u8]) -> Result<Option<T>, DecodeError> {
+  if data.is_empty() {
+    return Ok(None);
+  }
+  T::decode(data).map(Some)
+}
+
+impl BaseCodec for Version {
+  fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
+    let protocol_version = ProtocolVersion::decode(data)?;
+    let services = ServiceFlags::decode(data)?;
+    let timestamp = i64::decode(data)?;
+    let addr_recv = VersionAddr::decode(data)?;
+    let (addr_send, nonce) = match read_if_any::<VersionAddr>(data)? {
+      Some(addr) => (Some(addr), Some(u64::decode(data)?)),
+      None => (None, None),
+    };
+    Ok(Self {
+      protocol_version,
+      services,
+      timestamp,
+      addr_recv,
+      addr_send,
+      nonce,
+      user_agent: read_if_any(data)?,
+      start_height: read_if_any(data)?,
+      relay: read_if_any(data)?,
+      mnauth_challenge: read_if_any(data)?,
+      mn_connection: read_if_any(data)?,
+    })
+  }
+
+  fn encode(&self, buf: &mut impl EncodeBuf) {
+    self.protocol_version.encode(buf);
+    self.services.encode(buf);
+    self.timestamp.encode(buf);
+    self.addr_recv.encode(buf);
+    self.encode_optional(buf);
+  }
+}
+
+impl Version {
+  /// Writes the optional fields up to the first absent one.
+  fn encode_optional(&self, buf: &mut impl EncodeBuf) -> Option<()> {
+    let (addr_send, nonce) = (self.addr_send.as_ref()?, self.nonce?);
+    addr_send.encode(buf);
+    nonce.encode(buf);
+    self.user_agent.as_ref()?.encode(buf);
+    self.start_height?.encode(buf);
+    self.relay?.encode(buf);
+    self.mnauth_challenge.as_ref()?.encode(buf);
+    self.mn_connection?.encode(buf);
+    Some(())
+  }
+}
+
+hash_impl!(Version);
+
+/// [`dash_types::serialize::str_u64`] for an optional field.
+#[cfg(feature = "serde")]
+mod opt_str_u64 {
+  use dash_types::serialize::str_u64;
+
+  #[derive(::serde::Deserialize, ::serde::Serialize)]
+  struct Wrap(#[serde(with = "str_u64")] u64);
+
+  /// Serializes `Some` as `str_u64` does and `None` as unit.
+  pub fn serialize<S: serde::Serializer>(val: &Option<u64>, s: S) -> Result<S::Ok, S::Error> {
+    serde::Serialize::serialize(&val.map(Wrap), s)
+  }
+
+  /// Deserializes what [`serialize`] writes.
+  pub fn deserialize<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<u64>, D::Error> {
+    Ok(<Option<Wrap> as serde::Deserialize>::deserialize(d)?.map(|Wrap(v)| v))
+  }
+}
 
 #[cfg(all(test, feature = "serde"))]
 mod tests {

@@ -10,9 +10,19 @@
 #![expect(clippy::panic, clippy::unwrap_used, reason = "test code")]
 
 use dash_dev::{vec_from_hex, Corpus};
-use dash_p2p_core::{CommandString, DecodedMsg, P2pDecodeError, P2pMsg, ProtoCtx, ProtocolVersion};
+use dash_p2p_core::{CommandString, DecodedMsg, P2pDecodeError, P2pMsg, ProtoCtx, ProtocolVersion, Version};
 use dash_pkc::bls::BlsCtx;
+use dash_types::codec::BaseCodec;
 use rstest::rstest;
+
+#[derive(::serde::Deserialize)]
+struct VersionVector {
+  name: String,
+  raw: String,
+  core: String,
+  relaytxes: Option<bool>,
+  groups: Option<usize>,
+}
 
 #[derive(::serde::Deserialize)]
 struct MsgVector {
@@ -40,6 +50,62 @@ fn command(name: &str) -> CommandString {
 fn decode(v: &MsgVector) -> Result<DecodedMsg, P2pDecodeError> {
   let raw = vec_from_hex(&v.raw);
   P2pMsg::decode_with_policy(&command(&v.command), &raw, &ctx(v.version.unwrap_or(70240)))
+}
+
+/// Counts the optional `version` field groups present after `addr_recv`.
+fn groups(v: &Version) -> usize {
+  [
+    v.addr_send.is_some() && v.nonce.is_some(),
+    v.user_agent.is_some(),
+    v.start_height.is_some(),
+    v.relay.is_some(),
+    v.mnauth_challenge.is_some(),
+    v.mn_connection.is_some(),
+  ]
+  .iter()
+  .take_while(|present| **present)
+  .count()
+}
+
+#[rstest]
+fn version_reads_optional_fields_as_core() {
+  for v in corpus().vectors::<VersionVector>("version") {
+    let raw = vec_from_hex(&v.raw);
+    let decoded = P2pMsg::decode_with_policy(&CommandString::VERSION, &raw, &ctx(209));
+    if v.core == "throw" {
+      assert!(
+        matches!(decoded, Err(P2pDecodeError::Consensus(_))),
+        "{}: {decoded:?}",
+        v.name
+      );
+      continue;
+    }
+    let DecodedMsg {
+      msg: P2pMsg::Version(version),
+      consumed,
+    } = decoded.unwrap()
+    else {
+      panic!("{}: not a version", v.name);
+    };
+    if let Some(expected) = v.groups {
+      assert_eq!(groups(&version), expected, "{}", v.name);
+      // An absent relay field defaults to true in Core.
+      let relay = version.relay.is_none_or(|r| r.get());
+      assert_eq!(Some(relay), v.relaytxes, "{}", v.name);
+    }
+    match v.core.as_str() {
+      "disconnect: inbound masternode" => assert_eq!(version.mn_connection.map(|b| b.get()), Some(true)),
+      "disconnect: obsolete version" => assert!(version.protocol_version < ProtocolVersion::MIN_PEER),
+      _ => {}
+    }
+    // Core ignores bytes after fMasternode; re-encoding writes the fields read.
+    let mut buf = Vec::new();
+    version.encode(&mut buf);
+    assert_eq!(buf.len(), consumed, "{}", v.name);
+    if v.name != "relay_02" && v.name != "relay_ff" && v.name != "mn_02" {
+      assert_eq!(buf, raw[..consumed], "{}", v.name);
+    }
+  }
 }
 
 #[rstest]
