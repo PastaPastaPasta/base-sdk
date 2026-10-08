@@ -38,6 +38,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   limitations in JSON and is now contained only for human-readable formats.
 - Decoding `Vec<T>`, `String` and script buffers rejects a length prefix above `MAX_SER_SIZE` even when enough bytes
   remain, matching Dash Core's `ReadCompactSize`.
+- Decoding `Vec<T>` reserves each batch exactly, as Core's `reserve(allocated)` does, rather than growing its capacity
+  geometrically past the batch.
 
 ### Removed
 
