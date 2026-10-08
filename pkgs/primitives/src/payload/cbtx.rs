@@ -154,11 +154,36 @@ impl fmt::Display for CoinbaseCommitment {
 }
 
 #[cfg(all(test, feature = "serde"))]
+#[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
+  use crate::Transaction;
 
-  use dash_dev::{assert_serde_rt, check_sptx, Corpus};
+  use dash_dev::{assert_serde_rt, check_sptx, vec_from_hex, Corpus};
+  use dash_types::MAX_SER_SIZE;
   use rstest::rstest;
+
+  /// `COMPACTSIZE(bestCLHeightDiff)` is range-checked. With the mainnet CbTx
+  /// ac9fc5d0... re-encoded at each value, decoderawtransaction on v23.1.8
+  /// and v24.0.0-rc.3 shows `bestCLHeightDiff` 33554432 for `fe00000002`
+  /// and omits `cbTx` for `fe01000002`.
+  #[rstest]
+  #[case::at_max(&[0xFE, 0x00, 0x00, 0x00, 0x02], Some(MAX_SER_SIZE as u64))]
+  #[case::above_max(&[0xFE, 0x01, 0x00, 0x00, 0x02], None)]
+  fn best_cl_height_diff_is_range_checked(#[case] size: &[u8], #[case] expected: Option<u64>) {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "cbtx").into_value();
+    let raw = corpus["cbtx"]["ac9fc5d0c7229a1c9fb834d8c6f6be200ae5b55d1b731c38afd83adc0c54aa31"]["raw"]
+      .as_str()
+      .map(vec_from_hex)
+      .unwrap();
+    let payload = Transaction::decode(&mut &raw[..]).unwrap().extra_payload;
+    // version, height and the two merkle roots, then a 1-byte diff.
+    assert_eq!(payload[70], 0x01);
+    let edited = [&payload[..70], size, &payload[71..]].concat();
+
+    let decoded = CoinbaseCommitment::decode(&mut &edited[..]);
+    assert_eq!(decoded.ok().and_then(|c| c.best_cl_height_diff), expected);
+  }
 
   #[rstest]
   fn corpus_cbtx() {
