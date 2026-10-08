@@ -149,15 +149,14 @@ impl CompressedHeader {
     // Core subtracts in `uint32_t`, so a time step backwards wraps to a large
     // delta and goes on the wire whole.
     let time_diff = self.header.time.wrapping_sub(previous.time);
-    let mut flags = UNCOMPRESSED & !FLAG_PREV_HASH;
     // At most 7 entries, so the offset fits the mask.
-    flags |= offset as u8 & VERSION_OFFSET_MASK;
-    if let Ok(delta) = i16::try_from(time_diff) {
-      flags &= !FLAG_TIMESTAMP;
-      self.time_offset = delta;
+    let mut flags = offset as u8 & VERSION_OFFSET_MASK;
+    match i16::try_from(time_diff) {
+      Ok(delta) => self.time_offset = delta,
+      Err(_) => flags |= FLAG_TIMESTAMP,
     }
-    if self.header.bits == previous.bits {
-      flags &= !FLAG_NBITS;
+    if self.header.bits != previous.bits {
+      flags |= FLAG_NBITS;
     }
     self.flags = flags;
   }
@@ -339,7 +338,7 @@ impl Headers2 {
     } else {
       MAX_HEADERS_UNCOMPRESSED_RESULT
     };
-    let count = read_header_count(data, "headers2", max as u64)?;
+    let count = read_header_count(data, "headers2", max)?;
     Ok(Self::read(data, count, &mut hash)?)
   }
 
@@ -351,7 +350,8 @@ impl Headers2 {
     hash: &mut impl FnMut(&BlockHeader) -> BlockHash,
   ) -> Result<Self, DecodeError> {
     let mut versions = VersionList::default();
-    let mut headers: Vec<CompressedHeader> = Vec::with_capacity(count);
+    // At most what the payload can hold, whatever the count says.
+    let mut headers: Vec<CompressedHeader> = Vec::with_capacity(count.min(data.len() / MIN_HEADERS2_ENTRY));
     for _ in 0..count {
       let mut h = CompressedHeader::decode(data)?;
       h.uncompress(headers.last().map(|p| &p.header), &mut versions, hash);
@@ -382,8 +382,10 @@ impl MsgDecode for Headers2 {
   }
 }
 
+// Synthetic chains; Core's verdicts on such messages are diff_headers2's and
+// the core_headers2 corpus's. Semantics from source: block.cpp 57-134.
 #[cfg(test)]
-#[expect(clippy::panic, clippy::unwrap_used, reason = "test code")]
+#[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
 
@@ -409,20 +411,31 @@ mod tests {
     ProtoCtx::new(ProtocolVersion::V24_0, BlsCtx::BASIC)
   }
 
-  fn round_trip(msg: &Headers2) -> Headers2 {
+  fn wire(msg: &Headers2) -> Vec<u8> {
     let mut buf = Vec::new();
     msg.encode(&mut buf);
-    let mut cursor = &buf[..];
-    let decoded = Headers2::decode_msg(&mut cursor, &ctx()).unwrap();
-    assert!(cursor.is_empty());
-    decoded
+    buf
+  }
+
+  /// Decodes `bytes`, returning the result and the nonces of the headers the
+  /// decoder hashed, in order.
+  fn hashed(bytes: &[u8]) -> (Result<Headers2, P2pDecodeError>, Vec<u32>) {
+    let mut nonces = Vec::new();
+    let r = Headers2::decode_with_hasher(&mut &bytes[..], &ctx(), |h| {
+      nonces.push(h.nonce);
+      h.hash()
+    });
+    (r, nonces)
   }
 
   #[test]
   fn both_modes_round_trip_a_chain() {
     let headers = chain(20);
     for msg in [Headers2::reply(&headers), Headers2::announce(&headers)] {
-      let decoded = round_trip(&msg);
+      let bytes = wire(&msg);
+      let mut cursor = &bytes[..];
+      let decoded = Headers2::decode_msg(&mut cursor, &ctx()).unwrap();
+      assert!(cursor.is_empty());
       assert_eq!(decoded, msg);
       assert!(decoded.block_headers().copied().eq(headers.iter().copied()));
       assert!(!decoded.is_prev_hash_derived(0));
@@ -463,50 +476,36 @@ mod tests {
       (0, BlockHash::default(), 0, 0, 7)
     );
     assert_eq!(msg.headers[0].time_offset, -5);
-    let mut buf = Vec::new();
-    msg.encode(&mut buf);
-    assert_eq!(buf, payload);
+    assert_eq!(wire(&msg), payload);
   }
 
   #[test]
   fn an_offset_past_the_list_leaves_version_zero() {
-    let headers = chain(2);
-    let mut msg = Headers2::announce(&headers);
-    msg.headers[1].flags = (msg.headers[1].flags & !VERSION_OFFSET_MASK) | 2;
-    let mut buf = Vec::new();
-    msg.encode(&mut buf);
+    let mut msg = Headers2::announce(&chain(2));
     // Header 1 carried its version; with offset 2 it is not on the wire.
-    let decoded = Headers2::decode(&mut &buf[..]);
-    let h = match decoded {
-      Ok(d) => d.headers[1].header,
-      Err(e) => panic!("{e}"),
-    };
-    assert_eq!(h.version, 0);
+    msg.headers[1].flags = (msg.headers[1].flags & !VERSION_OFFSET_MASK) | 2;
+    let decoded = Headers2::decode(&mut &wire(&msg)[..]).unwrap();
+    assert_eq!(decoded.headers[1].header.version, 0);
   }
 
   #[test]
   fn hashes_only_where_core_does() {
-    let headers = chain(5);
-    let mut msg = Headers2::announce(&headers);
+    let mut msg = Headers2::announce(&chain(5));
     msg.headers[3].flags |= FLAG_PREV_HASH;
-    let mut buf = Vec::new();
-    msg.encode(&mut buf);
-    let mut hashed = Vec::new();
-    Headers2::decode_with_hasher(&mut &buf[..], &ctx(), |h| {
-      hashed.push(h.nonce);
-      h.hash()
-    })
-    .unwrap();
-    assert_eq!(hashed, [0, 1, 3]);
-    // A message cut inside header 3 has hashed for headers 1 and 2 only.
-    let mut hashed = Vec::new();
-    let cut = &buf[..buf.len() - 50];
-    let r = Headers2::decode_with_hasher(&mut &cut[..], &ctx(), |h| {
-      hashed.push(h.nonce);
-      h.hash()
-    });
+    let bytes = wire(&msg);
+    let (r, nonces) = hashed(&bytes);
+    assert!(r.is_ok());
+    assert_eq!(nonces, [0, 1, 3]);
+    // Cut inside header 3: hashed for headers 1 and 2 only.
+    let (r, nonces) = hashed(&bytes[..bytes.len() - 50]);
     assert!(r.is_err());
-    assert_eq!(hashed, [0, 1]);
+    assert_eq!(nonces, [0, 1]);
+    // A count past the end of the data: read and hashed up to the end.
+    let mut long = bytes.clone();
+    long[0] = 79;
+    let (r, nonces) = hashed(&long);
+    assert!(r.is_err());
+    assert_eq!(nonces, [0, 1, 3]);
   }
 
   #[test]
