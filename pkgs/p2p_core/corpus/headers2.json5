@@ -51,12 +51,16 @@
       "details": {
         "headers": [
           {
-            "version": 536870912,
-            "prevHash": "000000000000001a94a4abec8474758d274b208544777173d8bd9ce8fbd26feb",
-            "merkleRoot": "53ab84126ba8fe898ae4f163e5a6aded6925b97a3c5a3ebed5c5d3a25995ef55",
-            "time": 1778264555,
-            "bits": 421963582,
-            "nonce": 3837937772
+            "flags": 56,
+            "timeOffset": 0,
+            "header": {
+              "version": 536870912,
+              "prevHash": "000000000000001a94a4abec8474758d274b208544777173d8bd9ce8fbd26feb",
+              "merkleRoot": "53ab84126ba8fe898ae4f163e5a6aded6925b97a3c5a3ebed5c5d3a25995ef55",
+              "time": 1778264555,
+              "bits": 421963582,
+              "nonce": 3837937772
+            }
           }
         ]
       }
@@ -67,12 +71,16 @@
       "details": {
         "headers": [
           {
-            "version": 536870912,
-            "prevHash": "000000000000000d35649b332333437adcc12829790a55d0cb95d7679c72212f",
-            "merkleRoot": "22b5029209c7dd76c77dbebb557af4bc00dfc5a133b7ae9cd48a3a2846859f83",
-            "time": 1778264602,
-            "bits": 422153387,
-            "nonce": 4026620048
+            "flags": 56,
+            "timeOffset": 0,
+            "header": {
+              "version": 536870912,
+              "prevHash": "000000000000000d35649b332333437adcc12829790a55d0cb95d7679c72212f",
+              "merkleRoot": "22b5029209c7dd76c77dbebb557af4bc00dfc5a133b7ae9cd48a3a2846859f83",
+              "time": 1778264602,
+              "bits": 422153387,
+              "nonce": 4026620048
+            }
           }
         ]
       }

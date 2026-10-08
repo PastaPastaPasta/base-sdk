@@ -28,7 +28,7 @@ pub use addr::{Addr, AddrV2Entry, AddrV2Msg, TimestampedAddr};
 pub use control::{QSendRecSigs, SendDsq};
 pub use gov::GovSync;
 pub use headers::{GetHeaders, Headers};
-pub use headers2::{CompressionState, GetHeaders2, Headers2};
+pub use headers2::{CompressedHeader, GetHeaders2, Headers2};
 pub use inv::{AssetUnlockInv, GetData, Inv, InvType, Inventory, NotFound};
 pub use mn_list::{DeletedQuorum, GetMnListDiff, MnListDiff, MnListDiffPayload, QuorumClSig, SimplifiedMnListEntry};
 pub use ping::{Ping, Pong};

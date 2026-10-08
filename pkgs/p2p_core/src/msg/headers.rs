@@ -8,6 +8,7 @@
 
 use crate::codec::{codec_p2p, impl_p2p, MsgDecode};
 use crate::ctx::ProtoCtx;
+use crate::limits::MAX_HEADERS_UNCOMPRESSED_RESULT;
 use crate::prelude::*;
 use crate::version::ProtocolVersion;
 use crate::P2pDecodeError;
@@ -16,12 +17,6 @@ use dash_primitives::{hash_impl, BlockHash, BlockHeader, MerkleRoot};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
 use dash_types::{CompactSize, Numeric};
-
-/// Core's `MAX_HEADERS_UNCOMPRESSED_RESULT`, the `headers` limit.
-pub(crate) const MAX_HEADERS_UNCOMPRESSED: u64 = 2_000;
-
-/// Core's `MAX_HEADERS_COMPRESSED_RESULT`, the raised `headers2` limit.
-pub(crate) const MAX_HEADERS_COMPRESSED: u64 = 8_000;
 
 /// The fewest bytes a `headers` entry takes, a header and its tx count.
 const MIN_HEADERS_ENTRY: usize = 81;
@@ -124,7 +119,7 @@ impl Headers {
 
 impl MsgDecode for Headers {
   fn decode_msg(data: &mut &[u8], _ctx: &ProtoCtx) -> Result<Self, P2pDecodeError> {
-    let count = read_header_count(data, "headers", MAX_HEADERS_UNCOMPRESSED)?;
+    let count = read_header_count(data, "headers", MAX_HEADERS_UNCOMPRESSED_RESULT as u64)?;
     Ok(Self::read(data, count)?)
   }
 }
