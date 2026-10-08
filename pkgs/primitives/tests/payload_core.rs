@@ -22,6 +22,7 @@ use dash_types::{Checkable, Numeric};
 use hex_conservative::DisplayHex;
 
 use std::collections::BTreeSet;
+use std::sync::LazyLock;
 
 const V23: &str = "v23.1.8";
 const V24: &str = "v24.0.0-rc.3";
@@ -62,8 +63,22 @@ fn decode_tx(raw: &str) -> Transaction {
 }
 
 /// The payload, when it decodes and Core's `GetTxPayload` would accept it.
-fn accepted(tx: &Transaction, bls: BlsCtx) -> Option<PayloadDecode> {
-  tx.decode_payload(bls)?.ok().filter(PayloadDecode::is_complete)
+fn accepted(tx: &Transaction) -> Option<PayloadDecode> {
+  tx.decode_payload()?.ok().filter(PayloadDecode::is_complete)
+}
+
+/// `payload_core.json5`, parsed once.
+static CRAFTED: LazyLock<Value> =
+  LazyLock::new(|| Corpus::open(env!("CARGO_MANIFEST_DIR"), "payload_core").into_value());
+
+/// The transaction of a crafted case.
+fn crafted_tx(name: &str) -> Transaction {
+  decode_tx(CRAFTED[name]["raw"].as_str().unwrap())
+}
+
+/// The payload a crafted case decodes to.
+fn crafted(name: &str) -> SpecialPayload {
+  accepted(&crafted_tx(name)).unwrap_or_else(|| panic!("{name}")).payload
 }
 
 /// Core's address list (`GetNetInfoWithLegacyFields`), `[invalid entry]` for
@@ -320,7 +335,7 @@ fn compare(label: &str, payload: &SpecialPayload, core: &Value, bls: BlsCtx) {
       f.eq("fee", p.fee);
       f.eq("requestedHeight", p.requested_height);
       f.eq("quorumHash", p.quorum_hash.to_string());
-      f.eq("quorumSig", hex(&p.quorum_sig.to_bytes(bls.scheme())));
+      f.eq("quorumSig", hex(&p.quorum_sig.get(bls).to_bytes(bls.scheme())));
     }
     SpecialPayload::ProviderDissolve(p) => {
       f.eq("version", p.version);
@@ -368,7 +383,7 @@ fn compare_cbtx(f: &mut Fields<'_>, p: &CoinbaseCommitment, bls: BlsCtx) {
   }
   if let (Some(diff), Some(sig), Some(balance)) = (p.best_cl_height_diff, &p.best_cl_signature, p.credit_pool_balance) {
     f.eq("bestCLHeightDiff", diff);
-    f.eq("bestCLSignature", hex(&sig.to_bytes(bls.scheme())));
+    f.eq("bestCLSignature", hex(&sig.get(bls).to_bytes(bls.scheme())));
     assert_eq!(duffs(&f.core["creditPoolBalance"]), balance, "{}", f.label);
     f.seen.insert("creditPoolBalance".into());
   }
@@ -396,23 +411,22 @@ fn reward_script(share: &dash_primitives::CollateralShare) -> &[u8] {
   }
 }
 
-/// Every crafted case: base-sdk accepts the payload under each flag exactly
-/// when v24.0.0-rc.3 does, and renders what Core printed. A case whose verdict
-/// differs at v23.1.8 must be listed in [`PIN_DEPENDENT`].
+/// Every crafted case: base-sdk, which decodes without the flag, accepts the
+/// payload exactly when v24.0.0-rc.3 does under each flag, and renders what
+/// Core printed under it. A case whose verdict differs at v23.1.8 must be
+/// listed in [`PIN_DEPENDENT`].
 #[test]
 fn crafted_payloads_match_core() {
-  let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "payload_core").into_value();
-  let cases = corpus.as_object().unwrap();
+  let cases = CRAFTED.as_object().unwrap();
   assert!(cases.len() >= 70);
   let mut pin_dependent = BTreeSet::new();
   for (name, case) in cases {
-    let tx = decode_tx(case["raw"].as_str().unwrap());
+    let ours = accepted(&decode_tx(case["raw"].as_str().unwrap()));
     for (flag, bls) in [("basic", BlsCtx::BASIC), ("legacy", BlsCtx::LEGACY)] {
       let label = format!("{name} ({flag})");
       let core = core_object(case, V24, flag);
-      let ours = accepted(&tx, bls);
       assert_eq!(ours.is_some(), core.is_some(), "{label}: decode verdict");
-      if let (Some(ours), Some(core)) = (ours, core) {
+      if let (Some(ours), Some(core)) = (&ours, core) {
         compare(&label, &ours.payload, core, bls);
       }
       if core_object(case, V23, flag).is_some() != core.is_some() {
@@ -434,7 +448,7 @@ fn v24_payloads_match_core() {
   let mut types = BTreeSet::new();
   for (txid, entry) in entries {
     let tx = decode_tx(entry["raw"].as_str().unwrap());
-    let decoded = accepted(&tx, BlsCtx::BASIC).unwrap_or_else(|| panic!("{txid}: payload"));
+    let decoded = accepted(&tx).unwrap_or_else(|| panic!("{txid}: payload"));
     let core = entry["core"].as_object().unwrap().values().next().unwrap();
     compare(txid, &decoded.payload, core, BlsCtx::BASIC);
     // Core mined these, so base-sdk's partial checks must pass them.
@@ -466,92 +480,88 @@ fn reencode(payload: &SpecialPayload) -> Vec<u8> {
 }
 
 /// The scheme each BLS field decodes under, per A1 §1.4.1: the version for
-/// ProTx and commitment fields, Core's flag for the coinbase and asset-unlock
-/// signatures, the basic scheme for MnHF and shared-registrar fields. Core
-/// passes these in the payloads' serializers at both pins; it prints no
-/// ProUpServTx or ProUpRevTx signature, so this also pins their outcome.
+/// ProTx and commitment fields, the basic scheme for MnHF and shared-registrar
+/// fields, and Core's flag, given at use, for the coinbase and asset-unlock
+/// signatures. Core passes these in the payloads' serializers at both pins;
+/// it prints no ProUpServTx or ProUpRevTx signature, so this also pins their
+/// outcome.
 #[test]
 fn bls_fields_take_their_scheme_source() {
   use BlsSchemeKind::{Basic, Legacy};
 
-  let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "payload_core").into_value();
-  let decode = |name: &str, bls: BlsCtx| {
-    let tx = decode_tx(corpus[name]["raw"].as_str().unwrap());
-    accepted(&tx, bls).unwrap_or_else(|| panic!("{name}")).payload
-  };
-  for bls in [BlsCtx::BASIC, BlsCtx::LEGACY] {
-    for (version, scheme) in [(1, Legacy), (2, Basic)] {
-      for (sample, valid) in [("legacy", scheme == Legacy), ("basic", scheme == Basic)] {
-        let name = format!("proupservtx_v{version}_sig_{sample}");
-        let SpecialPayload::ProviderUpdateService(p) = decode(&name, bls) else {
-          panic!("{name}")
-        };
-        assert_eq!((p.sig.scheme(), p.sig.is_valid()), (scheme, valid), "{name}");
-        let name = format!("prouprevtx_v{version}_sig_{sample}");
-        let SpecialPayload::ProviderUpdateRevoke(p) = decode(&name, bls) else {
-          panic!("{name}")
-        };
-        assert_eq!((p.sig.scheme(), p.sig.is_valid()), (scheme, valid), "{name}");
-        let name = format!("proregtx_v{version}_pk_{sample}");
-        let SpecialPayload::ProviderRegister(p) = decode(&name, bls) else {
-          panic!("{name}")
-        };
-        assert_eq!(p.pub_key_operator.scheme(), scheme, "{name}");
-        let name = format!("proupregtx_v{version}_pk_{sample}");
-        let SpecialPayload::ProviderUpdateRegistrar(p) = decode(&name, bls) else {
-          panic!("{name}")
-        };
-        assert_eq!(p.pub_key_operator.scheme(), scheme, "{name}");
-      }
-    }
-    for (version, scheme) in [(1, Legacy), (2, Legacy), (3, Basic), (4, Basic)] {
-      let name = format!("qctx_v{version}_basic");
-      let SpecialPayload::QuorumCommitment(p) = decode(&name, bls) else {
+  for (version, scheme) in [(1, Legacy), (2, Basic)] {
+    for (sample, valid) in [("legacy", scheme == Legacy), ("basic", scheme == Basic)] {
+      let name = format!("proupservtx_v{version}_sig_{sample}");
+      let SpecialPayload::ProviderUpdateService(p) = crafted(&name) else {
         panic!("{name}")
       };
-      let qc = &p.commitment;
-      let schemes = [
-        qc.quorum_public_key.scheme(),
-        qc.quorum_sig.scheme(),
-        qc.members_sig.scheme(),
-      ];
-      assert_eq!(schemes, [scheme; 3], "{name}");
+      assert_eq!((p.sig.scheme(), p.sig.is_valid()), (scheme, valid), "{name}");
+      let name = format!("prouprevtx_v{version}_sig_{sample}");
+      let SpecialPayload::ProviderUpdateRevoke(p) = crafted(&name) else {
+        panic!("{name}")
+      };
+      assert_eq!((p.sig.scheme(), p.sig.is_valid()), (scheme, valid), "{name}");
+      let name = format!("proregtx_v{version}_pk_{sample}");
+      let SpecialPayload::ProviderRegister(p) = crafted(&name) else {
+        panic!("{name}")
+      };
+      assert_eq!(p.pub_key_operator.scheme(), scheme, "{name}");
+      let name = format!("proupregtx_v{version}_pk_{sample}");
+      let SpecialPayload::ProviderUpdateRegistrar(p) = crafted(&name) else {
+        panic!("{name}")
+      };
+      assert_eq!(p.pub_key_operator.scheme(), scheme, "{name}");
     }
-    let SpecialPayload::CoinbaseCommitment(p) = decode("cbtx_v3_sig_basic", bls) else {
-      panic!()
-    };
-    assert_eq!(p.best_cl_signature.unwrap().scheme(), bls.scheme());
-    let SpecialPayload::AssetUnlock(p) = decode("assetunlock_v1_sig_basic", bls) else {
-      panic!()
-    };
-    assert_eq!(p.quorum_sig.scheme(), bls.scheme());
-    let SpecialPayload::MnhfSignal(p) = decode("mnhf_sig_basic", bls) else {
-      panic!()
-    };
-    assert_eq!((p.sig.scheme(), p.sig.is_valid()), (Basic, true));
-    let SpecialPayload::ProviderUpdateSharedRegistrar(p) = decode("proupsharedregtx_pk_legacy", bls) else {
-      panic!()
-    };
-    assert_eq!(p.pub_key_operator.scheme(), Basic);
   }
+  for (version, scheme) in [(1, Legacy), (2, Legacy), (3, Basic), (4, Basic)] {
+    let name = format!("qctx_v{version}_basic");
+    let SpecialPayload::QuorumCommitment(p) = crafted(&name) else {
+      panic!("{name}")
+    };
+    let qc = &p.commitment;
+    let schemes = [
+      qc.quorum_public_key.scheme(),
+      qc.quorum_sig.scheme(),
+      qc.members_sig.scheme(),
+    ];
+    assert_eq!(schemes, [scheme; 3], "{name}");
+  }
+  let SpecialPayload::CoinbaseCommitment(cbtx) = crafted("cbtx_v3_sig_basic") else {
+    panic!()
+  };
+  let SpecialPayload::AssetUnlock(unlock) = crafted("assetunlock_v1_sig_basic") else {
+    panic!()
+  };
+  // Basic-scheme samples: valid where the flag is basic, invalid where legacy.
+  for (bls, valid) in [(BlsCtx::BASIC, true), (BlsCtx::LEGACY, false)] {
+    assert_eq!(cbtx.best_cl_signature.as_ref().unwrap().get(bls).is_valid(), valid);
+    assert_eq!(unlock.quorum_sig.get(bls).is_valid(), valid);
+  }
+  let SpecialPayload::MnhfSignal(p) = crafted("mnhf_sig_basic") else {
+    panic!()
+  };
+  assert_eq!((p.sig.scheme(), p.sig.is_valid()), (Basic, true));
+  let SpecialPayload::ProviderUpdateSharedRegistrar(p) = crafted("proupsharedregtx_pk_legacy") else {
+    panic!()
+  };
+  assert_eq!(p.pub_key_operator.scheme(), Basic);
 }
 
 /// Core's `CFinalCommitment::IsNull` counts a BLS field that decoded invalid,
 /// its bytes canonical only in the other scheme, as absent (A1 quirk 36).
 #[test]
 fn null_commitment_ignores_fields_of_the_other_scheme() {
-  let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "payload_core").into_value();
   for (name, null) in [
     ("qctx_v1_basic", true),
     ("qctx_v3_basic", false),
     ("qctx_v3_legacy", true),
   ] {
-    let mut raw = dash_dev::vec_from_hex(corpus[name]["raw"].as_str().unwrap());
+    let mut raw = dash_dev::vec_from_hex(CRAFTED[name]["raw"].as_str().unwrap());
     // The crafted verification vector hash is 32 bytes of 0x06.
     let at = raw.windows(32).position(|w| w == [6u8; 32]).unwrap();
     raw[at..at + 32].fill(0);
     let tx = Transaction::decode(&mut &raw[..]).unwrap();
-    let SpecialPayload::QuorumCommitment(p) = accepted(&tx, BlsCtx::BASIC).unwrap().payload else {
+    let SpecialPayload::QuorumCommitment(p) = accepted(&tx).unwrap().payload else {
       panic!("{name}")
     };
     assert_eq!(p.commitment.is_null(), null, "{name}");

@@ -7,11 +7,13 @@
 //! BLS fields of special payloads, read and written as Dash Core does.
 //!
 //! Each field takes its scheme from one of Core's rules: the payload's
-//! version, Core's process-wide flag, or the basic scheme always.
+//! version, Core's process-wide flag, or the basic scheme always. A field
+//! under the flag keeps its wire bytes ([`BlsGlobal`]), so a payload decodes
+//! without the flag.
 
 use super::PROTX_VERSION_LEGACY_BLS;
 
-use dash_pkc::bls::{BlsEager, BlsLazy, BlsSchemeKind, BlsSchemeSource, BlsWire, BlsWirePoint};
+use dash_pkc::bls::{BlsEager, BlsGlobal, BlsLazy, BlsSchemeKind, BlsSchemeSource, BlsWire, BlsWirePoint};
 use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
 
 /// Final commitment version: legacy BLS, not indexed.
@@ -75,6 +77,18 @@ pub(crate) fn read_lazy<K: BlsWirePoint<N>, const N: usize>(
   Ok(BlsLazy::from_bytes(&codec::take::<N>(data)?, source))
 }
 
+/// Reads a field under Core's process-wide flag, keeping its wire bytes.
+///
+/// # Errors
+///
+/// Returns a `DecodeError` when fewer than `N` bytes remain or the bytes are
+/// canonical in neither scheme, which Core rejects under either flag.
+pub(crate) fn read_global<K: BlsWirePoint<N>, const N: usize>(
+  data: &mut &[u8],
+) -> Result<BlsGlobal<K, N>, DecodeError> {
+  BlsGlobal::decode(&codec::take::<N>(data)?).map_err(|_| DecodeError::MalleableBls)
+}
+
 /// The wire bytes of an eager field, under the scheme it was decoded with;
 /// zeros when invalid.
 pub(crate) fn eager_bytes<K: BlsWire<N>, const N: usize>(field: &BlsEager<K, N>) -> [u8; N] {
@@ -101,39 +115,91 @@ pub(crate) fn write_lazy<K: BlsWirePoint<N>, const N: usize>(field: &BlsLazy<K, 
 pub(crate) mod serde {
   use super::{eager_bytes, eager_from};
 
-  use dash_pkc::bls::{BlsEager, BlsLazy, BlsSchemeSource, BlsWire, BlsWirePoint};
+  use dash_pkc::bls::{BlsEager, BlsGlobal, BlsLazy, BlsSchemeSource, BlsWire, BlsWirePoint};
 
-  /// The wire bytes of an optional field as hex, or null.
-  pub(crate) mod opt_hex {
-    /// Serializes present bytes as hex and absent ones as null.
+  /// A field under Core's process-wide flag, as the hex of its wire bytes.
+  pub(crate) mod global {
+    use super::*;
+
+    /// Serializes the wire bytes as hex.
     ///
     /// # Errors
     ///
     /// Returns a serialization error when the serializer rejects the value.
-    pub(crate) fn serialize<S, const N: usize>(bytes: &Option<[u8; N]>, serializer: S) -> Result<S::Ok, S::Error>
+    pub(crate) fn serialize<S, K, const N: usize>(field: &BlsGlobal<K, N>, serializer: S) -> Result<S::Ok, S::Error>
     where
       S: ::serde::Serializer,
+      K: BlsWirePoint<N>,
     {
-      match bytes {
-        Some(bytes) => dash_types::serialize::hex::serialize(bytes, serializer),
+      dash_types::serialize::hex::serialize(&field.to_bytes(), serializer)
+    }
+
+    /// Deserializes hex and checks it as the wire path does.
+    ///
+    /// # Errors
+    ///
+    /// Returns a deserialization error for bad hex or a malleable object.
+    pub(crate) fn deserialize<'de, D, K, const N: usize>(deserializer: D) -> Result<BlsGlobal<K, N>, D::Error>
+    where
+      D: ::serde::Deserializer<'de>,
+      K: BlsWirePoint<N>,
+    {
+      let bytes: [u8; N] = dash_types::serialize::hex::deserialize(deserializer)?;
+      BlsGlobal::decode(&bytes).map_err(::serde::de::Error::custom)
+    }
+  }
+
+  /// An optional field under Core's process-wide flag, as [`global`] or none.
+  pub(crate) mod opt_global {
+    use super::*;
+
+    /// Serializes a present field as [`super::global`] does and an absent one
+    /// as none.
+    ///
+    /// # Errors
+    ///
+    /// Returns a serialization error when the serializer rejects the value.
+    pub(crate) fn serialize<S, K, const N: usize>(
+      field: &Option<BlsGlobal<K, N>>,
+      serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+      S: ::serde::Serializer,
+      K: BlsWirePoint<N>,
+    {
+      struct Value<'a, K: BlsWirePoint<N>, const N: usize>(&'a BlsGlobal<K, N>);
+
+      impl<K: BlsWirePoint<N>, const N: usize> ::serde::Serialize for Value<'_, K, N> {
+        fn serialize<S: ::serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+          super::global::serialize(self.0, serializer)
+        }
+      }
+
+      match field {
+        Some(field) => serializer.serialize_some(&Value(field)),
         None => serializer.serialize_none(),
       }
     }
 
-    /// Deserializes hex, or null for absent bytes.
+    /// Deserializes what [`serialize`] writes.
     ///
     /// # Errors
     ///
-    /// Returns a deserialization error for bad hex or a wrong length.
-    pub(crate) fn deserialize<'de, D, const N: usize>(deserializer: D) -> Result<Option<[u8; N]>, D::Error>
+    /// Returns a deserialization error for bad hex or a malleable object.
+    pub(crate) fn deserialize<'de, D, K, const N: usize>(deserializer: D) -> Result<Option<BlsGlobal<K, N>>, D::Error>
     where
       D: ::serde::Deserializer<'de>,
+      K: BlsWirePoint<N>,
     {
-      #[derive(::serde::Deserialize)]
-      struct Hex<const M: usize>(#[serde(with = "dash_types::serialize::hex")] [u8; M]);
+      struct Value<K: BlsWirePoint<N>, const N: usize>(BlsGlobal<K, N>);
 
-      let hex: Option<Hex<N>> = ::serde::Deserialize::deserialize(deserializer)?;
-      Ok(hex.map(|Hex(bytes)| bytes))
+      impl<'de, K: BlsWirePoint<N>, const N: usize> ::serde::Deserialize<'de> for Value<K, N> {
+        fn deserialize<D: ::serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+          super::global::deserialize(deserializer).map(Value)
+        }
+      }
+
+      Ok(<Option<Value<K, N>> as ::serde::Deserialize>::deserialize(deserializer)?.map(|Value(field)| field))
     }
   }
 

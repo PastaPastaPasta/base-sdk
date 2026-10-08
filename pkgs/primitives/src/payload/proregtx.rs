@@ -390,7 +390,6 @@ mod tests {
   use crate::Transaction;
 
   use dash_dev::{assert_serde_rt, check_sptx, vec_from_hex, Corpus};
-  use dash_pkc::bls::BlsCtx;
   use rstest::rstest;
 
   #[rstest]
@@ -410,7 +409,7 @@ mod tests {
     for (txid, entry) in entries {
       let raw = vec_from_hex(entry["raw"].as_str().unwrap());
       let tx = Transaction::decode(&mut &raw[..]).unwrap();
-      let decoded = tx.decode_payload(BlsCtx::BASIC).unwrap();
+      let decoded = tx.decode_payload().unwrap();
       assert!(!decoded.is_ok_and(|d| d.is_complete()), "{txid}");
     }
   }

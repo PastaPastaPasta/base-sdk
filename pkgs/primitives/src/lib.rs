@@ -42,7 +42,7 @@ pub use payload::{
   Commitment, CommitmentInvalid, CompactSig, FinalCommitment, InputsHash, MnHardFork, MnHardForkInvalid, MnType,
   PayloadDecode, PayloadError, PayloadInvalid, PayoutShare, PlatformNodeId, ProDisTx, ProRegTx, ProTxInvalid,
   ProUpRegTx, ProUpRevTx, ProUpServTx, ProUpShareTx, ProUpSharedRegTx, QuorumHash, QuorumVvecHash, SpecialPayload,
-  SptxDecode, TxType, COMPACT_SIG_LEN, VERSIONBITS_NUM_BITS,
+  TxType, COMPACT_SIG_LEN, VERSIONBITS_NUM_BITS,
 };
 pub use support::{DynBitset, DynBitsetIterator, LlmqType, RevocationReason};
 pub use transaction::{

@@ -16,7 +16,6 @@ use bitcoin_hashes::sha256d;
 use bitcoin_primitives::script::{ScriptPubKeyBuf, ScriptSigBuf};
 use bitcoin_units::Amount;
 use dash_num::make_hash;
-use dash_pkc::bls::BlsCtx;
 use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{impl_type, Checkable, CompactSize, Hashable, Numeric};
@@ -335,8 +334,7 @@ impl Checkable for Transaction {
       }
     }
 
-    // The decode verdict and these checks do not depend on the BLS scheme.
-    if let Some(result) = self.decode_payload(BlsCtx::BASIC) {
+    if let Some(result) = self.decode_payload() {
       match result {
         Ok(decoded) if !decoded.is_complete() => {
           return Some(TxInvalid::PayloadDecode(PayloadError {
@@ -386,9 +384,6 @@ impl Transaction {
   /// Decodes the special transaction payload, if present, reporting how many
   /// of its bytes the decoder read.
   ///
-  /// `bls` is Core's process-wide BLS flag where it reads the payload; the
-  /// coinbase and asset-unlock signatures take it.
-  ///
   /// Returns `None` for spend/coinbase transactions that carry no extra
   /// payload. Unread bytes are not an error here, see [`PayloadDecode`].
   ///
@@ -396,12 +391,12 @@ impl Transaction {
   ///
   /// Returns `PayloadError` if the payload bytes cannot be decoded for the
   /// declared transaction type.
-  pub fn decode_payload(&self, bls: BlsCtx) -> Option<Result<PayloadDecode, PayloadError>> {
+  pub fn decode_payload(&self) -> Option<Result<PayloadDecode, PayloadError>> {
     if !self.has_extra_payload() {
       return None;
     }
     let mut cursor = &self.extra_payload[..];
-    let result = SpecialPayload::decode(self.tx_type, &mut cursor, bls);
+    let result = SpecialPayload::decode(self.tx_type, &mut cursor);
     Some(result.map(|payload| PayloadDecode {
       payload,
       consumed: self.extra_payload.len() - cursor.len(),
@@ -525,11 +520,11 @@ mod tests {
       let mut tx = Transaction::decode(&mut &raw[..]).unwrap();
       let len = tx.extra_payload.len();
 
-      let exact = tx.decode_payload(BlsCtx::BASIC).unwrap().unwrap();
+      let exact = tx.decode_payload().unwrap().unwrap();
       assert!(exact.is_complete(), "{}", v.txid);
 
       tx.extra_payload.resize(len + v.trailing, 0);
-      let padded = tx.decode_payload(BlsCtx::BASIC).unwrap().unwrap();
+      let padded = tx.decode_payload().unwrap().unwrap();
       assert_eq!((padded.consumed, padded.len), (len, len + v.trailing), "{}", v.txid);
       assert!(!padded.is_complete(), "{}", v.txid);
       assert_eq!(padded.payload, exact.payload, "{}", v.txid);
@@ -554,7 +549,7 @@ mod tests {
     for v in corpus.vectors::<NetInfoMapVector>("netinfo_map") {
       let raw = vec_from_hex(&v.raw);
       let tx = Transaction::decode(&mut &raw[..]).unwrap();
-      let decoded = tx.decode_payload(BlsCtx::BASIC).unwrap().unwrap();
+      let decoded = tx.decode_payload().unwrap().unwrap();
       assert!(decoded.is_complete());
       let SpecialPayload::ProviderUpdateService(pro) = decoded.payload else {
         panic!("not a ProUpServTx");

@@ -9,6 +9,9 @@
 //! Each payload type is decoded from the `extra_payload` field of a
 //! `Transaction` whose `tx_type` is not `Spend`. A BLS field keeps the scheme
 //! it was decoded or built with and encodes under it, whatever `version` says.
+//! A field under Core's process-wide flag keeps its wire bytes
+//! ([`BlsGlobal`](dash_pkc::bls::BlsGlobal)), so no payload needs the flag to
+//! decode.
 
 mod assetlock;
 mod assetunlock;
@@ -30,7 +33,6 @@ use crate::prelude::*;
 use crate::types::{NIError, NIPurpose, NITrait, NetInfo, NetInfoV1, NetInfoV2};
 
 use dash_num::make_hash;
-use dash_pkc::bls::BlsCtx;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{enum_map, impl_num, Checkable};
@@ -170,22 +172,6 @@ pub(super) fn write_net_info(buf: &mut impl EncodeBuf, net_info: &NetInfo, versi
     }
   } else if let NetInfo::Legacy(svc) = net_info {
     svc.encode(buf);
-  }
-}
-
-/// A special payload read the way Core's `GetTxPayload` reads it.
-///
-/// Some BLS fields take Core's process-wide scheme where the payload is read.
-/// The default reads the type's wire image, for payloads whose BLS fields
-/// take their scheme from the payload itself.
-pub trait SptxDecode: BaseCodec {
-  /// Decodes from the front of `data` with `bls` as Core's flag.
-  ///
-  /// # Errors
-  ///
-  /// Returns `DecodeError` where Core's `Unserialize` throws.
-  fn decode_sptx(data: &mut &[u8], _bls: BlsCtx) -> Result<Self, DecodeError> {
-    Self::decode(data)
   }
 }
 
@@ -496,8 +482,7 @@ impl SpecialPayload {
     matches!(self, Self::Unknown { .. })
   }
 
-  /// Decodes a payload from its transaction type and raw bytes, with `bls`
-  /// as Core's process-wide BLS flag where it reads the payload.
+  /// Decodes a payload from its transaction type and raw bytes.
   ///
   /// Returns `Unknown` for unrecognized types rather than an error, ensuring
   /// forward compatibility with future transaction types. A provider payload
@@ -507,7 +492,7 @@ impl SpecialPayload {
   /// # Errors
   ///
   /// Returns `PayloadError` if a recognized type fails to decode.
-  pub fn decode(tx_type: TxType, data: &mut &[u8], bls: BlsCtx) -> Result<Self, PayloadError> {
+  pub fn decode(tx_type: TxType, data: &mut &[u8]) -> Result<Self, PayloadError> {
     let err = |e: DecodeError| PayloadError {
       tx_type,
       message: format!("{e}"),
@@ -533,20 +518,18 @@ impl SpecialPayload {
           message: String::from("spend transactions have no payload"),
         })
       }
-      TxType::ProviderRegister => ProRegTx::decode_sptx(data, bls).map(Self::ProviderRegister),
-      TxType::ProviderUpdateService => ProUpServTx::decode_sptx(data, bls).map(Self::ProviderUpdateService),
-      TxType::ProviderUpdateRegistrar => ProUpRegTx::decode_sptx(data, bls).map(Self::ProviderUpdateRegistrar),
-      TxType::ProviderUpdateRevoke => ProUpRevTx::decode_sptx(data, bls).map(Self::ProviderUpdateRevoke),
-      TxType::CoinbaseCommitment => CoinbaseCommitment::decode_sptx(data, bls).map(Self::CoinbaseCommitment),
-      TxType::QuorumCommitment => FinalCommitment::decode_sptx(data, bls).map(Self::QuorumCommitment),
-      TxType::MnhfSignal => MnHardFork::decode_sptx(data, bls).map(Self::MnhfSignal),
-      TxType::AssetLock => AssetLock::decode_sptx(data, bls).map(Self::AssetLock),
-      TxType::AssetUnlock => AssetUnlock::decode_sptx(data, bls).map(Self::AssetUnlock),
-      TxType::ProviderDissolve => ProDisTx::decode_sptx(data, bls).map(Self::ProviderDissolve),
-      TxType::ProviderUpdateShare => ProUpShareTx::decode_sptx(data, bls).map(Self::ProviderUpdateShare),
-      TxType::ProviderUpdateSharedRegistrar => {
-        ProUpSharedRegTx::decode_sptx(data, bls).map(Self::ProviderUpdateSharedRegistrar)
-      }
+      TxType::ProviderRegister => ProRegTx::decode(data).map(Self::ProviderRegister),
+      TxType::ProviderUpdateService => ProUpServTx::decode(data).map(Self::ProviderUpdateService),
+      TxType::ProviderUpdateRegistrar => ProUpRegTx::decode(data).map(Self::ProviderUpdateRegistrar),
+      TxType::ProviderUpdateRevoke => ProUpRevTx::decode(data).map(Self::ProviderUpdateRevoke),
+      TxType::CoinbaseCommitment => CoinbaseCommitment::decode(data).map(Self::CoinbaseCommitment),
+      TxType::QuorumCommitment => FinalCommitment::decode(data).map(Self::QuorumCommitment),
+      TxType::MnhfSignal => MnHardFork::decode(data).map(Self::MnhfSignal),
+      TxType::AssetLock => AssetLock::decode(data).map(Self::AssetLock),
+      TxType::AssetUnlock => AssetUnlock::decode(data).map(Self::AssetUnlock),
+      TxType::ProviderDissolve => ProDisTx::decode(data).map(Self::ProviderDissolve),
+      TxType::ProviderUpdateShare => ProUpShareTx::decode(data).map(Self::ProviderUpdateShare),
+      TxType::ProviderUpdateSharedRegistrar => ProUpSharedRegTx::decode(data).map(Self::ProviderUpdateSharedRegistrar),
       unknown => {
         let bytes = data.to_vec();
         *data = &[];
@@ -559,14 +542,3 @@ impl SpecialPayload {
     decoded.map_err(err)
   }
 }
-
-impl SptxDecode for AssetLock {}
-impl SptxDecode for FinalCommitment {}
-impl SptxDecode for MnHardFork {}
-impl SptxDecode for ProDisTx {}
-impl SptxDecode for ProRegTx {}
-impl SptxDecode for ProUpRegTx {}
-impl SptxDecode for ProUpRevTx {}
-impl SptxDecode for ProUpServTx {}
-impl SptxDecode for ProUpShareTx {}
-impl SptxDecode for ProUpSharedRegTx {}

@@ -7,10 +7,9 @@
 //! CoinbaseCommitment coinbase commitment payload (type 5).
 
 use super::bls;
-use super::SptxDecode;
 use crate::{hash_impl, MerkleRoot};
 
-use dash_pkc::bls::{BlsCtx, BlsEagerSig, BlsSchemeSource};
+use dash_pkc::bls::BlsGlobalSig;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{impl_type, Checkable, CompactSize, Numeric};
@@ -23,15 +22,9 @@ use core::fmt;
 /// - v2: adds merkle_root_quorums
 /// - v3: adds ChainLock proof and credit pool balance
 /// - v4: adds the asset-unlock merkle root (v24)
-///
-/// The ChainLock signature takes Core's process-wide BLS scheme, so
-/// consensus code decodes this payload with [`SptxDecode::decode_sptx`].
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
-#[cfg_attr(
-  feature = "serde",
-  serde(into = "CoinbaseCommitmentSerde", try_from = "CoinbaseCommitmentSerde")
-)]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct CoinbaseCommitment {
   /// Payload version (1 to 4).
   pub version: u16,
@@ -43,44 +36,50 @@ pub struct CoinbaseCommitment {
   pub merkle_root_quorums: Option<MerkleRoot>,
   /// Best ChainLock height difference (v3+, CompactSize).
   pub best_cl_height_diff: Option<u64>,
-  /// Best ChainLock BLS signature (v3+), under the scheme it was decoded
-  /// with.
-  pub best_cl_signature: Option<BlsEagerSig>,
+  /// Best ChainLock BLS signature (v3+), as its wire bytes. Its scheme is
+  /// Core's process-wide flag where the signature is used, given to
+  /// [`get`](dash_pkc::bls::BlsGlobal::get).
+  #[cfg_attr(feature = "serde", serde(with = "super::bls::serde::opt_global"))]
+  pub best_cl_signature: Option<BlsGlobalSig>,
   /// Credit pool balance in duffs (v3+).
   pub credit_pool_balance: Option<i64>,
-  /// Merkle root of the block's stable-txid asset unlocks (v4+).
+  /// Merkle root over the instance hashes of the block's v2+ asset unlocks,
+  /// in block order (v4+).
+  #[cfg_attr(feature = "serde", serde(default, skip_serializing_if = "Option::is_none"))]
   pub merkle_root_asset_unlocks: Option<MerkleRoot>,
 }
 
 impl_type!(CoinbaseCommitment);
 
-/// The serde form of [`CoinbaseCommitment`], with the signature as raw bytes.
-///
-/// A signature decoded under the legacy scheme says so; the scheme of one
-/// without the marker is basic.
-#[cfg(feature = "serde")]
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Unencodable, ::serde::Serialize, ::serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct CoinbaseCommitmentSerde {
-  version: u16,
-  height: i32,
-  merkle_root_mn_list: MerkleRoot,
-  merkle_root_quorums: Option<MerkleRoot>,
-  best_cl_height_diff: Option<u64>,
-  #[serde(with = "super::bls::serde::opt_hex")]
-  best_cl_signature: Option<[u8; dash_pkc::bls::BLS_SIG_LEN]>,
-  #[serde(default, skip_serializing_if = "core::ops::Not::not")]
-  legacy_bls: bool,
-  credit_pool_balance: Option<i64>,
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  merkle_root_asset_unlocks: Option<MerkleRoot>,
-}
-
 impl BaseCodec for CoinbaseCommitment {
-  /// Decodes with the signature under the basic scheme, Core's flag from V19
-  /// on. Consensus code decodes under the call site's context instead.
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    Self::decode_sptx(data, BlsCtx::BASIC)
+    let version = u16::decode(data)?;
+    let height = i32::decode(data)?;
+    let merkle_root_mn_list = MerkleRoot::decode(data)?;
+    let mut cbtx = Self {
+      version,
+      height,
+      merkle_root_mn_list,
+      merkle_root_quorums: None,
+      best_cl_height_diff: None,
+      best_cl_signature: None,
+      credit_pool_balance: None,
+      merkle_root_asset_unlocks: None,
+    };
+    if version < 2 {
+      return Ok(cbtx);
+    }
+    cbtx.merkle_root_quorums = Some(MerkleRoot::decode(data)?);
+    if version < 3 {
+      return Ok(cbtx);
+    }
+    cbtx.best_cl_height_diff = Some(CompactSize::decode_size(data)?.to_base());
+    cbtx.best_cl_signature = Some(bls::read_global(data)?);
+    cbtx.credit_pool_balance = Some(i64::decode(data)?);
+    if version >= 4 {
+      cbtx.merkle_root_asset_unlocks = Some(MerkleRoot::decode(data)?);
+    }
+    Ok(cbtx)
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
@@ -95,10 +94,8 @@ impl BaseCodec for CoinbaseCommitment {
       return;
     }
     CompactSize::from(self.best_cl_height_diff.unwrap_or(0)).encode(buf);
-    match &self.best_cl_signature {
-      Some(sig) => bls::write_eager(sig, buf),
-      None => [0u8; dash_pkc::bls::BLS_SIG_LEN].encode(buf),
-    }
+    let sig = self.best_cl_signature.as_ref().map(BlsGlobalSig::to_bytes);
+    sig.unwrap_or([0u8; dash_pkc::bls::BLS_SIG_LEN]).encode(buf);
     self.credit_pool_balance.unwrap_or(0).encode(buf);
     if self.version >= 4 {
       self.merkle_root_asset_unlocks.unwrap_or_default().encode(buf);
@@ -167,82 +164,9 @@ impl Checkable for CoinbaseCommitment {
 
 hash_impl!(CoinbaseCommitment);
 
-impl SptxDecode for CoinbaseCommitment {
-  /// Decodes with the signature under `bls`, the scheme Core's flag holds
-  /// where it reads the payload.
-  fn decode_sptx(data: &mut &[u8], bls: BlsCtx) -> Result<Self, DecodeError> {
-    let version = u16::decode(data)?;
-    let height = i32::decode(data)?;
-    let merkle_root_mn_list = MerkleRoot::decode(data)?;
-    let mut cbtx = Self {
-      version,
-      height,
-      merkle_root_mn_list,
-      merkle_root_quorums: None,
-      best_cl_height_diff: None,
-      best_cl_signature: None,
-      credit_pool_balance: None,
-      merkle_root_asset_unlocks: None,
-    };
-    if version < 2 {
-      return Ok(cbtx);
-    }
-    cbtx.merkle_root_quorums = Some(MerkleRoot::decode(data)?);
-    if version < 3 {
-      return Ok(cbtx);
-    }
-    cbtx.best_cl_height_diff = Some(CompactSize::decode_size(data)?.to_base());
-    cbtx.best_cl_signature = Some(bls::read_eager(data, BlsSchemeSource::Global(bls))?);
-    cbtx.credit_pool_balance = Some(i64::decode(data)?);
-    if version >= 4 {
-      cbtx.merkle_root_asset_unlocks = Some(MerkleRoot::decode(data)?);
-    }
-    Ok(cbtx)
-  }
-}
-
 impl fmt::Display for CoinbaseCommitment {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(f, "CoinbaseCommitment {{ v{}, height: {} }}", self.version, self.height)
-  }
-}
-
-#[cfg(feature = "serde")]
-impl From<CoinbaseCommitment> for CoinbaseCommitmentSerde {
-  fn from(cbtx: CoinbaseCommitment) -> Self {
-    Self {
-      version: cbtx.version,
-      height: cbtx.height,
-      merkle_root_mn_list: cbtx.merkle_root_mn_list,
-      merkle_root_quorums: cbtx.merkle_root_quorums,
-      best_cl_height_diff: cbtx.best_cl_height_diff,
-      best_cl_signature: cbtx.best_cl_signature.as_ref().map(bls::eager_bytes),
-      legacy_bls: cbtx.best_cl_signature.is_some_and(|sig| sig.scheme().is_legacy()),
-      credit_pool_balance: cbtx.credit_pool_balance,
-      merkle_root_asset_unlocks: cbtx.merkle_root_asset_unlocks,
-    }
-  }
-}
-
-#[cfg(feature = "serde")]
-impl TryFrom<CoinbaseCommitmentSerde> for CoinbaseCommitment {
-  type Error = DecodeError;
-
-  fn try_from(raw: CoinbaseCommitmentSerde) -> Result<Self, Self::Error> {
-    let source = BlsSchemeSource::Global(BlsCtx::from_legacy(raw.legacy_bls));
-    Ok(Self {
-      version: raw.version,
-      height: raw.height,
-      merkle_root_mn_list: raw.merkle_root_mn_list,
-      merkle_root_quorums: raw.merkle_root_quorums,
-      best_cl_height_diff: raw.best_cl_height_diff,
-      best_cl_signature: raw
-        .best_cl_signature
-        .map(|sig| bls::eager_from(&sig, source))
-        .transpose()?,
-      credit_pool_balance: raw.credit_pool_balance,
-      merkle_root_asset_unlocks: raw.merkle_root_asset_unlocks,
-    })
   }
 }
 
