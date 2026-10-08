@@ -6,19 +6,18 @@
 
 //! ProUpServTx service-update payload (type 2).
 
-use super::bls::{self, protx_scheme};
-use super::proregtx::{
-  check_platform_fields, read_net_info, read_platform_fields, write_net_info, write_platform_fields,
-};
+use super::bls::{self, protx_source};
 use super::{
-  check_sptx_netinfo, check_version, InputsHash, MnType, ProTxInvalid, PROTX_VERSION_BASIC_BLS, PROTX_VERSION_EXT_ADDR,
+  check_platform_fields, check_sptx_netinfo, check_version, is_known_protx_version, read_net_info,
+  read_platform_fields, write_net_info, write_platform_fields, InputsHash, MnType, ProTxInvalid,
+  PROTX_VERSION_BASIC_BLS, PROTX_VERSION_EXT_ADDR,
 };
 use crate::payload::PlatformNodeId;
 use crate::types::{NITrait, NetInfo};
 use crate::{hash_impl, TxHash};
 
 use bitcoin_primitives::script::ScriptPubKeyBuf;
-use dash_pkc::bls::{BlsEagerSig, BlsSchemeSource};
+use dash_pkc::bls::BlsEagerSig;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::{impl_type, type_id::TypeId, Checkable, Numeric};
 
@@ -109,7 +108,7 @@ impl BaseCodec for ProUpServTx {
       platform_node_id,
       platform_p2p_port,
       platform_http_port,
-      sig: bls::read_eager(data, BlsSchemeSource::Version(protx_scheme(version)))?,
+      sig: bls::read_eager(data, protx_source(version))?,
     })
   }
 
@@ -138,7 +137,7 @@ impl Checkable for ProUpServTx {
   type Error = ProTxInvalid;
 
   fn check(&self) -> Option<Self::Error> {
-    if self.version == 0 || self.version > PROTX_VERSION_EXT_ADDR {
+    if !is_known_protx_version(self.version) {
       return Some(ProTxInvalid::BadVersion { version: self.version });
     }
 
@@ -206,7 +205,7 @@ impl From<ProUpServTx> for ProUpServTxSerde {
       platform_node_id: tx.platform_node_id,
       platform_p2p_port: tx.platform_p2p_port,
       platform_http_port: tx.platform_http_port,
-      sig: bls::serde::eager_bytes(&tx.sig),
+      sig: bls::eager_bytes(&tx.sig),
     }
   }
 }
@@ -226,7 +225,7 @@ impl TryFrom<ProUpServTxSerde> for ProUpServTx {
       platform_node_id: raw.platform_node_id,
       platform_p2p_port: raw.platform_p2p_port,
       platform_http_port: raw.platform_http_port,
-      sig: bls::eager_from(&raw.sig, BlsSchemeSource::Version(protx_scheme(raw.version)))?,
+      sig: bls::eager_from(&raw.sig, protx_source(raw.version))?,
     })
   }
 }

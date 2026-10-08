@@ -7,7 +7,8 @@
 //! Special transaction payload decoders.
 //!
 //! Each payload type is decoded from the `extra_payload` field of a
-//! `Transaction` whose `tx_type` is not `Spend`.
+//! `Transaction` whose `tx_type` is not `Spend`. A BLS field keeps the scheme
+//! it was decoded or built with and encodes under it, whatever `version` says.
 
 mod assetlock;
 mod assetunlock;
@@ -26,11 +27,11 @@ mod shares;
 
 use crate::hash_impl;
 use crate::prelude::*;
-use crate::types::{NIError, NIPurpose, NITrait, NetInfoV2};
+use crate::types::{NIError, NIPurpose, NITrait, NetInfo, NetInfoV1, NetInfoV2};
 
 use dash_num::make_hash;
 use dash_pkc::bls::BlsCtx;
-use dash_types::codec::{BaseCodec, DecodeError};
+use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{enum_map, impl_num, Checkable};
 
@@ -68,7 +69,7 @@ pub(crate) const PROTX_VERSION_EXT_ADDR: u16 = 3;
 ///
 /// Core's `ProTxVersion::GetMax(true, true)` is `ExtAddr` at both pins; it
 /// reads only the version of version 0 or anything above.
-const fn is_known_protx_version(version: u16) -> bool {
+pub(crate) const fn is_known_protx_version(version: u16) -> bool {
   version != 0 && version <= PROTX_VERSION_EXT_ADDR
 }
 
@@ -85,6 +86,90 @@ pub(crate) fn check_version(version: u16) -> Result<u16, DecodeError> {
       expected: vec![1, 2, 3],
       actual: u64::from(version),
     })
+  }
+}
+
+/// Checks that platform fields are consistent with mn_type and version.
+pub(super) fn check_platform_fields(
+  mn_type: MnType,
+  version: u16,
+  platform_node_id: &Option<PlatformNodeId>,
+  platform_p2p_port: Option<u16>,
+  platform_http_port: Option<u16>,
+) -> Option<ProTxInvalid> {
+  if mn_type == MnType::Evo {
+    if platform_node_id.is_none() {
+      return Some(ProTxInvalid::BadPlatformFields);
+    }
+    if version < PROTX_VERSION_EXT_ADDR {
+      if platform_p2p_port.is_none() || platform_http_port.is_none() {
+        return Some(ProTxInvalid::BadPlatformFields);
+      }
+    } else if platform_p2p_port.is_some() || platform_http_port.is_some() {
+      return Some(ProTxInvalid::BadPlatformFields);
+    }
+  } else if platform_node_id.is_some() || platform_p2p_port.is_some() || platform_http_port.is_some() {
+    return Some(ProTxInvalid::BadPlatformFields);
+  }
+  None
+}
+
+/// The platform node id, P2P port and HTTP port of an Evo node.
+pub(super) type PlatformFields = (Option<PlatformNodeId>, Option<u16>, Option<u16>);
+
+/// Reads the platform fields that follow the inputs hash for Evo nodes.
+pub(super) fn read_platform_fields(
+  data: &mut &[u8],
+  mn_type: MnType,
+  version: u16,
+) -> Result<PlatformFields, DecodeError> {
+  if mn_type != MnType::Evo {
+    return Ok((None, None, None));
+  }
+  let node_id = PlatformNodeId::decode(data)?;
+  if version < PROTX_VERSION_EXT_ADDR {
+    Ok((Some(node_id), Some(u16::decode(data)?), Some(u16::decode(data)?)))
+  } else {
+    Ok((Some(node_id), None, None))
+  }
+}
+
+/// Writes the platform fields as [`read_platform_fields`] reads them.
+pub(super) fn write_platform_fields(
+  buf: &mut impl EncodeBuf,
+  mn_type: MnType,
+  version: u16,
+  platform_node_id: &Option<PlatformNodeId>,
+  platform_p2p_port: Option<u16>,
+  platform_http_port: Option<u16>,
+) {
+  if mn_type == MnType::Evo {
+    platform_node_id.unwrap_or_default().encode(buf);
+    if version < PROTX_VERSION_EXT_ADDR {
+      platform_p2p_port.unwrap_or(0).encode(buf);
+      platform_http_port.unwrap_or(0).encode(buf);
+    }
+  }
+}
+
+/// Reads the network info a version carries, extended from v3.
+pub(super) fn read_net_info(data: &mut &[u8], version: u16) -> Result<NetInfo, DecodeError> {
+  if version >= PROTX_VERSION_EXT_ADDR {
+    Ok(NetInfo::Extended(NetInfoV2::decode(data)?))
+  } else {
+    Ok(NetInfo::Legacy(NetInfoV1::decode(data)?))
+  }
+}
+
+/// Writes the network info as [`read_net_info`] reads it. Validation
+/// guarantees the variant matches the version.
+pub(super) fn write_net_info(buf: &mut impl EncodeBuf, net_info: &NetInfo, version: u16) {
+  if version >= PROTX_VERSION_EXT_ADDR {
+    if let NetInfo::Extended(ext) = net_info {
+      ext.encode(buf);
+    }
+  } else if let NetInfo::Legacy(svc) = net_info {
+    svc.encode(buf);
   }
 }
 
@@ -441,50 +526,37 @@ impl SpecialPayload {
         return Ok(Self::UnknownProTxVersion { tx_type, version });
       }
     }
-    match tx_type {
-      TxType::Spend => Err(PayloadError {
-        tx_type,
-        message: String::from("spend transactions have no payload"),
-      }),
-      TxType::ProviderRegister => ProRegTx::decode_sptx(data, bls)
-        .map(Self::ProviderRegister)
-        .map_err(err),
-      TxType::ProviderUpdateService => ProUpServTx::decode_sptx(data, bls)
-        .map(Self::ProviderUpdateService)
-        .map_err(err),
-      TxType::ProviderUpdateRegistrar => ProUpRegTx::decode_sptx(data, bls)
-        .map(Self::ProviderUpdateRegistrar)
-        .map_err(err),
-      TxType::ProviderUpdateRevoke => ProUpRevTx::decode_sptx(data, bls)
-        .map(Self::ProviderUpdateRevoke)
-        .map_err(err),
-      TxType::CoinbaseCommitment => CoinbaseCommitment::decode_sptx(data, bls)
-        .map(Self::CoinbaseCommitment)
-        .map_err(err),
-      TxType::QuorumCommitment => FinalCommitment::decode_sptx(data, bls)
-        .map(Self::QuorumCommitment)
-        .map_err(err),
-      TxType::MnhfSignal => MnHardFork::decode_sptx(data, bls).map(Self::MnhfSignal).map_err(err),
-      TxType::AssetLock => AssetLock::decode_sptx(data, bls).map(Self::AssetLock).map_err(err),
-      TxType::AssetUnlock => AssetUnlock::decode_sptx(data, bls).map(Self::AssetUnlock).map_err(err),
-      TxType::ProviderDissolve => ProDisTx::decode_sptx(data, bls)
-        .map(Self::ProviderDissolve)
-        .map_err(err),
-      TxType::ProviderUpdateShare => ProUpShareTx::decode_sptx(data, bls)
-        .map(Self::ProviderUpdateShare)
-        .map_err(err),
-      TxType::ProviderUpdateSharedRegistrar => ProUpSharedRegTx::decode_sptx(data, bls)
-        .map(Self::ProviderUpdateSharedRegistrar)
-        .map_err(err),
+    let decoded = match tx_type {
+      TxType::Spend => {
+        return Err(PayloadError {
+          tx_type,
+          message: String::from("spend transactions have no payload"),
+        })
+      }
+      TxType::ProviderRegister => ProRegTx::decode_sptx(data, bls).map(Self::ProviderRegister),
+      TxType::ProviderUpdateService => ProUpServTx::decode_sptx(data, bls).map(Self::ProviderUpdateService),
+      TxType::ProviderUpdateRegistrar => ProUpRegTx::decode_sptx(data, bls).map(Self::ProviderUpdateRegistrar),
+      TxType::ProviderUpdateRevoke => ProUpRevTx::decode_sptx(data, bls).map(Self::ProviderUpdateRevoke),
+      TxType::CoinbaseCommitment => CoinbaseCommitment::decode_sptx(data, bls).map(Self::CoinbaseCommitment),
+      TxType::QuorumCommitment => FinalCommitment::decode_sptx(data, bls).map(Self::QuorumCommitment),
+      TxType::MnhfSignal => MnHardFork::decode_sptx(data, bls).map(Self::MnhfSignal),
+      TxType::AssetLock => AssetLock::decode_sptx(data, bls).map(Self::AssetLock),
+      TxType::AssetUnlock => AssetUnlock::decode_sptx(data, bls).map(Self::AssetUnlock),
+      TxType::ProviderDissolve => ProDisTx::decode_sptx(data, bls).map(Self::ProviderDissolve),
+      TxType::ProviderUpdateShare => ProUpShareTx::decode_sptx(data, bls).map(Self::ProviderUpdateShare),
+      TxType::ProviderUpdateSharedRegistrar => {
+        ProUpSharedRegTx::decode_sptx(data, bls).map(Self::ProviderUpdateSharedRegistrar)
+      }
       unknown => {
         let bytes = data.to_vec();
         *data = &[];
-        Ok(Self::Unknown {
+        return Ok(Self::Unknown {
           tx_type: unknown,
           data: bytes,
-        })
+        });
       }
-    }
+    };
+    decoded.map_err(err)
   }
 }
 

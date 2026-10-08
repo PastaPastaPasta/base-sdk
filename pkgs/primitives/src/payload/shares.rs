@@ -89,11 +89,6 @@ pub(crate) fn read_list<T: BaseCodec>(data: &mut &[u8]) -> Result<Vec<T>, Decode
   read_items(data, count)
 }
 
-/// Writes Core's one-byte count, the length cast to `uint8_t`.
-pub(crate) fn write_count<T>(items: &[T], buf: &mut impl EncodeBuf) {
-  (items.len() as u8).encode(buf);
-}
-
 /// Writes items with no count.
 pub(crate) fn write_items<T: BaseCodec>(items: &[T], buf: &mut impl EncodeBuf) {
   for item in items {
@@ -103,8 +98,9 @@ pub(crate) fn write_items<T: BaseCodec>(items: &[T], buf: &mut impl EncodeBuf) {
 
 /// Writes a one-byte count and the items, as Core does.
 ///
-/// Like Core, it writes every item after a count that wraps above 255.
+/// Like Core, it casts the length to `uint8_t` and writes every item, so a
+/// count above 255 wraps.
 pub(crate) fn write_list<T: BaseCodec>(items: &[T], buf: &mut impl EncodeBuf) {
-  write_count(items, buf);
+  (items.len() as u8).encode(buf);
   write_items(items, buf);
 }

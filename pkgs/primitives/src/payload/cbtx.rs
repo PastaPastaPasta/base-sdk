@@ -216,7 +216,7 @@ impl From<CoinbaseCommitment> for CoinbaseCommitmentSerde {
       merkle_root_mn_list: cbtx.merkle_root_mn_list,
       merkle_root_quorums: cbtx.merkle_root_quorums,
       best_cl_height_diff: cbtx.best_cl_height_diff,
-      best_cl_signature: cbtx.best_cl_signature.as_ref().map(bls::serde::eager_bytes),
+      best_cl_signature: cbtx.best_cl_signature.as_ref().map(bls::eager_bytes),
       legacy_bls: cbtx.best_cl_signature.is_some_and(|sig| sig.scheme().is_legacy()),
       credit_pool_balance: cbtx.credit_pool_balance,
       merkle_root_asset_unlocks: cbtx.merkle_root_asset_unlocks,

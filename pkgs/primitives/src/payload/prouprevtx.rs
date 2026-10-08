@@ -6,12 +6,12 @@
 
 //! ProUpRevTx revocation payload (type 4).
 
-use super::bls::{self, protx_scheme};
-use super::{check_version, InputsHash, ProTxInvalid, PROTX_VERSION_EXT_ADDR};
+use super::bls::{self, protx_source};
+use super::{check_version, is_known_protx_version, InputsHash, ProTxInvalid};
 use crate::support::RevocationReason;
 use crate::{hash_impl, TxHash};
 
-use dash_pkc::bls::{BlsEagerSig, BlsSchemeSource};
+use dash_pkc::bls::BlsEagerSig;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
 use dash_types::{impl_type, Checkable};
@@ -70,7 +70,7 @@ impl BaseCodec for ProUpRevTx {
       pro_tx_hash: TxHash::decode(data)?,
       reason: RevocationReason::decode(data)?,
       inputs_hash: InputsHash::decode(data)?,
-      sig: bls::read_eager(data, BlsSchemeSource::Version(protx_scheme(version)))?,
+      sig: bls::read_eager(data, protx_source(version))?,
     })
   }
 
@@ -87,7 +87,7 @@ impl Checkable for ProUpRevTx {
   type Error = ProTxInvalid;
 
   fn check(&self) -> Option<Self::Error> {
-    if self.version == 0 || self.version > PROTX_VERSION_EXT_ADDR {
+    if !is_known_protx_version(self.version) {
       return Some(ProTxInvalid::BadVersion { version: self.version });
     }
 
@@ -115,7 +115,7 @@ impl From<ProUpRevTx> for ProUpRevTxSerde {
       pro_tx_hash: tx.pro_tx_hash,
       reason: tx.reason,
       inputs_hash: tx.inputs_hash,
-      sig: bls::serde::eager_bytes(&tx.sig),
+      sig: bls::eager_bytes(&tx.sig),
     }
   }
 }
@@ -130,7 +130,7 @@ impl TryFrom<ProUpRevTxSerde> for ProUpRevTx {
       pro_tx_hash: raw.pro_tx_hash,
       reason: raw.reason,
       inputs_hash: raw.inputs_hash,
-      sig: bls::eager_from(&raw.sig, BlsSchemeSource::Version(protx_scheme(raw.version)))?,
+      sig: bls::eager_from(&raw.sig, protx_source(raw.version))?,
     })
   }
 }

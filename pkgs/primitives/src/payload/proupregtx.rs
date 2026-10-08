@@ -6,14 +6,14 @@
 
 //! ProUpRegTx registrar-update payload (type 3).
 
-use super::bls::{self, protx_scheme};
+use super::bls::{self, protx_source};
 use super::shares::{self, PayoutShare};
-use super::{check_version, InputsHash, ProTxInvalid, PROTX_VERSION_EXT_ADDR};
+use super::{check_version, is_known_protx_version, InputsHash, ProTxInvalid, PROTX_VERSION_EXT_ADDR};
 use crate::prelude::*;
 use crate::{hash_impl, TxHash};
 
 use bitcoin_primitives::script::ScriptPubKeyBuf;
-use dash_pkc::bls::{BlsLazyPk, BlsSchemeSource};
+use dash_pkc::bls::BlsLazyPk;
 use dash_script::{PubKeyHash, Recipient};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
@@ -85,7 +85,7 @@ impl BaseCodec for ProUpRegTx {
     let version = check_version(u16::decode(data)?)?;
     let pro_tx_hash = TxHash::decode(data)?;
     let mode = u16::decode(data)?;
-    let pub_key_operator = bls::read_lazy(data, BlsSchemeSource::Version(protx_scheme(version)))?;
+    let pub_key_operator = bls::read_lazy(data, protx_source(version))?;
     let key_id_voting = PubKeyHash::decode(data)?;
     let (script_payout, payouts) = if version >= PROTX_VERSION_EXT_ADDR {
       (ScriptPubKeyBuf::new(), shares::read_list(data)?)
@@ -121,11 +121,14 @@ impl BaseCodec for ProUpRegTx {
   }
 }
 
+/// Part of Core's `IsTriviallyValid`, without chain context. The v3 payout
+/// list rules (`IsPayoutListTriviallyValid`) are dash-evo's; this checks only
+/// the payout scripts.
 impl Checkable for ProUpRegTx {
   type Error = ProTxInvalid;
 
   fn check(&self) -> Option<Self::Error> {
-    if self.version == 0 || self.version > PROTX_VERSION_EXT_ADDR {
+    if !is_known_protx_version(self.version) {
       return Some(ProTxInvalid::BadVersion { version: self.version });
     }
 
@@ -190,10 +193,7 @@ impl From<ProUpRegTxSerde> for ProUpRegTx {
       version: raw.version,
       pro_tx_hash: raw.pro_tx_hash,
       mode: raw.mode,
-      pub_key_operator: BlsLazyPk::from_bytes(
-        &raw.pub_key_operator,
-        BlsSchemeSource::Version(protx_scheme(raw.version)),
-      ),
+      pub_key_operator: BlsLazyPk::from_bytes(&raw.pub_key_operator, protx_source(raw.version)),
       key_id_voting: raw.key_id_voting,
       script_payout: raw.script_payout,
       payouts: raw.payouts,

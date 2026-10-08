@@ -6,13 +6,13 @@
 
 //! LLMQ final commitment payload (type 6).
 
-use super::bls::{self, qc_scheme};
+use super::bls::{self, qc_source};
 use super::QuorumHash;
 use crate::hash_impl;
 use crate::support::{DynBitset, LlmqType};
 
 use dash_num::make_hash;
-use dash_pkc::bls::{BlsEagerPk, BlsEagerSig, BlsSchemeSource};
+use dash_pkc::bls::{BlsEagerPk, BlsEagerSig};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{impl_type, Checkable, Numeric};
@@ -96,7 +96,7 @@ impl BaseCodec for Commitment {
     } else {
       None
     };
-    let source = BlsSchemeSource::Version(qc_scheme(version));
+    let source = qc_source(version);
 
     Ok(Self {
       version,
@@ -168,10 +168,10 @@ impl From<Commitment> for CommitmentSerde {
       quorum_index: qc.quorum_index,
       signers: qc.signers,
       valid_members: qc.valid_members,
-      quorum_public_key: bls::serde::eager_bytes(&qc.quorum_public_key),
+      quorum_public_key: bls::eager_bytes(&qc.quorum_public_key),
       quorum_vvec_hash: qc.quorum_vvec_hash,
-      quorum_sig: bls::serde::eager_bytes(&qc.quorum_sig),
-      members_sig: bls::serde::eager_bytes(&qc.members_sig),
+      quorum_sig: bls::eager_bytes(&qc.quorum_sig),
+      members_sig: bls::eager_bytes(&qc.members_sig),
     }
   }
 }
@@ -181,7 +181,7 @@ impl TryFrom<CommitmentSerde> for Commitment {
   type Error = DecodeError;
 
   fn try_from(raw: CommitmentSerde) -> Result<Self, Self::Error> {
-    let source = BlsSchemeSource::Version(qc_scheme(raw.version));
+    let source = qc_source(raw.version);
     Ok(Self {
       version: raw.version,
       llmq_type: raw.llmq_type,

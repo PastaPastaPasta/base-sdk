@@ -6,19 +6,20 @@
 
 //! ProRegTx registration payload (type 1).
 
-use super::bls::{self, protx_scheme};
+use super::bls::{self, protx_source};
 use super::shares::{self, CollateralShare, CompactSig, PayoutShare};
 use super::{
-  check_sptx_netinfo, check_version, InputsHash, MnType, ProTxInvalid, MAX_OPERATOR_REWARD, PROTX_VERSION_BASIC_BLS,
-  PROTX_VERSION_EXT_ADDR,
+  check_platform_fields, check_sptx_netinfo, check_version, is_known_protx_version, read_net_info,
+  read_platform_fields, write_net_info, write_platform_fields, InputsHash, MnType, ProTxInvalid, MAX_OPERATOR_REWARD,
+  PROTX_VERSION_BASIC_BLS, PROTX_VERSION_EXT_ADDR,
 };
 use crate::payload::PlatformNodeId;
 use crate::prelude::*;
-use crate::types::{NITrait, NetInfo, NetInfoV1, NetInfoV2};
+use crate::types::{NITrait, NetInfo};
 use crate::{hash_impl, TxHash};
 
 use bitcoin_primitives::script::ScriptPubKeyBuf;
-use dash_pkc::bls::{BlsLazyPk, BlsSchemeSource};
+use dash_pkc::bls::BlsLazyPk;
 use dash_script::{PubKeyHash, Recipient};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
@@ -65,7 +66,8 @@ pub struct ProRegTx {
   pub payouts: Vec<PayoutShare>,
   /// Collateral shares of a shared masternode (v3).
   pub shares: Vec<CollateralShare>,
-  /// One consent signature per share, in share order (v3).
+  /// One consent signature per share, in share order (v3). Encoding writes
+  /// what this holds; Core refuses to write a count other than the shares'.
   pub join_sigs: Vec<CompactSig>,
   /// Blocks in which leaving a shared masternode costs a penalty (v3).
   pub early_period_blocks: u32,
@@ -110,9 +112,9 @@ struct ProRegTxSerde {
   shares: Vec<CollateralShare>,
   #[serde(default, skip_serializing_if = "Vec::is_empty")]
   join_sigs: Vec<CompactSig>,
-  #[serde(default)]
+  #[serde(default, skip_serializing_if = "is_zero_u32")]
   early_period_blocks: u32,
-  #[serde(default, with = "crate::serialize::duffs")]
+  #[serde(default, skip_serializing_if = "is_zero_i64", with = "crate::serialize::duffs")]
   early_penalty: i64,
   inputs_hash: InputsHash,
   platform_node_id: Option<PlatformNodeId>,
@@ -122,90 +124,6 @@ struct ProRegTxSerde {
   platform_http_port: Option<u16>,
   #[serde(with = "dash_types::serialize::hex")]
   vch_sig: Vec<u8>,
-}
-
-/// Checks that platform fields are consistent with mn_type and version.
-pub(super) fn check_platform_fields(
-  mn_type: MnType,
-  version: u16,
-  platform_node_id: &Option<PlatformNodeId>,
-  platform_p2p_port: Option<u16>,
-  platform_http_port: Option<u16>,
-) -> Option<ProTxInvalid> {
-  if mn_type == MnType::Evo {
-    if platform_node_id.is_none() {
-      return Some(ProTxInvalid::BadPlatformFields);
-    }
-    if version < PROTX_VERSION_EXT_ADDR {
-      if platform_p2p_port.is_none() || platform_http_port.is_none() {
-        return Some(ProTxInvalid::BadPlatformFields);
-      }
-    } else if platform_p2p_port.is_some() || platform_http_port.is_some() {
-      return Some(ProTxInvalid::BadPlatformFields);
-    }
-  } else if platform_node_id.is_some() || platform_p2p_port.is_some() || platform_http_port.is_some() {
-    return Some(ProTxInvalid::BadPlatformFields);
-  }
-  None
-}
-
-/// The platform node id, P2P port and HTTP port of an Evo node.
-pub(super) type PlatformFields = (Option<PlatformNodeId>, Option<u16>, Option<u16>);
-
-/// Reads the platform fields that follow the inputs hash for Evo nodes.
-pub(super) fn read_platform_fields(
-  data: &mut &[u8],
-  mn_type: MnType,
-  version: u16,
-) -> Result<PlatformFields, DecodeError> {
-  if mn_type != MnType::Evo {
-    return Ok((None, None, None));
-  }
-  let node_id = PlatformNodeId::decode(data)?;
-  if version < PROTX_VERSION_EXT_ADDR {
-    Ok((Some(node_id), Some(u16::decode(data)?), Some(u16::decode(data)?)))
-  } else {
-    Ok((Some(node_id), None, None))
-  }
-}
-
-/// Writes the platform fields as [`read_platform_fields`] reads them.
-pub(super) fn write_platform_fields(
-  buf: &mut impl EncodeBuf,
-  mn_type: MnType,
-  version: u16,
-  platform_node_id: &Option<PlatformNodeId>,
-  platform_p2p_port: Option<u16>,
-  platform_http_port: Option<u16>,
-) {
-  if mn_type == MnType::Evo {
-    platform_node_id.unwrap_or_default().encode(buf);
-    if version < PROTX_VERSION_EXT_ADDR {
-      platform_p2p_port.unwrap_or(0).encode(buf);
-      platform_http_port.unwrap_or(0).encode(buf);
-    }
-  }
-}
-
-/// Reads the network info a version carries, extended from v3.
-pub(super) fn read_net_info(data: &mut &[u8], version: u16) -> Result<NetInfo, DecodeError> {
-  if version >= PROTX_VERSION_EXT_ADDR {
-    Ok(NetInfo::Extended(NetInfoV2::decode(data)?))
-  } else {
-    Ok(NetInfo::Legacy(NetInfoV1::decode(data)?))
-  }
-}
-
-/// Writes the network info as [`read_net_info`] reads it. Validation
-/// guarantees the variant matches the version.
-pub(super) fn write_net_info(buf: &mut impl EncodeBuf, net_info: &NetInfo, version: u16) {
-  if version >= PROTX_VERSION_EXT_ADDR {
-    if let NetInfo::Extended(ext) = net_info {
-      ext.encode(buf);
-    }
-  } else if let NetInfo::Legacy(svc) = net_info {
-    svc.encode(buf);
-  }
 }
 
 impl BaseCodec for ProRegTx {
@@ -221,10 +139,29 @@ impl BaseCodec for ProRegTx {
     let collateral_index = u32::decode(data)?;
     let net_info = read_net_info(data, version)?;
     let key_id_owner = PubKeyHash::decode(data)?;
-    let pub_key_operator = bls::read_lazy(data, BlsSchemeSource::Version(protx_scheme(version)))?;
+    let pub_key_operator = bls::read_lazy(data, protx_source(version))?;
     let key_id_voting = PubKeyHash::decode(data)?;
     let operator_reward = u16::decode(data)?;
-    let mut tx = Self {
+    let (script_payout, payouts, shares, join_sigs, early_period_blocks, early_penalty) =
+      if version >= PROTX_VERSION_EXT_ADDR {
+        let payouts = shares::read_list(data)?;
+        let share_count = u8::decode(data)?;
+        let shares = shares::read_items(data, share_count)?;
+        let join_sigs = shares::read_items(data, share_count)?;
+        (
+          ScriptPubKeyBuf::new(),
+          payouts,
+          shares,
+          join_sigs,
+          u32::decode(data)?,
+          i64::decode(data)?,
+        )
+      } else {
+        (ScriptPubKeyBuf::decode(data)?, Vec::new(), Vec::new(), Vec::new(), 0, 0)
+      };
+    let inputs_hash = InputsHash::decode(data)?;
+    let (platform_node_id, platform_p2p_port, platform_http_port) = read_platform_fields(data, mn_type, version)?;
+    Ok(Self {
       version,
       mn_type,
       mode,
@@ -235,32 +172,18 @@ impl BaseCodec for ProRegTx {
       pub_key_operator,
       key_id_voting,
       operator_reward,
-      script_payout: ScriptPubKeyBuf::new(),
-      payouts: Vec::new(),
-      shares: Vec::new(),
-      join_sigs: Vec::new(),
-      early_period_blocks: 0,
-      early_penalty: 0,
-      inputs_hash: InputsHash::default(),
-      platform_node_id: None,
-      platform_p2p_port: None,
-      platform_http_port: None,
-      vch_sig: Vec::new(),
-    };
-    if version >= PROTX_VERSION_EXT_ADDR {
-      tx.payouts = shares::read_list(data)?;
-      let share_count = u8::decode(data)?;
-      tx.shares = shares::read_items(data, share_count)?;
-      tx.join_sigs = shares::read_items(data, share_count)?;
-      tx.early_period_blocks = u32::decode(data)?;
-      tx.early_penalty = i64::decode(data)?;
-    } else {
-      tx.script_payout = ScriptPubKeyBuf::decode(data)?;
-    }
-    tx.inputs_hash = InputsHash::decode(data)?;
-    (tx.platform_node_id, tx.platform_p2p_port, tx.platform_http_port) = read_platform_fields(data, mn_type, version)?;
-    tx.vch_sig = Vec::decode(data)?;
-    Ok(tx)
+      script_payout,
+      payouts,
+      shares,
+      join_sigs,
+      early_period_blocks,
+      early_penalty,
+      inputs_hash,
+      platform_node_id,
+      platform_p2p_port,
+      platform_http_port,
+      vch_sig: Vec::decode(data)?,
+    })
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
@@ -296,11 +219,15 @@ impl BaseCodec for ProRegTx {
   }
 }
 
+/// Part of Core's `IsTriviallyValid`, without chain context. The v3 payout
+/// and share list rules (`IsPayoutListTriviallyValid`,
+/// `IsShareListTriviallyValid`) and the shared-registration rules are
+/// dash-evo's; this checks only the payout scripts and key reuse.
 impl Checkable for ProRegTx {
   type Error = ProTxInvalid;
 
   fn check(&self) -> Option<Self::Error> {
-    if self.version == 0 || self.version > PROTX_VERSION_EXT_ADDR {
+    if !is_known_protx_version(self.version) {
       return Some(ProTxInvalid::BadVersion { version: self.version });
     }
 
@@ -389,6 +316,16 @@ impl fmt::Display for ProRegTx {
 }
 
 #[cfg(feature = "serde")]
+fn is_zero_u32(v: &u32) -> bool {
+  *v == 0
+}
+
+#[cfg(feature = "serde")]
+fn is_zero_i64(v: &i64) -> bool {
+  *v == 0
+}
+
+#[cfg(feature = "serde")]
 impl From<ProRegTx> for ProRegTxSerde {
   fn from(tx: ProRegTx) -> Self {
     Self {
@@ -428,10 +365,7 @@ impl From<ProRegTxSerde> for ProRegTx {
       collateral_index: raw.collateral_index,
       net_info: raw.net_info,
       key_id_owner: raw.key_id_owner,
-      pub_key_operator: BlsLazyPk::from_bytes(
-        &raw.pub_key_operator,
-        BlsSchemeSource::Version(protx_scheme(raw.version)),
-      ),
+      pub_key_operator: BlsLazyPk::from_bytes(&raw.pub_key_operator, protx_source(raw.version)),
       key_id_voting: raw.key_id_voting,
       operator_reward: raw.operator_reward,
       script_payout: raw.script_payout,

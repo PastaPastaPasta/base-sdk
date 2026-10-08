@@ -20,18 +20,19 @@ const QC_VERSION_LEGACY_BLS: u16 = 1;
 /// Final commitment version: legacy BLS, indexed.
 const QC_VERSION_LEGACY_BLS_INDEXED: u16 = 2;
 
-/// The scheme of a ProTx BLS field: legacy for version 1 only.
+/// The scheme source of a ProTx BLS field: legacy for version 1 only.
 ///
 /// Core passes `nVersion == ProTxVersion::LegacyBLS` to the field's version
 /// wrapper.
-pub(crate) const fn protx_scheme(version: u16) -> BlsSchemeKind {
-  BlsSchemeKind::from_legacy(version == PROTX_VERSION_LEGACY_BLS)
+pub(crate) const fn protx_source(version: u16) -> BlsSchemeSource {
+  BlsSchemeSource::Version(BlsSchemeKind::from_legacy(version == PROTX_VERSION_LEGACY_BLS))
 }
 
-/// The scheme of a final commitment's BLS fields: legacy for versions 1 and
-/// 2, basic for any other version, unknown versions included.
-pub(crate) const fn qc_scheme(version: u16) -> BlsSchemeKind {
-  BlsSchemeKind::from_legacy(version == QC_VERSION_LEGACY_BLS || version == QC_VERSION_LEGACY_BLS_INDEXED)
+/// The scheme source of a final commitment's BLS fields: legacy for versions
+/// 1 and 2, basic for any other version, unknown versions included.
+pub(crate) const fn qc_source(version: u16) -> BlsSchemeSource {
+  let legacy = version == QC_VERSION_LEGACY_BLS || version == QC_VERSION_LEGACY_BLS_INDEXED;
+  BlsSchemeSource::Version(BlsSchemeKind::from_legacy(legacy))
 }
 
 /// Decodes an eager field from its wire bytes, Core's
@@ -74,10 +75,15 @@ pub(crate) fn read_lazy<K: BlsWirePoint<N>, const N: usize>(
   Ok(BlsLazy::from_bytes(&codec::take::<N>(data)?, source))
 }
 
-/// Writes an eager field under the scheme it was decoded with; zeros when
-/// invalid.
+/// The wire bytes of an eager field, under the scheme it was decoded with;
+/// zeros when invalid.
+pub(crate) fn eager_bytes<K: BlsWire<N>, const N: usize>(field: &BlsEager<K, N>) -> [u8; N] {
+  field.to_bytes(field.scheme())
+}
+
+/// Writes an eager field as [`eager_bytes`] gives it.
 pub(crate) fn write_eager<K: BlsWire<N>, const N: usize>(field: &BlsEager<K, N>, buf: &mut impl EncodeBuf) {
-  field.to_bytes(field.scheme()).encode(buf);
+  eager_bytes(field).encode(buf);
 }
 
 /// Writes a lazy field under its captured scheme, Core's `Serialize(s)`.
@@ -93,14 +99,9 @@ pub(crate) fn write_lazy<K: BlsWirePoint<N>, const N: usize>(field: &BlsLazy<K, 
 /// path does.
 #[cfg(feature = "serde")]
 pub(crate) mod serde {
-  use super::eager_from;
+  use super::{eager_bytes, eager_from};
 
   use dash_pkc::bls::{BlsEager, BlsLazy, BlsSchemeSource, BlsWire, BlsWirePoint};
-
-  /// The wire bytes of an eager field, under the scheme it was decoded with.
-  pub(crate) fn eager_bytes<K: BlsWire<N>, const N: usize>(field: &BlsEager<K, N>) -> [u8; N] {
-    field.to_bytes(field.scheme())
-  }
 
   /// The wire bytes of an optional field as hex, or null.
   pub(crate) mod opt_hex {
@@ -217,7 +218,7 @@ mod tests {
   #[case::ext_addr(3, BlsSchemeKind::Basic)]
   #[case::unknown(0xffff, BlsSchemeKind::Basic)]
   fn protx_version_picks_scheme(#[case] version: u16, #[case] scheme: BlsSchemeKind) {
-    assert_eq!(protx_scheme(version), scheme);
+    assert_eq!(protx_source(version), BlsSchemeSource::Version(scheme));
   }
 
   /// `CFinalCommitment` passes `nVersion` 1 or 2 as legacy at both pins.
@@ -230,6 +231,6 @@ mod tests {
   #[case::unknown(5, BlsSchemeKind::Basic)]
   #[case::max(0xffff, BlsSchemeKind::Basic)]
   fn qc_version_picks_scheme(#[case] version: u16, #[case] scheme: BlsSchemeKind) {
-    assert_eq!(qc_scheme(version), scheme);
+    assert_eq!(qc_source(version), BlsSchemeSource::Version(scheme));
   }
 }

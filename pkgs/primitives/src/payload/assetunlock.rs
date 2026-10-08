@@ -145,7 +145,7 @@ impl From<AssetUnlock> for AssetUnlockSerde {
       fee: au.fee,
       requested_height: au.requested_height,
       quorum_hash: au.quorum_hash,
-      quorum_sig: bls::serde::eager_bytes(&au.quorum_sig),
+      quorum_sig: bls::eager_bytes(&au.quorum_sig),
       legacy_bls: au.quorum_sig.scheme().is_legacy(),
     }
   }
