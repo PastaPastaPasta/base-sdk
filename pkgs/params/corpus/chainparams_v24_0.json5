@@ -1,17 +1,20 @@
 // Dash Core's chain parameters, v24.0 pin (v24.0.0-rc.3-5-g23769258c239), for dash-params' builder
 // equality test (node program BS5). Produced by Core, not written by hand:
-// contrib/node/bs5-chainparams in rust-dashcore (branch node/bs5-adapt) links
-// chainparams_dump.cpp against the pinned oracle shim build tree (Core commit
-// 23769258c239e69282569e9f9e219ce9e2c4ee2e) and runs each case through ClearArgs, SetupChainParamsOptions,
-// ParseParameters and SelectParams, as oracle_set_network does. Every case but
-// the "tool_only" ones was checked equal to the pinned archive's
-// oracle_chainparams_json (or its error text) by the same script.
+// contrib/node/bs5-chainparams in rust-dashcore builds chainparams_dump from a
+// controlled clean build of Core commit 23769258c239e69282569e9f9e219ce9e2c4ee2e (tree 3e6e313465948a74f03146d1dcb8501a48a1a358), the pin in
+// dash-oracle-sys/pins.txt, and runs each case through ClearArgs,
+// SetupChainParamsOptions, ParseParameters and SelectParams, then
+// AppInitMain's spork block. Dump binary sha256 04cbe2bb483beb01bb56bff6b58db71d438301beab7fd73dcc3ac04a1c9fc6f3.
+// Every case but the "tool_only" ones was checked equal to the pinned
+// archive's oracle_chainparams_json (or its error text) by the same script.
 //
 // "bases" holds the full dump of each chain with no arguments: "params" is
-// the oracle's ChainParamsJson() and "ext" the CChainParams members it omits.
-// A case holds Core's exception text ("error"), or the leaves that differ
-// from its chain's base ("delta"), keyed by dotted path; "#" is an array
-// length. Keys are the same set in every case. core_version is dropped.
+// the oracle's ChainParamsJson(), "ext" the CChainParams members it omits and
+// "spork" the resolved spork signers. A case holds Core's error text
+// ("error"), or the leaves that differ from its chain's base ("delta"), keyed
+// by dotted path; "#" is an array length. Keys are the same set in every
+// case. A "refused" case is one Core accepts and dash-params refuses, with
+// the refusal's text. core_version is dropped.
 {
  "core_version": "v24.0.0-rc.3-5-g23769258c239",
  "bases": {
@@ -688,6 +691,11 @@
      }
     ],
     "MAX_LLMQ_SIZE": 400
+   },
+   "spork": {
+    "keyIDs": [
+     "441c7d2b023ccb805c02f627937206ba9fe0365a"
+    ]
    }
   },
   "test": {
@@ -1379,6 +1387,11 @@
      }
     ],
     "MAX_LLMQ_SIZE": 400
+   },
+   "spork": {
+    "keyIDs": [
+     "fd2225ace13b4fbc503071f19f9e8041c86d62dc"
+    ]
    }
   },
   "devnet": {
@@ -2123,6 +2136,11 @@
      }
     ],
     "MAX_LLMQ_SIZE": 400
+   },
+   "spork": {
+    "keyIDs": [
+     "fd2225ace13b4fbc503071f19f9e8041c86d62dc"
+    ]
    }
   },
   "regtest": {
@@ -2773,6 +2791,11 @@
      }
     ],
     "MAX_LLMQ_SIZE": 400
+   },
+   "spork": {
+    "keyIDs": [
+     "fa53c9728c3189b12b267be5811b54033525b08d"
+    ]
    }
   }
  },
@@ -4237,6 +4260,106 @@
    "error": "LLMQ_TEST parameters malformed, expecting <size>:<threshold>"
   },
   {
+   "name": "extra/vb_negative_overwritten",
+   "chain": "regtest",
+   "args": [
+    "-vbparams=v24:0:9:-1",
+    "-vbparams=v24:0:9:0"
+   ],
+   "delta": {
+    "params.consensus.vDeployments.1.nTimeout": 9
+   }
+  },
+  {
+   "name": "extra/vb_negative_overwritten_3",
+   "chain": "regtest",
+   "args": [
+    "-vbparams=v24:0:9:-1",
+    "-vbparams=v24:0:9"
+   ],
+   "delta": {
+    "params.consensus.vDeployments.1.nTimeout": 9
+   }
+  },
+  {
+   "name": "extra/dip3_negative_overwritten",
+   "chain": "regtest",
+   "args": [
+    "-dip3params=-1:5",
+    "-dip3params=4:5"
+   ],
+   "delta": {
+    "params.consensus.DIP0003Height": 4,
+    "params.consensus.DIP0003EnforcementHeight": 5,
+    "ext.buriedDeployments.dip0003": 4
+   }
+  },
+  {
+   "name": "extra/neg_vbparams_garbage",
+   "chain": "regtest",
+   "args": [
+    "-novbparams=garbage"
+   ],
+   "error": "Version bits parameters malformed, expecting <deployment>:<start>:<end> or <deployment>:<start>:<end>:<min_activation_height> or <deployment>:<start>:<end>:<min_activation_height>:<window>:<threshold> or <deployment>:<start>:<end>:<min_activation_height>:<window>:<thresholdstart>:<thresholdmin>:<falloffcoeff>:<useehf>"
+  },
+  {
+   "name": "extra/neg_dip3_0abc",
+   "chain": "regtest",
+   "args": [
+    "-nodip3params=0abc"
+   ],
+   "error": "DIP3 parameters malformed, expecting <activation>:<enforcement>"
+  },
+  {
+   "name": "extra/neg_dip3_true",
+   "chain": "regtest",
+   "args": [
+    "-nodip3params=1"
+   ],
+   "error": "DIP3 parameters malformed, expecting <activation>:<enforcement>"
+  },
+  {
+   "name": "refused/vb_other_negative",
+   "chain": "regtest",
+   "args": [
+    "-vbparams=testdummy:0:9:-5",
+    "-vbparams=v24:0:9:-1",
+    "-vbparams=v24:0:9:0"
+   ],
+   "delta": {
+    "params.consensus.vDeployments.0.nTimeout": 9,
+    "params.consensus.vDeployments.0.min_activation_height": -5,
+    "params.consensus.vDeployments.1.nTimeout": 9
+   },
+   "refused": "negative height -5 in -vbparams"
+  },
+  {
+   "name": "refused/budget_negative",
+   "chain": "regtest",
+   "args": [
+    "-budgetparams=10:-1:30"
+   ],
+   "delta": {
+    "params.consensus.nMasternodePaymentsStartBlock": 10,
+    "params.consensus.nBudgetPaymentsStartBlock": -1,
+    "params.consensus.nSuperblockStartBlock": 30
+   },
+   "refused": "negative height -1 in -budgetparams"
+  },
+  {
+   "name": "refused/dip3_negative",
+   "chain": "regtest",
+   "args": [
+    "-dip3params=-1:5"
+   ],
+   "delta": {
+    "params.consensus.DIP0003Height": -1,
+    "params.consensus.DIP0003EnforcementHeight": 5,
+    "ext.buriedDeployments.dip0003": -1
+   },
+   "refused": "negative height -1 in -dip3params"
+  },
+  {
    "name": "regtest_fastprune",
    "chain": "regtest",
    "args": [
@@ -4306,6 +4429,257 @@
    "delta": {
     "params.pruneAfterHeight": 100
    }
+  },
+  {
+   "name": "regtest_fastprune_garbage",
+   "chain": "regtest",
+   "args": [
+    "-nofastprune=garbage"
+   ],
+   "tool_only": true,
+   "delta": {
+    "params.pruneAfterHeight": 100
+   }
+  },
+  {
+   "name": "regtest_fastprune_0x1",
+   "chain": "regtest",
+   "args": [
+    "-nofastprune=0x1"
+   ],
+   "tool_only": true,
+   "delta": {
+    "params.pruneAfterHeight": 100
+   }
+  },
+  {
+   "name": "regtest_fastprune_0abc",
+   "chain": "regtest",
+   "args": [
+    "-nofastprune=0abc"
+   ],
+   "tool_only": true,
+   "delta": {
+    "params.pruneAfterHeight": 100
+   }
+  },
+  {
+   "name": "spork/custom",
+   "chain": "regtest",
+   "args": [
+    "-sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55"
+   ],
+   "tool_only": true,
+   "delta": {
+    "spork.keyIDs.0": "fd2225ace13b4fbc503071f19f9e8041c86d62dc"
+   }
+  },
+  {
+   "name": "spork/main_default_again",
+   "chain": "main",
+   "args": [
+    "-sporkaddr=Xgtyuk76vhuFW2iT7UAiHgNdWXCf3J34wh"
+   ],
+   "tool_only": true,
+   "delta": {}
+  },
+  {
+   "name": "spork/invalid",
+   "chain": "regtest",
+   "args": [
+    "-sporkaddr=invalid"
+   ],
+   "tool_only": true,
+   "error": "Invalid spork address specified with -sporkaddr"
+  },
+  {
+   "name": "spork/wrong_network",
+   "chain": "regtest",
+   "args": [
+    "-sporkaddr=Xgtyuk76vhuFW2iT7UAiHgNdWXCf3J34wh"
+   ],
+   "tool_only": true,
+   "error": "Invalid spork address specified with -sporkaddr"
+  },
+  {
+   "name": "spork/script_hash",
+   "chain": "regtest",
+   "args": [
+    "-sporkaddr=8eRTi4fUVRoeYEeeTyL4DPAwxatvbjaxFV"
+   ],
+   "tool_only": true,
+   "error": "Invalid spork address specified with -sporkaddr"
+  },
+  {
+   "name": "spork/whitespace",
+   "chain": "regtest",
+   "args": [
+    "-sporkaddr= yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55\t"
+   ],
+   "tool_only": true,
+   "delta": {
+    "spork.keyIDs.0": "fd2225ace13b4fbc503071f19f9e8041c86d62dc"
+   }
+  },
+  {
+   "name": "spork/inner_space",
+   "chain": "regtest",
+   "args": [
+    "-sporkaddr=yjPtiKh2uwk3bDut TEA2q9mCtXyiZRWn55"
+   ],
+   "tool_only": true,
+   "error": "Invalid spork address specified with -sporkaddr"
+  },
+  {
+   "name": "spork/platform_hrp",
+   "chain": "regtest",
+   "args": [
+    "-sporkaddr=tdash1qq"
+   ],
+   "tool_only": true,
+   "error": "Invalid spork address specified with -sporkaddr"
+  },
+  {
+   "name": "spork/two",
+   "chain": "regtest",
+   "args": [
+    "-sporkaddr=yj949n1UH6fDhw6HtVE5VMj2iSTaSWBMcW",
+    "-sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55"
+   ],
+   "tool_only": true,
+   "extra_keys": {
+    "spork.warning": "More than one spork address is provided. Using yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55."
+   },
+   "missing_keys": [],
+   "delta": {
+    "spork.keyIDs.0": "fd2225ace13b4fbc503071f19f9e8041c86d62dc"
+   }
+  },
+  {
+   "name": "spork/two_threshold_2",
+   "chain": "regtest",
+   "args": [
+    "-sporkaddr=yj949n1UH6fDhw6HtVE5VMj2iSTaSWBMcW",
+    "-sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55",
+    "-minsporkkeys=2"
+   ],
+   "tool_only": true,
+   "error": "Invalid parameter -minsporkkeys=2"
+  },
+  {
+   "name": "spork/three_threshold_2",
+   "chain": "test",
+   "args": [
+    "-sporkaddr=yj949n1UH6fDhw6HtVE5VMj2iSTaSWBMcW",
+    "-sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55",
+    "-sporkaddr=yLKU4EJxjbv8peagVRM3UykZDJoaUUrXSn",
+    "-minsporkkeys=2"
+   ],
+   "tool_only": true,
+   "error": "Invalid parameter -minsporkkeys=2"
+  },
+  {
+   "name": "spork/duplicate",
+   "chain": "regtest",
+   "args": [
+    "-sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55",
+    "-sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55"
+   ],
+   "tool_only": true,
+   "extra_keys": {
+    "spork.warning": "More than one spork address is provided. Using yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55."
+   },
+   "missing_keys": [],
+   "delta": {
+    "spork.keyIDs.0": "fd2225ace13b4fbc503071f19f9e8041c86d62dc"
+   }
+  },
+  {
+   "name": "spork/negated",
+   "chain": "regtest",
+   "args": [
+    "-nosporkaddr"
+   ],
+   "tool_only": true,
+   "error": "Invalid spork address specified with -sporkaddr"
+  },
+  {
+   "name": "spork/negated_then_set",
+   "chain": "regtest",
+   "args": [
+    "-sporkaddr=invalid",
+    "-nosporkaddr",
+    "-sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55"
+   ],
+   "tool_only": true,
+   "delta": {
+    "spork.keyIDs.0": "fd2225ace13b4fbc503071f19f9e8041c86d62dc"
+   }
+  },
+  {
+   "name": "spork/minkeys_0",
+   "chain": "regtest",
+   "args": [
+    "-minsporkkeys=0"
+   ],
+   "tool_only": true,
+   "error": "Invalid parameter -minsporkkeys=0"
+  },
+  {
+   "name": "spork/minkeys_1",
+   "chain": "devnet",
+   "args": [
+    "-minsporkkeys=1"
+   ],
+   "tool_only": true,
+   "error": "Invalid parameter -minsporkkeys=1"
+  },
+  {
+   "name": "spork/minkeys_garbage",
+   "chain": "regtest",
+   "args": [
+    "-minsporkkeys=garbage"
+   ],
+   "tool_only": true,
+   "error": "Invalid parameter -minsporkkeys=garbage"
+  },
+  {
+   "name": "spork/minkeys_wrap",
+   "chain": "regtest",
+   "args": [
+    "-minsporkkeys=4294967297"
+   ],
+   "tool_only": true,
+   "error": "Invalid parameter -minsporkkeys=4294967297"
+  },
+  {
+   "name": "spork/minkeys_negated",
+   "chain": "regtest",
+   "args": [
+    "-nominsporkkeys"
+   ],
+   "tool_only": true,
+   "error": "Invalid parameter -nominsporkkeys"
+  },
+  {
+   "name": "spork/chain_error_first",
+   "chain": "regtest",
+   "args": [
+    "-sporkaddr=invalid",
+    "-dip3params=x"
+   ],
+   "tool_only": true,
+   "error": "DIP3 parameters malformed, expecting <activation>:<enforcement>"
+  },
+  {
+   "name": "spork/minkeys_before_chain",
+   "chain": "regtest",
+   "args": [
+    "-minsporkkeys=1",
+    "-dip3params=x"
+   ],
+   "tool_only": true,
+   "error": "Invalid parameter -minsporkkeys=1"
   }
  ]
 }

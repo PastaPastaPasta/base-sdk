@@ -307,6 +307,18 @@ fn dump(p: &ChainParams) -> BTreeMap<String, Value> {
       out.put("ext.MAX_LLMQ_SIZE", MAX_LLMQ_SIZE);
     }
   }
+  let signers = &p.spork_signers;
+  out.list("spork.keyIDs", &signers.key_ids, |out, path, _, id| {
+    let mut bytes = Vec::new();
+    id.encode(&mut bytes);
+    out.put(path, bytes.to_lower_hex_string());
+  });
+  if let Some(min) = signers.min_spork_keys {
+    out.put("spork.minSporkKeys", min);
+  }
+  if let Some(warning) = &signers.warning {
+    out.put("spork.warning", warning.as_str());
+  }
   out.0
 }
 
@@ -340,8 +352,42 @@ fn network(chain: &str) -> NetworkKind {
   NetworkKind::from_network_id(chain).expect("one of Core's chains")
 }
 
+/// Core's `LocaleIndependentAtoi<int>`: trimmed, one `+` (`+-` is 0),
+/// leading digits only, saturating.
+fn atoi_int(s: &str) -> i64 {
+  let s = s.trim_matches(|c| matches!(c, ' ' | '\x0c' | '\n' | '\r' | '\t' | '\x0b'));
+  if s.starts_with("+-") {
+    return 0;
+  }
+  let s = s.strip_prefix('+').unwrap_or(s);
+  let (negative, digits) = match s.strip_prefix('-') {
+    Some(rest) => (true, rest),
+    None => (false, s),
+  };
+  let digits: String = digits.chars().take_while(char::is_ascii_digit).collect();
+  if digits.is_empty() {
+    return 0;
+  }
+  let limit = if negative {
+    i64::from(i32::MIN)
+  } else {
+    i64::from(i32::MAX)
+  };
+  match digits.parse::<i64>() {
+    Ok(v) if negative => (-v).max(limit),
+    Ok(v) => v.min(limit),
+    Err(_) => limit,
+  }
+}
+
+/// Core's `InterpretBool`: empty is true, else `atoi_int` is compared to 0.
+fn interpret_bool(s: &str) -> bool {
+  s.is_empty() || atoi_int(s) != 0
+}
+
 /// Adds one command-line argument `-name[=value]` or `-noname[=value]` to
-/// `builder`, as Core's `ArgsManager` interprets it.
+/// `builder`, as Core's `InterpretValue` stores it: `-noname=v` with a false
+/// `v` is a double negative, stored as true.
 fn add_arg(builder: ChainParamsBuilder, arg: &str) -> ChainParamsBuilder {
   let (key, value) = match arg.split_once('=') {
     Some((k, v)) => (k, Some(v)),
@@ -349,14 +395,23 @@ fn add_arg(builder: ChainParamsBuilder, arg: &str) -> ChainParamsBuilder {
   };
   let option = |name: &str| ChainOption::from_name(name).expect("chain option");
   match key.strip_prefix("-no") {
-    // `-nofoo=0` is a double negative, stored as true (the corpus spells
-    // it `=0`; Core reads any value whose atoi is 0).
-    Some(name) if value.is_some_and(|v| v.trim().parse::<i64>().is_ok_and(|n| n == 0)) => {
-      builder.arg(option(&format!("-{name}")), "1")
-    }
+    Some(name) if value.is_some_and(|v| !interpret_bool(v)) => builder.arg(option(&format!("-{name}")), "1"),
     Some(name) => builder.negate(option(&format!("-{name}"))),
     None => builder.arg(option(key), value.unwrap_or("")),
   }
+}
+
+#[rstest]
+#[case("garbage", false)]
+#[case("0x1", false)]
+#[case("0abc", false)]
+#[case("1abc", true)]
+#[case("", true)]
+#[case(" -3", true)]
+#[case("+-1", false)]
+#[case("99999999999", true)]
+fn interpret_bool_as_core(#[case] s: &str, #[case] want: bool) {
+  assert_eq!(interpret_bool(s), want);
 }
 
 #[rstest]
@@ -380,6 +435,14 @@ fn chain_params_equal_core(#[case] release: Release, #[case] corpus: &str) {
       builder = add_arg(builder, arg.as_str().unwrap());
     }
     let built = builder.build();
+    if let Some(refused) = case.get("refused") {
+      // Core accepts this input (its dump is in the corpus); dash-params
+      // refuses it (BL-31).
+      assert!(case.get("delta").is_some(), "{corpus} {name}: Core refused too");
+      let got = built.map(|_| ()).expect_err(name).to_string();
+      assert_eq!(got, refused.as_str().unwrap(), "{corpus} {name}");
+      continue;
+    }
     if let Some(error) = case.get("error") {
       let got = built.map(|_| ()).expect_err(name).to_string();
       assert_eq!(got, error.as_str().unwrap(), "{corpus} {name}");
@@ -404,6 +467,15 @@ fn chain_params_equal_core(#[case] release: Release, #[case] corpus: &str) {
         want.insert(path.clone(), v.clone()).is_some(),
         "{corpus} {name}: {path} not in base"
       );
+    }
+    for (path, v) in case.get("extra_keys").and_then(Value::as_object).into_iter().flatten() {
+      assert!(
+        want.insert(path.clone(), v.clone()).is_none(),
+        "{corpus} {name}: {path}"
+      );
+    }
+    for path in case.get("missing_keys").and_then(Value::as_array).into_iter().flatten() {
+      assert!(want.remove(path.as_str().unwrap()).is_some(), "{corpus} {name}: {path}");
     }
     let got = dump(&p);
     for (path, v) in &want {
