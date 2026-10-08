@@ -86,45 +86,48 @@ impl fmt::Display for TxIn {
 }
 
 /// A transaction output.
+///
+/// `value` is Core's signed `CAmount`. Any 8 bytes decode, as in Core, which
+/// rejects negative and oversized values in `CheckTransaction` rather than
+/// while deserializing.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct TxOut {
-  /// Output value in duffs.
-  #[cfg_attr(feature = "serde", serde(with = "crate::serialize::amount"))]
-  pub value: Amount,
+  /// Output value in duffs, unchecked.
+  #[cfg_attr(feature = "serde", serde(with = "crate::serialize::duffs"))]
+  pub value: i64,
   /// Locking script.
   #[cfg_attr(feature = "serde", serde(rename = "scriptPubKey"))]
   pub script_pubkey: ScriptPubKeyBuf,
 }
 
-impl_type!(TxOut);
+codec_type!(TxOut { value, script_pubkey });
 
-impl BaseCodec for TxOut {
-  fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let raw = u64::decode(data)?;
-    let value = Amount::from_sat(raw).map_err(|_| DecodeError::InvalidValue {
-      expected: vec![Amount::MAX_MONEY.to_sat()],
-      actual: raw,
-    })?;
-    Ok(Self {
-      value,
-      script_pubkey: ScriptPubKeyBuf::decode(data)?,
-    })
+impl TxOut {
+  /// Builds an output paying `amount`.
+  pub fn new(amount: Amount, script_pubkey: ScriptPubKeyBuf) -> Self {
+    Self {
+      value: amount.to_signed().to_sat(),
+      script_pubkey,
+    }
   }
 
-  fn encode(&self, buf: &mut impl EncodeBuf) {
-    self.value.to_sat().encode(buf);
-    self.script_pubkey.encode(buf);
+  /// Returns the value as an [`Amount`] when it lies in `0..=MAX_MONEY`.
+  pub fn amount(&self) -> Option<Amount> {
+    u64::try_from(self.value).ok().and_then(|v| Amount::from_sat(v).ok())
   }
 }
 
-hash_impl!(TxOut);
-
 impl fmt::Display for TxOut {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "TxOut {{ value: {} }}", self.value.to_sat())
+    write!(f, "TxOut {{ value: {} }}", self.value)
   }
+}
+
+/// Returns `true` for a value in Core's `MoneyRange`, `0..=MAX_MONEY`.
+pub(crate) fn money_range(value: i64) -> bool {
+  (0..=Amount::MAX_MONEY.to_signed().to_sat()).contains(&value)
 }
 
 /// Transaction validation failure.
@@ -138,10 +141,12 @@ pub enum TxInvalid {
   Oversize { size: usize },
   /// `bad-txns-payload-oversize`
   PayloadOversize { size: usize },
+  /// `bad-txns-vout-negative`
+  OutputNegative { index: usize, value: i64 },
   /// `bad-txns-vout-toolarge`
-  OutputTooLarge { index: usize, value: u64 },
+  OutputTooLarge { index: usize, value: i64 },
   /// `bad-txns-txouttotal-toolarge`
-  OutputTotalTooLarge { total: u64 },
+  OutputTotalTooLarge { total: i64 },
   /// `bad-txns-inputs-duplicate`
   DuplicateInputs { outpoint: OutPoint },
   /// `bad-cb-length`
@@ -163,6 +168,7 @@ impl fmt::Display for TxInvalid {
       Self::EmptyOutputs => write!(f, "bad-txns-vout-empty"),
       Self::Oversize { size } => write!(f, "bad-txns-oversize: {size} bytes"),
       Self::PayloadOversize { size } => write!(f, "bad-txns-payload-oversize: {size} bytes"),
+      Self::OutputNegative { index, value } => write!(f, "bad-txns-vout-negative: output {index} value {value}"),
       Self::OutputTooLarge { index, value } => write!(f, "bad-txns-vout-toolarge: output {index} value {value}"),
       Self::OutputTotalTooLarge { total } => write!(f, "bad-txns-txouttotal-toolarge: {total}"),
       Self::DuplicateInputs { outpoint } => write!(f, "bad-txns-inputs-duplicate: {outpoint}"),
@@ -261,15 +267,18 @@ impl Checkable for Transaction {
       });
     }
 
-    let max_money = bitcoin_units::Amount::MAX_MONEY.to_sat();
-    let mut total: u64 = 0;
+    // Core checks the sign, then the per-output cap, then the running total.
+    let mut total: i64 = 0;
     for (i, output) in self.outputs.iter().enumerate() {
-      let sat = output.value.to_sat();
-      if sat > max_money {
-        return Some(TxInvalid::OutputTooLarge { index: i, value: sat });
+      let value = output.value;
+      if value < 0 {
+        return Some(TxInvalid::OutputNegative { index: i, value });
       }
-      total = total.saturating_add(sat);
-      if total > max_money {
+      if !money_range(value) {
+        return Some(TxInvalid::OutputTooLarge { index: i, value });
+      }
+      total += value;
+      if !money_range(total) {
         return Some(TxInvalid::OutputTotalTooLarge { total });
       }
     }
@@ -391,11 +400,52 @@ impl fmt::Display for Transaction {
 }
 
 #[cfg(all(test, feature = "serde"))]
+#[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
 
-  use dash_dev::{assert_serde_rt, check_tx, Corpus};
+  use dash_dev::{assert_serde_rt, check_tx, vec_from_hex, Corpus};
   use rstest::rstest;
+
+  #[derive(::serde::Deserialize)]
+  struct ValueVector {
+    name: String,
+    raw: String,
+    values: Vec<i64>,
+    core: String,
+  }
+
+  /// Core decodes any `CAmount` and leaves the range to `CheckTransaction`.
+  #[rstest]
+  fn out_of_range_values_decode() {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "decode_domain");
+    for v in corpus.vectors::<ValueVector>("tx_value_range") {
+      let raw = vec_from_hex(&v.raw);
+      let mut cursor = &raw[..];
+      let tx = Transaction::decode(&mut cursor).unwrap();
+      assert!(cursor.is_empty(), "{}: trailing bytes", v.name);
+      let values: Vec<i64> = tx.outputs.iter().map(|o| o.value).collect();
+      assert_eq!(values, v.values, "{}", v.name);
+      let mut buf = Vec::new();
+      tx.encode(&mut buf);
+      assert_eq!(buf, raw, "{}: re-encode", v.name);
+      let reason = tx.check().map(|e| e.to_string()).unwrap_or_default();
+      assert!(reason.starts_with(&v.core), "{}: {reason}", v.name);
+    }
+  }
+
+  #[rstest]
+  #[case::negative(-1, None)]
+  #[case::zero(0, Some(0))]
+  #[case::max(2_100_000_000_000_000, Some(2_100_000_000_000_000))]
+  #[case::above_max(2_100_000_000_000_001, None)]
+  fn amount_is_soft(#[case] value: i64, #[case] expected: Option<u64>) {
+    let out = TxOut {
+      value,
+      script_pubkey: ScriptPubKeyBuf::from_bytes(Vec::new()),
+    };
+    assert_eq!(out.amount().map(Amount::to_sat), expected);
+  }
 
   #[rstest]
   #[case("spend")]

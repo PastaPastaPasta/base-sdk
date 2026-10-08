@@ -1,0 +1,31 @@
+// Byte strings Dash Core decodes (or rejects while decoding), for the decode
+// domain of base-sdk's primitives. Each section names its source. "core" is
+// what Core does with the bytes, checked against v23.1.8 and v24.0.0-rc.3
+// through the in-process oracle (CTransaction deserialization, then
+// CheckTransaction).
+{
+  // Dash Core src/test/data/tx_invalid.json, "Tests for CheckTransaction()",
+  // identical at v23.1.8 and v24.0.0-rc.3. transaction_tests.cpp deserializes
+  // each and expects CheckTransaction to fail; Core decodes all bytes and
+  // rejects with "core".
+  "tx_value_range": [
+    {
+      "name": "negative_output",
+      "raw": "01000000010001000000000000000000000000000000000000000000000000000000000000000000006d4830450220063222cbb128731fc09de0d7323746539166544d6c1df84d867ccea84bcc8903022100bf568e8552844de664cd41648a031554327aa8844af34b4f27397c65b92c04de0123210243ec37dee0e2e053a9c976f43147e79bc7d9dc606ea51010af1ac80db6b069e1acffffffff01ffffffffffffffff015100000000",
+      "values": [-1],
+      "core": "bad-txns-vout-negative",
+    },
+    {
+      "name": "max_money_plus_1",
+      "raw": "01000000010001000000000000000000000000000000000000000000000000000000000000000000006e493046022100e1eadba00d9296c743cb6ecc703fd9ddc9b3cd12906176a226ae4c18d6b00796022100a71aef7d2874deff681ba6080f1b278bac7bb99c61b08a85f4311970ffe7f63f012321030c0588dc44d92bdcbf8e72093466766fdc265ead8db64517b0c542275b70fffbacffffffff010140075af0750700015100000000",
+      "values": [2100000000000001],
+      "core": "bad-txns-vout-toolarge",
+    },
+    {
+      "name": "max_money_output_plus_1_output",
+      "raw": "01000000010001000000000000000000000000000000000000000000000000000000000000000000006d483045022027deccc14aa6668e78a8c9da3484fbcd4f9dcc9bb7d1b85146314b21b9ae4d86022100d0b43dece8cfb07348de0ca8bc5b86276fa88f7f2138381128b7c36ab2e42264012321029bb13463ddd5d2cc05da6e84e37536cb9525703cfd8f43afdb414988987a92f6acffffffff020040075af075070001510001000000000000015100000000",
+      "values": [2100000000000000, 256],
+      "core": "bad-txns-txouttotal-toolarge",
+    },
+  ],
+}
