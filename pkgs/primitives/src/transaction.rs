@@ -339,7 +339,7 @@ impl Checkable for Transaction {
         Ok(decoded) if !decoded.is_complete() => {
           return Some(TxInvalid::PayloadDecode(PayloadError {
             tx_type: self.tx_type,
-            message: format!("trailing bytes: {} remaining", decoded.len - decoded.consumed),
+            message: format!("trailing bytes: {} remaining", decoded.trailing()),
           }));
         }
         Ok(decoded) if decoded.payload.is_unknown() => {

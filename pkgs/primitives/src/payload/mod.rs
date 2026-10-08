@@ -249,6 +249,11 @@ impl PayloadDecode {
   pub fn is_complete(&self) -> bool {
     self.consumed == self.len
   }
+
+  /// Returns the bytes after the ones the decoder read.
+  pub fn trailing(&self) -> usize {
+    self.len.saturating_sub(self.consumed)
+  }
 }
 
 /// Error decoding a special payload.
