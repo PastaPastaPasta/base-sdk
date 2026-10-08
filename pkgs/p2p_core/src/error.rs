@@ -6,6 +6,7 @@
 
 //! P2P-layer decoding errors.
 
+use crate::msg::Version;
 use crate::prelude::*;
 
 use dash_types::codec::DecodeError;
@@ -43,6 +44,16 @@ pub enum P2pDecodeError {
     /// The handler's limit.
     max: u64,
   },
+  /// A `version` whose fields after `addr_recv` fail to decode.
+  ///
+  /// Core checks the peer's version and services in `head` before it reads
+  /// the later fields, and throws only after those checks pass.
+  VersionTail {
+    /// The fields decoded before the failure, the optional ones absent.
+    head: Box<Version>,
+    /// The decode failure in the optional fields.
+    error: String,
+  },
   /// A field value is outside the valid range.
   InvalidValue {
     /// Brief description of what was invalid.
@@ -69,6 +80,7 @@ impl fmt::Display for P2pDecodeError {
       Self::TooManyEntries { command, count, max } => {
         write!(f, "{command} lists {count} entries, max {max}")
       }
+      Self::VersionTail { error, .. } => write!(f, "version after addr_recv: {error}"),
       Self::InvalidValue { field } => {
         write!(f, "invalid value for {field}")
       }

@@ -194,7 +194,6 @@ define_p2p! {
   }
 }
 
-impl MsgDecode for Version {}
 impl MsgDecode for Ping {}
 impl MsgDecode for Pong {}
 impl MsgDecode for Addr {}

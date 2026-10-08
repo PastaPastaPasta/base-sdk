@@ -72,38 +72,53 @@ fn version_reads_optional_fields_as_core() {
   for v in corpus().vectors::<VersionVector>("version") {
     let raw = vec_from_hex(&v.raw);
     let decoded = P2pMsg::decode_with_policy(&CommandString::VERSION, &raw, &ctx(209));
-    if v.core == "throw" {
-      assert!(
-        matches!(decoded, Err(P2pDecodeError::Consensus(_))),
+    match v.core.as_str() {
+      // Core throws, past the mandatory fields or inside them.
+      "throw" => assert!(
+        matches!(
+          decoded,
+          Err(P2pDecodeError::VersionTail { .. } | P2pDecodeError::Consensus(_))
+        ),
         "{}: {decoded:?}",
         v.name
-      );
-      continue;
-    }
-    let DecodedMsg {
-      msg: P2pMsg::Version(version),
-      consumed,
-    } = decoded.unwrap()
-    else {
-      panic!("{}: not a version", v.name);
-    };
-    if let Some(expected) = v.groups {
-      assert_eq!(groups(&version), expected, "{}", v.name);
-      // An absent relay field defaults to true in Core.
-      let relay = version.relay.is_none_or(|r| r.get());
-      assert_eq!(Some(relay), v.relaytxes, "{}", v.name);
-    }
-    match v.core.as_str() {
-      "disconnect: inbound masternode" => assert_eq!(version.mn_connection.map(|b| b.get()), Some(true)),
-      "disconnect: obsolete version" => assert!(version.protocol_version < ProtocolVersion::MIN_PEER),
-      _ => {}
-    }
-    // Core ignores bytes after fMasternode; re-encoding writes the fields read.
-    let mut buf = Vec::new();
-    version.encode(&mut buf);
-    assert_eq!(buf.len(), consumed, "{}", v.name);
-    if v.name != "relay_02" && v.name != "relay_ff" && v.name != "mn_02" {
-      assert_eq!(buf, raw[..consumed], "{}", v.name);
+      ),
+      // Core disconnects on the version alone, whatever follows it.
+      "disconnect: obsolete version" => {
+        let head = match decoded {
+          Ok(DecodedMsg {
+            msg: P2pMsg::Version(version),
+            ..
+          }) => version,
+          Err(P2pDecodeError::VersionTail { head, .. }) => *head,
+          other => panic!("{}: {other:?}", v.name),
+        };
+        assert!(head.protocol_version < ProtocolVersion::MIN_PEER, "{}", v.name);
+      }
+      core => {
+        let DecodedMsg {
+          msg: P2pMsg::Version(version),
+          consumed,
+        } = decoded.unwrap()
+        else {
+          panic!("{}: not a version", v.name);
+        };
+        if core == "disconnect: inbound masternode" {
+          assert_eq!(version.mn_connection.map(|b| b.get()), Some(true), "{}", v.name);
+        }
+        if let Some(expected) = v.groups {
+          assert_eq!(groups(&version), expected, "{}", v.name);
+          // An absent relay field defaults to true in Core.
+          let relay = version.relay.is_none_or(|r| r.get());
+          assert_eq!(Some(relay), v.relaytxes, "{}", v.name);
+        }
+        // Core ignores bytes after fMasternode; re-encoding writes the fields read.
+        let mut buf = Vec::new();
+        version.encode(&mut buf);
+        assert_eq!(buf.len(), consumed, "{}", v.name);
+        if !matches!(v.name.as_str(), "relay_02" | "relay_ff" | "mn_02") {
+          assert_eq!(buf, raw[..consumed], "{}", v.name);
+        }
+      }
     }
   }
 }

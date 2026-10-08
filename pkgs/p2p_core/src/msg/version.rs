@@ -6,9 +6,11 @@
 
 //! Version and capability handshake.
 
-use crate::codec::{codec_p2p, impl_p2p};
+use crate::codec::{codec_p2p, impl_p2p, MsgDecode};
+use crate::ctx::ProtoCtx;
 use crate::prelude::*;
 use crate::version::ProtocolVersion;
+use crate::P2pDecodeError;
 
 use dash_num::Hash256;
 use dash_primitives::{hash_impl, ServiceV1};
@@ -226,27 +228,9 @@ fn read_if_any<T: BaseCodec>(data: &mut &[u8]) -> Result<Option<T>, DecodeError>
 
 impl BaseCodec for Version {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let protocol_version = ProtocolVersion::decode(data)?;
-    let services = ServiceFlags::decode(data)?;
-    let timestamp = i64::decode(data)?;
-    let addr_recv = VersionAddr::decode(data)?;
-    let (addr_send, nonce) = match read_if_any::<VersionAddr>(data)? {
-      Some(addr) => (Some(addr), Some(u64::decode(data)?)),
-      None => (None, None),
-    };
-    Ok(Self {
-      protocol_version,
-      services,
-      timestamp,
-      addr_recv,
-      addr_send,
-      nonce,
-      user_agent: read_if_any(data)?,
-      start_height: read_if_any(data)?,
-      relay: read_if_any(data)?,
-      mnauth_challenge: read_if_any(data)?,
-      mn_connection: read_if_any(data)?,
-    })
+    let mut version = Self::decode_head(data)?;
+    version.decode_optional(data)?;
+    Ok(version)
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
@@ -259,6 +243,37 @@ impl BaseCodec for Version {
 }
 
 impl Version {
+  /// Decodes the fields Core reads unconditionally, leaving the rest absent.
+  fn decode_head(data: &mut &[u8]) -> Result<Self, DecodeError> {
+    Ok(Self {
+      protocol_version: ProtocolVersion::decode(data)?,
+      services: ServiceFlags::decode(data)?,
+      timestamp: i64::decode(data)?,
+      addr_recv: VersionAddr::decode(data)?,
+      addr_send: None,
+      nonce: None,
+      user_agent: None,
+      start_height: None,
+      relay: None,
+      mnauth_challenge: None,
+      mn_connection: None,
+    })
+  }
+
+  /// Decodes the optional fields in Core's order while bytes remain.
+  fn decode_optional(&mut self, data: &mut &[u8]) -> Result<(), DecodeError> {
+    if let Some(addr_send) = read_if_any(data)? {
+      self.addr_send = Some(addr_send);
+      self.nonce = Some(u64::decode(data)?);
+    }
+    self.user_agent = read_if_any(data)?;
+    self.start_height = read_if_any(data)?;
+    self.relay = read_if_any(data)?;
+    self.mnauth_challenge = read_if_any(data)?;
+    self.mn_connection = read_if_any(data)?;
+    Ok(())
+  }
+
   /// Writes the optional fields up to the first absent one.
   fn encode_optional(&self, buf: &mut impl EncodeBuf) -> Option<()> {
     let (addr_send, nonce) = (self.addr_send.as_ref()?, self.nonce?);
@@ -274,6 +289,22 @@ impl Version {
 }
 
 hash_impl!(Version);
+
+/// Core checks the peer's version and services right after the fields it
+/// reads unconditionally, so a failure in the optional fields keeps them.
+impl MsgDecode for Version {
+  fn decode_msg(data: &mut &[u8], _ctx: &ProtoCtx) -> Result<Self, P2pDecodeError> {
+    let head = Self::decode_head(data)?;
+    let mut version = head.clone();
+    match version.decode_optional(data) {
+      Ok(()) => Ok(version),
+      Err(e) => Err(P2pDecodeError::VersionTail {
+        head: Box::new(head),
+        error: format!("{e}"),
+      }),
+    }
+  }
+}
 
 /// [`dash_types::serialize::str_u64`] for an optional field.
 #[cfg(feature = "serde")]
