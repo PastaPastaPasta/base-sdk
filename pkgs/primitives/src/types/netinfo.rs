@@ -295,7 +295,8 @@ pub struct NetInfoV2 {
   /// Format version.
   pub version: u8,
   /// Purpose-grouped entries. A decoded value holds one group per purpose in
-  /// purpose order, the first the payload gave, as Core's `std::map` does.
+  /// purpose order, the first the payload gave, as Core's `std::map` does, so
+  /// re-encoding gives Core's re-serialization, not always the input bytes.
   pub entries: Vec<(NIPurpose, Vec<NIEntry>)>,
 }
 

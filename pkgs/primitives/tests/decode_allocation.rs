@@ -4,7 +4,8 @@
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
 
-//! Decoders reserve no more memory than the bytes they are given can back.
+//! Decoders reserve no more than the bytes they are given can back, in Core's
+//! batches: a count the input cannot fill costs at most one batch.
 
 #![cfg(feature = "std")]
 #![expect(unsafe_code, reason = "a counting test allocator")]
@@ -134,8 +135,9 @@ fn net_info_groups_are_bound_by_the_bytes(#[case] count: fn(usize) -> usize) {
 const MAX_VECTOR_ALLOCATE: usize = 5_000_000;
 
 /// A vector of byte strings, 24 bytes each in memory and 1 on the wire, whose
-/// first element has a non-canonical length. `Vec<T>` reserves in batches no
-/// larger than Core's, and no more items than the bytes left can hold.
+/// first element has a non-canonical length. `Vec<T>` reserves exactly one
+/// batch of at most Core's size beyond the items read, and no more items than
+/// the bytes left can hold.
 #[rstest]
 fn vector_reservation_is_bound_as_core() {
   let len = 3 * 1024 * 1024;

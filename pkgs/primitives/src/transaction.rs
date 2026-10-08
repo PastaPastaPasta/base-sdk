@@ -424,7 +424,7 @@ impl fmt::Display for Transaction {
 }
 
 #[cfg(all(test, feature = "serde"))]
-#[expect(clippy::unwrap_used, reason = "test code")]
+#[expect(clippy::panic, clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
 
@@ -529,6 +529,52 @@ mod tests {
       assert!(!padded.is_complete(), "{}", v.txid);
       assert_eq!(padded.payload, exact.payload, "{}", v.txid);
       assert!(matches!(tx.check(), Some(TxInvalid::PayloadDecode(_))), "{}", v.txid);
+    }
+  }
+
+  #[derive(::serde::Deserialize)]
+  struct NetInfoMapVector {
+    raw: String,
+    core: BTreeMap<String, Vec<String>>,
+  }
+
+  /// Core reads a ProTx's NetInfo groups into a `std::map`: the first group
+  /// of each purpose, in purpose order, as `decoderawtransaction` prints.
+  #[rstest]
+  fn net_info_groups_follow_cores_map() {
+    use crate::payload::SpecialPayload;
+    use crate::types::{NIPurpose, NetInfo, NetInfoV2};
+
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "decode_domain");
+    for v in corpus.vectors::<NetInfoMapVector>("netinfo_map") {
+      let raw = vec_from_hex(&v.raw);
+      let tx = Transaction::decode(&mut &raw[..]).unwrap();
+      let decoded = tx.decode_payload().unwrap().unwrap();
+      assert!(decoded.is_complete());
+      let SpecialPayload::ProviderUpdateService(pro) = decoded.payload else {
+        panic!("not a ProUpServTx");
+      };
+      let NetInfo::Extended(info) = pro.net_info else {
+        panic!("not an extended NetInfo");
+      };
+      let names = ["core_p2p", "platform_p2p", "platform_https"];
+      let groups: BTreeMap<String, Vec<String>> = info
+        .entries
+        .iter()
+        .map(|(purpose, group)| {
+          let name = names[usize::from(purpose.to_base())].to_string();
+          (name, group.iter().map(ToString::to_string).collect())
+        })
+        .collect();
+      assert_eq!(groups, v.core);
+      let purposes: Vec<NIPurpose> = info.entries.iter().map(|(p, _)| *p).collect();
+      assert!(purposes.windows(2).all(|w| w[0].to_base() < w[1].to_base()));
+      // Re-encoding writes the map, as Core re-serializes it.
+      let mut buf = Vec::new();
+      info.encode(&mut buf);
+      let mut again = &buf[..];
+      assert_eq!(NetInfoV2::decode(&mut again).unwrap(), info);
+      assert!(buf.len() < raw.len());
     }
   }
 
