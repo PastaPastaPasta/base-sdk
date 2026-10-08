@@ -29,6 +29,10 @@ use core::fmt::{self, Debug, Formatter};
 /// shared references. A failed [`Self::get`] makes it serialize and hash as
 /// zeros. Serializing under another scheme before a successful
 /// [`Self::get`] overwrites the raw bytes with zeros.
+///
+/// Each object behaves as a freshly unserialized Core wrapper. Core's
+/// `Unserialize` into a used wrapper can keep a stale object, which this type
+/// cannot express, so decode every field into a new object.
 #[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct BlsLazy<K: BlsWirePoint<N>, const N: usize> {
   state: Mutex<LazyState<K, N>>,
@@ -136,6 +140,9 @@ impl<K: BlsWirePoint<N>, const N: usize> BlsLazy<K, N> {
   }
 
   /// Holds a decoded object under `scheme`, Core's `Set` on a new object.
+  ///
+  /// Takes a bare scheme, as Core's `Set` takes a flag value rather than a
+  /// decode rule. [`Self::new`] does too, standing in for Core's global flag.
   pub fn from_value(value: BlsValue<K, N>, scheme: BlsSchemeKind) -> Self {
     Self::from_state(LazyState {
       buf: [0u8; N],
@@ -194,7 +201,8 @@ impl<K: BlsWirePoint<N>, const N: usize> BlsLazy<K, N> {
   ///
   /// Under a scheme other than the captured one the object adopts `scheme`.
   /// Before a successful [`Self::get`] that serializes zeros and discards the
-  /// raw bytes.
+  /// raw bytes. The default object, or one whose [`Self::get`] failed,
+  /// serializes zeros and keeps its captured scheme.
   pub fn to_bytes_as(&self, scheme: BlsSchemeKind) -> [u8; N] {
     self.state.lock().serialize(scheme)
   }

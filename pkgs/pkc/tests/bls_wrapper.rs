@@ -354,6 +354,20 @@ fn explicit_scheme_serialization_trap() {
   assert_eq!(resolved.to_bytes_as(LEGACY), input);
 }
 
+/// The default object, and one whose `get` failed, serialize zeros under the
+/// other scheme without adopting it.
+#[test]
+fn default_objects_keep_their_scheme() {
+  let fresh = BlsLazyPk::new(LEGACY);
+  assert_eq!(fresh.to_bytes_as(BASIC), [0u8; BLS_PK_LEN]);
+  assert_eq!(fresh.scheme(), LEGACY);
+
+  let failed = BlsLazyPk::from_bytes(&pk_input("sub_000"), BlsSchemeSource::Version(BASIC));
+  assert!(!failed.get().is_valid());
+  assert_eq!(failed.to_bytes_as(LEGACY), [0u8; BLS_PK_LEN]);
+  assert_eq!(failed.scheme(), BASIC);
+}
+
 /// A clone carries raw bytes only while they are current, as Core's copy
 /// assignment does.
 #[test]

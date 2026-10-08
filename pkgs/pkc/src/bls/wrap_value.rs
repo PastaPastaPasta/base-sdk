@@ -109,6 +109,7 @@ impl<K: BlsWire<N>, const N: usize> Debug for BlsValue<K, N> {
 
 impl<K: BlsWire<N>, const N: usize> Eq for BlsValue<K, N> {}
 
+/// Valid secret keys all hash alike, so they make poor hash keys.
 impl<K: BlsWire<N>, const N: usize> Hash for BlsValue<K, N> {
   fn hash<H: Hasher>(&self, state: &mut H) {
     self.valid.hash(state);
