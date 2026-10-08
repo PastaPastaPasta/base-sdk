@@ -20,6 +20,8 @@ use core::fmt;
 
 /// Maximum entries per purpose.
 const MAX_ENTRIES: usize = 4;
+/// The fewest bytes a purpose group takes, its purpose and an empty count.
+const MIN_GROUP_LEN: usize = 2;
 /// Maximum label length per RFC 1035.
 const DOMAIN_LABEL_MAX: usize = 63;
 /// Maximum FQDN length.
@@ -292,7 +294,8 @@ pub trait NITrait: fmt::Display {
 pub struct NetInfoV2 {
   /// Format version.
   pub version: u8,
-  /// Purpose-grouped entries.
+  /// Purpose-grouped entries. A decoded value holds one group per purpose in
+  /// purpose order, the first the payload gave, as Core's `std::map` does.
   pub entries: Vec<(NIPurpose, Vec<NIEntry>)>,
 }
 
@@ -301,17 +304,19 @@ impl_type!(NetInfoV2);
 impl BaseCodec for NetInfoV2 {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let version = u8::decode(data)?;
-    let purpose_count = CompactSize::decode_size(data)?.into_len(data.len())?;
-    let mut entries = Vec::with_capacity(purpose_count);
+    // Core reads a `std::map`: a repeated purpose is read and dropped, and the
+    // groups come out in purpose order. Each group takes 2 bytes or more.
+    let purpose_count = CompactSize::decode_size(data)?.into_len(data.len() / MIN_GROUP_LEN)?;
+    let mut groups = BTreeMap::new();
     for _ in 0..purpose_count {
-      let purpose = NIPurpose::from_base(u8::decode(data)?);
-      let entry_count = CompactSize::decode_size(data)?.into_len(data.len())?;
-      let mut group = Vec::with_capacity(entry_count);
-      for _ in 0..entry_count {
-        group.push(NIEntry::decode(data)?);
-      }
-      entries.push((purpose, group));
+      let purpose = u8::decode(data)?;
+      let group = Vec::<NIEntry>::decode(data)?;
+      groups.entry(purpose).or_insert(group);
     }
+    let entries = groups
+      .into_iter()
+      .map(|(purpose, group)| (NIPurpose::from_base(purpose), group))
+      .collect();
     Ok(Self { version, entries })
   }
 
