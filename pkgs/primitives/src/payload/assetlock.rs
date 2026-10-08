@@ -43,6 +43,8 @@ pub enum AssetLockInvalid {
   CreditOutOfRange { index: usize },
   /// `bad-assetlocktx-pubKeyHash`
   CreditNotP2pkh { index: usize },
+  /// `bad-assetlocktx-script-pubkey` (v2: neither P2PKH nor P2SH)
+  CreditBadScript { index: usize },
 }
 
 impl core::fmt::Display for AssetLockInvalid {
@@ -52,6 +54,7 @@ impl core::fmt::Display for AssetLockInvalid {
       Self::EmptyCreditOutputs => write!(f, "bad-assetlocktx-emptycreditoutputs"),
       Self::CreditOutOfRange { index } => write!(f, "bad-assetlocktx-credit-outofrange: output {index}"),
       Self::CreditNotP2pkh { index } => write!(f, "bad-assetlocktx-pubKeyHash: output {index}"),
+      Self::CreditBadScript { index } => write!(f, "bad-assetlocktx-script-pubkey: output {index}"),
     }
   }
 }
@@ -60,7 +63,8 @@ impl Checkable for AssetLock {
   type Error = AssetLockInvalid;
 
   fn check(&self) -> Option<Self::Error> {
-    if self.version == 0 || self.version > 1 {
+    // Version 2 is v24's; Core accepts it once V24 is active.
+    if self.version == 0 || self.version > 2 {
       return Some(AssetLockInvalid::BadVersion { version: self.version });
     }
 
@@ -74,10 +78,12 @@ impl Checkable for AssetLock {
         return Some(AssetLockInvalid::CreditOutOfRange { index: i });
       }
       total += out.value;
-      if !matches!(
-        Recipient::from_script(out.script_pubkey.as_bytes()),
-        Some(Recipient::PubKeyHash(_))
-      ) {
+      let recipient = Recipient::from_script(out.script_pubkey.as_bytes());
+      if self.version >= 2 {
+        if !matches!(recipient, Some(Recipient::PubKeyHash(_) | Recipient::ScriptHash(_))) {
+          return Some(AssetLockInvalid::CreditBadScript { index: i });
+        }
+      } else if !matches!(recipient, Some(Recipient::PubKeyHash(_))) {
         return Some(AssetLockInvalid::CreditNotP2pkh { index: i });
       }
     }
