@@ -24,6 +24,8 @@ struct VersionVector {
   name: String,
   raw: String,
   core: String,
+  subver: Option<String>,
+  startingheight: Option<i32>,
   relaytxes: Option<bool>,
   groups: Option<usize>,
 }
@@ -71,6 +73,9 @@ fn decode(v: &MsgVector) -> Result<DecodedMsg, P2pDecodeError> {
   P2pMsg::decode_with_policy(&command(&v.command), &raw, &ctx(v.version.unwrap_or(70240)))
 }
 
+/// Bytes of the `version` fields Core reads unconditionally, to `addr_recv`.
+const VERSION_HEAD_LEN: usize = 46;
+
 /// Counts the optional `version` field groups present after `addr_recv`.
 fn groups(v: &Version) -> usize {
   [
@@ -92,12 +97,15 @@ fn version_reads_optional_fields_as_core() {
     let raw = vec_from_hex(&v.raw);
     let decoded = P2pMsg::decode_with_policy(&CommandString::VERSION, &raw, &ctx(209));
     match v.core.as_str() {
-      // Core throws, past the mandatory fields or inside them.
+      // Core throws. Past `addr_recv` it has already checked the head, which
+      // the error keeps; inside the head there is nothing to check.
+      "throw" if raw.len() > VERSION_HEAD_LEN => assert!(
+        matches!(decoded, Err(P2pDecodeError::VersionTail { .. })),
+        "{}: {decoded:?}",
+        v.name
+      ),
       "throw" => assert!(
-        matches!(
-          decoded,
-          Err(P2pDecodeError::VersionTail { .. } | P2pDecodeError::Consensus(_))
-        ),
+        matches!(decoded, Err(P2pDecodeError::Consensus(_))),
         "{}: {decoded:?}",
         v.name
       ),
@@ -126,9 +134,12 @@ fn version_reads_optional_fields_as_core() {
         }
         if let Some(expected) = v.groups {
           assert_eq!(groups(&version), expected, "{}", v.name);
-          // An absent relay field defaults to true in Core.
+          // Core's defaults for absent fields: no subver, height -1, relay.
           let relay = version.relay.is_none_or(|r| r.get());
           assert_eq!(Some(relay), v.relaytxes, "{}", v.name);
+          let subver = version.user_agent.as_ref().and_then(|u| u.as_str()).unwrap_or_default();
+          assert_eq!(Some(subver), v.subver.as_deref(), "{}", v.name);
+          assert_eq!(Some(version.start_height.unwrap_or(-1)), v.startingheight, "{}", v.name);
         }
         // Core ignores bytes after fMasternode; re-encoding writes the fields read.
         let mut buf = Vec::new();

@@ -186,8 +186,8 @@ impl fmt::Display for VersionAddr {
 /// Core reads the fields up to `addr_recv` unconditionally, then each later
 /// field only while payload bytes remain, `addr_send` and `nonce` together.
 /// A field is `None` when the payload ends before it, and a field cut short
-/// is a decode error. Encoding stops at the first absent field, so decode
-/// from a cursor that ends with the payload.
+/// is a decode error, so the fields present form a prefix. Encoding stops at
+/// the first absent field. Decode from a cursor that ends with the payload.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct Version {
@@ -238,9 +238,12 @@ impl BaseCodec for Version {
     self.services.encode(buf);
     self.timestamp.encode(buf);
     self.addr_recv.encode(buf);
+    debug_assert!(self.has_prefix_tail(), "optional version fields with a gap");
     self.encode_optional(buf);
   }
 }
+
+hash_impl!(Version);
 
 impl Version {
   /// Decodes the fields Core reads unconditionally, leaving the rest absent.
@@ -286,20 +289,48 @@ impl Version {
     self.mn_connection?.encode(buf);
     Some(())
   }
-}
 
-hash_impl!(Version);
+  /// Whether the optional fields present are a prefix of Core's read order.
+  ///
+  /// Only such a `Version` decodes from a payload; encoding another one stops
+  /// at its first absent field.
+  pub fn has_prefix_tail(&self) -> bool {
+    let present = [
+      self.addr_send.is_some(),
+      self.nonce.is_some(),
+      self.user_agent.is_some(),
+      self.start_height.is_some(),
+      self.relay.is_some(),
+      self.mnauth_challenge.is_some(),
+      self.mn_connection.is_some(),
+    ];
+    present.windows(2).all(|pair| pair[0] || !pair[1]) && present[0] == present[1]
+  }
+
+  /// This message with every optional field absent.
+  fn into_head(self) -> Self {
+    Self {
+      addr_send: None,
+      nonce: None,
+      user_agent: None,
+      start_height: None,
+      relay: None,
+      mnauth_challenge: None,
+      mn_connection: None,
+      ..self
+    }
+  }
+}
 
 /// Core checks the peer's version and services right after the fields it
 /// reads unconditionally, so a failure in the optional fields keeps them.
 impl MsgDecode for Version {
   fn decode_msg(data: &mut &[u8], _ctx: &ProtoCtx) -> Result<Self, P2pDecodeError> {
-    let head = Self::decode_head(data)?;
-    let mut version = head.clone();
+    let mut version = Self::decode_head(data)?;
     match version.decode_optional(data) {
       Ok(()) => Ok(version),
       Err(e) => Err(P2pDecodeError::VersionTail {
-        head: Box::new(head),
+        head: Box::new(version.into_head()),
         error: format!("{e}"),
       }),
     }
