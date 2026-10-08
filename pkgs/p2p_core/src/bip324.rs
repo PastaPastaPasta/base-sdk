@@ -30,19 +30,24 @@ pub fn encode_v2(msg: &P2pMsg, buf: &mut Vec<u8>) {
   msg.encode_payload(buf);
 }
 
-/// Decodes V2 packet contents into a `P2pMsg` under `ctx`.
+/// Whether Core gives the short ID a slot: Bitcoin's 1 to 32, Dash's 128 to
+/// 168 (`IsValidV2ShortID`). A slot without a message has the empty type.
+const fn is_core_short_id(id: u8) -> bool {
+  matches!(id, 1..=32 | 128..=168)
+}
+
+/// Splits V2 packet contents into the message type and its payload.
 ///
-/// [`DecodedMsg::consumed`] counts payload bytes after the 1-byte short ID or
-/// the 13-byte long-form type. The contents are bound by Core's V2 limit,
-/// checked before the type, and the V1 payload limit does not apply.
+/// The contents are bound by Core's V2 limit, checked before the type. A
+/// short ID Core reserves without a message, such as 5, gives the empty
+/// type, which Core's handlers treat as an unknown command.
 ///
 /// # Errors
 ///
 /// Returns `ContentsTooLarge` above the limit, on which Core disconnects.
-/// Returns another `P2pDecodeError` for empty contents, a cut long-form type
-/// or an unassigned short ID, which Core drops, or for a payload
-/// [`P2pMsg::decode_with_policy`] rejects.
-pub fn decode_v2(contents: &[u8], ctx: &ProtoCtx) -> Result<DecodedMsg, P2pDecodeError> {
+/// Returns `EmptyV2Contents`, `TruncatedV2Type` or `UnknownShortId` for
+/// contents Core cannot type, which it drops while keeping the peer.
+pub fn split_v2(contents: &[u8]) -> Result<(CommandString, &[u8]), P2pDecodeError> {
   if contents.len() > MAX_V2_CONTENTS_SIZE {
     return Err(P2pDecodeError::ContentsTooLarge {
       size: contents.len(),
@@ -50,26 +55,32 @@ pub fn decode_v2(contents: &[u8], ctx: &ProtoCtx) -> Result<DecodedMsg, P2pDecod
     });
   }
   let Some((&short_id, rest)) = contents.split_first() else {
-    return Err(P2pDecodeError::Consensus(String::from(
-      "unexpected eof: needed 1 byte, 0 remaining",
-    )));
+    return Err(P2pDecodeError::EmptyV2Contents);
   };
-
   if short_id == 0 {
     // Long format: next 12 bytes are the command string.
-    let Some((cmd_bytes, payload)) = rest.split_first_chunk::<12>() else {
-      return Err(P2pDecodeError::Consensus(format!(
-        "unexpected eof: needed 12 bytes, {} remaining",
-        rest.len()
-      )));
+    return match rest.split_first_chunk::<12>() {
+      Some((cmd, payload)) => Ok((CommandString::from_bytes(*cmd), payload)),
+      None => Err(P2pDecodeError::TruncatedV2Type { remaining: rest.len() }),
     };
-    let cmd = CommandString::from_bytes(*cmd_bytes);
-    P2pMsg::dispatch(&cmd, payload, ctx)
-  } else {
-    // Short ID: resolve to command, then decode payload.
-    let cmd = ShortId(short_id)
-      .to_command()
-      .ok_or(P2pDecodeError::UnknownShortId { id: short_id })?;
-    P2pMsg::dispatch(&cmd, rest, ctx)
   }
+  match ShortId(short_id).to_command() {
+    Some(cmd) => Ok((cmd, rest)),
+    None if is_core_short_id(short_id) => Ok((CommandString::from_bytes([0; 12]), rest)),
+    None => Err(P2pDecodeError::UnknownShortId { id: short_id }),
+  }
+}
+
+/// Decodes V2 packet contents into a `P2pMsg` under `ctx`.
+///
+/// [`split_v2`], then [`P2pMsg::decode_v2_payload`]. [`DecodedMsg::consumed`]
+/// counts payload bytes after the type. A policy that needs the command of a
+/// payload its handler rejects calls the two itself.
+///
+/// # Errors
+///
+/// Returns the error of [`split_v2`] or of the payload's handler.
+pub fn decode_v2(contents: &[u8], ctx: &ProtoCtx) -> Result<DecodedMsg, P2pDecodeError> {
+  let (cmd, payload) = split_v2(contents)?;
+  P2pMsg::decode_v2_payload(&cmd, payload, ctx)
 }

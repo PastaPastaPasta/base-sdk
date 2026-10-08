@@ -84,9 +84,10 @@
   ],
   // V2 (BIP324) packets over an encrypted connection (probe_v2.py, Core's
   // test framework): the contents are a ping type, short ID 18 or the
-  // 13-byte long form ("unassigned" is short ID 0xfe), then the nonce
-  // 0x01245678 and zeros up to "payload_len". "accept" means Core read the
-  // ping and kept the peer.
+  // 13-byte long form, then the nonce 0x01245678 and zeros up to
+  // "payload_len". "unassigned" uses short ID 0xfe, "unassigned_33" 33 and
+  // "reserved_5" 5, a slot Core keeps without a message. "accept" means Core
+  // read the ping and kept the peer; "Unknown command" is Core's log line.
   "v2_contents": [
     {"form": "short", "payload_len": 3145728, "contents_len": 3145729, "core": "accept"},
     {"form": "short", "payload_len": 3145729, "contents_len": 3145730, "core": "accept"},
@@ -96,5 +97,7 @@
     {"form": "long", "payload_len": 3145729, "contents_len": 3145742, "core": "disconnect: packet too large"},
     {"form": "unassigned", "payload_len": 8, "contents_len": 9, "core": "dropped: invalid message type"},
     {"form": "unassigned", "payload_len": 3145741, "contents_len": 3145742, "core": "disconnect: packet too large"},
+    {"form": "unassigned_33", "payload_len": 8, "contents_len": 9, "core": "dropped: invalid message type"},
+    {"form": "reserved_5", "payload_len": 8, "contents_len": 9, "core": "accept: Unknown command"},
   ],
 }

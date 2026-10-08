@@ -43,6 +43,13 @@ pub enum P2pDecodeError {
     /// Maximum allowed size, in bytes.
     max: usize,
   },
+  /// V2 packet contents without a type byte, which Core drops.
+  EmptyV2Contents,
+  /// A V2 long-form type cut short, which Core drops.
+  TruncatedV2Type {
+    /// Type bytes present, of 12.
+    remaining: usize,
+  },
   /// A message lists more entries than its handler accepts.
   ///
   /// Core checks the count before reading any entry and penalises the peer.
@@ -89,6 +96,10 @@ impl fmt::Display for P2pDecodeError {
       }
       Self::ContentsTooLarge { size, max } => {
         write!(f, "v2 contents too large: {size} bytes, max {max}")
+      }
+      Self::EmptyV2Contents => f.write_str("empty v2 contents"),
+      Self::TruncatedV2Type { remaining } => {
+        write!(f, "v2 long-form type cut short: {remaining} of 12 bytes")
       }
       Self::TooManyEntries { command, count, max } => {
         write!(f, "{command} lists {count} entries, max {max}")

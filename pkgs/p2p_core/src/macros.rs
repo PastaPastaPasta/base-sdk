@@ -183,8 +183,25 @@ macro_rules! define_p2p {
         Self::dispatch(cmd, payload, ctx)
       }
 
+      /// Decodes a V2 message's payload as Core's handler for `cmd` reads it.
+      ///
+      /// As [`P2pMsg::decode_with_policy`] but without the V1 payload limit,
+      /// for a payload [`crate::split_v2`] returned under the V2 limit.
+      ///
+      /// # Errors
+      ///
+      /// Returns `P2pDecodeError` where Core's handler throws, or stops before
+      /// reading the rest of the payload.
+      pub fn decode_v2_payload(
+        cmd: &CommandString,
+        payload: &[u8],
+        ctx: &crate::ctx::ProtoCtx,
+      ) -> Result<DecodedMsg, crate::P2pDecodeError> {
+        Self::dispatch(cmd, payload, ctx)
+      }
+
       /// Decodes as `cmd`'s handler reads, once the transport bound passed.
-      pub(crate) fn dispatch(
+      fn dispatch(
         cmd: &CommandString,
         payload: &[u8],
         ctx: &crate::ctx::ProtoCtx,
