@@ -294,9 +294,13 @@ pub trait NITrait: fmt::Display {
 pub struct NetInfoV2 {
   /// Format version.
   pub version: u8,
-  /// Purpose-grouped entries. A decoded value holds one group per purpose in
-  /// purpose order, the first the payload gave, as Core's `std::map` does, so
-  /// re-encoding gives Core's re-serialization, not always the input bytes.
+  /// Purpose-grouped entries, one group per purpose in purpose order.
+  ///
+  /// A decoded value keeps the first group the payload gave for a purpose, as
+  /// Core's `std::map` does, so the groups, their order and the map framing
+  /// re-encode as Core's do. Core re-serializes an entry it marks invalid as
+  /// one tag byte, which `NIEntry` keeps or rejects instead, so the entries can
+  /// still differ from Core's re-serialization.
   pub entries: Vec<(NIPurpose, Vec<NIEntry>)>,
 }
 
