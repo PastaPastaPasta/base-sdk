@@ -209,12 +209,15 @@ mod tests {
   }
 
   /// Core's `ReadCompactSize` throws "size too large" above `MAX_SIZE`
-  /// (`serialize.h:318` in v24.0.0-rc.3, `:314` in v23.1.8).
+  /// (`serialize.h:318` in v24.0.0-rc.3, `:314` in v23.1.8). The `at_max`,
+  /// `above_max` and `u64` prefixes are those of Core's
+  /// `unserialize_vector_with_max_size` test at both pins; `u32_max` is from
+  /// source.
   #[rstest]
   #[case::at_max(&[0xFE, 0x00, 0x00, 0x00, 0x02], Ok(0x0200_0000))]
   #[case::above_max(&[0xFE, 0x01, 0x00, 0x00, 0x02], Err(0x0200_0001))]
   #[case::u32_max(&[0xFE, 0xFF, 0xFF, 0xFF, 0xFF], Err(0xFFFF_FFFF))]
-  #[case::u64(&[0xFF, 0, 0, 0, 0, 0x01, 0, 0, 0], Err(0x1_0000_0000))]
+  #[case::u64(&[0xFF, 0, 0, 0, 0x02, 0x01, 0, 0, 0], Err(0x1_0200_0000))]
   fn decode_size_applies_the_max_size_range_check(#[case] wire: &[u8], #[case] expected: Result<u64, u64>) {
     let decoded = CompactSize::decode_size(&mut &*wire).map(|v| v.to_base());
     let expected = expected.map_err(|value| DecodeError::CompactSizeExceedsLimit {

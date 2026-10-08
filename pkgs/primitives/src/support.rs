@@ -298,7 +298,8 @@ mod tests {
   }
 
   /// Core's `DYNBITSET` reads `num_bits` with `ReadCompactSize`, which
-  /// accepts `MAX_SIZE` and throws above it whatever bytes follow.
+  /// accepts `MAX_SIZE` and throws above it whatever bytes follow. The
+  /// at-max bytes are Core's (v24 only); the above-max case is from source.
   #[rstest]
   fn num_bits_is_range_checked() {
     let at_max = every_third_bit(MAX_SER_SIZE);

@@ -67,7 +67,8 @@ mod tests {
 
   /// Core's `Unserialize(Stream&, bool&)` assigns the byte (`serialize.h:239`
   /// in v24.0.0-rc.3, `:235` in v23.1.8), so every value decodes. Core
-  /// re-serializes the `bool` as 0 or 1.
+  /// re-serializes the `bool` as 0 or 1. Core's P2P handlers judged `02`
+  /// and `ff` (p2p_core `decode_domain` corpus); `80` is from source.
   #[rstest]
   #[case::zero(0x00, false)]
   #[case::one(0x01, true)]

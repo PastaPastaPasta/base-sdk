@@ -407,6 +407,7 @@ mod tests {
 
   /// A length prefix above `MAX_SIZE` fails even with enough bytes left,
   /// as in Core's `ReadCompactSize`, which runs before any element read.
+  /// The verdicts are from source.
   #[rstest]
   fn vec_length_prefix_is_range_checked() {
     use crate::codec::BaseCodec;
