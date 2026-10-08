@@ -8,7 +8,6 @@
 
 use super::proregtx::check_platform_fields;
 use super::{check_sptx_netinfo, InputsHash, MnType, ProTxInvalid, PROTX_VERSION_BASIC_BLS, PROTX_VERSION_EXT_ADDR};
-use crate::codec::impl_payload;
 use crate::payload::PlatformNodeId;
 use crate::types::{NITrait, NetInfo, NetInfoV1, NetInfoV2, ServiceV1};
 use crate::{hash_impl, TxHash};
@@ -16,7 +15,7 @@ use crate::{hash_impl, TxHash};
 use bitcoin_primitives::script::ScriptPubKeyBuf;
 use dash_pkc::bls::{BlsScIetf, BlsSigBytes};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
-use dash_types::{type_id::TypeId, Checkable, Numeric};
+use dash_types::{impl_type, type_id::TypeId, Checkable, Numeric};
 
 use core::fmt;
 
@@ -53,7 +52,7 @@ pub struct ProUpServTx {
   pub sig: BlsSigBytes<BlsScIetf>,
 }
 
-impl_payload!(ProUpServTx);
+impl_type!(ProUpServTx);
 
 impl BaseCodec for ProUpServTx {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {

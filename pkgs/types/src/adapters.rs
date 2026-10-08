@@ -11,7 +11,7 @@ macro_rules! adapt_codec {
   (<$gen:ident>, $ty:ty) => {
     impl<$gen> $crate::codec::BaseCodec for $ty {
       fn decode(data: &mut &[u8]) -> Result<Self, $crate::codec::DecodeError> {
-        let n = $crate::CompactSize::decode(data)?.into_len(data.len())?;
+        let n = $crate::CompactSize::decode_size(data)?.into_len(data.len())?;
         let bytes = $crate::codec::read_bytes(data, n)?;
         Ok(Self::from_bytes(bytes.to_vec()))
       }

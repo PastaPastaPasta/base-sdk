@@ -7,7 +7,7 @@
 //! MnHardFork hard-fork signal (type 7).
 
 use super::QuorumHash;
-use crate::codec::codec_payload;
+use crate::codec_type;
 
 use dash_pkc::bls::{BlsScIetf, BlsSigBytes};
 use dash_types::type_id::{TypeId, Unencodable};
@@ -33,7 +33,7 @@ pub struct MnHardFork {
   pub sig: BlsSigBytes<BlsScIetf>,
 }
 
-codec_payload!(MnHardFork {
+codec_type!(MnHardFork {
   version,
   version_bit,
   quorum_hash,

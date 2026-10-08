@@ -276,24 +276,6 @@ impl BaseCodec for i64 {
   }
 }
 
-impl BaseCodec for bool {
-  fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let byte = take::<1>(data)?[0];
-    match byte {
-      0 => Ok(false),
-      1 => Ok(true),
-      _ => Err(DecodeError::InvalidValue {
-        expected: vec![0, 1],
-        actual: u64::from(byte),
-      }),
-    }
-  }
-
-  fn encode(&self, buf: &mut impl EncodeBuf) {
-    buf.push(u8::from(*self));
-  }
-}
-
 impl<const N: usize> BaseCodec for [u8; N] {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     take::<N>(data)
@@ -306,14 +288,15 @@ impl<const N: usize> BaseCodec for [u8; N] {
 
 impl<T: BaseCodec> BaseCodec for Vec<T> {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let count = CompactSize::decode(data)?.into_len(data.len())?;
+    let count = CompactSize::decode_size(data)?.into_len(data.len())?;
     let batch = MAX_VECTOR_ALLOCATE / core::mem::size_of::<T>().max(1);
     let mut items = Vec::new();
     let mut allocated = 0usize;
     for _ in 0..count {
       if items.len() == allocated {
+        // Core's `reserve(allocated)`: exactly one batch beyond the items read.
         allocated = count.min(allocated + batch);
-        items.reserve(allocated - items.len());
+        items.reserve_exact(allocated - items.len());
       }
       items.push(T::decode(data)?);
     }
@@ -421,6 +404,31 @@ mod tests {
     let lifted: DecodeError<SampleError> = err.lift();
     assert_eq!(lifted.to_string(), before);
     assert!(!matches!(lifted, DecodeError::DecError(_)));
+  }
+
+  /// A length prefix above `MAX_SIZE` fails even with enough bytes left,
+  /// as in Core's `ReadCompactSize`, which runs before any element read.
+  /// The verdicts are from source.
+  #[rstest]
+  fn vec_length_prefix_is_range_checked() {
+    use crate::codec::BaseCodec;
+    use crate::MAX_SER_SIZE;
+
+    let mut at_max = vec![0xFE];
+    at_max.extend_from_slice(&(MAX_SER_SIZE as u32).to_le_bytes());
+    at_max.resize(at_max.len() + MAX_SER_SIZE, 0);
+    assert_eq!(Vec::<u8>::decode(&mut &at_max[..]).map(|v| v.len()), Ok(MAX_SER_SIZE));
+
+    let mut above = vec![0xFE];
+    above.extend_from_slice(&(MAX_SER_SIZE as u32 + 1).to_le_bytes());
+    above.resize(above.len() + MAX_SER_SIZE + 1, 0);
+    assert_eq!(
+      Vec::<u8>::decode(&mut &above[..]),
+      Err(DecodeError::CompactSizeExceedsLimit {
+        limit: MAX_SER_SIZE,
+        value: MAX_SER_SIZE as u64 + 1,
+      })
+    );
   }
 
   /// Consumes the whole cursor, so `end()` sees no trailing bytes.

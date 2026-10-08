@@ -55,3 +55,49 @@ pub mod amount {
     deserializer.deserialize_any(Visitor)
   }
 }
+
+/// Serializes a signed duff value (Core's `CAmount`) as an integer.
+///
+/// Deserializes integers as duffs and floats as whole coins, like
+/// [`amount`], without its range check.
+pub mod duffs {
+  use crate::prelude::*;
+
+  use bitcoin_units::Amount;
+
+  /// Serializes as raw duffs.
+  pub fn serialize<S: serde::Serializer>(val: &i64, serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.serialize_i64(*val)
+  }
+
+  /// Deserializes from duffs (an integer) or coins (a float).
+  pub fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<i64, D::Error> {
+    struct Visitor;
+
+    impl serde::de::Visitor<'_> for Visitor {
+      type Value = i64;
+
+      fn expecting(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("an integer (duffs) or float (coins)")
+      }
+
+      fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<i64, E> {
+        Ok(v)
+      }
+
+      fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<i64, E> {
+        i64::try_from(v).map_err(E::custom)
+      }
+
+      fn visit_f64<E: serde::de::Error>(self, v: f64) -> Result<i64, E> {
+        let duffs = round(v * Amount::ONE_BTC.to_sat() as f64);
+        if !duffs.is_finite() || duffs < i64::MIN as f64 || duffs >= i64::MAX as f64 {
+          return Err(E::custom("amount overflow"));
+        }
+        Ok(duffs as i64)
+      }
+    }
+
+    deserializer.deserialize_any(Visitor)
+  }
+}

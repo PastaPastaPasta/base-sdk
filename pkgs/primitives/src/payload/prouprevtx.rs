@@ -7,7 +7,7 @@
 //! ProUpRevTx revocation payload (type 4).
 
 use super::{InputsHash, ProTxInvalid};
-use crate::codec::codec_payload;
+use crate::codec_type;
 use crate::support::RevocationReason;
 use crate::TxHash;
 
@@ -37,7 +37,7 @@ pub struct ProUpRevTx {
   pub sig: BlsSigBytes<BlsScIetf>,
 }
 
-codec_payload!(ProUpRevTx {
+codec_type!(ProUpRevTx {
   version,
   pro_tx_hash,
   reason,

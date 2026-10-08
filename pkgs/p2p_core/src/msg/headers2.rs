@@ -6,17 +6,21 @@
 
 //! Compressed header messages.
 
-use crate::codec::{codec_p2p, impl_p2p};
+use super::headers::{read_entry_count, read_header_count, MAX_HEADERS_COMPRESSED, MAX_HEADERS_UNCOMPRESSED};
+use crate::codec::{codec_p2p, impl_p2p, MsgDecode};
+use crate::ctx::ProtoCtx;
 use crate::prelude::*;
 use crate::version::ProtocolVersion;
+use crate::P2pDecodeError;
 
 use dash_primitives::{hash_impl, BlockHash, BlockHeader, MerkleRoot};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{CompactSize, Hashable};
 
-/// Maximum headers per message.
-const MAX_HEADERS: usize = 2_000;
+/// The fewest bytes a compressed header takes: flags, merkle root, a time
+/// delta and the nonce.
+const MIN_HEADERS2_ENTRY: usize = 39;
 
 /// Maximum entries in the MRU version cache.
 const MAX_VERSION_CACHE: usize = 7;
@@ -255,13 +259,8 @@ impl_p2p!(Headers2);
 
 impl BaseCodec for Headers2 {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let count = CompactSize::decode(data)?.into_len(MAX_HEADERS)?;
-    let mut state = CompressionState::new();
-    let mut headers = Vec::with_capacity(count);
-    for _ in 0..count {
-      headers.push(state.decode_header(data)?);
-    }
-    Ok(Self { headers })
+    let count = read_entry_count(data, MIN_HEADERS2_ENTRY)?;
+    Self::read(data, count)
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
@@ -274,6 +273,30 @@ impl BaseCodec for Headers2 {
 }
 
 hash_impl!(Headers2);
+
+impl Headers2 {
+  /// Reads `count` compressed headers with a fresh compression state.
+  fn read(data: &mut &[u8], count: usize) -> Result<Self, DecodeError> {
+    let mut state = CompressionState::new();
+    let mut headers = Vec::with_capacity(count);
+    for _ in 0..count {
+      headers.push(state.decode_header(data)?);
+    }
+    Ok(Self { headers })
+  }
+}
+
+impl MsgDecode for Headers2 {
+  fn decode_msg(data: &mut &[u8], ctx: &ProtoCtx) -> Result<Self, P2pDecodeError> {
+    let max = if ctx.version >= ProtocolVersion::INCREASE_MAX_HEADERS2 {
+      MAX_HEADERS_COMPRESSED
+    } else {
+      MAX_HEADERS_UNCOMPRESSED
+    };
+    let count = read_header_count(data, "headers2", max)?;
+    Ok(Self::read(data, count)?)
+  }
+}
 
 #[cfg(all(test, feature = "serde"))]
 mod tests {

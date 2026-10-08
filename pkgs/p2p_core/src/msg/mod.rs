@@ -7,6 +7,7 @@
 //! P2P message types and dispatch.
 
 mod addr;
+mod control;
 mod gov;
 mod headers;
 mod headers2;
@@ -15,15 +16,16 @@ mod mn_list;
 mod ping;
 mod version;
 
+use crate::codec::MsgDecode;
 use crate::command::CommandString;
 use crate::prelude::*;
 use crate::short_id::ShortId;
 
-use bitcoin_consensus_encoding as encoding;
 use dash_primitives::{GovObject, GovVote};
 use dash_types::type_id::Unencodable;
 
 pub use addr::{Addr, AddrV2Entry, AddrV2Msg, TimestampedAddr};
+pub use control::{QSendRecSigs, SendDsq};
 pub use gov::GovSync;
 pub use headers::{GetHeaders, Headers};
 pub use headers2::{CompressionState, GetHeaders2, Headers2};
@@ -68,6 +70,10 @@ define_p2p! {
     GetMnListDiff(GetMnListDiff) => GETMNLISTD "getmnlistd" @ 143,
     /// MN list diff.
     MnListDiff(MnListDiff) => MNLISTDIFF "mnlistdiff" @ 144,
+    /// Signal CoinJoin queue relay.
+    SendDsq(SendDsq) => SENDDSQ "senddsq" @ 130,
+    /// LLMQ: send recovered signatures.
+    QSendRecSigs(QSendRecSigs) => QSENDRECSIGS "qsendrecsigs" @ 145,
   }
 
   parsed_empty {
@@ -185,11 +191,24 @@ define_p2p! {
     Mempool => MEMPOOL "mempool" @ 15,
     /// Request active sporks.
     GetSporks => GETSPORKS "getsporks" @ 129,
-    /// Signal CoinJoin queue relay.
-    SendDsq => SENDDSQ "senddsq" @ 130,
-    /// LLMQ: send recovered signatures.
-    QSendRecSigs => QSENDRECSIGS "qsendrecsigs" @ 145,
     /// LLMQ: watch quorums.
     QWatch => QWATCH "qwatch" @ 151,
   }
 }
+
+impl MsgDecode for Ping {}
+impl MsgDecode for Pong {}
+impl MsgDecode for Addr {}
+impl MsgDecode for AddrV2Msg {}
+impl MsgDecode for Inv {}
+impl MsgDecode for GetData {}
+impl MsgDecode for NotFound {}
+impl MsgDecode for GetHeaders {}
+impl MsgDecode for GetHeaders2 {}
+impl MsgDecode for GovSync {}
+impl MsgDecode for GovObject {}
+impl MsgDecode for GovVote {}
+impl MsgDecode for GetMnListDiff {}
+impl MsgDecode for MnListDiff {}
+impl MsgDecode for SendDsq {}
+impl MsgDecode for QSendRecSigs {}

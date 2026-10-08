@@ -6,9 +6,9 @@
 
 //! AssetLock (type 8): L1 to Platform.
 
-use crate::codec::codec_payload;
+use crate::codec_type;
 use crate::prelude::*;
-use crate::transaction::TxOut;
+use crate::transaction::{money_range, TxOut};
 
 use dash_script::Recipient;
 use dash_types::type_id::{TypeId, Unencodable};
@@ -27,7 +27,7 @@ pub struct AssetLock {
   pub credit_outputs: Vec<TxOut>,
 }
 
-codec_payload!(AssetLock {
+codec_type!(AssetLock {
   version,
   credit_outputs
 });
@@ -68,17 +68,12 @@ impl Checkable for AssetLock {
       return Some(AssetLockInvalid::EmptyCreditOutputs);
     }
 
-    let max_money = bitcoin_units::Amount::MAX_MONEY.to_sat();
-    let mut total: u64 = 0;
+    let mut total: i64 = 0;
     for (i, out) in self.credit_outputs.iter().enumerate() {
-      let sat = out.value.to_sat();
-      if sat == 0 || sat > max_money {
+      if out.value == 0 || !money_range(out.value) || !money_range(total + out.value) {
         return Some(AssetLockInvalid::CreditOutOfRange { index: i });
       }
-      total = total.saturating_add(sat);
-      if total > max_money {
-        return Some(AssetLockInvalid::CreditOutOfRange { index: i });
-      }
+      total += out.value;
       if !matches!(
         Recipient::from_script(out.script_pubkey.as_bytes()),
         Some(Recipient::PubKeyHash(_))
