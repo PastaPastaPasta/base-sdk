@@ -131,6 +131,20 @@ private predicate hasFloatField(TypeItem t) {
  * Holds if `t` is a serde internal generated type
  * (e.g. __FieldVisitor, __Visitor, __Field).
  */
+/**
+ * Holds if `t` has a lazy BLS field, directly or through a type of its own
+ * crate.
+ */
+private predicate hasLazyBlsField(TypeItem t) {
+  typeFieldName(t) = ["BlsLazy", "BlsLazyPk", "BlsLazySig"]
+  or
+  exists(TypeItem inner, string name, string crate |
+    fieldTypeInCrate(t, name, crate) and
+    typeNameInCrate(inner, name, crate) and
+    hasLazyBlsField(inner)
+  )
+}
+
 predicate isSerdeInternalType(TypeItem t) { nameOf(t).matches("\\_\\_%") }
 
 /** Gets a required trait name. */
@@ -225,6 +239,9 @@ predicate isSuppressed(TypeItem t, string trait) {
   isOpaqueCrate(fileOf(t)) and
   nameOf(t) = "BlsLazy" and
   trait = ["Eq", "Hash"]
+  or
+  // A type holding one compares through it: suppress Eq and Hash
+  hasLazyBlsField(t) and trait = ["Eq", "Hash"]
 }
 
 /** Holds if `t` is exempt from serde derivation requirements. */
