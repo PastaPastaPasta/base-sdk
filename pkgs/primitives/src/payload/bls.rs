@@ -9,7 +9,8 @@
 //! Each field takes its scheme from one of Core's rules: the payload's
 //! version, Core's process-wide flag, or the basic scheme always. A field
 //! under the flag keeps its wire bytes ([`BlsGlobal`]), so a payload decodes
-//! without the flag.
+//! without the flag. The other fields encode under the scheme their rule
+//! gives when the payload is encoded, as Core's serializers do.
 
 use super::PROTX_VERSION_LEGACY_BLS;
 
@@ -100,23 +101,29 @@ pub(crate) fn read_global<K: BlsWirePoint<N>, const N: usize>(
   BlsGlobal::decode(&codec::take::<N>(data)?).map_err(|_| DecodeError::MalleableBls)
 }
 
-/// The wire bytes of an eager field, under the scheme it was decoded with;
-/// zeros when invalid.
-pub(crate) fn eager_bytes<K: BlsWire<N>, const N: usize>(field: &BlsEager<K, N>) -> [u8; N] {
-  field.to_bytes(field.scheme())
+/// The bytes Core serializes for a lazy field under `scheme` once the field
+/// is in use: its object under `scheme`, or zeros when the object is
+/// invalid.
+///
+/// Core's own bytes depend on whether the field was used: an unused invalid
+/// key keeps its raw bytes. These do not, so encoding, hashing and JSON give
+/// the same bytes whatever ran first. A valid key under its own scheme gives
+/// its wire bytes; a transaction's id covers the raw payload either way. The
+/// field is resolved on a copy, so encoding leaves it as it was.
+pub(crate) fn lazy_bytes<K: BlsWirePoint<N>, const N: usize>(field: &BlsLazy<K, N>, scheme: BlsSchemeKind) -> [u8; N] {
+  field.clone().get().to_bytes(scheme)
 }
 
-/// Writes an eager field as [`eager_bytes`] gives it.
-pub(crate) fn write_eager<K: BlsWire<N>, const N: usize>(field: &BlsEager<K, N>, buf: &mut impl EncodeBuf) {
-  eager_bytes(field).encode(buf);
+/// Writes a lazy field as [`lazy_bytes`] gives it.
+pub(crate) fn write_lazy<K: BlsWirePoint<N>, const N: usize>(
+  field: &BlsLazy<K, N>,
+  scheme: BlsSchemeKind,
+  buf: &mut impl EncodeBuf,
+) {
+  lazy_bytes(field, scheme).encode(buf);
 }
 
-/// Writes a lazy field under its captured scheme, Core's `Serialize(s)`.
-pub(crate) fn write_lazy<K: BlsWirePoint<N>, const N: usize>(field: &BlsLazy<K, N>, buf: &mut impl EncodeBuf) {
-  field.to_bytes().encode(buf);
-}
-
-/// Serde forms of BLS fields, the hex of their wire bytes.
+/// Serde forms of BLS fields, the hex of the bytes the wire path writes.
 ///
 /// A version-sourced field cannot read its scheme from its own JSON, so each
 /// payload carrying one converts through a form holding the raw bytes, and
@@ -124,9 +131,9 @@ pub(crate) fn write_lazy<K: BlsWirePoint<N>, const N: usize>(field: &BlsLazy<K, 
 /// path does.
 #[cfg(feature = "serde")]
 pub(crate) mod serde {
-  use super::{eager_bytes, eager_from};
+  use super::{eager_from, lazy_bytes};
 
-  use dash_pkc::bls::{BlsEager, BlsGlobal, BlsLazy, BlsSchemeSource, BlsWire, BlsWirePoint};
+  use dash_pkc::bls::{BlsEager, BlsGlobal, BlsLazy, BlsSchemeKind, BlsSchemeSource, BlsWire, BlsWirePoint};
 
   /// A field under Core's process-wide flag, as the hex of its wire bytes.
   pub(crate) mod global {
@@ -218,7 +225,7 @@ pub(crate) mod serde {
   pub(crate) mod always_basic {
     use super::*;
 
-    /// Serializes the field's wire bytes as hex.
+    /// Serializes the field under the basic scheme as hex.
     ///
     /// # Errors
     ///
@@ -228,7 +235,7 @@ pub(crate) mod serde {
       S: ::serde::Serializer,
       K: BlsWire<N>,
     {
-      dash_types::serialize::hex::serialize(&eager_bytes(field), serializer)
+      dash_types::serialize::hex::serialize(&field.to_bytes(BlsSchemeKind::Basic), serializer)
     }
 
     /// Deserializes hex and decodes it under the basic scheme.
@@ -250,7 +257,8 @@ pub(crate) mod serde {
   pub(crate) mod lazy_always_basic {
     use super::*;
 
-    /// Serializes the field's wire bytes as hex.
+    /// Serializes the field as [`lazy_bytes`] gives it under the basic scheme,
+    /// as hex.
     ///
     /// # Errors
     ///
@@ -260,7 +268,7 @@ pub(crate) mod serde {
       S: ::serde::Serializer,
       K: BlsWirePoint<N>,
     {
-      dash_types::serialize::hex::serialize(&field.to_bytes(), serializer)
+      dash_types::serialize::hex::serialize(&lazy_bytes(field, BlsSchemeKind::Basic), serializer)
     }
 
     /// Deserializes hex into a field holding the bytes under the basic scheme.

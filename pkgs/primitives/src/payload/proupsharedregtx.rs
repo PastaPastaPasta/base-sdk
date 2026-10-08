@@ -12,7 +12,7 @@ use super::InputsHash;
 use crate::prelude::*;
 use crate::{hash_impl, TxHash};
 
-use dash_pkc::bls::{BlsLazyPk, BlsSchemeSource};
+use dash_pkc::bls::{BlsLazyPk, BlsSchemeKind, BlsSchemeSource};
 use dash_script::PubKeyHash;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::impl_type;
@@ -33,7 +33,8 @@ pub struct ProUpSharedRegTx {
   /// ProTx hash identifying the masternode.
   pub pro_tx_hash: TxHash,
   /// Operator BLS public key, decoded on first use, always under the basic
-  /// scheme.
+  /// scheme. It encodes as Core serializes a key in use, and as zeros when
+  /// invalid, whether or not it was used before.
   #[cfg_attr(feature = "serde", serde(with = "super::bls::serde::lazy_always_basic"))]
   pub pub_key_operator: BlsLazyPk,
   /// Voting key id (20 bytes).
@@ -61,7 +62,7 @@ impl BaseCodec for ProUpSharedRegTx {
   fn encode(&self, buf: &mut impl EncodeBuf) {
     self.version.encode(buf);
     self.pro_tx_hash.encode(buf);
-    bls::write_lazy(&self.pub_key_operator, buf);
+    bls::write_lazy(&self.pub_key_operator, BlsSchemeKind::Basic, buf);
     self.key_id_voting.encode(buf);
     self.inputs_hash.encode(buf);
     shares::write_list(&self.sigs, buf);

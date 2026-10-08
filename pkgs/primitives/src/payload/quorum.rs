@@ -6,7 +6,7 @@
 
 //! LLMQ final commitment payload (type 6).
 
-use super::bls::{self, qc_source};
+use super::bls::{self, commitment_bls_scheme, qc_source};
 use super::QuorumHash;
 use crate::hash_impl;
 use crate::support::{DynBitset, LlmqType};
@@ -113,6 +113,7 @@ impl BaseCodec for Commitment {
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
+    let scheme = commitment_bls_scheme(self.version);
     self.version.encode(buf);
     self.llmq_type.to_base().encode(buf);
     self.quorum_hash.encode(buf);
@@ -121,10 +122,10 @@ impl BaseCodec for Commitment {
     }
     self.signers.encode(buf);
     self.valid_members.encode(buf);
-    bls::write_eager(&self.quorum_public_key, buf);
+    self.quorum_public_key.to_bytes(scheme).encode(buf);
     self.quorum_vvec_hash.encode(buf);
-    bls::write_eager(&self.quorum_sig, buf);
-    bls::write_eager(&self.members_sig, buf);
+    self.quorum_sig.to_bytes(scheme).encode(buf);
+    self.members_sig.to_bytes(scheme).encode(buf);
   }
 }
 
@@ -161,6 +162,7 @@ impl fmt::Display for Commitment {
 #[cfg(feature = "serde")]
 impl From<Commitment> for CommitmentSerde {
   fn from(qc: Commitment) -> Self {
+    let scheme = commitment_bls_scheme(qc.version);
     Self {
       version: qc.version,
       llmq_type: qc.llmq_type,
@@ -168,10 +170,10 @@ impl From<Commitment> for CommitmentSerde {
       quorum_index: qc.quorum_index,
       signers: qc.signers,
       valid_members: qc.valid_members,
-      quorum_public_key: bls::eager_bytes(&qc.quorum_public_key),
+      quorum_public_key: qc.quorum_public_key.to_bytes(scheme),
       quorum_vvec_hash: qc.quorum_vvec_hash,
-      quorum_sig: bls::eager_bytes(&qc.quorum_sig),
-      members_sig: bls::eager_bytes(&qc.members_sig),
+      quorum_sig: qc.quorum_sig.to_bytes(scheme),
+      members_sig: qc.members_sig.to_bytes(scheme),
     }
   }
 }

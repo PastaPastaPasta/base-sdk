@@ -6,7 +6,7 @@
 
 //! ProUpRegTx registrar-update payload (type 3).
 
-use super::bls::{self, protx_source};
+use super::bls::{self, protx_bls_scheme, protx_source};
 use super::shares::{self, PayoutShare};
 use super::{check_version, is_known_protx_version, InputsHash, ProTxInvalid, PROTX_VERSION_EXT_ADDR};
 use crate::prelude::*;
@@ -39,7 +39,9 @@ pub struct ProUpRegTx {
   /// Reserved, always 0.
   pub mode: u16,
   /// Operator BLS public key, decoded on first use under the version's
-  /// scheme (legacy for v1).
+  /// scheme (legacy for v1). It encodes as Core serializes a key in use,
+  /// under the version's scheme at encoding, and as zeros when invalid,
+  /// whether or not it was used before.
   pub pub_key_operator: BlsLazyPk,
   /// Voting key id (20 bytes).
   pub key_id_voting: PubKeyHash,
@@ -109,7 +111,7 @@ impl BaseCodec for ProUpRegTx {
     self.version.encode(buf);
     self.pro_tx_hash.encode(buf);
     self.mode.encode(buf);
-    bls::write_lazy(&self.pub_key_operator, buf);
+    bls::write_lazy(&self.pub_key_operator, protx_bls_scheme(self.version), buf);
     self.key_id_voting.encode(buf);
     if self.version >= PROTX_VERSION_EXT_ADDR {
       shares::write_list(&self.payouts, buf);
@@ -176,7 +178,7 @@ impl From<ProUpRegTx> for ProUpRegTxSerde {
       version: tx.version,
       pro_tx_hash: tx.pro_tx_hash,
       mode: tx.mode,
-      pub_key_operator: tx.pub_key_operator.to_bytes(),
+      pub_key_operator: bls::lazy_bytes(&tx.pub_key_operator, protx_bls_scheme(tx.version)),
       key_id_voting: tx.key_id_voting,
       script_payout: tx.script_payout,
       payouts: tx.payouts,

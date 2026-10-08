@@ -15,7 +15,7 @@
 use dash_dev::{Corpus, Value};
 use dash_pkc::bls::{BlsCtx, BlsEager, BlsLazyPk, BlsSchemeKind, BlsWire};
 use dash_primitives::{
-  CoinbaseCommitment, MnType, NIEntry, NITrait, NetInfo, PayloadDecode, SpecialPayload, Transaction,
+  CoinbaseCommitment, Commitment, MnType, NIEntry, NITrait, NetInfo, PayloadDecode, SpecialPayload, Transaction,
 };
 use dash_types::codec::BaseCodec;
 use dash_types::{Checkable, Numeric};
@@ -545,6 +545,137 @@ fn bls_fields_take_their_scheme_source() {
     panic!()
   };
   assert_eq!(p.pub_key_operator.scheme(), Basic);
+}
+
+/// `payload`'s encoding.
+fn encoded<T: BaseCodec>(payload: &T) -> Vec<u8> {
+  let mut buf = Vec::new();
+  payload.encode(&mut buf);
+  buf
+}
+
+/// `payload` decoded from its own encoding.
+fn redecode<T: BaseCodec>(payload: &T) -> T {
+  T::decode(&mut &encoded(payload)[..]).unwrap()
+}
+
+/// Core writes a version-sourced field under the version its payload has when
+/// written, as the version wrappers in `providertx.h` and `commitment.h` pass
+/// `nVersion` on both paths. A legacy field written at a basic version holds
+/// the same object in the basic encoding.
+#[test]
+fn version_sourced_fields_encode_under_the_version_at_encoding() {
+  let SpecialPayload::ProviderUpdateRevoke(mut rev) = crafted("prouprevtx_v1_sig_legacy") else {
+    panic!()
+  };
+  assert!(rev.sig.is_valid());
+  rev.version = 2;
+  let written = redecode(&rev);
+  assert_eq!(
+    (written.sig.scheme(), written.sig.is_valid()),
+    (BlsSchemeKind::Basic, true)
+  );
+  assert_eq!(written.sig, rev.sig, "same object");
+
+  let SpecialPayload::ProviderUpdateRegistrar(mut reg) = crafted("proupregtx_v1_pk_legacy") else {
+    panic!()
+  };
+  let key = reg.pub_key_operator.get();
+  assert!(key.is_valid());
+  reg.version = 2;
+  let written = redecode(&reg);
+  assert_eq!(written.pub_key_operator.scheme(), BlsSchemeKind::Basic);
+  assert_eq!(written.pub_key_operator.get(), key, "same object");
+
+  let SpecialPayload::QuorumCommitment(qc) = crafted("qctx_v1_legacy") else {
+    panic!()
+  };
+  let mut commitment = qc.commitment;
+  let valid = |c: &Commitment| {
+    [
+      c.quorum_public_key.is_valid(),
+      c.quorum_sig.is_valid(),
+      c.members_sig.is_valid(),
+    ]
+  };
+  assert_eq!(valid(&commitment), [true; 3]);
+  // Version 3 keeps version 1's layout, without a quorum index.
+  commitment.version = 3;
+  let written = redecode(&commitment);
+  assert_eq!(valid(&written), [true; 3]);
+  assert_eq!(written.quorum_public_key, commitment.quorum_public_key);
+  assert_eq!(written.quorum_sig, commitment.quorum_sig);
+  assert_eq!(written.members_sig, commitment.members_sig);
+}
+
+/// Checks that `p`'s operator `key` encodes and serializes alike before and
+/// after its first use (`get()`, as `check()` does), as its wire bytes if
+/// valid and zeros otherwise, and that encoding leaves the key as it was.
+fn assert_lazy_key_alike<T>(name: &str, tx: &Transaction, p: &T, key: &BlsLazyPk, valid: bool)
+where
+  T: BaseCodec + ::serde::Serialize,
+{
+  let wire_key = key.to_bytes();
+  let (bytes, json) = (encoded(p), dash_dev::to_json(p));
+  assert_eq!(key.to_bytes(), wire_key, "{name}: encoding used the key");
+  assert_eq!(key.get().is_valid(), valid, "{name}");
+  assert_eq!(encoded(p), bytes, "{name}: encoding");
+  assert_eq!(dash_dev::to_json(p), json, "{name}: JSON");
+  let at = tx.extra_payload.windows(wire_key.len()).position(|w| w == wire_key);
+  let at = at.unwrap_or_else(|| panic!("{name}: key"));
+  let mut expected = tx.extra_payload.clone();
+  if !valid {
+    expected[at..at + wire_key.len()].fill(0);
+  }
+  assert_eq!(bytes, expected, "{name}");
+}
+
+/// A lazy key encodes alike whatever ran first (Opus BS6a r1 F9).
+#[test]
+fn lazy_keys_encode_alike_before_and_after_use() {
+  for (name, valid) in [("proregtx_v2_pk_basic", true), ("proregtx_v2_pk_legacy", false)] {
+    let tx = crafted_tx(name);
+    let SpecialPayload::ProviderRegister(p) = accepted(&tx).unwrap().payload else {
+      panic!("{name}")
+    };
+    assert_lazy_key_alike(name, &tx, &p, &p.pub_key_operator, valid);
+  }
+  for (name, valid) in [
+    ("proupsharedregtx_pk_basic", true),
+    ("proupsharedregtx_pk_legacy", false),
+  ] {
+    let tx = crafted_tx(name);
+    let SpecialPayload::ProviderUpdateSharedRegistrar(p) = accepted(&tx).unwrap().payload else {
+      panic!("{name}")
+    };
+    assert_lazy_key_alike(name, &tx, &p, &p.pub_key_operator, valid);
+  }
+}
+
+/// Payloads Core accepts encode as Core serializes them: the coinbase and
+/// asset-unlock signatures as their wire bytes, whichever scheme they are
+/// canonical in, and an always-basic field holding legacy-only bytes as
+/// zeros.
+#[test]
+fn payloads_encode_as_core_serializes_them() {
+  let names = [
+    "cbtx_v3_sig_legacy",
+    "cbtx_v3_sig_basic",
+    "assetunlock_v1_sig_legacy",
+    "assetunlock_v1_sig_basic",
+  ];
+  for name in names {
+    let tx = crafted_tx(name);
+    assert_eq!(reencode(&accepted(&tx).unwrap().payload), tx.extra_payload, "{name}");
+  }
+  // Both fields follow 34 bytes: MnHF's version, version bit and quorum hash;
+  // the shared registrar's version and ProTx hash.
+  for (name, len) in [("mnhf_sig_legacy", 96), ("proupsharedregtx_pk_legacy", 48)] {
+    let tx = crafted_tx(name);
+    let mut expected = tx.extra_payload.clone();
+    expected[34..34 + len].fill(0);
+    assert_eq!(reencode(&accepted(&tx).unwrap().payload), expected, "{name}");
+  }
 }
 
 /// Core's `CFinalCommitment::IsNull` counts a BLS field that decoded invalid,

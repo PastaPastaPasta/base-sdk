@@ -6,7 +6,7 @@
 
 //! ProRegTx registration payload (type 1).
 
-use super::bls::{self, protx_source};
+use super::bls::{self, protx_bls_scheme, protx_source};
 use super::shares::{self, CollateralShare, CompactSig, PayoutShare};
 use super::{
   check_platform_fields, check_sptx_netinfo, check_version, is_known_protx_version, read_net_info,
@@ -54,7 +54,9 @@ pub struct ProRegTx {
   /// Owner key id (20 bytes).
   pub key_id_owner: PubKeyHash,
   /// Operator BLS public key, decoded on first use under the version's
-  /// scheme (legacy for v1).
+  /// scheme (legacy for v1). It encodes as Core serializes a key in use,
+  /// under the version's scheme at encoding, and as zeros when invalid,
+  /// whether or not it was used before.
   pub pub_key_operator: BlsLazyPk,
   /// Voting key id (20 bytes).
   pub key_id_voting: PubKeyHash,
@@ -194,7 +196,7 @@ impl BaseCodec for ProRegTx {
     self.collateral_index.encode(buf);
     write_net_info(buf, &self.net_info, self.version);
     self.key_id_owner.encode(buf);
-    bls::write_lazy(&self.pub_key_operator, buf);
+    bls::write_lazy(&self.pub_key_operator, protx_bls_scheme(self.version), buf);
     self.key_id_voting.encode(buf);
     self.operator_reward.encode(buf);
     if self.version >= PROTX_VERSION_EXT_ADDR {
@@ -336,7 +338,7 @@ impl From<ProRegTx> for ProRegTxSerde {
       collateral_index: tx.collateral_index,
       net_info: tx.net_info,
       key_id_owner: tx.key_id_owner,
-      pub_key_operator: tx.pub_key_operator.to_bytes(),
+      pub_key_operator: bls::lazy_bytes(&tx.pub_key_operator, protx_bls_scheme(tx.version)),
       key_id_voting: tx.key_id_voting,
       operator_reward: tx.operator_reward,
       script_payout: tx.script_payout,

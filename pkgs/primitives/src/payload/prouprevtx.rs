@@ -6,7 +6,7 @@
 
 //! ProUpRevTx revocation payload (type 4).
 
-use super::bls::{self, protx_source};
+use super::bls::{self, protx_bls_scheme, protx_source};
 use super::{check_version, is_known_protx_version, InputsHash, ProTxInvalid};
 use crate::support::RevocationReason;
 use crate::{hash_impl, TxHash};
@@ -79,7 +79,7 @@ impl BaseCodec for ProUpRevTx {
     self.pro_tx_hash.encode(buf);
     self.reason.encode(buf);
     self.inputs_hash.encode(buf);
-    bls::write_eager(&self.sig, buf);
+    self.sig.to_bytes(protx_bls_scheme(self.version)).encode(buf);
   }
 }
 
@@ -115,7 +115,7 @@ impl From<ProUpRevTx> for ProUpRevTxSerde {
       pro_tx_hash: tx.pro_tx_hash,
       reason: tx.reason,
       inputs_hash: tx.inputs_hash,
-      sig: bls::eager_bytes(&tx.sig),
+      sig: tx.sig.to_bytes(protx_bls_scheme(tx.version)),
     }
   }
 }

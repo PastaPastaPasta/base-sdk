@@ -6,7 +6,7 @@
 
 //! ProUpServTx service-update payload (type 2).
 
-use super::bls::{self, protx_source};
+use super::bls::{self, protx_bls_scheme, protx_source};
 use super::{
   check_platform_fields, check_sptx_netinfo, check_version, is_known_protx_version, read_net_info,
   read_platform_fields, write_net_info, write_platform_fields, InputsHash, MnType, ProTxInvalid,
@@ -129,7 +129,7 @@ impl BaseCodec for ProUpServTx {
       self.platform_p2p_port,
       self.platform_http_port,
     );
-    bls::write_eager(&self.sig, buf);
+    self.sig.to_bytes(protx_bls_scheme(self.version)).encode(buf);
   }
 }
 
@@ -205,7 +205,7 @@ impl From<ProUpServTx> for ProUpServTxSerde {
       platform_node_id: tx.platform_node_id,
       platform_p2p_port: tx.platform_p2p_port,
       platform_http_port: tx.platform_http_port,
-      sig: bls::eager_bytes(&tx.sig),
+      sig: tx.sig.to_bytes(protx_bls_scheme(tx.version)),
     }
   }
 }

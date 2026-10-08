@@ -7,11 +7,11 @@
 //! Special transaction payload decoders.
 //!
 //! Each payload type is decoded from the `extra_payload` field of a
-//! `Transaction` whose `tx_type` is not `Spend`. A BLS field keeps the scheme
-//! it was decoded or built with and encodes under it, whatever `version` says.
-//! A field under Core's process-wide flag keeps its wire bytes
-//! ([`BlsGlobal`](dash_pkc::bls::BlsGlobal)), so no payload needs the flag to
-//! decode.
+//! `Transaction` whose `tx_type` is not `Spend`. A BLS field takes its scheme
+//! from the payload's version or is always basic, and encodes under the
+//! scheme its payload gives when encoded. A field under Core's process-wide
+//! flag keeps its wire bytes ([`BlsGlobal`](dash_pkc::bls::BlsGlobal)), so
+//! no payload needs the flag to decode.
 
 mod assetlock;
 mod assetunlock;

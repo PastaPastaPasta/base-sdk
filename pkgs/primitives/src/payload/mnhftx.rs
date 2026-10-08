@@ -10,7 +10,7 @@ use super::bls;
 use super::QuorumHash;
 use crate::hash_impl;
 
-use dash_pkc::bls::{BlsEagerSig, BlsSchemeSource};
+use dash_pkc::bls::{BlsEagerSig, BlsSchemeKind, BlsSchemeSource};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{impl_type, Checkable};
@@ -52,7 +52,7 @@ impl BaseCodec for MnHardFork {
     self.version.encode(buf);
     self.version_bit.encode(buf);
     self.quorum_hash.encode(buf);
-    bls::write_eager(&self.sig, buf);
+    self.sig.to_bytes(BlsSchemeKind::Basic).encode(buf);
   }
 }
 
