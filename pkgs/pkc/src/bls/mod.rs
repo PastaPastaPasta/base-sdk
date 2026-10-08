@@ -11,6 +11,7 @@ mod error;
 mod ies_bytes;
 mod public_bytes;
 mod public_hash;
+mod scheme_ctx;
 mod schemes;
 mod secret_bytes;
 mod share_id;
@@ -22,6 +23,7 @@ pub use error::BlsError;
 pub use ies_bytes::{BlsIesBlobBytes, BlsIesMultiBytes, IV_SEED_LEN, MAX_IES_RECIPIENTS};
 pub use public_bytes::{BlsPkBytes, BLS_PK_LEN};
 pub use public_hash::{BlsPkHash, BLS_PK_HASH_LEN};
+pub use scheme_ctx::{BlsCtx, BlsSchemeKind, BlsSchemeSource};
 pub use schemes::{BlsScChia, BlsScIetf, BlsSchemeId};
 pub use secret_bytes::{BlsSkBytes, BLS_SK_LEN};
 pub use share_id::{BlsShareId, BLS_ID_LEN};
@@ -42,6 +44,10 @@ cfg_if::cfg_if! {
     mod sig_basic;
     mod sig_pop;
     mod sig_threshold;
+    mod wrap_codec;
+    mod wrap_eager;
+    mod wrap_lazy;
+    mod wrap_value;
     #[expect(unsafe_code, reason = "blst C FFI")]
     pub(crate) mod blst_ffi;
     pub(crate) mod chia_h2c;
@@ -59,5 +65,9 @@ cfg_if::cfg_if! {
     pub use secret_ops::BlsSecretKey;
     pub use share_ops::{BlsPkShare, BlsSigShare, BlsSkShare};
     pub use sig_basic::BlsSignature;
+    pub use wrap_codec::{BlsPoint, BlsWire, BlsWirePoint};
+    pub use wrap_eager::{BlsDecodeError, BlsEager, BlsEagerPk, BlsEagerSig, BlsEagerSk};
+    pub use wrap_lazy::{BlsLazy, BlsLazyPk, BlsLazySig};
+    pub use wrap_value::BlsValue;
   }
 }
