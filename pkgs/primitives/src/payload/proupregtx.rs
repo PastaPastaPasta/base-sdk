@@ -122,8 +122,8 @@ impl BaseCodec for ProUpRegTx {
 }
 
 /// Part of Core's `IsTriviallyValid`, without chain context. The v3 payout
-/// list rules (`IsPayoutListTriviallyValid`) are dash-evo's; this checks only
-/// the payout scripts.
+/// list rules (`IsPayoutListTriviallyValid`) are dash-evo's; of the payout
+/// rules, this checks the scripts.
 impl Checkable for ProUpRegTx {
   type Error = ProTxInvalid;
 

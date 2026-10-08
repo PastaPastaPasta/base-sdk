@@ -222,7 +222,7 @@ impl BaseCodec for ProRegTx {
 /// Part of Core's `IsTriviallyValid`, without chain context. The v3 payout
 /// and share list rules (`IsPayoutListTriviallyValid`,
 /// `IsShareListTriviallyValid`) and the shared-registration rules are
-/// dash-evo's; this checks only the payout scripts and key reuse.
+/// dash-evo's; of the payout rules, this checks the scripts and key reuse.
 impl Checkable for ProRegTx {
   type Error = ProTxInvalid;
 
