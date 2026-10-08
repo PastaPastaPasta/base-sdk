@@ -6,12 +6,13 @@
 
 //! LLMQ final commitment payload (type 6).
 
+use super::bls::{self, qc_scheme};
 use super::QuorumHash;
 use crate::hash_impl;
 use crate::support::{DynBitset, LlmqType};
 
 use dash_num::make_hash;
-use dash_pkc::bls::{BlsPkBytes, BlsScIetf, BlsSigBytes};
+use dash_pkc::bls::{BlsEagerPk, BlsEagerSig, BlsSchemeSource};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{impl_type, Checkable, Numeric};
@@ -31,9 +32,13 @@ hash_impl!(QuorumVvecHash);
 /// - v2: legacy + indexed (quorum_index)
 /// - v3: basic
 /// - v4: basic + indexed (quorum_index)
+///
+/// The BLS fields take the version's scheme: legacy for v1 and v2, basic for
+/// any other version. Core hashes the re-serialization, which writes zeros
+/// for an invalid field.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "serde", serde(into = "CommitmentSerde", try_from = "CommitmentSerde"))]
 pub struct Commitment {
   /// 1=legacy, 2=+indexed, 3=basic, 4=basic+idx.
   pub version: u16,
@@ -47,17 +52,39 @@ pub struct Commitment {
   pub signers: DynBitset,
   /// Valid members bitset.
   pub valid_members: DynBitset,
-  /// Quorum BLS public key (48 bytes).
-  pub quorum_public_key: BlsPkBytes<BlsScIetf>,
+  /// Quorum BLS public key.
+  pub quorum_public_key: BlsEagerPk,
   /// Quorum verification vector hash (32 bytes).
   pub quorum_vvec_hash: QuorumVvecHash,
   /// Threshold signature over commitment.
-  pub quorum_sig: BlsSigBytes<BlsScIetf>,
+  pub quorum_sig: BlsEagerSig,
   /// Aggregated per-member signature.
-  pub members_sig: BlsSigBytes<BlsScIetf>,
+  pub members_sig: BlsEagerSig,
 }
 
 impl_type!(Commitment);
+
+/// The serde form of [`Commitment`], with the BLS fields as raw bytes.
+#[cfg(feature = "serde")]
+#[derive(
+  Clone, Debug, Eq, Hash, PartialEq, dash_types::type_id::Unencodable, ::serde::Serialize, ::serde::Deserialize,
+)]
+#[serde(rename_all = "camelCase")]
+struct CommitmentSerde {
+  version: u16,
+  llmq_type: LlmqType,
+  quorum_hash: QuorumHash,
+  quorum_index: Option<i16>,
+  signers: DynBitset,
+  valid_members: DynBitset,
+  #[serde(with = "dash_types::serialize::hex")]
+  quorum_public_key: [u8; dash_pkc::bls::BLS_PK_LEN],
+  quorum_vvec_hash: QuorumVvecHash,
+  #[serde(with = "dash_types::serialize::hex")]
+  quorum_sig: [u8; dash_pkc::bls::BLS_SIG_LEN],
+  #[serde(with = "dash_types::serialize::hex")]
+  members_sig: [u8; dash_pkc::bls::BLS_SIG_LEN],
+}
 
 impl BaseCodec for Commitment {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
@@ -69,6 +96,7 @@ impl BaseCodec for Commitment {
     } else {
       None
     };
+    let source = BlsSchemeSource::Version(qc_scheme(version));
 
     Ok(Self {
       version,
@@ -77,10 +105,10 @@ impl BaseCodec for Commitment {
       quorum_index,
       signers: DynBitset::decode(data)?,
       valid_members: DynBitset::decode(data)?,
-      quorum_public_key: BlsPkBytes::<BlsScIetf>::decode(data)?,
+      quorum_public_key: bls::read_eager(data, source)?,
       quorum_vvec_hash: QuorumVvecHash::decode(data)?,
-      quorum_sig: BlsSigBytes::<BlsScIetf>::decode(data)?,
-      members_sig: BlsSigBytes::<BlsScIetf>::decode(data)?,
+      quorum_sig: bls::read_eager(data, source)?,
+      members_sig: bls::read_eager(data, source)?,
     })
   }
 
@@ -93,10 +121,10 @@ impl BaseCodec for Commitment {
     }
     self.signers.encode(buf);
     self.valid_members.encode(buf);
-    self.quorum_public_key.encode(buf);
+    bls::write_eager(&self.quorum_public_key, buf);
     self.quorum_vvec_hash.encode(buf);
-    self.quorum_sig.encode(buf);
-    self.members_sig.encode(buf);
+    bls::write_eager(&self.quorum_sig, buf);
+    bls::write_eager(&self.members_sig, buf);
   }
 }
 
@@ -108,11 +136,64 @@ impl Commitment {
   pub fn is_indexed(&self) -> bool {
     self.version == 2 || self.version == 4
   }
+
+  /// Returns true for a null commitment, Core's `IsNull`.
+  ///
+  /// It has no signer or valid-member bits, a null verification vector hash
+  /// and no valid BLS field. A field that decoded invalid, because its bytes
+  /// are canonical only in the other scheme, counts as absent.
+  pub fn is_null(&self) -> bool {
+    self.signers.count_ones() == 0
+      && self.valid_members.count_ones() == 0
+      && !self.quorum_public_key.is_valid()
+      && self.quorum_vvec_hash.is_null()
+      && !self.members_sig.is_valid()
+      && !self.quorum_sig.is_valid()
+  }
 }
 
 impl fmt::Display for Commitment {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(f, "Commitment {{ v{}, llmq: {} }}", self.version, self.llmq_type,)
+  }
+}
+
+#[cfg(feature = "serde")]
+impl From<Commitment> for CommitmentSerde {
+  fn from(qc: Commitment) -> Self {
+    Self {
+      version: qc.version,
+      llmq_type: qc.llmq_type,
+      quorum_hash: qc.quorum_hash,
+      quorum_index: qc.quorum_index,
+      signers: qc.signers,
+      valid_members: qc.valid_members,
+      quorum_public_key: bls::serde::eager_bytes(&qc.quorum_public_key),
+      quorum_vvec_hash: qc.quorum_vvec_hash,
+      quorum_sig: bls::serde::eager_bytes(&qc.quorum_sig),
+      members_sig: bls::serde::eager_bytes(&qc.members_sig),
+    }
+  }
+}
+
+#[cfg(feature = "serde")]
+impl TryFrom<CommitmentSerde> for Commitment {
+  type Error = DecodeError;
+
+  fn try_from(raw: CommitmentSerde) -> Result<Self, Self::Error> {
+    let source = BlsSchemeSource::Version(qc_scheme(raw.version));
+    Ok(Self {
+      version: raw.version,
+      llmq_type: raw.llmq_type,
+      quorum_hash: raw.quorum_hash,
+      quorum_index: raw.quorum_index,
+      signers: raw.signers,
+      valid_members: raw.valid_members,
+      quorum_public_key: bls::eager_from(&raw.quorum_public_key, source)?,
+      quorum_vvec_hash: raw.quorum_vvec_hash,
+      quorum_sig: bls::eager_from(&raw.quorum_sig, source)?,
+      members_sig: bls::eager_from(&raw.members_sig, source)?,
+    })
   }
 }
 

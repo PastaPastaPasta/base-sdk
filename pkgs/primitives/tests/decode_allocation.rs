@@ -11,6 +11,7 @@
 #![expect(unsafe_code, reason = "a counting test allocator")]
 #![expect(clippy::unwrap_used, reason = "test code")]
 
+use dash_pkc::bls::BlsCtx;
 use dash_primitives::{NetInfoV2, Transaction};
 use dash_types::codec::BaseCodec;
 use rstest::rstest;
@@ -109,7 +110,7 @@ fn pro_up_serv_tx() -> (Vec<u8>, usize) {
 fn special_payload_reserves_at_most_its_size() {
   let (raw, len) = pro_up_serv_tx();
   let tx = Transaction::decode(&mut &raw[..]).unwrap();
-  let (decoded, largest) = largest_allocation(|| tx.decode_payload());
+  let (decoded, largest) = largest_allocation(|| tx.decode_payload(BlsCtx::BASIC));
   assert!(matches!(decoded, Some(Err(_))), "{decoded:?}");
   assert!(largest <= len, "largest allocation {largest} for a {len}-byte payload");
 }
