@@ -246,17 +246,11 @@ impl BaseCodec for i64 {
   }
 }
 
+/// A non-zero byte other than `1` re-encodes as `1`, so such input does not
+/// round-trip.
 impl BaseCodec for bool {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let byte = take::<1>(data)?[0];
-    match byte {
-      0 => Ok(false),
-      1 => Ok(true),
-      _ => Err(DecodeError::InvalidValue {
-        expected: vec![0, 1],
-        actual: u64::from(byte),
-      }),
-    }
+    Ok(take::<1>(data)?[0] != 0)
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
@@ -347,7 +341,7 @@ impl<T: Codec> __CodecMarker for T {}
 
 #[cfg(test)]
 mod tests {
-  use super::DecodeError;
+  use super::{BaseCodec, DecodeError};
   use crate::prelude::*;
   use crate::{VecDecoder, VecEncoder};
 
@@ -385,6 +379,32 @@ mod tests {
     let lifted: DecodeError<SampleError> = err.lift();
     assert_eq!(lifted.to_string(), before);
     assert!(!matches!(lifted, DecodeError::DecError(_)));
+  }
+
+  #[rstest]
+  #[case::zero(0x00, false)]
+  #[case::one(0x01, true)]
+  #[case::two(0x02, true)]
+  #[case::high(0x80, true)]
+  #[case::max(0xFF, true)]
+  fn bool_decodes_any_non_zero_byte_as_true(#[case] byte: u8, #[case] value: bool) {
+    let mut cursor: &[u8] = &[byte];
+    assert_eq!(bool::decode(&mut cursor), Ok(value));
+    assert!(cursor.is_empty());
+  }
+
+  #[rstest]
+  #[case::false_(false, 0x00)]
+  #[case::true_(true, 0x01)]
+  fn bool_encodes_as_zero_or_one(#[case] value: bool, #[case] byte: u8) {
+    let mut buf = Vec::new();
+    value.encode(&mut buf);
+    assert_eq!(buf, [byte]);
+  }
+
+  #[rstest]
+  fn bool_rejects_empty_input() {
+    assert!(matches!(bool::decode(&mut &[][..]), Err(DecodeError::Eof { .. })));
   }
 
   /// Consumes the whole cursor, so `end()` sees no trailing bytes.
