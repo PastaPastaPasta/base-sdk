@@ -72,20 +72,36 @@ impl<K: BlsWirePoint<N>, const N: usize> LazyState<K, N> {
     self.buf
   }
 
-  /// `Get()`.
-  fn get(&mut self) -> BlsValue<K, N> {
-    if let Some(obj) = &self.obj {
-      return obj.clone();
+  /// `Get()` up to decoding. Returns the result when it needs no decoding,
+  /// otherwise the bytes and scheme to decode.
+  fn cached(&self) -> Result<BlsValue<K, N>, ([u8; N], BlsSchemeKind)> {
+    match &self.obj {
+      Some(obj) => Ok(obj.clone()),
+      None if !self.buf_valid => Ok(BlsValue::invalid()),
+      None => Err((self.buf, self.scheme)),
     }
-    if !self.buf_valid {
-      return BlsValue::invalid();
-    }
-    match BlsValue::from_canonical(&self.buf, self.scheme) {
-      Some(obj) => self.obj.insert(obj).clone(),
-      None => {
-        self.buf_valid = false;
-        BlsValue::invalid()
-      }
+  }
+
+  /// Finishes `Get()` with `decoded`, the decode of `buf` under `scheme`.
+  ///
+  /// Returns `None` and changes nothing when the state no longer decodes
+  /// `buf` under `scheme`; the caller then starts over.
+  fn publish(
+    &mut self,
+    buf: &[u8; N],
+    scheme: BlsSchemeKind,
+    decoded: Option<BlsValue<K, N>>,
+  ) -> Option<BlsValue<K, N>> {
+    match self.cached() {
+      Ok(value) => Some(value),
+      Err((current, current_scheme)) if current == *buf && current_scheme == scheme => match decoded {
+        Some(obj) => Some(self.obj.insert(obj).clone()),
+        None => {
+          self.buf_valid = false;
+          Some(BlsValue::invalid())
+        }
+      },
+      Err(_) => None,
     }
   }
 
@@ -148,10 +164,23 @@ impl<K: BlsWirePoint<N>, const N: usize> BlsLazy<K, N> {
   ///
   /// The object is valid only if the raw bytes are canonical under the
   /// captured scheme. Otherwise the object is invalid from then on and
-  /// serializes as zeros. The first call decodes under the object's spin
-  /// lock, so concurrent callers wait out one decompression.
+  /// serializes as zeros.
+  ///
+  /// Decoding runs outside the object's lock, so no caller waits out
+  /// another's decompression. Concurrent first calls may each decode; the
+  /// first result published is kept. Changes made meanwhile through other
+  /// shared references restart the call, keeping Core's order of effects.
   pub fn get(&self) -> BlsValue<K, N> {
-    self.state.lock().get()
+    loop {
+      let (buf, scheme) = match self.state.lock().cached() {
+        Ok(value) => return value,
+        Err(input) => input,
+      };
+      let decoded = BlsValue::from_canonical(&buf, scheme);
+      if let Some(value) = self.state.lock().publish(&buf, scheme, decoded) {
+        return value;
+      }
+    }
   }
 
   /// Serializes under the captured scheme, Core's `Serialize(s)`.
@@ -244,5 +273,69 @@ impl<K: BlsWirePoint<N>, const N: usize> PartialEq for BlsLazy<K, N> {
       }
     }
     self.get() == other.get()
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  use hex_conservative::hex;
+
+  /// A subgroup point canonical under both schemes, the corpus's first
+  /// `sub_100` public key.
+  const SUB_100: [u8; BLS_PK_LEN] =
+    hex!("882354ca87df4bd93d56cec15993eee030cf147a98494e452b958dff9cb8c52e050bc202f5bc781cd06216c3c3a59bf8");
+
+  fn pending(lazy: &BlsLazyPk) -> ([u8; BLS_PK_LEN], BlsSchemeKind) {
+    let cached = lazy.state.lock().cached();
+    assert!(cached.is_err(), "a fresh object must need decoding");
+    cached.err().unwrap_or(([0u8; BLS_PK_LEN], BlsSchemeKind::Basic))
+  }
+
+  /// Serializing under the other scheme while a `get` decodes discards that
+  /// decode; the restarted `get` sees the zeroed bytes, as after Core's
+  /// `Serialize` then `Get`.
+  #[test]
+  fn get_restarts_after_a_concurrent_serialization() {
+    let lazy = BlsLazyPk::from_bytes(&SUB_100, BlsSchemeSource::Version(BlsSchemeKind::Legacy));
+    let (buf, scheme) = pending(&lazy);
+    let decoded = BlsValue::from_canonical(&buf, scheme);
+    assert!(decoded.is_some());
+
+    assert_eq!(lazy.to_bytes_as(BlsSchemeKind::Basic), [0u8; BLS_PK_LEN]);
+    assert!(lazy.state.lock().publish(&buf, scheme, decoded).is_none());
+    assert!(!lazy.get().is_valid());
+    assert_eq!(lazy.to_bytes(), [0u8; BLS_PK_LEN]);
+  }
+
+  /// Two first calls that both decode keep the first object published.
+  #[test]
+  fn concurrent_first_gets_keep_one_object() {
+    let lazy = BlsLazyPk::from_bytes(&SUB_100, BlsSchemeSource::Version(BlsSchemeKind::Basic));
+    let (buf, scheme) = pending(&lazy);
+    let (first, second) = (
+      BlsValue::from_canonical(&buf, scheme),
+      BlsValue::from_canonical(&buf, scheme),
+    );
+
+    let published = lazy.state.lock().publish(&buf, scheme, first);
+    assert!(published.as_ref().is_some_and(BlsValue::is_valid));
+    assert_eq!(lazy.state.lock().publish(&buf, scheme, second), published);
+    assert_eq!(lazy.state.lock().cached().ok(), published);
+  }
+
+  /// A failed decode published first makes later calls return the invalid
+  /// object without decoding.
+  #[test]
+  fn failed_decode_published_first_wins() {
+    let lazy = BlsLazyPk::from_bytes(&SUB_100, BlsSchemeSource::Version(BlsSchemeKind::Basic));
+    let (buf, scheme) = pending(&lazy);
+    let decoded = BlsValue::from_canonical(&buf, scheme);
+
+    let failed = lazy.state.lock().publish(&buf, scheme, None);
+    assert_eq!(failed, Some(BlsValue::invalid()));
+    assert_eq!(lazy.state.lock().publish(&buf, scheme, decoded), failed);
+    assert_eq!(lazy.to_bytes(), [0u8; BLS_PK_LEN]);
   }
 }

@@ -20,6 +20,7 @@ use rstest::rstest;
 use serde::Deserialize;
 
 use std::collections::BTreeMap;
+use std::sync::Barrier;
 
 const LEGACY: BlsSchemeKind = BlsSchemeKind::Legacy;
 const BASIC: BlsSchemeKind = BlsSchemeKind::Basic;
@@ -553,6 +554,83 @@ fn concurrent_lazy_comparisons_finish() {
     };
     assert_eq!(forward, backward);
   });
+}
+
+/// The signature the lazy entries use for `class`.
+fn sig_input(class: &str) -> [u8; BLS_SIG_LEN] {
+  arr_from_hex(&first_rows("sig")[class].input)
+}
+
+/// Joins a scoped thread, failing the test if it panicked.
+fn joined<T>(handle: std::thread::ScopedJoinHandle<'_, T>) -> T {
+  handle.join().unwrap_or_else(|_| panic!("a test thread panicked"))
+}
+
+/// Threads contending for one lazy signature's first decode all get the same
+/// object and see consistent bytes and hashes throughout.
+#[test]
+fn contended_lazy_gets_agree() {
+  const THREADS: usize = 8;
+  let input = sig_input("sub_basic_s0");
+  let want = BlsValue::from_canonical(&input, BASIC).unwrap_or_else(|| panic!("sub_basic_s0 must decode"));
+  let hash = Sha256d::hash(&input).to_byte_array();
+  for _ in 0..50 {
+    let lazy = BlsLazySig::from_bytes(&input, BlsSchemeSource::Version(BASIC));
+    let barrier = Barrier::new(THREADS);
+    let values: Vec<BlsValue<G2, BLS_SIG_LEN>> = std::thread::scope(|s| {
+      let handles: Vec<_> = (0..THREADS)
+        .map(|i| {
+          let (lazy, barrier) = (&lazy, &barrier);
+          s.spawn(move || {
+            barrier.wait();
+            // Half the threads read before decoding, racing the others.
+            if i % 2 == 0 {
+              assert_eq!(lazy.to_bytes(), input);
+              assert_eq!(lazy.serialize_hash().as_bytes(), &hash);
+            }
+            let value = lazy.get();
+            assert_eq!(lazy.to_bytes(), input);
+            assert!(*lazy == lazy.clone());
+            value
+          })
+        })
+        .collect();
+      handles.into_iter().map(joined).collect()
+    });
+    assert!(values.iter().all(|value| *value == want));
+    assert_eq!(lazy.serialize_hash().as_bytes(), &hash);
+  }
+}
+
+/// A first `get` racing a serialization under the other scheme ends as one
+/// of Core's two orders. The decode is kept, or the raw bytes are lost first.
+#[test]
+fn lazy_get_racing_other_scheme_serialization_ends_in_a_core_order() {
+  let input = sig_input("sub_basic_s0");
+  let want = BlsValue::from_canonical(&input, BASIC).unwrap_or_else(|| panic!("sub_basic_s0 must decode"));
+  for _ in 0..500 {
+    let lazy = BlsLazySig::from_bytes(&input, BlsSchemeSource::Version(BASIC));
+    let barrier = Barrier::new(2);
+    let (value, ser) = std::thread::scope(|s| {
+      let get = s.spawn(|| {
+        barrier.wait();
+        lazy.get()
+      });
+      let ser = s.spawn(|| {
+        barrier.wait();
+        lazy.to_bytes_as(LEGACY)
+      });
+      (joined(get), joined(ser))
+    });
+    if value.is_valid() {
+      assert_eq!(value, want);
+      assert_eq!(ser, want.to_bytes(LEGACY));
+    } else {
+      assert_eq!(ser, [0u8; BLS_SIG_LEN]);
+    }
+    assert_eq!(lazy.scheme(), LEGACY);
+    assert_eq!(lazy.to_bytes(), ser);
+  }
 }
 
 /// A large differential sample from `contrib/vectors/bls_wrapper/gen.py fuzz`,
