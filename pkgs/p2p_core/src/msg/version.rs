@@ -202,7 +202,7 @@ pub struct Version {
   /// Sender's own address, present with `nonce`.
   pub addr_send: Option<VersionAddr>,
   /// Random nonce for connection deduplication.
-  #[cfg_attr(feature = "serde", serde(default, with = "opt_str_u64"))]
+  #[cfg_attr(feature = "serde", serde(default, with = "dash_types::serialize::opt_str_u64"))]
   pub nonce: Option<u64>,
   /// User agent string.
   pub user_agent: Option<UserAgent>,
@@ -303,25 +303,6 @@ impl MsgDecode for Version {
         error: format!("{e}"),
       }),
     }
-  }
-}
-
-/// [`dash_types::serialize::str_u64`] for an optional field.
-#[cfg(feature = "serde")]
-mod opt_str_u64 {
-  use dash_types::serialize::str_u64;
-
-  #[derive(::serde::Deserialize, ::serde::Serialize)]
-  struct Wrap(#[serde(with = "str_u64")] u64);
-
-  /// Serializes `Some` as `str_u64` does and `None` as unit.
-  pub fn serialize<S: serde::Serializer>(val: &Option<u64>, s: S) -> Result<S::Ok, S::Error> {
-    serde::Serialize::serialize(&val.map(Wrap), s)
-  }
-
-  /// Deserializes what [`serialize`] writes.
-  pub fn deserialize<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<u64>, D::Error> {
-    Ok(<Option<Wrap> as serde::Deserialize>::deserialize(d)?.map(|Wrap(v)| v))
   }
 }
 

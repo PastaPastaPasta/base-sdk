@@ -161,6 +161,38 @@ pub mod str_u64 {
   }
 }
 
+/// [`str_u64`] for an optional field, `None` being null.
+pub mod opt_str_u64 {
+  /// Serializes `Some` as [`super::str_u64`] does and `None` as none.
+  pub fn serialize<S: ::serde::Serializer>(val: &Option<u64>, s: S) -> Result<S::Ok, S::Error> {
+    struct Value(u64);
+
+    impl ::serde::Serialize for Value {
+      fn serialize<S: ::serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        super::str_u64::serialize(&self.0, s)
+      }
+    }
+
+    match val {
+      Some(v) => s.serialize_some(&Value(*v)),
+      None => s.serialize_none(),
+    }
+  }
+
+  /// Deserializes what [`serialize`] writes.
+  pub fn deserialize<'de, D: ::serde::Deserializer<'de>>(d: D) -> Result<Option<u64>, D::Error> {
+    struct Value(u64);
+
+    impl<'de> ::serde::Deserialize<'de> for Value {
+      fn deserialize<D: ::serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        super::str_u64::deserialize(d).map(Value)
+      }
+    }
+
+    Ok(<Option<Value> as ::serde::Deserialize>::deserialize(d)?.map(|Value(v)| v))
+  }
+}
+
 /// UTF-8 serde for `Vec<u8>` fields that hold text.
 pub mod utf8 {
   use crate::prelude::*;
