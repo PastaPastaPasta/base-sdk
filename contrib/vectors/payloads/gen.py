@@ -261,6 +261,9 @@ def cases() -> dict[str, tuple[bytes, str]]:
     # IPv4 with length 5 throws before reading the address. Core marks the
     # entry invalid and reads the next entry where the address would start.
     "ipv4_len5": [b"\x01\x01\x05", svc4([5, 6, 7, 8], 2)],
+    # A non-canonical or oversized length throws once the size is read.
+    "size_noncanonical": [b"\x01\x01\xfd\x04\x00", svc4([5, 6, 7, 8], 2)],
+    "size_513": [b"\x01\x01\xfd\x01\x02", svc4([5, 6, 7, 8], 2)],
   }
   for name, entries in ext_cases.items():
     net = netinfo(1, [(0, entries)])
