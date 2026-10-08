@@ -7,6 +7,7 @@
 //! Dash transaction with version/type packing and optional extra payload for
 //! special transactions.
 
+use crate::block::MAX_LEGACY_BLOCK_SIZE;
 use crate::payload::{PayloadDecode, PayloadError, PayloadInvalid, SpecialPayload, TxType};
 use crate::prelude::*;
 use crate::{codec_type, hash_impl};
@@ -258,6 +259,12 @@ impl Checkable for Transaction {
       return Some(TxInvalid::EmptyOutputs);
     }
 
+    let mut buf = Vec::new();
+    self.encode(&mut buf);
+    if buf.len() > MAX_LEGACY_BLOCK_SIZE {
+      return Some(TxInvalid::Oversize { size: buf.len() });
+    }
+
     if !self.has_extra_payload() && !self.extra_payload.is_empty() {
       return Some(TxInvalid::PayloadNotAllowed);
     }
@@ -466,13 +473,21 @@ mod tests {
           "{}: {decoded:?}",
           v.payload_len
         );
+        continue;
+      }
+      let decoded = decoded.unwrap();
+      assert_eq!(decoded.extra_payload.len(), v.payload_len);
+      // Core's size rules, in Core's order. `check` also runs the payload
+      // rules Core leaves to `CheckSpecialTx`, which the padding breaks.
+      // Past the first oversize vector, re-encoding in `check` is only slow.
+      if v.payload_len > 1_000_000 {
+        continue;
+      }
+      let reason = decoded.check().map(|e| e.to_string()).unwrap_or_default();
+      if v.core == "accept" {
+        assert!(!reason.contains("oversize"), "{}: {reason}", v.payload_len);
       } else {
-        assert_eq!(
-          decoded.map(|t| t.extra_payload.len()),
-          Ok(v.payload_len),
-          "{}",
-          v.payload_len
-        );
+        assert!(reason.starts_with(&v.core), "{}: {reason}", v.payload_len);
       }
     }
   }
