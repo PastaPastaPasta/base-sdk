@@ -22,19 +22,30 @@ const QC_VERSION_LEGACY_BLS: u16 = 1;
 /// Final commitment version: legacy BLS, indexed.
 const QC_VERSION_LEGACY_BLS_INDEXED: u16 = 2;
 
-/// The scheme source of a ProTx BLS field: legacy for version 1 only.
+/// The scheme of a ProTx's BLS fields (types 1 to 4): legacy for version 1
+/// only. Core reads no field of a ProTx of unknown version.
 ///
 /// Core passes `nVersion == ProTxVersion::LegacyBLS` to the field's version
-/// wrapper.
-pub(crate) const fn protx_source(version: u16) -> BlsSchemeSource {
-  BlsSchemeSource::Version(BlsSchemeKind::from_legacy(version == PROTX_VERSION_LEGACY_BLS))
+/// wrapper, when reading and when writing.
+pub const fn protx_bls_scheme(version: u16) -> BlsSchemeKind {
+  BlsSchemeKind::from_legacy(version == PROTX_VERSION_LEGACY_BLS)
 }
 
-/// The scheme source of a final commitment's BLS fields: legacy for versions
-/// 1 and 2, basic for any other version, unknown versions included.
+/// The scheme of a final commitment's BLS fields: legacy for versions 1 and
+/// 2, basic for any other version, unknown versions included.
+pub const fn commitment_bls_scheme(version: u16) -> BlsSchemeKind {
+  BlsSchemeKind::from_legacy(version == QC_VERSION_LEGACY_BLS || version == QC_VERSION_LEGACY_BLS_INDEXED)
+}
+
+/// The scheme source of a ProTx BLS field, [`protx_bls_scheme`].
+pub(crate) const fn protx_source(version: u16) -> BlsSchemeSource {
+  BlsSchemeSource::Version(protx_bls_scheme(version))
+}
+
+/// The scheme source of a final commitment's BLS fields,
+/// [`commitment_bls_scheme`].
 pub(crate) const fn qc_source(version: u16) -> BlsSchemeSource {
-  let legacy = version == QC_VERSION_LEGACY_BLS || version == QC_VERSION_LEGACY_BLS_INDEXED;
-  BlsSchemeSource::Version(BlsSchemeKind::from_legacy(legacy))
+  BlsSchemeSource::Version(commitment_bls_scheme(version))
 }
 
 /// Decodes an eager field from its wire bytes, Core's
@@ -284,6 +295,7 @@ mod tests {
   #[case::ext_addr(3, BlsSchemeKind::Basic)]
   #[case::unknown(0xffff, BlsSchemeKind::Basic)]
   fn protx_version_picks_scheme(#[case] version: u16, #[case] scheme: BlsSchemeKind) {
+    assert_eq!(protx_bls_scheme(version), scheme);
     assert_eq!(protx_source(version), BlsSchemeSource::Version(scheme));
   }
 
@@ -297,6 +309,7 @@ mod tests {
   #[case::unknown(5, BlsSchemeKind::Basic)]
   #[case::max(0xffff, BlsSchemeKind::Basic)]
   fn qc_version_picks_scheme(#[case] version: u16, #[case] scheme: BlsSchemeKind) {
+    assert_eq!(commitment_bls_scheme(version), scheme);
     assert_eq!(qc_source(version), BlsSchemeSource::Version(scheme));
   }
 }
