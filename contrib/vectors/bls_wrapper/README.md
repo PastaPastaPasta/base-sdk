@@ -1,8 +1,8 @@
 # BLS wrapper vectors
 
 `pkgs/pkc/corpus/bls_wrapper.json5` records how Dash Core's BLS wrappers treat byte strings: `CBLSWrapper::Unserialize`
-under each scheme flag, `CBLSLazyWrapper` operation sequences, and lazy `operator==`. The inputs are generated here; every
-outcome comes from Dash Core.
+under each scheme flag, `SetBytes` under the basic flag, `CBLSLazyWrapper` operation sequences, and lazy `operator==`.
+The inputs are generated here; every outcome comes from Dash Core.
 
 | File | Role |
 |---|---|

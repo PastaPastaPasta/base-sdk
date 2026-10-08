@@ -471,6 +471,20 @@ def check_eager(raw: bytes, r: Eager) -> None:
       sys.exit(f"{flag} decode is valid without a round trip: {raw.hex()}")
     if res["outcome"] == "invalid" and res["ser"] != "00" * len(raw):
       sys.exit(f"invalid {flag} object is not zeros: {raw.hex()}")
+  # Unserialize is SetBytes and then the round trip.
+  if r["basic"]["outcome"] == "valid" and r["set"] != r["basic"]:
+    sys.exit(f"SetBytes disagrees with a valid basic decode: {raw.hex()}")
+
+
+def set_tag(r: Eager) -> str:
+  """I (invalid), V (the object the basic decode yields) or
+  V:<legacy serialization>/<basic serialization>."""
+  res = r["set"]
+  if res["outcome"] == "invalid":
+    return "I"
+  if res == r["basic"]:
+    return "V"
+  return f"V:{res['legacy']}/{res['basic']}"
 
 
 def eager_tag(res: dict[str, str], other: str) -> str:
@@ -521,7 +535,10 @@ def gen_inputs(rng: random.Random, samples: int) -> dict[str, list]:
     rows = []
     for name, gen in make().items():
       for _ in range(1 if name in FIXED else samples):
-        rows.append((name, gen(rng)))
+        row = (name, gen(rng))
+        # Some classes hold few values, such as G1's order-3 torsion.
+        if row not in rows:
+          rows.append(row)
     if kind in DERIVED:
       source, name, convert = DERIVED[kind]
       first = next(raw for n, raw in rows if n == source)
@@ -537,6 +554,7 @@ def eager_entry(name: str, raw: bytes, r: Eager) -> dict[str, str]:
     "in": raw.hex(),
     "L": eager_tag(r["legacy"], "basic"),
     "B": eager_tag(r["basic"], "legacy"),
+    "SB": set_tag(r),
   }
 
 

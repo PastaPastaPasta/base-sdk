@@ -8,7 +8,8 @@
 // behaviour on given byte strings and prints one JSON object per input line.
 //
 // Input lines (stdin):
-//   E <id> <kind> <hex>                       eager Unserialize under both flags
+//   E <id> <kind> <hex>                       eager Unserialize under both
+//                                             flags, SetBytes under basic
 //   L <id> <kind> <hex> <ops>                 lazy op script (comma separated)
 //   P <id> <kind> <hexA> <opsA> <hexB> <opsB> lazy pair, then operator==
 // kind is pk, sig or sk (sk is eager only).
@@ -61,10 +62,23 @@ std::string EagerOne(const std::vector<uint8_t>& in, bool legacy)
            HexStr(w.ToBytes(false)) + "\"}";
 }
 
+// SetBytes under the basic flag with no round trip, as Core reads governance
+// and CoinJoin signatures.
+template <typename W>
+std::string SetBasic(const std::vector<uint8_t>& in)
+{
+    W w;
+    w.SetBytes(in, false);
+    if (!w.IsValid()) return "{\"outcome\":\"invalid\"}";
+    return std::string("{\"outcome\":\"valid\",\"legacy\":\"") + HexStr(w.ToBytes(true)) + "\",\"basic\":\"" +
+           HexStr(w.ToBytes(false)) + "\"}";
+}
+
 template <typename W>
 std::string Eager(const std::vector<uint8_t>& in)
 {
-    return std::string("{\"legacy\":") + EagerOne<W>(in, true) + ",\"basic\":" + EagerOne<W>(in, false) + "}";
+    return std::string("{\"legacy\":") + EagerOne<W>(in, true) + ",\"basic\":" + EagerOne<W>(in, false) +
+           ",\"set\":" + SetBasic<W>(in) + "}";
 }
 
 template <typename W>
