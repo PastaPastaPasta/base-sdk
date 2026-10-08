@@ -6,12 +6,11 @@
 
 //! BIP157 compact block filter messages.
 
-use crate::codec::{codec_p2p, impl_p2p, read_byte_vec, write_byte_vec};
+use crate::codec::codec_p2p;
 use crate::prelude::*;
 
 use dash_num::Hash256;
-use dash_primitives::{hash_impl, BlockHash};
-use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
+use dash_primitives::BlockHash;
 use dash_types::type_id::TypeId;
 
 /// Requests the filters of a range of blocks, the `getcfilters` payload.
@@ -78,25 +77,11 @@ pub struct CFilter {
   pub filter: Vec<u8>,
 }
 
-impl_p2p!(CFilter);
-
-impl BaseCodec for CFilter {
-  fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    Ok(Self {
-      filter_type: u8::decode(data)?,
-      block_hash: BlockHash::decode(data)?,
-      filter: read_byte_vec(data)?,
-    })
-  }
-
-  fn encode(&self, buf: &mut impl EncodeBuf) {
-    self.filter_type.encode(buf);
-    self.block_hash.encode(buf);
-    write_byte_vec(&self.filter, buf);
-  }
-}
-
-hash_impl!(CFilter);
+codec_p2p!(CFilter {
+  filter_type,
+  block_hash,
+  filter
+});
 
 /// Filter hashes of a range of blocks, the `cfheaders` payload. Core sends
 /// it and has no handler for it.

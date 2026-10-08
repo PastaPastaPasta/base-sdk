@@ -11,7 +11,7 @@ use crate::limits;
 use crate::prelude::*;
 use crate::P2pDecodeError;
 
-use dash_types::codec::{read_bytes, BaseCodec, DecodeError, EncodeBuf};
+use dash_types::codec::{read_bytes, BaseCodec, DecodeError};
 use dash_types::CompactSize;
 
 /// Core's `MAX_PROTOCOL_MESSAGE_LENGTH`, the V1 payload limit.
@@ -64,22 +64,9 @@ macro_rules! codec_p2p {
 }
 pub(crate) use codec_p2p;
 
-/// Reads Core's `std::vector<unsigned char>`: a range-checked size, then the
-/// bytes.
-pub(crate) fn read_byte_vec(data: &mut &[u8]) -> Result<Vec<u8>, DecodeError> {
-  let len = CompactSize::decode_size(data)?.into_len(data.len())?;
-  Ok(read_bytes(data, len)?.to_vec())
-}
-
 /// Reads Core's `LIMITED_VECTOR(v, limit)` of bytes: a size above `limit`
 /// fails before any byte is read.
 pub(crate) fn read_limited_byte_vec(data: &mut &[u8], limit: usize) -> Result<Vec<u8>, DecodeError> {
   let len = CompactSize::decode_size(data)?.into_len(limit)?;
   Ok(read_bytes(data, len)?.to_vec())
-}
-
-/// Writes a byte vector with its size prefix.
-pub(crate) fn write_byte_vec(bytes: &[u8], buf: &mut impl EncodeBuf) {
-  CompactSize::from(bytes.len()).encode(buf);
-  buf.extend_from_slice(bytes); // nosemgrep: codec-no-raw-extend
 }

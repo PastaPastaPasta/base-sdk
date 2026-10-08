@@ -102,7 +102,7 @@ pub fn split_v2(contents: &[u8]) -> Result<V2Message<'_>, P2pDecodeError> {
   }
   let command = match ShortId(short_id).to_command() {
     Some(command) => command,
-    None if ShortId(short_id).has_core_slot() => CommandString::from_bytes([0; 12]),
+    None if ShortId(short_id).has_core_slot() => CommandString::EMPTY,
     None => return Err(P2pDecodeError::UnknownShortId { id: short_id }),
   };
   Ok(V2Message { command, payload: rest })

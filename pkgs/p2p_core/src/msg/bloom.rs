@@ -6,7 +6,7 @@
 
 //! BIP37 bloom filter messages.
 
-use crate::codec::{impl_p2p, read_byte_vec, read_limited_byte_vec, write_byte_vec};
+use crate::codec::{codec_p2p, impl_p2p, read_limited_byte_vec};
 use crate::limits::{MAX_BLOOM_FILTER_SIZE, MAX_SCRIPT_ELEMENT_SIZE};
 use crate::prelude::*;
 
@@ -46,7 +46,7 @@ impl BaseCodec for FilterLoad {
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
-    write_byte_vec(&self.data, buf);
+    self.data.encode(buf);
     self.hash_funcs.encode(buf);
     self.tweak.encode(buf);
     self.flags.encode(buf);
@@ -76,7 +76,7 @@ impl BaseCodec for FilterAdd {
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
-    write_byte_vec(&self.data, buf);
+    self.data.encode(buf);
   }
 }
 
@@ -95,25 +95,11 @@ pub struct PartialMerkleTree {
   pub flag_bytes: Vec<u8>,
 }
 
-impl_p2p!(PartialMerkleTree);
-
-impl BaseCodec for PartialMerkleTree {
-  fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    Ok(Self {
-      transactions: u32::decode(data)?,
-      hashes: Vec::decode(data)?,
-      flag_bytes: read_byte_vec(data)?,
-    })
-  }
-
-  fn encode(&self, buf: &mut impl EncodeBuf) {
-    self.transactions.encode(buf);
-    self.hashes.encode(buf);
-    write_byte_vec(&self.flag_bytes, buf);
-  }
-}
-
-hash_impl!(PartialMerkleTree);
+codec_p2p!(PartialMerkleTree {
+  transactions,
+  hashes,
+  flag_bytes
+});
 
 /// A block header with the matches of the peer's filter, Core's
 /// `CMerkleBlock` and the `merkleblock` payload.
@@ -128,20 +114,4 @@ pub struct MerkleBlock {
   pub txn: PartialMerkleTree,
 }
 
-impl_p2p!(MerkleBlock);
-
-impl BaseCodec for MerkleBlock {
-  fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    Ok(Self {
-      header: BlockHeader::decode(data)?,
-      txn: PartialMerkleTree::decode(data)?,
-    })
-  }
-
-  fn encode(&self, buf: &mut impl EncodeBuf) {
-    self.header.encode(buf);
-    self.txn.encode(buf);
-  }
-}
-
-hash_impl!(MerkleBlock);
+codec_p2p!(MerkleBlock { header, txn });

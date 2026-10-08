@@ -84,19 +84,12 @@ impl V1Header {
 
   /// Reads a header; any 24 bytes form one.
   pub fn from_bytes(bytes: &[u8; Self::SIZE]) -> Self {
-    let mut magic = [0u8; 4];
-    let mut command = [0u8; 12];
-    let mut length = [0u8; 4];
-    let mut checksum = [0u8; 4];
-    magic.copy_from_slice(&bytes[..4]);
-    command.copy_from_slice(&bytes[4..16]);
-    length.copy_from_slice(&bytes[16..20]);
-    checksum.copy_from_slice(&bytes[20..]);
+    let [m0, m1, m2, m3, command @ .., l0, l1, l2, l3, c0, c1, c2, c3] = *bytes;
     Self {
-      magic: Magic::from_bytes(magic),
+      magic: Magic::from_bytes([m0, m1, m2, m3]),
       command: CommandString::from_bytes(command),
-      length: u32::from_le_bytes(length),
-      checksum,
+      length: u32::from_le_bytes([l0, l1, l2, l3]),
+      checksum: [c0, c1, c2, c3],
     }
   }
 

@@ -27,9 +27,7 @@ fn corpus() -> Corpus {
 }
 
 fn command(name: &str) -> CommandString {
-  let mut bytes = [0u8; 12];
-  bytes[..name.len()].copy_from_slice(name.as_bytes());
-  CommandString::from_bytes(bytes)
+  CommandString::from_static(name)
 }
 
 /// Versions around every boundary the gate has.
@@ -52,17 +50,11 @@ fn the_send_gate_is_cores() {
 }
 
 #[rstest]
-fn before_the_version_every_message_is_long_form() {
+fn before_the_version_core_uses_the_long_form() {
+  // VERSIONS starts at INIT, so the gate test covers every command there.
   let init: i32 = corpus().value("init_version");
   assert_eq!(ProtocolVersion::INIT, ProtocolVersion::new(init));
-  let send: BTreeMap<String, Option<Slot>> = corpus().value("send");
-  for name in send.keys() {
-    assert_eq!(
-      ShortId::for_send(&command(name), ProtocolVersion::INIT),
-      None,
-      "{name:?}"
-    );
-  }
+  assert_eq!(VERSIONS[0], init);
 }
 
 #[rstest]

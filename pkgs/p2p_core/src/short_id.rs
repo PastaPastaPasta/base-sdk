@@ -65,7 +65,7 @@ impl ShortId {
   /// Core's `V2MessageMap`: the ID of every assigned slot, and the first
   /// reserved slot for the empty type.
   fn send_slot(cmd: &CommandString) -> Option<Self> {
-    if cmd.as_bytes() == &[0; 12] {
+    if *cmd == CommandString::EMPTY {
       return Some(Self::EMPTY_TYPE);
     }
     Self::from_command(cmd)

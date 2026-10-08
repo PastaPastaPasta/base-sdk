@@ -94,9 +94,7 @@ struct Framing {
 }
 
 fn command(name: &str) -> CommandString {
-  let mut bytes = [0u8; 12];
-  bytes[..name.len()].copy_from_slice(name.as_bytes());
-  CommandString::from_bytes(bytes)
+  CommandString::from_static(name)
 }
 
 /// The probes negotiated common version 70240 at both releases.
@@ -169,11 +167,7 @@ fn short_ids_are_cores() {
     );
     let want: Vec<_> = block.transactions[1..]
       .iter()
-      .map(|tx| {
-        let mut txid = Vec::new();
-        tx.hash().encode(&mut txid);
-        cmpct.short_id(&txid.try_into().unwrap())
-      })
+      .map(|tx| cmpct.short_id(tx.hash().as_bytes()))
       .collect();
     assert_eq!(cmpct.short_ids, want);
     with_short_ids += usize::from(!want.is_empty());
@@ -308,27 +302,18 @@ fn v1_framing_is_cores() {
   let regtest = Magic::from_bytes([0xfc, 0xc1, 0xb7, 0xdc]);
   for f in &framing {
     let bytes = f.frame.bytes();
-    let mut header = [0u8; V1Header::SIZE];
-    header.copy_from_slice(&bytes[..V1Header::SIZE]);
-    let header = V1Header::from_bytes(&header);
+    let header = V1Header::from_bytes(bytes.first_chunk().unwrap());
     let verdict = header
       .check(regtest)
       .and_then(|()| header.check_payload(&bytes[V1Header::SIZE..]));
     let logged = |s: &str| f.log.iter().any(|l| l.contains(s));
     match verdict {
-      Err(e @ V1FrameError::WrongMagic { .. }) => {
-        assert!(
-          e.disconnects() && f.core == "disconnect" && logged("Wrong MessageStart"),
-          "{}",
-          f.name
-        )
-      }
-      Err(e @ V1FrameError::TooLarge { .. }) => {
-        assert!(
-          e.disconnects() && f.core == "disconnect" && logged("Size too large"),
-          "{}",
-          f.name
-        )
+      Err(e @ (V1FrameError::WrongMagic { .. } | V1FrameError::TooLarge { .. })) => {
+        let why = match e {
+          V1FrameError::WrongMagic { .. } => "Wrong MessageStart",
+          _ => "Size too large",
+        };
+        assert!(e.disconnects() && f.core == "disconnect" && logged(why), "{}", f.name);
       }
       Err(e @ (V1FrameError::BadChecksum | V1FrameError::InvalidCommand)) => {
         // Dropped: the peer stays, and only the probe's own sync ping is answered.
