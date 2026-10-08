@@ -11,8 +11,8 @@
 
 use dash_dev::{vec_from_hex, Corpus};
 use dash_p2p_core::{
-  decode_v2, CommandString, DecodedMsg, P2pDecodeError, P2pMsg, Ping, ProtoCtx, ProtocolVersion, QSendRecSigs, SendDsq,
-  Version,
+  decode_v2, CommandString, DecodedMsg, P2pDecodeError, P2pMsg, Ping, Pong, ProtoCtx, ProtocolVersion, QSendRecSigs,
+  SendDsq, Version,
 };
 use dash_pkc::bls::BlsCtx;
 use dash_types::codec::BaseCodec;
@@ -26,6 +26,13 @@ struct VersionVector {
   core: String,
   relaytxes: Option<bool>,
   groups: Option<usize>,
+}
+
+#[derive(::serde::Deserialize)]
+struct PongVector {
+  name: String,
+  raw: String,
+  core: String,
 }
 
 #[derive(::serde::Deserialize)]
@@ -273,5 +280,27 @@ fn v2_contents_are_bound_as_core() {
       ),
       other => panic!("{label}: unexpected outcome {other}"),
     }
+  }
+}
+
+/// Core reads a pong's nonce only from 8 bytes up; a shorter payload, like a
+/// zero nonce, cancels the outstanding ping. A non-zero nonce is compared.
+#[rstest]
+fn pong_reads_its_nonce_as_core() {
+  for v in corpus().vectors::<PongVector>("pong") {
+    let raw = vec_from_hex(&v.raw);
+    let decoded = P2pMsg::decode_with_policy(&CommandString::PONG, &raw, &ctx(70240));
+    let DecodedMsg {
+      msg: P2pMsg::Pong(Pong { nonce }),
+      consumed,
+    } = decoded.unwrap_or_else(|e| panic!("{}: {e}", v.name))
+    else {
+      panic!("{}: not a pong", v.name);
+    };
+    let expected = raw.first_chunk::<8>().map(|b| u64::from_le_bytes(*b));
+    assert_eq!(nonce, expected, "{}", v.name);
+    assert_eq!(consumed, if nonce.is_some() { 8 } else { 0 }, "{}", v.name);
+    let cancels = matches!(nonce, None | Some(0));
+    assert_eq!(cancels, v.core == "ping cancelled", "{}", v.name);
   }
 }
