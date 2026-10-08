@@ -29,6 +29,7 @@ full = ["std", "serde"]
 
 [dependencies]
 bitcoin-consensus-encoding = { workspace = true, features = ["alloc"] }
+bitcoin_hashes = { workspace = true, features = ["alloc"] }
 cfg-if = "1"
 dash-num = { version = "0.1.0-beta", path = "../num", features = ["codec"] }
 dash-pkc = { version = "0.1.0-beta", path = "../pkc", features = ["codec"] }

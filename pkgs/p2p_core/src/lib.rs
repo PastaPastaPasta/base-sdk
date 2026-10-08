@@ -25,6 +25,7 @@ mod msg;
 #[allow(unused_imports, reason = "ergonomic shim, exports may be unused")]
 mod prelude;
 mod short_id;
+mod v1;
 mod version;
 
 #[doc(hidden)]
@@ -40,4 +41,5 @@ pub use error::P2pDecodeError;
 pub use magic::Magic;
 pub use msg::*;
 pub use short_id::ShortId;
+pub use v1::{checksum, encode_v1, V1FrameError, V1Header};
 pub use version::ProtocolVersion;
