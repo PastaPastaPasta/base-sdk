@@ -7,6 +7,7 @@
 //! P2P message types and dispatch.
 
 mod addr;
+mod control;
 mod gov;
 mod headers;
 mod headers2;
@@ -24,6 +25,7 @@ use dash_primitives::{GovObject, GovVote};
 use dash_types::type_id::Unencodable;
 
 pub use addr::{Addr, AddrV2Entry, AddrV2Msg, TimestampedAddr};
+pub use control::{QSendRecSigs, SendDsq};
 pub use gov::GovSync;
 pub use headers::{GetHeaders, Headers};
 pub use headers2::{CompressionState, GetHeaders2, Headers2};
@@ -68,6 +70,10 @@ define_p2p! {
     GetMnListDiff(GetMnListDiff) => GETMNLISTD "getmnlistd" @ 143,
     /// MN list diff.
     MnListDiff(MnListDiff) => MNLISTDIFF "mnlistdiff" @ 144,
+    /// Signal CoinJoin queue relay.
+    SendDsq(SendDsq) => SENDDSQ "senddsq" @ 130,
+    /// LLMQ: send recovered signatures.
+    QSendRecSigs(QSendRecSigs) => QSENDRECSIGS "qsendrecsigs" @ 145,
   }
 
   parsed_empty {
@@ -176,10 +182,6 @@ define_p2p! {
     QrInfo => QRINFO "qrinfo" @ 167,
     /// DIP-0031: platform ban.
     PlatformBan => PLATFORMBAN "platformban" @ 168,
-    /// Signal CoinJoin queue relay.
-    SendDsq => SENDDSQ "senddsq" @ 130,
-    /// LLMQ: send recovered signatures.
-    QSendRecSigs => QSENDRECSIGS "qsendrecsigs" @ 145,
   }
 
   stub_empty {
@@ -208,3 +210,5 @@ impl MsgDecode for GovObject {}
 impl MsgDecode for GovVote {}
 impl MsgDecode for GetMnListDiff {}
 impl MsgDecode for MnListDiff {}
+impl MsgDecode for SendDsq {}
+impl MsgDecode for QSendRecSigs {}

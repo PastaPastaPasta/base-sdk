@@ -58,8 +58,13 @@
     {"name": "verack_with_payload", "command": "verack", "raw": "deadbeef", "core": "accept"},
     {"name": "sendheaders2_with_payload", "command": "sendheaders2", "raw": "0707", "core": "accept"},
   ],
-  // senddsq as both nodes sent it (-capturemessages): a one-byte bool.
-  "senddsq": [
+  // Messages carrying one bool. "captured" is senddsq as both nodes sent it
+  // (-capturemessages); the rest were sent after a full handshake.
+  "control": [
     {"name": "captured", "command": "senddsq", "raw": "01", "core": "accept"},
+    {"name": "senddsq_empty", "command": "senddsq", "raw": "", "core": "throw"},
+    {"name": "senddsq_02", "command": "senddsq", "raw": "02", "core": "accept"},
+    {"name": "qsendrecsigs_empty", "command": "qsendrecsigs", "raw": "", "core": "throw"},
+    {"name": "qsendrecsigs_02", "command": "qsendrecsigs", "raw": "02", "core": "accept"},
   ],
 }

@@ -10,9 +10,12 @@
 #![expect(clippy::panic, clippy::unwrap_used, reason = "test code")]
 
 use dash_dev::{vec_from_hex, Corpus};
-use dash_p2p_core::{CommandString, DecodedMsg, P2pDecodeError, P2pMsg, ProtoCtx, ProtocolVersion, Version};
+use dash_p2p_core::{
+  CommandString, DecodedMsg, P2pDecodeError, P2pMsg, ProtoCtx, ProtocolVersion, QSendRecSigs, SendDsq, Version,
+};
 use dash_pkc::bls::BlsCtx;
 use dash_types::codec::BaseCodec;
+use dash_types::CoreBool;
 use rstest::rstest;
 
 #[derive(::serde::Deserialize)]
@@ -168,11 +171,26 @@ fn ignored_payloads_decode() {
   }
 }
 
+/// Core reads one `bool` from each, any non-zero byte being true.
 #[rstest]
-fn senddsq_carries_its_payload() {
-  for v in corpus().vectors::<MsgVector>("senddsq") {
-    let decoded = decode(&v).unwrap();
-    assert_eq!(decoded.msg, P2pMsg::SendDsq(vec_from_hex(&v.raw)), "{}", v.name);
+fn control_messages_read_a_core_bool() {
+  for v in corpus().vectors::<MsgVector>("control") {
+    let raw = vec_from_hex(&v.raw);
+    let decoded = decode(&v);
+    if v.core == "throw" {
+      assert!(
+        matches!(decoded, Err(P2pDecodeError::Consensus(_))),
+        "{}: {decoded:?}",
+        v.name
+      );
+      continue;
+    }
+    let flag = CoreBool(raw[0] != 0);
+    let expected = match v.command.as_str() {
+      "senddsq" => P2pMsg::SendDsq(SendDsq { send_dsq: flag }),
+      _ => P2pMsg::QSendRecSigs(QSendRecSigs { send_rec_sigs: flag }),
+    };
+    assert_eq!(decoded.map(|d| d.msg), Ok(expected), "{}", v.name);
   }
 }
 
