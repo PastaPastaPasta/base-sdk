@@ -11,11 +11,11 @@
 
 use dash_dev::{vec_from_hex, Corpus};
 use dash_p2p_core::{
-  decode_v2, CommandString, DecodedMsg, P2pDecodeError, P2pMsg, Ping, Pong, ProtoCtx, ProtocolVersion, QSendRecSigs,
-  SendDsq, Version,
+  decode_v2, CommandString, DecodedMsg, Headers, Headers2, P2pDecodeError, P2pMsg, Ping, Pong, ProtoCtx,
+  ProtocolVersion, QSendRecSigs, SendDsq, Version,
 };
 use dash_pkc::bls::BlsCtx;
-use dash_types::codec::BaseCodec;
+use dash_types::codec::{BaseCodec, DecodeError};
 use dash_types::CoreBool;
 use rstest::rstest;
 
@@ -303,4 +303,28 @@ fn pong_reads_its_nonce_as_core() {
     let cancels = matches!(nonce, None | Some(0));
     assert_eq!(cancels, v.core == "ping cancelled", "{}", v.name);
   }
+}
+
+/// A header count the payload cannot hold fails at the count, before the
+/// decoder reserves memory for it (Opus r1 M-4: a 3 MiB payload claiming
+/// 3,145,720 headers would otherwise reserve 80 bytes per header).
+#[rstest]
+fn header_counts_are_bound_by_the_payload() {
+  let mut payload = vec![0xfe, 0xf8, 0xff, 0x2f, 0x00];
+  payload.resize(3 * 1024 * 1024, 0);
+  let left = payload.len() - 5;
+  assert_eq!(
+    Headers::decode(&mut &payload[..]),
+    Err(DecodeError::CompactSizeExceedsLimit {
+      limit: left / 81,
+      value: 3_145_720,
+    })
+  );
+  assert_eq!(
+    Headers2::decode(&mut &payload[..]),
+    Err(DecodeError::CompactSizeExceedsLimit {
+      limit: left / 39,
+      value: 3_145_720,
+    })
+  );
 }

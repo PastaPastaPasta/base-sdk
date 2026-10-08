@@ -6,7 +6,7 @@
 
 //! Compressed header messages.
 
-use super::headers::{read_header_count, MAX_HEADERS_COMPRESSED, MAX_HEADERS_UNCOMPRESSED};
+use super::headers::{read_entry_count, read_header_count, MAX_HEADERS_COMPRESSED, MAX_HEADERS_UNCOMPRESSED};
 use crate::codec::{codec_p2p, impl_p2p, MsgDecode};
 use crate::ctx::ProtoCtx;
 use crate::prelude::*;
@@ -17,6 +17,10 @@ use dash_primitives::{hash_impl, BlockHash, BlockHeader, MerkleRoot};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{CompactSize, Hashable};
+
+/// The fewest bytes a compressed header takes: flags, merkle root, a time
+/// delta and the nonce.
+const MIN_HEADERS2_ENTRY: usize = 39;
 
 /// Maximum entries in the MRU version cache.
 const MAX_VERSION_CACHE: usize = 7;
@@ -253,6 +257,23 @@ pub struct Headers2 {
 
 impl_p2p!(Headers2);
 
+impl BaseCodec for Headers2 {
+  fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
+    let count = read_entry_count(data, MIN_HEADERS2_ENTRY)?;
+    Self::read(data, count)
+  }
+
+  fn encode(&self, buf: &mut impl EncodeBuf) {
+    CompactSize::from(self.headers.len()).encode(buf);
+    let mut state = CompressionState::new();
+    for h in &self.headers {
+      state.encode_header(h, buf);
+    }
+  }
+}
+
+hash_impl!(Headers2);
+
 impl Headers2 {
   /// Reads `count` compressed headers with a fresh compression state.
   fn read(data: &mut &[u8], count: usize) -> Result<Self, DecodeError> {
@@ -276,23 +297,6 @@ impl MsgDecode for Headers2 {
     Ok(Self::read(data, count)?)
   }
 }
-
-impl BaseCodec for Headers2 {
-  fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let count = CompactSize::decode_size(data)?.into_len(data.len())?;
-    Self::read(data, count)
-  }
-
-  fn encode(&self, buf: &mut impl EncodeBuf) {
-    CompactSize::from(self.headers.len()).encode(buf);
-    let mut state = CompressionState::new();
-    for h in &self.headers {
-      state.encode_header(h, buf);
-    }
-  }
-}
-
-hash_impl!(Headers2);
 
 #[cfg(all(test, feature = "serde"))]
 mod tests {

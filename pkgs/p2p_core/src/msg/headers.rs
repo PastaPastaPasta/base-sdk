@@ -23,6 +23,16 @@ pub(crate) const MAX_HEADERS_UNCOMPRESSED: u64 = 2_000;
 /// Core's `MAX_HEADERS_COMPRESSED_RESULT`, the raised `headers2` limit.
 pub(crate) const MAX_HEADERS_COMPRESSED: u64 = 8_000;
 
+/// The fewest bytes a `headers` entry takes, a header and its tx count.
+const MIN_HEADERS_ENTRY: usize = 81;
+
+/// Reads an entry count, rejecting one the remaining bytes cannot hold.
+///
+/// The count then bounds the allocation by the payload, not by the peer.
+pub(crate) fn read_entry_count(data: &mut &[u8], min_entry: usize) -> Result<usize, DecodeError> {
+  CompactSize::decode_size(data)?.into_len(data.len() / min_entry)
+}
+
 /// Reads a header count, rejecting one above `max` before any header.
 ///
 /// Core's handler compares the count with its limit and penalises the peer
@@ -70,6 +80,28 @@ pub struct Headers {
 
 impl_p2p!(Headers);
 
+impl BaseCodec for Headers {
+  fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
+    let count = read_entry_count(data, MIN_HEADERS_ENTRY)?;
+    Self::read(data, count)
+  }
+
+  fn encode(&self, buf: &mut impl EncodeBuf) {
+    CompactSize::from(self.headers.len()).encode(buf);
+    for h in &self.headers {
+      h.version.encode(buf);
+      h.prev_hash.encode(buf);
+      h.merkle_root.encode(buf);
+      h.time.encode(buf);
+      h.bits.encode(buf);
+      h.nonce.encode(buf);
+      0u8.encode(buf); // tx_count = 0
+    }
+  }
+}
+
+hash_impl!(Headers);
+
 impl Headers {
   /// Reads `count` headers, each followed by a transaction count that Core
   /// reads with `ReadCompactSize` and ignores.
@@ -96,25 +128,3 @@ impl MsgDecode for Headers {
     Ok(Self::read(data, count)?)
   }
 }
-
-impl BaseCodec for Headers {
-  fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let count = CompactSize::decode_size(data)?.into_len(data.len())?;
-    Self::read(data, count)
-  }
-
-  fn encode(&self, buf: &mut impl EncodeBuf) {
-    CompactSize::from(self.headers.len()).encode(buf);
-    for h in &self.headers {
-      h.version.encode(buf);
-      h.prev_hash.encode(buf);
-      h.merkle_root.encode(buf);
-      h.time.encode(buf);
-      h.bits.encode(buf);
-      h.nonce.encode(buf);
-      0u8.encode(buf); // tx_count = 0
-    }
-  }
-}
-
-hash_impl!(Headers);
