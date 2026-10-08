@@ -10,8 +10,8 @@ use dash_primitives::hash_impl;
 use dash_types::make_num;
 
 make_num! {
-  /// Protocol version exchanged during the handshake.
-  ProtocolVersion, u32, 4
+  /// Protocol version exchanged during the handshake, Core's signed `int`.
+  ProtocolVersion, i32, 4
 }
 
 hash_impl!(ProtocolVersion);
@@ -33,4 +33,6 @@ impl ProtocolVersion {
   pub const MNLISTDIFF_VERSION_ORDER: Self = Self(70229);
   /// Chainlock signatures in MN list diff boundary.
   pub const MNLISTDIFF_CHAINLOCKS: Self = Self(70230);
+  /// Compressed `headers2` limit raised to 8000 boundary.
+  pub const INCREASE_MAX_HEADERS2: Self = Self(70235);
 }
