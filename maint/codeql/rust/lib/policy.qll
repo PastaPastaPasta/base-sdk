@@ -128,10 +128,6 @@ private predicate hasFloatField(TypeItem t) {
 }
 
 /**
- * Holds if `t` is a serde internal generated type
- * (e.g. __FieldVisitor, __Visitor, __Field).
- */
-/**
  * Holds if `t` has a lazy BLS field, directly or through a type of its own
  * crate.
  */
@@ -145,6 +141,10 @@ private predicate hasLazyBlsField(TypeItem t) {
   )
 }
 
+/**
+ * Holds if `t` is a serde internal generated type
+ * (e.g. __FieldVisitor, __Visitor, __Field).
+ */
 predicate isSerdeInternalType(TypeItem t) { nameOf(t).matches("\\_\\_%") }
 
 /** Gets a required trait name. */
