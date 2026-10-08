@@ -7,7 +7,7 @@
 //! CompactSize-encoded integers.
 
 use crate::codec::{BaseCodec, DecodeError, EncodeBuf};
-use crate::Numeric;
+use crate::{Numeric, MAX_SER_SIZE};
 
 /// An unsigned integer encoded in variable-width CompactSize.
 #[repr(transparent)]
@@ -107,6 +107,26 @@ impl CompactSize {
     Self(value)
   }
 
+  /// Decodes a size the way Core's `ReadCompactSize` does by default.
+  ///
+  /// Core range-checks every length prefix and every `COMPACTSIZE` field
+  /// against `MAX_SIZE`, whatever the bytes left in the stream.
+  ///
+  /// # Errors
+  ///
+  /// Returns [`DecodeError::CompactSizeExceedsLimit`] for a value above
+  /// [`MAX_SER_SIZE`], and the errors of [`CompactSize::decode`].
+  pub fn decode_size(data: &mut &[u8]) -> Result<Self, DecodeError> {
+    let size = Self::decode(data)?;
+    if size.0 > MAX_SER_SIZE as u64 {
+      return Err(DecodeError::CompactSizeExceedsLimit {
+        limit: MAX_SER_SIZE,
+        value: size.0,
+      });
+    }
+    Ok(size)
+  }
+
   /// Converts the value to a length no greater than `limit`.
   ///
   /// # Errors
@@ -186,6 +206,32 @@ mod tests {
   #[case::short_u64(&[0xFF, 0x00, 0x00, 0x00, 0x00])]
   fn rejects_truncated_input(#[case] wire: &[u8]) {
     assert!(matches!(CompactSize::decode(&mut &*wire), Err(DecodeError::Eof { .. })));
+  }
+
+  /// Core's `ReadCompactSize` throws "size too large" above `MAX_SIZE`
+  /// (`serialize.h:318` in v24.0.0-rc.3, `:314` in v23.1.8).
+  #[rstest]
+  #[case::at_max(&[0xFE, 0x00, 0x00, 0x00, 0x02], Ok(0x0200_0000))]
+  #[case::above_max(&[0xFE, 0x01, 0x00, 0x00, 0x02], Err(0x0200_0001))]
+  #[case::u32_max(&[0xFE, 0xFF, 0xFF, 0xFF, 0xFF], Err(0xFFFF_FFFF))]
+  #[case::u64(&[0xFF, 0, 0, 0, 0, 0x01, 0, 0, 0], Err(0x1_0000_0000))]
+  fn decode_size_applies_the_max_size_range_check(#[case] wire: &[u8], #[case] expected: Result<u64, u64>) {
+    let decoded = CompactSize::decode_size(&mut &*wire).map(|v| v.to_base());
+    let expected = expected.map_err(|value| DecodeError::CompactSizeExceedsLimit {
+      limit: crate::MAX_SER_SIZE,
+      value,
+    });
+    assert_eq!(decoded, expected);
+    // The plain decode keeps reading sizes used as numbers.
+    assert!(CompactSize::decode(&mut &*wire).is_ok());
+  }
+
+  #[rstest]
+  fn decode_size_keeps_the_canonicality_check() {
+    assert_eq!(
+      CompactSize::decode_size(&mut &[0xFD, 0xFC, 0x00][..]),
+      Err(DecodeError::NonMinimalCompactSize { value: 0xFC })
+    );
   }
 
   #[rstest]
