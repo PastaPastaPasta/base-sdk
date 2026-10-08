@@ -17,6 +17,7 @@ mod codec;
 mod command;
 mod ctx;
 mod error;
+pub mod limits;
 #[macro_use]
 mod macros;
 mod magic;

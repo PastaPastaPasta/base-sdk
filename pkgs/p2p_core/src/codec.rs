@@ -7,18 +7,19 @@
 //! Codec helpers for P2P message types.
 
 use crate::ctx::ProtoCtx;
+use crate::limits;
 use crate::P2pDecodeError;
 
 use dash_types::codec::BaseCodec;
 
 /// Core's `MAX_PROTOCOL_MESSAGE_LENGTH`, the V1 payload limit.
-pub(crate) const MAX_P2P_PAYLOAD_SIZE: usize = 3_145_728;
+pub(crate) const MAX_P2P_PAYLOAD_SIZE: usize = limits::MAX_PROTOCOL_MESSAGE_LENGTH;
 
 /// Core's V2 `MAX_CONTENTS_LEN`: the long-form type and a V1-sized payload.
 ///
 /// Core checks it on the whole contents before reading the type, so a
 /// short-ID message may carry 12 payload bytes more than the V1 limit.
-pub(crate) const MAX_V2_CONTENTS_SIZE: usize = 1 + 12 + MAX_P2P_PAYLOAD_SIZE;
+pub(crate) const MAX_V2_CONTENTS_SIZE: usize = limits::MAX_V2_CONTENTS_LEN;
 
 /// A message payload decoded the way Core's handler reads it.
 ///
