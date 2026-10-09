@@ -132,9 +132,10 @@ impl BaseCodec for CmpctBlock {
     };
     let total = block.short_ids.len() + block.prefilled.len();
     if total > MAX_BLOCK_TXS {
-      return Err(DecodeError::CompactSizeExceedsLimit {
-        limit: MAX_BLOCK_TXS,
-        value: total as u64,
+      // Core's "indexes overflowed 16 bits".
+      return Err(DecodeError::BadLen {
+        expected: vec![MAX_BLOCK_TXS],
+        actual: total,
       });
     }
     Ok(block)
@@ -185,34 +186,37 @@ pub fn short_id_with_keys(k0: u64, k1: u64, tx_hash: &[u8; 32]) -> ShortTxId {
 /// `BlockTransactionsRequest` and the `getblocktxn` payload.
 ///
 /// The indexes go on the wire as differences, Core's `DifferenceFormatter`,
-/// so they must strictly increase, as [`GetBlockTxn::new`] checks; a decoded
-/// request always does. Core refuses to serialize any other list.
+/// so they strictly increase: [`GetBlockTxn::new`] and deserialization check
+/// it, and a decoded request always does. Core refuses to serialize any other
+/// list.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(try_from = "GetBlockTxnFields", into = "GetBlockTxnFields"))]
 pub struct GetBlockTxn {
-  /// The block.
-  pub block_hash: BlockHash,
-  /// Indexes of the requested transactions in the block.
-  pub indexes: Vec<u16>,
+  block_hash: BlockHash,
+  indexes: Vec<u16>,
 }
 
 impl_p2p!(GetBlockTxn);
 
 impl BaseCodec for GetBlockTxn {
+  /// Reads as Core does: every declared difference in order, until one is
+  /// missing or overflows, so a failure leaves the cursor where Core's does.
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let block_hash = BlockHash::decode(data)?;
-    // Each difference takes a byte at least.
-    let count = CompactSize::decode_size(data)?.into_len(data.len())?;
+    let count = CompactSize::decode_size(data)?.into_len(usize::MAX)?;
     let batch = crate::codec::MAX_VECTOR_ALLOCATE / core::mem::size_of::<u16>();
-    let mut indexes = Vec::new();
+    let mut indexes: Vec<u16> = Vec::new();
     let mut shift: u64 = 0;
     for _ in 0..count {
       if indexes.len() == indexes.capacity() {
-        indexes.reserve_exact(count.min(indexes.len() + batch) - indexes.len());
+        // Core's batches, capped by the bytes left: a difference takes one at
+        // least, so no more can be read.
+        indexes.reserve_exact(batch.min(count - indexes.len()).min(data.len().max(1)));
       }
       let diff = u64::from(CompactSize::decode_size(data)?);
-      // Core's overflow checks: a wrapped sum, the u64 sentinel and the
-      // element type's range.
+      // Core's "differential value overflow": a wrapped sum, the u64
+      // sentinel or the element type's range.
       let Some(index) = shift.checked_add(diff).and_then(|s| u16::try_from(s).ok()) else {
         return Err(DecodeError::CompactSizeExceedsLimit {
           limit: MAX_BLOCK_TXS,
@@ -230,7 +234,8 @@ impl BaseCodec for GetBlockTxn {
     CompactSize::from(self.indexes.len()).encode(buf);
     let mut shift: u64 = 0;
     for &index in &self.indexes {
-      CompactSize::from(u64::from(index).wrapping_sub(shift)).encode(buf);
+      // Strictly increasing, so never below the shift.
+      CompactSize::from(u64::from(index) - shift).encode(buf);
       shift = u64::from(index) + 1;
     }
   }
@@ -246,6 +251,46 @@ impl GetBlockTxn {
       .windows(2)
       .all(|w| w[0] < w[1])
       .then_some(Self { block_hash, indexes })
+  }
+
+  /// The block.
+  pub const fn block_hash(&self) -> &BlockHash {
+    &self.block_hash
+  }
+
+  /// Indexes of the requested transactions in the block, increasing.
+  pub fn indexes(&self) -> &[u16] {
+    &self.indexes
+  }
+}
+
+/// A [`GetBlockTxn`]'s fields, checked through [`GetBlockTxn::new`] when
+/// deserialized.
+#[cfg(feature = "serde")]
+#[derive(
+  Clone, Debug, Eq, Hash, PartialEq, dash_types::type_id::Unencodable, ::serde::Serialize, ::serde::Deserialize,
+)]
+struct GetBlockTxnFields {
+  block_hash: BlockHash,
+  indexes: Vec<u16>,
+}
+
+#[cfg(feature = "serde")]
+impl TryFrom<GetBlockTxnFields> for GetBlockTxn {
+  type Error = &'static str;
+
+  fn try_from(f: GetBlockTxnFields) -> Result<Self, Self::Error> {
+    Self::new(f.block_hash, f.indexes).ok_or("getblocktxn indexes must strictly increase")
+  }
+}
+
+#[cfg(feature = "serde")]
+impl From<GetBlockTxn> for GetBlockTxnFields {
+  fn from(r: GetBlockTxn) -> Self {
+    Self {
+      block_hash: r.block_hash,
+      indexes: r.indexes,
+    }
   }
 }
 
@@ -276,5 +321,14 @@ mod tests {
     assert_eq!(&buf[32..], [4, 0, 0, 5, 0xfd, 0xf7, 0xff]);
     assert_eq!(GetBlockTxn::decode(&mut &buf[..]).unwrap(), req);
     assert_eq!(GetBlockTxn::new(BlockHash::default(), vec![5, 5]), None);
+  }
+
+  #[cfg(feature = "serde")]
+  #[test]
+  fn getblocktxn_deserialization_checks_the_order() {
+    let ok = r#"{"block_hash":"0000000000000000000000000000000000000000000000000000000000000000","indexes":[1,2]}"#;
+    assert!(dash_dev::from_json_slice::<GetBlockTxn>(ok.as_bytes()).indexes() == [1, 2]);
+    let bad = ok.replace("[1,2]", "[5,5]");
+    assert!(dash_dev::json_rejects::<GetBlockTxn>(&bad));
   }
 }
