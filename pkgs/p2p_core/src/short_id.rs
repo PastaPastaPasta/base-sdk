@@ -34,12 +34,6 @@ impl ShortId {
     self.to_command_str().map(CommandString::from_static)
   }
 
-  /// Whether Core gives the ID a slot: Bitcoin's 1 to 32, Dash's 128 to 168
-  /// (`IsValidV2ShortID`). A slot without a message has the empty type.
-  pub const fn has_core_slot(self) -> bool {
-    matches!(self.0, 1..=32 | 128..=168)
-  }
-
   /// The common version from which Core sends `cmd` by its short ID, its
   /// `GetMessageMinVersion`.
   ///

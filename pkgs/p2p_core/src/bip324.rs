@@ -99,16 +99,15 @@ pub fn decode_v2_payload(cmd: &CommandString, payload: &[u8], ctx: &ProtoCtx) ->
 
 /// Splits V2 packet contents into the message type and its payload.
 ///
-/// The contents are bound by Core's V2 limit, checked before the type. A
-/// short ID Core reserves without a message, such as 5, gives the empty
-/// type, which Core's handlers treat as an unknown command.
+/// The contents are bound by Core's V2 limit, checked before the type.
 ///
 /// # Errors
 ///
 /// Returns `ContentsTooLarge` above the limit, on which Core disconnects.
 /// Returns `EmptyV2Contents`, `TruncatedV2Type`, `InvalidCommand` or
-/// `UnknownShortId` for contents Core cannot type, which it drops while
-/// keeping the peer.
+/// `UnknownShortId` for contents without a message type: drop the message and
+/// keep the peer. That includes the short IDs Core reserves without a message,
+/// such as 5, which Core types as the empty command and ignores.
 pub fn split_v2(contents: &[u8]) -> Result<V2Message<'_>, P2pDecodeError> {
   if contents.len() > MAX_V2_CONTENTS_SIZE {
     return Err(P2pDecodeError::ContentsTooLarge {
@@ -132,7 +131,6 @@ pub fn split_v2(contents: &[u8]) -> Result<V2Message<'_>, P2pDecodeError> {
   }
   let command = match ShortId(short_id).to_command() {
     Some(command) => command,
-    None if ShortId(short_id).has_core_slot() => CommandString::EMPTY,
     None => return Err(P2pDecodeError::UnknownShortId { id: short_id }),
   };
   Ok(V2Message { command, payload: rest })

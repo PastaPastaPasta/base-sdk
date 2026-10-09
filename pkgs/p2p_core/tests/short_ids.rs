@@ -96,8 +96,10 @@ fn the_receive_table_is_cores() {
     let got = split_v2(&contents);
     match want.as_deref() {
       Some("long") => assert_eq!(got.unwrap().command(), CommandString::PING, "{b}"),
+      // A slot Core reserves without a message: Core types it as the empty
+      // command and ignores it; base-sdk drops it. Either way the peer stays.
+      Some("") | None => assert_eq!(got, Err(P2pDecodeError::UnknownShortId { id: b }), "{b}"),
       Some(name) => assert_eq!(got.unwrap().command(), command(name), "{b}"),
-      None => assert_eq!(got, Err(P2pDecodeError::UnknownShortId { id: b }), "{b}"),
     }
   }
 }
