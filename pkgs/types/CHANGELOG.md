@@ -14,9 +14,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `ParseHexError` is moved from `dash-num`, superseding `dash_num::ParseHexError`.
 - `serialize::hex::serialize_as` and `serialize::hex::deserialize_as`, to permit caller-defined handling of
   human-readable encoding while sharing common machine-readable encoding.
+- `CoreBool`, a wire boolean that decodes any non-zero byte as `true` and encodes as `0x00` or `0x01`, as Dash Core
+  reads and writes a `bool`.
+- `CompactSize::decode_size`, which applies Dash Core's `MAX_SIZE` range check to a size, as `ReadCompactSize` does by
+  default.
+- `serialize::opt_str_u64`: `str_u64` for an `Option<u64>` field.
 
 ### Changed
 
+- `DecodeError` gains `MalleableBls`, for BLS bytes canonical in neither scheme, which Dash Core rejects as a "malleable
+  BLS object". Exhaustive matches on `DecodeError` must add an arm.
 - `{derive,make}_bytes!`-defined types serialize as their raw storage bytes for machine-readable formats. JSON and
   other human-readable formats retain hex in storage order for `fwd` and in reverse storage order for `rev`.
 - `derive_bytes!` emits `From<[u8; N]>` in place of `impl_bytes!`, and `make_sbytes!` emits the implementation itself.
@@ -31,6 +38,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `Vec<u8>` as the fixed return type must now mention it explicitly.
 - `serialize::str_u64` writes a native `u64` to machine-readable formats. `str_u64` is a workaround for number-precision
   limitations in JSON and is now contained only for human-readable formats.
+- Decoding `Vec<T>`, `String` and script buffers rejects a length prefix above `MAX_SER_SIZE` even when enough bytes
+  remain, matching Dash Core's `ReadCompactSize`.
+- Decoding `Vec<T>` reserves each batch exactly, as Core's `reserve(allocated)` does, rather than growing its capacity
+  geometrically past the batch.
 
 ### Removed
 
