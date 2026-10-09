@@ -10,6 +10,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - `Bls{Public,Secret}Key::negate`, `BlsSecretKey::mul_tweak`, `EcdsaPublicKey::negate` and `EcdsaSecretKey::mul_tweak`.
+- `BlsSchemeKind`, `BlsCtx` and `BlsSchemeSource` select Dash Core's legacy or basic BLS scheme at runtime. They need no
+  feature, so wire types can carry the scheme without the `bls` backend.
+- `BlsEager`, `BlsLazy`, `BlsValue` and `BlsPoint` decode BLS fields as Dash Core's `CBLSWrapper` and `CBLSLazyWrapper`
+  do, under an explicit scheme source, with the aliases `BlsEager{Pk,Sig,Sk}` and `BlsLazy{Pk,Sig}`. Eager decoding
+  yields a valid object, the invalid object (serialized as zeros) or Core's "malleable BLS object" error. Lazy objects
+  keep Core's state changes. The `bls` feature now depends on `spin` for the lazy object's lock.
+- `BlsGlobal`, with the aliases `BlsGlobal{Pk,Sig}`, keeps the wire bytes of a field Dash Core reads under its
+  process-wide scheme flag. Decoding rejects only what Core rejects under either flag, and `get` resolves the object
+  under an explicit `BlsCtx`.
+- `BlsValue::from_set_bytes_basic` decodes as Dash Core's `SetBytes` under the basic scheme, with no round trip, as Core
+  reads governance and CoinJoin signatures.
 
 ### Changed
 
