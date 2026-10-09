@@ -110,31 +110,33 @@ mod magic {
   use super::BootstrapError;
   use crate::Application;
 
-  use dash_params::{ChainParams, MessageStart, Network};
+  use dash_params::{ChainParams, ChainParamsBuilder, MessageStart, NetworkKind, Release};
 
-  const KNOWN_NETWORKS: &[&ChainParams] = &[
-    Network::Main.chain(),
-    Network::Testnet3.chain(),
-    Network::Regtest.chain(),
-  ];
+  /// Networks with a fixed genesis block. Their magic and genesis are the
+  /// same at every release.
+  const KNOWN_NETWORKS: [NetworkKind; 3] = [NetworkKind::Mainnet, NetworkKind::Testnet, NetworkKind::Regtest];
 
-  fn detect(magic: MessageStart) -> Result<&'static ChainParams, BootstrapError> {
-    KNOWN_NETWORKS
-      .iter()
-      .find(|p| p.message_start == magic)
-      .copied()
-      .ok_or(BootstrapError::UnknownMagic { magic })
+  fn detect(magic: MessageStart) -> Result<ChainParams, BootstrapError> {
+    for network in KNOWN_NETWORKS {
+      let params = ChainParamsBuilder::new(network, Release::V24_0)
+        .build()
+        .map_err(|e| BootstrapError::Config(format!("{network:?} parameters: {e}")))?;
+      if params.message_start == magic {
+        return Ok(params);
+      }
+    }
+    Err(BootstrapError::UnknownMagic { magic })
   }
 
   /// Identify the network from magic bytes and log the result.
-  pub fn check(magic: MessageStart, app: &Application) -> Result<&'static ChainParams, BootstrapError> {
+  pub fn check(magic: MessageStart, app: &Application) -> Result<ChainParams, BootstrapError> {
     let params = detect(magic)?;
     let [a, b, c, d] = magic;
     crate::logging::log_msg(
       app,
       &format!(
         "Magic 0x{a:02x}{b:02x}{c:02x}{d:02x} corresponds to \"{}\"",
-        params.network_id
+        params.network_id()
       ),
     );
     Ok(params)
@@ -425,7 +427,7 @@ pub fn run(
     app,
     &pool,
     &mut reader,
-    params,
+    &params,
     genesis_data,
     budget_bytes,
     report_freq,
