@@ -240,6 +240,11 @@ impl QrInfo {
 }
 
 impl MsgDecode for QrInfo {
+  /// Decodes rotation info in the negotiated layout.
+  ///
+  /// Core's handler reads nothing from a peer: it penalises one that sends
+  /// `qrinfo` and stops. A node that follows Core decides from the command,
+  /// before decoding, and decodes only the replies to its own requests.
   fn decode_msg(data: &mut &[u8], ctx: &ProtoCtx) -> Result<Self, P2pDecodeError> {
     Ok(Self::decode_as(data, MnListFormat::for_version(ctx.version))?)
   }

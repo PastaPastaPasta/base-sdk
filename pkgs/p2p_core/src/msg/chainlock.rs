@@ -29,7 +29,8 @@ pub struct ClSig {
   pub height: i32,
   /// Hash of the locked block.
   pub block_hash: BlockHash,
-  /// Recovered threshold signature of the signing quorum.
+  /// Recovered threshold signature of the signing quorum, as read. Its
+  /// scheme comes from the context, not the type's tag.
   pub sig: BlsSigBytes<BlsScIetf>,
 }
 

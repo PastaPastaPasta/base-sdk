@@ -209,9 +209,11 @@ pub type VerificationVector = Vec<BlsPkBytes<BlsScIetf>>;
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct QuorumData {
-  /// The verification vector, when asked for.
+  /// The verification vector, when asked for, as read. Its scheme comes
+  /// from the context, not the type's tag.
   pub vvec: Option<VerificationVector>,
-  /// The member's encrypted contributions, when asked for.
+  /// The member's encrypted contributions, when asked for, as read. The
+  /// scheme of their keys comes from the context, not the type's tag.
   pub contributions: Option<Vec<BlsIesBlobBytes<BlsScIetf>>>,
 }
 

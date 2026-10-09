@@ -127,8 +127,10 @@ codec_p2p!(GetMnListDiff {
 /// `CSimplifiedMNListDiff`).
 ///
 /// Its layout and its entries' depend on the negotiated protocol version,
-/// kept in [`MnListDiff::format`]; the codec reads and writes the current
-/// layout, and [`MsgDecode`] the negotiated one.
+/// kept in [`MnListDiff::format`]. The codec reads the current layout and
+/// [`MsgDecode`] the negotiated one; both write the diff in its own
+/// `format`, so a diff read in an older layout reads back only with
+/// [`MnListDiff::decode_as`] in that layout.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
@@ -157,8 +159,10 @@ pub struct MnListDiff {
   /// [`MnListFormat::ClSigs`].
   ///
   /// Core reads them into a map keyed by the signature as its BLS wrapper
-  /// re-serializes it, which drops repeated keys and orders the rest by the
-  /// key's double SHA-256. Core writes them in that order.
+  /// re-serializes it under the context's scheme. Of entries with equal keys
+  /// the map keeps the first, with its index set; it orders the keys by
+  /// their double SHA-256 and Core writes them in that order. Building that
+  /// map is the node-side BLS classifier's.
   pub quorum_cl_sigs: Vec<QuorumClSig>,
 }
 
@@ -244,6 +248,12 @@ impl MnListDiff {
 }
 
 impl MsgDecode for MnListDiff {
+  /// Decodes a diff in the negotiated layout.
+  ///
+  /// Core's handler reads nothing from a peer: it penalises one that sends
+  /// `mnlistdiff` and stops. A node that follows Core decides from the
+  /// command, before decoding, and decodes only the replies to its own
+  /// requests.
   fn decode_msg(data: &mut &[u8], ctx: &ProtoCtx) -> Result<Self, P2pDecodeError> {
     Ok(Self::decode_as(data, MnListFormat::for_version(ctx.version))?)
   }
@@ -271,7 +281,8 @@ impl fmt::Display for MnListDiff {
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct QuorumClSig {
-  /// BLS signature.
+  /// BLS signature, as read. Its scheme comes from the context, not the
+  /// type's tag.
   pub sig: BlsSigBytes<BlsScIetf>,
   /// Indexes into the `new_quorums` vector, ascending.
   pub index_set: BTreeSet<u16>,
@@ -321,7 +332,8 @@ pub struct SimplifiedMnListEntry {
   pub confirmed_hash: BlockHash,
   /// Network info, extended from version 3.
   pub net_info: NetInfo,
-  /// BLS operator public key.
+  /// BLS operator public key, as read. Its scheme comes from
+  /// [`SimplifiedMnListEntry::operator_key_scheme`], not the type's tag.
   pub operator_key: BlsPkBytes<BlsScIetf>,
   /// Voting key hash (HASH160).
   pub voting_key_id: PubKeyHash,

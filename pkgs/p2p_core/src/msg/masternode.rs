@@ -32,7 +32,8 @@ pub const MAX_SPORK_SIG_LEN: usize = 65;
 pub struct MnAuth {
   /// Registration transaction hash of the authenticating masternode.
   pub pro_reg_tx_hash: TxHash,
-  /// Operator signature over the connection's challenge.
+  /// Operator signature over the connection's challenge, as read. Its scheme
+  /// comes from the context, not the type's tag.
   pub sig: BlsSigBytes<BlsScIetf>,
 }
 
