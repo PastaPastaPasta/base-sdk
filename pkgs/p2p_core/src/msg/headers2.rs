@@ -642,6 +642,17 @@ mod tests {
     assert!(nonces.is_empty());
   }
 
+  #[cfg(feature = "serde")]
+  #[test]
+  fn deserialization_checks_the_restored_fields() {
+    let msg = Headers2::announce(&chain(3));
+    dash_dev::assert_json_rt(&msg);
+    // Header 2's time goes as a delta, so its encoding drops the edit.
+    let mut edited = msg.clone();
+    edited.headers[2].header.time += 1;
+    assert!(dash_dev::json_rejects::<Headers2>(&dash_dev::to_json(&edited)));
+  }
+
   #[test]
   fn the_version_list_keeps_seven_with_duplicates() {
     let mut list = VersionList::default();
