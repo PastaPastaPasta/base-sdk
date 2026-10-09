@@ -8,6 +8,7 @@
 
 use super::bls::{self, protx_bls_scheme, protx_source};
 use super::{check_version, is_known_protx_version, InputsHash, ProTxInvalid};
+use crate::prelude::*;
 use crate::support::RevocationReason;
 use crate::{hash_impl, TxHash};
 
@@ -75,10 +76,7 @@ impl BaseCodec for ProUpRevTx {
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
-    self.version.encode(buf);
-    self.pro_tx_hash.encode(buf);
-    self.reason.encode(buf);
-    self.inputs_hash.encode(buf);
+    self.encode_unsigned(buf);
     self.sig.to_bytes(protx_bls_scheme(self.version)).encode(buf);
   }
 }
@@ -100,6 +98,24 @@ impl Checkable for ProUpRevTx {
 }
 
 hash_impl!(ProUpRevTx);
+
+impl ProUpRevTx {
+  /// The payload's `SER_GETHASH` serialization, which leaves out `sig`. The
+  /// operator signs its SHA256d.
+  pub fn sig_hash_bytes(&self) -> Vec<u8> {
+    let mut buf = Vec::new();
+    self.encode_unsigned(&mut buf);
+    buf
+  }
+
+  /// Every field but `sig`, as [`BaseCodec::encode`] writes them.
+  fn encode_unsigned(&self, buf: &mut impl EncodeBuf) {
+    self.version.encode(buf);
+    self.pro_tx_hash.encode(buf);
+    self.reason.encode(buf);
+    self.inputs_hash.encode(buf);
+  }
+}
 
 impl fmt::Display for ProUpRevTx {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

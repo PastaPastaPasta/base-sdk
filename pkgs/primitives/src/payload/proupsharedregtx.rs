@@ -60,16 +60,31 @@ impl BaseCodec for ProUpSharedRegTx {
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
-    self.version.encode(buf);
-    self.pro_tx_hash.encode(buf);
-    bls::write_lazy(&self.pub_key_operator, BlsSchemeKind::Basic, buf);
-    self.key_id_voting.encode(buf);
-    self.inputs_hash.encode(buf);
+    self.encode_unsigned(buf);
     shares::write_list(&self.sigs, buf);
   }
 }
 
 hash_impl!(ProUpSharedRegTx);
+
+impl ProUpSharedRegTx {
+  /// The payload's `SER_GETHASH` serialization, which leaves out the
+  /// signatures and their count. Every share owner signs its SHA256d.
+  pub fn sig_hash_bytes(&self) -> Vec<u8> {
+    let mut buf = Vec::new();
+    self.encode_unsigned(&mut buf);
+    buf
+  }
+
+  /// Every field but the signatures, as [`BaseCodec::encode`] writes them.
+  fn encode_unsigned(&self, buf: &mut impl EncodeBuf) {
+    self.version.encode(buf);
+    self.pro_tx_hash.encode(buf);
+    bls::write_lazy(&self.pub_key_operator, BlsSchemeKind::Basic, buf);
+    self.key_id_voting.encode(buf);
+    self.inputs_hash.encode(buf);
+  }
+}
 
 impl fmt::Display for ProUpSharedRegTx {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

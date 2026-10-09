@@ -7,8 +7,9 @@
 //! ProDisTx shared-masternode dissolution payload (type 10, v24).
 
 use super::shares::{self, CompactSig};
+use super::sighash::write_tx_header;
 use crate::prelude::*;
-use crate::{hash_impl, TxHash};
+use crate::{hash_impl, Transaction, TxHash};
 
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::impl_type;
@@ -54,6 +55,35 @@ impl BaseCodec for ProDisTx {
 }
 
 hash_impl!(ProDisTx);
+
+impl ProDisTx {
+  /// The bytes whose SHA256d every dissolution signature signs, Core's
+  /// `MakeSignHash`.
+  ///
+  /// The digest commits to the inputs and outputs of `tx`, the transaction
+  /// that carries this payload, and to `sig_count`, which selects the mode
+  /// (one signature is unilateral, one per share unanimous). A signer passes
+  /// the count the transaction will carry; Core verifies with `sigs.len()`.
+  pub fn sig_hash_bytes(&self, tx: &Transaction, sig_count: u8) -> Vec<u8> {
+    let mut buf = Vec::new();
+    String::from("DashSharedMNDissolve").encode(&mut buf);
+    self.version.encode(&mut buf);
+    write_tx_header(tx, &mut buf);
+    for input in &tx.inputs {
+      input.prevout.encode(&mut buf);
+    }
+    for input in &tx.inputs {
+      input.sequence.encode(&mut buf);
+    }
+    for output in &tx.outputs {
+      output.encode(&mut buf);
+    }
+    self.pro_tx_hash.encode(&mut buf);
+    self.actor_index.encode(&mut buf);
+    sig_count.encode(&mut buf);
+    buf
+  }
+}
 
 impl fmt::Display for ProDisTx {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

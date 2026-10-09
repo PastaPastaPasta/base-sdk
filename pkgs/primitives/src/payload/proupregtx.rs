@@ -108,17 +108,7 @@ impl BaseCodec for ProUpRegTx {
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
-    self.version.encode(buf);
-    self.pro_tx_hash.encode(buf);
-    self.mode.encode(buf);
-    bls::write_lazy(&self.pub_key_operator, protx_bls_scheme(self.version), buf);
-    self.key_id_voting.encode(buf);
-    if self.version >= PROTX_VERSION_EXT_ADDR {
-      shares::write_list(&self.payouts, buf);
-    } else {
-      self.script_payout.encode(buf);
-    }
-    self.inputs_hash.encode(buf);
+    self.encode_unsigned(buf);
     self.vch_sig.encode(buf);
   }
 }
@@ -164,6 +154,31 @@ impl Checkable for ProUpRegTx {
 }
 
 hash_impl!(ProUpRegTx);
+
+impl ProUpRegTx {
+  /// The payload's `SER_GETHASH` serialization, which leaves out
+  /// `vch_sig`. The owner key signs its SHA256d.
+  pub fn sig_hash_bytes(&self) -> Vec<u8> {
+    let mut buf = Vec::new();
+    self.encode_unsigned(&mut buf);
+    buf
+  }
+
+  /// Every field but `vch_sig`, as [`BaseCodec::encode`] writes them.
+  fn encode_unsigned(&self, buf: &mut impl EncodeBuf) {
+    self.version.encode(buf);
+    self.pro_tx_hash.encode(buf);
+    self.mode.encode(buf);
+    bls::write_lazy(&self.pub_key_operator, protx_bls_scheme(self.version), buf);
+    self.key_id_voting.encode(buf);
+    if self.version >= PROTX_VERSION_EXT_ADDR {
+      shares::write_list(&self.payouts, buf);
+    } else {
+      self.script_payout.encode(buf);
+    }
+    self.inputs_hash.encode(buf);
+  }
+}
 
 impl fmt::Display for ProUpRegTx {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

@@ -8,6 +8,7 @@
 
 use super::bls::{self, protx_bls_scheme, protx_source};
 use super::shares::{self, CollateralShare, CompactSig, PayoutShare};
+use super::sighash::{destination_string, hash256, message_bytes, write_tx_header};
 use super::{
   check_platform_fields, check_sptx_netinfo, check_version, is_known_protx_version, read_net_info,
   read_platform_fields, write_net_info, write_platform_fields, InputsHash, MnType, ProTxInvalid, MAX_OPERATOR_REWARD,
@@ -16,11 +17,11 @@ use super::{
 use crate::payload::PlatformNodeId;
 use crate::prelude::*;
 use crate::types::{NITrait, NetInfo};
-use crate::{hash_impl, TxHash};
+use crate::{hash_impl, Transaction, TxHash};
 
 use bitcoin_primitives::script::ScriptPubKeyBuf;
 use dash_pkc::bls::BlsLazyPk;
-use dash_script::{PubKeyHash, Recipient};
+use dash_script::{AddrParams, PubKeyHash, Recipient};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
 use dash_types::{impl_type, Checkable, Numeric};
@@ -189,34 +190,7 @@ impl BaseCodec for ProRegTx {
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
-    self.version.encode(buf);
-    self.mn_type.to_base().encode(buf);
-    self.mode.encode(buf);
-    self.collateral_hash.encode(buf);
-    self.collateral_index.encode(buf);
-    write_net_info(buf, &self.net_info, self.version);
-    self.key_id_owner.encode(buf);
-    bls::write_lazy(&self.pub_key_operator, protx_bls_scheme(self.version), buf);
-    self.key_id_voting.encode(buf);
-    self.operator_reward.encode(buf);
-    if self.version >= PROTX_VERSION_EXT_ADDR {
-      shares::write_list(&self.payouts, buf);
-      shares::write_list(&self.shares, buf);
-      shares::write_items(&self.join_sigs, buf);
-      self.early_period_blocks.encode(buf);
-      self.early_penalty.encode(buf);
-    } else {
-      self.script_payout.encode(buf);
-    }
-    self.inputs_hash.encode(buf);
-    write_platform_fields(
-      buf,
-      self.mn_type,
-      self.version,
-      &self.platform_node_id,
-      self.platform_p2p_port,
-      self.platform_http_port,
-    );
+    self.encode_unsigned(buf);
     self.vch_sig.encode(buf);
   }
 }
@@ -310,6 +284,126 @@ impl Checkable for ProRegTx {
 }
 
 hash_impl!(ProRegTx);
+
+impl ProRegTx {
+  /// The payload's `SER_GETHASH` serialization, which leaves out
+  /// `vch_sig`. Its SHA256d ends the string an external collateral's key
+  /// signs; see [`Self::sign_string`].
+  pub fn sig_hash_bytes(&self) -> Vec<u8> {
+    let mut buf = Vec::new();
+    self.encode_unsigned(&mut buf);
+    buf
+  }
+
+  /// Core's `MakeSignString`, which the key of an external collateral signs
+  /// as a text message: the payout, the operator reward, the owner and
+  /// voting addresses and the payload hash, separated by `|`.
+  ///
+  /// It depends on the network through the address prefixes in `addr`.
+  pub fn sign_string(&self, addr: &AddrParams) -> String {
+    let payout = if self.version >= PROTX_VERSION_EXT_ADDR {
+      let entries: Vec<String> = self
+        .payouts
+        .iter()
+        .map(|payout| {
+          format!(
+            "{}:{}",
+            destination_string(payout.script_payout.as_bytes(), addr),
+            payout.reward
+          )
+        })
+        .collect();
+      entries.join(",")
+    } else {
+      destination_string(self.script_payout.as_bytes(), addr)
+    };
+    format!(
+      "{payout}|{}|{}|{}|{}",
+      self.operator_reward,
+      self.key_id_owner.to_base58c(addr.pubkey_addr),
+      self.key_id_voting.to_base58c(addr.pubkey_addr),
+      hash256(&self.sig_hash_bytes()),
+    )
+  }
+
+  /// The bytes whose SHA256d an external collateral's key signs, Core's
+  /// `MessageHash` input for [`Self::sign_string`].
+  pub fn sign_message_bytes(&self, addr: &AddrParams) -> Vec<u8> {
+    message_bytes(&self.sign_string(addr))
+  }
+
+  /// The bytes whose SHA256d each share owner signs to consent to a shared
+  /// registration (v24), Core's `MakeSharedRegConsentHash`.
+  ///
+  /// The digest binds the funding inputs and their sequences, every output,
+  /// the share table, the penalty terms and the registrar configuration of
+  /// `tx`, the transaction that carries this payload.
+  pub fn shared_consent_bytes(&self, tx: &Transaction) -> Vec<u8> {
+    let mut inputs = Vec::new();
+    let mut outputs = Vec::new();
+    for input in &tx.inputs {
+      input.prevout.encode(&mut inputs);
+    }
+    for output in &tx.outputs {
+      output.encode(&mut outputs);
+    }
+
+    let mut buf = Vec::new();
+    String::from("DashSharedMNReg").encode(&mut buf);
+    self.version.encode(&mut buf);
+    write_tx_header(tx, &mut buf);
+    hash256(&inputs).encode(&mut buf);
+    for input in &tx.inputs {
+      input.sequence.encode(&mut buf);
+    }
+    hash256(&outputs).encode(&mut buf);
+    self.mn_type.to_base().encode(&mut buf);
+    self.mode.encode(&mut buf);
+    write_net_info(&mut buf, &self.net_info, self.version);
+    if self.mn_type == MnType::Evo {
+      self.platform_node_id.unwrap_or_default().encode(&mut buf);
+    }
+    self.key_id_voting.encode(&mut buf);
+    bls::write_lazy(&self.pub_key_operator, protx_bls_scheme(self.version), &mut buf);
+    self.operator_reward.encode(&mut buf);
+    shares::write_list(&self.shares, &mut buf);
+    self.early_period_blocks.encode(&mut buf);
+    self.early_penalty.encode(&mut buf);
+    buf
+  }
+
+  /// Every field but `vch_sig`, as [`BaseCodec::encode`] writes them.
+  fn encode_unsigned(&self, buf: &mut impl EncodeBuf) {
+    self.version.encode(buf);
+    self.mn_type.to_base().encode(buf);
+    self.mode.encode(buf);
+    self.collateral_hash.encode(buf);
+    self.collateral_index.encode(buf);
+    write_net_info(buf, &self.net_info, self.version);
+    self.key_id_owner.encode(buf);
+    bls::write_lazy(&self.pub_key_operator, protx_bls_scheme(self.version), buf);
+    self.key_id_voting.encode(buf);
+    self.operator_reward.encode(buf);
+    if self.version >= PROTX_VERSION_EXT_ADDR {
+      shares::write_list(&self.payouts, buf);
+      shares::write_list(&self.shares, buf);
+      shares::write_items(&self.join_sigs, buf);
+      self.early_period_blocks.encode(buf);
+      self.early_penalty.encode(buf);
+    } else {
+      self.script_payout.encode(buf);
+    }
+    self.inputs_hash.encode(buf);
+    write_platform_fields(
+      buf,
+      self.mn_type,
+      self.version,
+      &self.platform_node_id,
+      self.platform_p2p_port,
+      self.platform_http_port,
+    );
+  }
+}
 
 impl fmt::Display for ProRegTx {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

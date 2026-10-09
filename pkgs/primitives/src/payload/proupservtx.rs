@@ -13,6 +13,7 @@ use super::{
   PROTX_VERSION_BASIC_BLS, PROTX_VERSION_EXT_ADDR,
 };
 use crate::payload::PlatformNodeId;
+use crate::prelude::*;
 use crate::types::{NITrait, NetInfo};
 use crate::{hash_impl, TxHash};
 
@@ -113,22 +114,7 @@ impl BaseCodec for ProUpServTx {
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
-    self.version.encode(buf);
-    if self.version >= PROTX_VERSION_BASIC_BLS {
-      self.mn_type.to_base().encode(buf);
-    }
-    self.pro_tx_hash.encode(buf);
-    write_net_info(buf, &self.net_info, self.version);
-    self.script_operator_payout.encode(buf);
-    self.inputs_hash.encode(buf);
-    write_platform_fields(
-      buf,
-      self.mn_type,
-      self.version,
-      &self.platform_node_id,
-      self.platform_p2p_port,
-      self.platform_http_port,
-    );
+    self.encode_unsigned(buf);
     self.sig.to_bytes(protx_bls_scheme(self.version)).encode(buf);
   }
 }
@@ -185,6 +171,36 @@ impl Checkable for ProUpServTx {
 }
 
 hash_impl!(ProUpServTx);
+
+impl ProUpServTx {
+  /// The payload's `SER_GETHASH` serialization, which leaves out `sig`. The
+  /// operator signs its SHA256d.
+  pub fn sig_hash_bytes(&self) -> Vec<u8> {
+    let mut buf = Vec::new();
+    self.encode_unsigned(&mut buf);
+    buf
+  }
+
+  /// Every field but `sig`, as [`BaseCodec::encode`] writes them.
+  fn encode_unsigned(&self, buf: &mut impl EncodeBuf) {
+    self.version.encode(buf);
+    if self.version >= PROTX_VERSION_BASIC_BLS {
+      self.mn_type.to_base().encode(buf);
+    }
+    self.pro_tx_hash.encode(buf);
+    write_net_info(buf, &self.net_info, self.version);
+    self.script_operator_payout.encode(buf);
+    self.inputs_hash.encode(buf);
+    write_platform_fields(
+      buf,
+      self.mn_type,
+      self.version,
+      &self.platform_node_id,
+      self.platform_p2p_port,
+      self.platform_http_port,
+    );
+  }
+}
 
 impl fmt::Display for ProUpServTx {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

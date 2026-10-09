@@ -7,9 +7,12 @@
 //! MnHardFork hard-fork signal (type 7).
 
 use super::bls;
+use super::sighash::{request_id, tx_bytes_unsigned};
 use super::QuorumHash;
-use crate::hash_impl;
+use crate::prelude::*;
+use crate::{hash_impl, Transaction};
 
+use dash_num::Hash256;
 use dash_pkc::bls::{BlsEagerSig, BlsSchemeKind, BlsSchemeSource};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
@@ -19,6 +22,9 @@ use core::fmt;
 
 /// Number of version bits available for signalling.
 pub const VERSIONBITS_NUM_BITS: u8 = 29;
+
+/// Prefix of an MnHF signal's request id, Core's `MNEHF_REQUESTID_PREFIX`.
+const MNHF_REQUESTID_PREFIX: &str = "mnhf";
 
 /// MnHardFork -- hard-fork signal (type 7).
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
@@ -91,6 +97,23 @@ impl Checkable for MnHardFork {
 }
 
 hash_impl!(MnHardFork);
+
+impl MnHardFork {
+  /// The bytes whose SHA256d is the message hash the quorum signs: `tx`,
+  /// the transaction that carries this payload, serialized with the
+  /// payload's signature zeroed, as Core's `CheckMNHFTx` hashes it.
+  ///
+  /// The quorum signs `SignHash(llmqTypeMnhf, quorum_hash, request_id,
+  /// message hash)`.
+  pub fn sig_hash_bytes(&self, tx: &Transaction) -> Vec<u8> {
+    tx_bytes_unsigned(tx, self)
+  }
+
+  /// The request id of the signal, Core's `GetRequestId`.
+  pub fn request_id(&self) -> Hash256 {
+    request_id(MNHF_REQUESTID_PREFIX, &i64::from(self.version_bit))
+  }
+}
 
 impl fmt::Display for MnHardFork {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

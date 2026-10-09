@@ -11,6 +11,7 @@ use crate::prelude::*;
 use crate::{codec_type, TxHash};
 
 use bitcoin_primitives::script::ScriptPubKeyBuf;
+use dash_types::codec::BaseCodec;
 use dash_types::type_id::TypeId;
 
 use core::fmt;
@@ -45,6 +46,20 @@ codec_type!(ProUpShareTx {
   inputs_hash,
   vch_sig,
 });
+
+impl ProUpShareTx {
+  /// The payload's `SER_GETHASH` serialization, which leaves out
+  /// `vch_sig`. The share's owner key signs its SHA256d.
+  pub fn sig_hash_bytes(&self) -> Vec<u8> {
+    let mut buf = Vec::new();
+    self.version.encode(&mut buf);
+    self.pro_tx_hash.encode(&mut buf);
+    self.share_index.encode(&mut buf);
+    self.script_reward.encode(&mut buf);
+    self.inputs_hash.encode(&mut buf);
+    buf
+  }
+}
 
 impl fmt::Display for ProUpShareTx {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

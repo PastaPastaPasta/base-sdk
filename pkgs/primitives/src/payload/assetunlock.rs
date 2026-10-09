@@ -6,9 +6,12 @@
 
 //! AssetUnlock (type 9): Platform to L1.
 
+use super::sighash::{request_id, tx_bytes_unsigned};
 use super::{bls, QuorumHash};
-use crate::hash_impl;
+use crate::prelude::*;
+use crate::{hash_impl, Transaction};
 
+use dash_num::Hash256;
 use dash_pkc::bls::BlsGlobalSig;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
@@ -19,6 +22,10 @@ use core::fmt;
 /// AssetUnlock: Platform-to-L1 (type 9).
 ///
 /// Versions 1 and 2 share a layout; version 2 (v24) changes the txid only.
+/// Prefix of an asset unlock's request id, Core's
+/// `ASSET_UNLOCK_REQUESTID_PREFIX`.
+const ASSET_UNLOCK_REQUESTID_PREFIX: &str = "plwdtx";
+
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
@@ -99,6 +106,24 @@ impl Checkable for AssetUnlock {
 }
 
 hash_impl!(AssetUnlock);
+
+impl AssetUnlock {
+  /// The bytes whose SHA256d is the message hash the quorum signs: `tx`,
+  /// the transaction that carries this payload, serialized whole with the
+  /// quorum signature zeroed, as Core's `CheckAssetUnlockTx` hashes it.
+  ///
+  /// Unlike the stable txid of version 2, it keeps the requested height and
+  /// quorum hash. The quorum signs `SignHash(llmqTypePlatform, quorum_hash,
+  /// request_id, message hash)`.
+  pub fn sig_hash_bytes(&self, tx: &Transaction) -> Vec<u8> {
+    tx_bytes_unsigned(tx, self)
+  }
+
+  /// The request id of the withdrawal, from its index.
+  pub fn request_id(&self) -> Hash256 {
+    request_id(ASSET_UNLOCK_REQUESTID_PREFIX, &self.index)
+  }
+}
 
 impl fmt::Display for AssetUnlock {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

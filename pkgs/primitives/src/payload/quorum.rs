@@ -9,10 +9,11 @@
 use super::bls::{self, commitment_bls_scheme, qc_source};
 use super::QuorumHash;
 use crate::hash_impl;
+use crate::prelude::*;
 use crate::support::{DynBitset, LlmqType};
 
 use dash_num::make_hash;
-use dash_pkc::bls::{BlsEagerPk, BlsEagerSig};
+use dash_pkc::bls::{BlsEagerPk, BlsEagerSig, BlsSchemeKind};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{impl_type, Checkable, Numeric};
@@ -132,6 +133,22 @@ impl BaseCodec for Commitment {
 hash_impl!(Commitment);
 
 impl Commitment {
+  /// The bytes whose SHA256d the quorum and the members sign, Core's
+  /// `BuildCommitmentHash`: the LLMQ type, the quorum hash, the valid
+  /// members, the quorum public key and the verification vector hash.
+  ///
+  /// Core serializes the public key under its process-wide flag, not the
+  /// commitment's version, so the caller gives that `scheme`.
+  pub fn sig_hash_bytes(&self, scheme: BlsSchemeKind) -> Vec<u8> {
+    let mut buf = Vec::new();
+    self.llmq_type.to_base().encode(&mut buf);
+    self.quorum_hash.encode(&mut buf);
+    self.valid_members.encode(&mut buf);
+    self.quorum_public_key.to_bytes(scheme).encode(&mut buf);
+    self.quorum_vvec_hash.encode(&mut buf);
+    buf
+  }
+
   /// Returns true if this is an indexed commitment (version 2 or 4).
   #[inline]
   pub fn is_indexed(&self) -> bool {
@@ -258,6 +275,13 @@ impl Checkable for FinalCommitment {
 }
 
 hash_impl!(FinalCommitment);
+
+impl FinalCommitment {
+  /// The commitment's [`Commitment::sig_hash_bytes`].
+  pub fn sig_hash_bytes(&self, scheme: BlsSchemeKind) -> Vec<u8> {
+    self.commitment.sig_hash_bytes(scheme)
+  }
+}
 
 impl fmt::Display for FinalCommitment {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

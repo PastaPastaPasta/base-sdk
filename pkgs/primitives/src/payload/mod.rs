@@ -27,6 +27,7 @@ mod proupsharedregtx;
 mod proupsharetx;
 mod quorum;
 mod shares;
+mod sighash;
 
 use crate::hash_impl;
 use crate::prelude::*;
@@ -53,6 +54,7 @@ pub use self::proupsharedregtx::ProUpSharedRegTx;
 pub use self::proupsharetx::ProUpShareTx;
 pub use self::quorum::{Commitment, CommitmentInvalid, FinalCommitment, QuorumVvecHash};
 pub use self::shares::{CollateralShare, CompactSig, PayoutShare, COMPACT_SIG_LEN};
+pub use self::sighash::{llmq_sign_hash, message_bytes, MESSAGE_MAGIC};
 
 pub use dash_pkc::__private::__EddsaPkHash as PlatformNodeId;
 
