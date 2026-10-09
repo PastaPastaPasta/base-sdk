@@ -18,31 +18,36 @@ use rstest::rstest;
 #[derive(::serde::Deserialize)]
 struct Case {
   payload: String,
-  consumed: usize,
-  error: String,
+  core: String,
+  consumed: Option<usize>,
 }
 
 /// Core's verdict, and on success the bytes it read. Where a failed read
-/// stops and its error class are not compared: no Core logic observes them
-/// (DEC-98).
+/// stops and its error are not compared: no Core logic observes them.
 #[rstest]
 fn getblocktxn_verdicts_are_cores() {
-  let cases: Vec<Case> = Corpus::open(env!("CARGO_MANIFEST_DIR"), "core_cursors").value("getblocktxn");
+  let cases: Vec<Case> = Corpus::open(env!("CARGO_MANIFEST_DIR"), "core_getblocktxn").value("getblocktxn");
   assert!(cases.len() > 400);
+  assert!(cases.iter().any(|c| c.core == "read") && cases.iter().any(|c| c.core == "reject"));
   let ctx = ProtoCtx::new(ProtocolVersion::V24_0, BlsCtx::BASIC);
   for c in &cases {
     let payload = vec_from_hex(&c.payload);
     let mut cursor = &payload[..];
     let r = GetBlockTxn::decode(&mut cursor);
-    match (&r, c.error.is_empty()) {
-      (Ok(_), true) => assert_eq!(payload.len() - cursor.len(), c.consumed, "{}: bytes read", c.payload),
-      (Err(_), false) => {}
-      _ => panic!("{}: {r:?} vs {:?}", c.payload, c.error),
+    let read = match c.core.as_str() {
+      "read" => c.consumed,
+      "reject" => None,
+      other => panic!("{}: verdict {other}", c.payload),
+    };
+    match (&r, read) {
+      (Ok(_), Some(n)) => assert_eq!(payload.len() - cursor.len(), n, "{}: bytes read", c.payload),
+      (Err(_), None) => {}
+      _ => panic!("{}: {r:?}, Core {}", c.payload, c.core),
     }
     // The handler path gives the same verdict.
     match P2pMsg::decode_with_policy(&CommandString::GETBLOCKTXN, &payload, &ctx) {
-      Ok(d) => assert_eq!(d.consumed, c.consumed, "{}", c.payload),
-      Err(P2pDecodeError::Consensus(_)) => assert!(!c.error.is_empty(), "{}", c.payload),
+      Ok(d) => assert_eq!(Some(d.consumed), read, "{}", c.payload),
+      Err(P2pDecodeError::Consensus(_)) => assert!(read.is_none(), "{}", c.payload),
       Err(e) => panic!("{}: {e}", c.payload),
     }
   }
