@@ -19,10 +19,10 @@ struct Reply {
   raw: String,
 }
 
-/// The `getheaders2` replies the reference oracles built, by name.
+/// The `getheaders2` replies mainnet and testnet nodes built, by name.
 fn replies() -> Vec<(String, Vec<u8>)> {
   let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "core_headers2");
-  let entries: Vec<Reply> = corpus.value("oracle");
+  let entries: Vec<Reply> = corpus.value("networks");
   entries.into_iter().map(|e| (e.name, vec_from_hex(&e.raw))).collect()
 }
 

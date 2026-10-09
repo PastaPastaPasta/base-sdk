@@ -11,11 +11,11 @@
 
 use dash_dev::{vec_from_hex, Corpus};
 use dash_p2p_core::{
-  CmpctBlock, CommandString, FilterLoad, Headers2, Magic, P2pDecodeError, P2pMsg, ProtoCtx, ProtocolVersion, SendCmpct,
-  V1FrameError, V1Header,
+  CFCheckpt, CFHeaders, CFilter, CmpctBlock, CommandString, FilterLoad, Headers2, Magic, P2pDecodeError, P2pMsg,
+  ProtoCtx, ProtocolVersion, SendCmpct, V1FrameError, V1Header,
 };
 use dash_pkc::bls::BlsCtx;
-use dash_primitives::{Block, BlockHeader};
+use dash_primitives::{Block, BlockHash, BlockHeader};
 use dash_types::codec::{BaseCodec, DecodeError};
 use dash_types::Hashable;
 use rstest::rstest;
@@ -56,6 +56,19 @@ struct Message {
   source: String,
   command: String,
   raw: Raw,
+  /// For a reply to a filtered block or BIP157 request: what the probe asked
+  /// for, with the filter data from the node's own index (RPC).
+  expect: Option<Expect>,
+}
+
+/// A reply's expected fields; a `merkleblock` is checked by its block hash.
+#[derive(::serde::Deserialize)]
+#[serde(untagged)]
+enum Expect {
+  CFilter(CFilter),
+  CFHeaders(CFHeaders),
+  CFCheckpt(CFCheckpt),
+  Block { block_hash: BlockHash },
 }
 
 #[derive(::serde::Deserialize)]
@@ -135,6 +148,37 @@ fn every_message_core_sent_round_trips() {
   }
 }
 
+/// Replies Core sends and has no handler for, checked against the request:
+/// a re-encoding cannot tell two fields of one type apart.
+const REQUESTED: [&str; 4] = ["merkleblock", "cfilter", "cfheaders", "cfcheckpt"];
+
+#[rstest]
+fn replies_answer_the_request() {
+  let messages: Vec<Message> = open("core_messages").value("messages");
+  let mut checked = std::collections::BTreeMap::new();
+  for m in messages.iter().filter(|m| REQUESTED.contains(&m.command.as_str())) {
+    let label = format!("{} {} from {}", m.command, m.source, m.pin);
+    let want = m
+      .expect
+      .as_ref()
+      .unwrap_or_else(|| panic!("{label}: no request recorded"));
+    let d = P2pMsg::decode_with_policy(&command(&m.command), &m.raw.bytes(), &ctx()).unwrap();
+    match (d.msg, want) {
+      (P2pMsg::MerkleBlock(b), Expect::Block { block_hash }) => assert_eq!(b.header.hash(), *block_hash, "{label}"),
+      (P2pMsg::CFilter(f), Expect::CFilter(w)) => assert_eq!(&f, w, "{label}"),
+      (P2pMsg::CFHeaders(f), Expect::CFHeaders(w)) => assert_eq!(&f, w, "{label}"),
+      (P2pMsg::CFCheckpt(f), Expect::CFCheckpt(w)) => assert_eq!(&f, w, "{label}"),
+      (msg, _) => panic!("{label}: {msg:?} against another kind of request"),
+    }
+    *checked.entry(m.command.as_str()).or_insert(0) += 1;
+  }
+  assert_eq!(checked.keys().copied().collect::<Vec<_>>(), {
+    let mut all = REQUESTED.to_vec();
+    all.sort_unstable();
+    all
+  });
+}
+
 #[rstest]
 fn short_ids_are_cores() {
   let pairs: Vec<Compact> = open("core_messages").value("compact");
@@ -201,9 +245,9 @@ fn core_headers2_round_trip_in_their_mode() {
     modes.insert(m.mode.clone());
   }
   assert!(modes.contains("reply") && modes.contains("announce"));
-  let oracle: Vec<Header2Msg> = corpus.value("oracle");
-  assert_eq!(oracle.len(), 4);
-  for m in &oracle {
+  let networks: Vec<Header2Msg> = corpus.value("networks");
+  assert_eq!(networks.len(), 4);
+  for m in &networks {
     let msg = check_headers2(&vec_from_hex(&m.raw), &m.mode, &m.name);
     assert_eq!(msg.headers().len(), 300, "{}", m.name);
   }
@@ -215,7 +259,7 @@ const STRICT: [&str; 1] = ["sendcmpct_hb02_v1"];
 
 /// Commands Core has no handler for and ignores unread. base-sdk types them
 /// both ways; a node that follows Core ignores them before decoding.
-const IGNORED_BY_CORE: [&str; 4] = ["merkleblock", "cfilter", "cfheaders", "cfcheckpt"];
+const IGNORED_BY_CORE: [&str; 4] = REQUESTED;
 
 #[rstest]
 fn handler_verdicts_are_cores() {
