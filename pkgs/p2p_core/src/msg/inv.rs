@@ -12,7 +12,7 @@ use crate::prelude::*;
 
 use dash_num::Hash256;
 use dash_primitives::hash_impl;
-use dash_types::type_id::{TypeId, Unencodable};
+use dash_types::type_id::TypeId;
 use dash_types::{enum_map, impl_num};
 
 use core::fmt;
@@ -79,22 +79,12 @@ impl_num!(InvType, u32);
 
 hash_impl!(InvType);
 
-/// Whether inventory type 34, `MSG_ASSET_UNLOCK`, is known.
-///
-/// Core v24.0 knows it and carries the object in a `tx`; v23.1.8 does not.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
-pub enum AssetUnlockInv {
-  /// Type 34 is an unknown type, as at v23.1.8.
-  Unsupported,
-  /// Type 34 is a transaction announcement, as at v24.0.
-  Supported,
-}
-
 impl InvType {
   /// The command that carries the object, Core's `CInv::GetCommandInternal`.
   ///
   /// `None` is a type Core does not know, which its `inv` handler skips.
-  pub fn command(self, asset_unlock: AssetUnlockInv) -> Option<CommandString> {
+  /// Type 34, `MSG_ASSET_UNLOCK`, is carried in a `tx`.
+  pub fn command(self) -> Option<CommandString> {
     Some(match self {
       Self::Tx => CommandString::TX,
       Self::Block => CommandString::BLOCK,
@@ -114,23 +104,19 @@ impl InvType {
       Self::IsdLock => CommandString::ISDLOCK,
       Self::Dsq => CommandString::DSQ,
       Self::PlatformBan => CommandString::PLATFORMBAN,
-      Self::AssetUnlock if asset_unlock == AssetUnlockInv::Supported => CommandString::TX,
-      Self::AssetUnlock | Self::Error | Self::Unknown(_) => return None,
+      Self::AssetUnlock => CommandString::TX,
+      Self::Error | Self::Unknown(_) => return None,
     })
   }
 
   /// Whether Core knows the type, `CInv::IsKnownType`.
-  pub fn is_known(self, asset_unlock: AssetUnlockInv) -> bool {
-    self.command(asset_unlock).is_some()
+  pub fn is_known(self) -> bool {
+    self.command().is_some()
   }
 
   /// A transaction announcement, Core's `CInv::IsGenTxMsg`.
-  pub fn is_gen_tx(self, asset_unlock: AssetUnlockInv) -> bool {
-    match self {
-      Self::Tx | Self::Dstx => true,
-      Self::AssetUnlock => asset_unlock == AssetUnlockInv::Supported,
-      _ => false,
-    }
+  pub fn is_gen_tx(self) -> bool {
+    matches!(self, Self::Tx | Self::Dstx | Self::AssetUnlock)
   }
 
   /// A block request type, Core's `CInv::IsGenBlkMsg`.

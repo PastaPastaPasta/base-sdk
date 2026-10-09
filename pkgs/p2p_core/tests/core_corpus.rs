@@ -11,13 +11,13 @@
 
 use dash_dev::{vec_from_hex, Corpus};
 use dash_p2p_core::{
-  AssetUnlockInv, CFCheckpt, CFHeaders, CFilter, CmpctBlock, CommandString, FilterLoad, Headers2, Magic, MerkleBlock,
-  P2pDecodeError, P2pMsg, ProtoCtx, ProtocolVersion, SendCmpct, V1FrameError, V1Header,
+  CFCheckpt, CFHeaders, CFilter, CmpctBlock, CommandString, FilterLoad, Headers2, Magic, MerkleBlock, P2pDecodeError,
+  P2pMsg, ProtoCtx, ProtocolVersion, SendCmpct, V1FrameError, V1Header,
 };
 use dash_pkc::bls::BlsCtx;
 use dash_primitives::{Block, BlockHeader};
-use dash_types::codec::{BaseCodec, DecodeError};
-use dash_types::{Hashable, MAX_SER_SIZE};
+use dash_types::codec::BaseCodec;
+use dash_types::Hashable;
 use rstest::rstest;
 
 /// Hex, or a list of hex and `{"b", "n"}` byte runs (the corpus RLE).
@@ -86,46 +86,9 @@ struct Case {
   consumed: Option<usize>,
   /// Core's exception text, for rejected cases.
   exception: Option<String>,
-  /// The version this probe connection announced, when not 70240.
+  /// The version this probe connection announced, when not 70242.
   version: Option<i32>,
   replies: Vec<String>,
-}
-
-/// The class of an exception Core's reader threw, from its text.
-fn core_class(what: &str) -> &'static str {
-  const CLASSES: [(&str, &str); 8] = [
-    ("end of data", "eof"),
-    ("non-canonical ReadCompactSize()", "noncanonical"),
-    ("ReadCompactSize(): size too large", "size"),
-    ("differential value overflow", "overflow16"),
-    ("CompactSize exceeds limit of type", "type_range"),
-    ("indexes overflowed 16 bits", "total16"),
-    ("Vector length limit exceeded", "length_limit"),
-    ("String length limit exceeded", "length_limit"),
-  ];
-  CLASSES
-    .iter()
-    .find(|(text, _)| what.contains(text))
-    .map_or("other", |(_, class)| class)
-}
-
-/// The class of base-sdk's error for `cmd`, in Core's terms: the fixed
-/// limits are the ones each command's fields carry.
-fn our_class(cmd: &str, e: &P2pDecodeError) -> &'static str {
-  let P2pDecodeError::Consensus(d) = e else {
-    return "other";
-  };
-  match (cmd, d) {
-    (_, DecodeError::Eof { .. }) => "eof",
-    (_, DecodeError::NonMinimalCompactSize { .. }) => "noncanonical",
-    (_, DecodeError::CompactSizeExceedsLimit { limit, .. }) if *limit == MAX_SER_SIZE => "size",
-    ("getblocktxn", DecodeError::CompactSizeExceedsLimit { limit: 65535, .. }) => "overflow16",
-    ("cmpctblock", DecodeError::CompactSizeExceedsLimit { limit: 65535, .. }) => "type_range",
-    ("cmpctblock", DecodeError::BadLen { .. }) => "total16",
-    ("filterload", DecodeError::CompactSizeExceedsLimit { limit: 36000, .. }) => "length_limit",
-    ("filteradd", DecodeError::CompactSizeExceedsLimit { limit: 520, .. }) => "length_limit",
-    _ => "other",
-  }
 }
 
 #[derive(::serde::Deserialize)]
@@ -141,9 +104,9 @@ fn command(name: &str) -> CommandString {
   CommandString::from_static(name)
 }
 
-/// The probes negotiated common version 70240 at both releases.
+/// The probe negotiated common version 70242 with v24.0, the parity reference.
 fn ctx() -> ProtoCtx {
-  ProtoCtx::new(ProtocolVersion::V23_1, BlsCtx::BASIC)
+  ProtoCtx::new(ProtocolVersion::V24_0, BlsCtx::BASIC)
 }
 
 fn open(name: &str) -> Corpus {
@@ -271,24 +234,22 @@ fn core_headers2_round_trip_in_their_mode() {
 #[rstest]
 fn handler_verdicts_are_cores() {
   let cases: Vec<Case> = open("core_verdicts").value("cases");
-  assert!(cases.len() > 150);
+  assert!(cases.len() > 80);
   for c in &cases {
     let label = format!("{} at {}", c.name, c.pin);
     for (cmd, raw) in &c.pre {
       P2pMsg::decode_with_policy(&command(cmd), &raw.bytes(), &ctx()).unwrap_or_else(|e| panic!("{label}: {e}"));
     }
-    let ctx = ProtoCtx::new(ProtocolVersion::new(c.version.unwrap_or(70240)), BlsCtx::BASIC);
+    let ctx = ProtoCtx::new(ProtocolVersion::new(c.version.unwrap_or(70242)), BlsCtx::BASIC);
     let r = P2pMsg::decode_with_policy(&command(&c.command), &c.raw.bytes(), &ctx);
     match c.read.as_str() {
-      "throw" | "catch" => {
-        let want = core_class(c.exception.as_deref().unwrap_or_default());
-        // An unclassified exception would match any unclassified error.
-        assert_ne!(want, "other", "{label}: {:?}", c.exception);
-        match &r {
-          Err(e) => assert_eq!(our_class(&c.command, e), want, "{label}: {e}"),
-          Ok(_) => panic!("{label}: base-sdk read {r:?}, Core threw"),
-        }
-      }
+      // The verdict only: no Core logic observes the error class or where the
+      // read stopped (DEC-98).
+      "throw" | "catch" => assert!(
+        matches!(r, Err(P2pDecodeError::Consensus(_))),
+        "{label}: base-sdk {r:?}, Core threw {:?}",
+        c.exception
+      ),
       "too_many" => assert!(
         matches!(r, Err(P2pDecodeError::TooManyEntries { .. })),
         "{label}: {r:?}"
@@ -305,35 +266,25 @@ fn handler_verdicts_are_cores() {
   }
 }
 
-/// Core requests an inventory type it knows; type 34 only at v24.0.
+/// Core requests an inventory type it knows, type 34 included.
 #[rstest]
-fn inventory_type_34_is_known_by_release() {
+fn inventory_types_core_knows_are_requested() {
   let cases: Vec<Case> = open("core_verdicts").value("cases");
   let mut checked = 0;
   for c in cases.iter().filter(|c| c.name.starts_with("inv_type")) {
-    let ctx = ProtoCtx::new(ProtocolVersion::new(c.version.unwrap_or(70240)), BlsCtx::BASIC);
+    let ctx = ProtoCtx::new(ProtocolVersion::new(c.version.unwrap_or(70242)), BlsCtx::BASIC);
     let P2pMsg::Inv(inv) = P2pMsg::decode_with_policy(&CommandString::INV, &c.raw.bytes(), &ctx)
       .unwrap()
       .msg
     else {
       panic!("{}", c.name)
     };
-    let release = if c.pin.starts_with("v24") {
-      AssetUnlockInv::Supported
-    } else {
-      AssetUnlockInv::Unsupported
-    };
     let requested = c.replies.iter().any(|r| r == "getdata");
-    assert_eq!(
-      inv.inventory[0].inv_type.is_known(release),
-      requested,
-      "{} at {}",
-      c.name,
-      c.pin
-    );
+    assert!(requested, "{}", c.name);
+    assert!(inv.inventory[0].inv_type.is_known(), "{}", c.name);
     checked += 1;
   }
-  assert_eq!(checked, 6);
+  assert_eq!(checked, 3);
 }
 
 #[rstest]

@@ -35,7 +35,7 @@ pub use control::{QSendRecSigs, SendDsq, SendTxRcncl, Ssc};
 pub use gov::GovSync;
 pub use headers::{GetBlocks, GetHeaders, Headers};
 pub use headers2::{CompressedHeader, GetHeaders2, Headers2};
-pub use inv::{AssetUnlockInv, GetData, Inv, InvType, Inventory, NotFound};
+pub use inv::{GetData, Inv, InvType, Inventory, NotFound};
 pub use mn_list::{DeletedQuorum, GetMnListDiff, MnListDiff, MnListDiffPayload, QuorumClSig, SimplifiedMnListEntry};
 pub use ping::{Ping, Pong};
 pub use version::{ServiceFlags, UserAgent, UserAgentTooLong, Version, VersionAddr};
