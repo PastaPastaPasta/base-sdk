@@ -282,6 +282,8 @@ fn handler_verdicts_are_cores() {
     match c.read.as_str() {
       "throw" | "catch" => {
         let want = core_class(c.exception.as_deref().unwrap_or_default());
+        // An unclassified exception would match any unclassified error.
+        assert_ne!(want, "other", "{label}: {:?}", c.exception);
         match &r {
           Err(e) => assert_eq!(our_class(&c.command, e), want, "{label}: {e}"),
           Ok(_) => panic!("{label}: base-sdk read {r:?}, Core threw"),
