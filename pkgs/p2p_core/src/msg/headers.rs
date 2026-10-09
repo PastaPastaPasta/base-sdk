@@ -31,8 +31,10 @@ pub(crate) fn read_entry_count(data: &mut &[u8], min_entry: usize) -> Result<usi
 /// Reads a header count, rejecting one above `max` before any header.
 ///
 /// Core's handler compares the count with its limit and penalises the peer
-/// without reading further (`GetHeadersLimit`). A count the payload cannot
-/// hold fails here too, where Core reads up to the end of the data first.
+/// without reading further (`GetHeadersLimit`). A count larger than the
+/// bytes left fails here too, where Core reads up to the end of the data
+/// first; a smaller count the headers cannot fill fails where they run out,
+/// as in Core.
 pub(crate) fn read_header_count(data: &mut &[u8], command: &'static str, max: usize) -> Result<usize, P2pDecodeError> {
   let count = CompactSize::decode_size(data)?;
   if count.to_base() > max as u64 {

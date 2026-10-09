@@ -45,17 +45,19 @@ const UNCOMPRESSED: u8 = FLAG_PREV_HASH | FLAG_TIMESTAMP | FLAG_NBITS;
 /// One header of a `headers2` message, Core's `CompressibleBlockHeader`.
 ///
 /// It keeps the flags byte and the time delta as on the wire, so it encodes
-/// back to the bytes it was decoded from, unused flag bits included.
+/// back to the bytes it was decoded from, unused flag bits included. The
+/// fields the flags leave off the wire are derived: within a [`Headers2`]
+/// they are restored from the headers before, and decoded alone they are
+/// zero. [`BaseCodec::encode`] writes only the wire fields, so the fields
+/// are read-only, and a header comes from decoding or from [`Headers2`]'s
+/// encoders.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct CompressedHeader {
-  /// The flags byte, Core's `CompressedHeaderBitField`.
-  pub flags: u8,
-  /// The header, its compressed fields restored.
-  pub header: BlockHeader,
-  /// The time delta, on the wire when the timestamp is compressed.
-  pub time_offset: i16,
+  flags: u8,
+  header: BlockHeader,
+  time_offset: i16,
 }
 
 impl BaseCodec for CompressedHeader {
@@ -118,6 +120,21 @@ impl CompressedHeader {
       header,
       time_offset: 0,
     }
+  }
+
+  /// The flags byte, Core's `CompressedHeaderBitField`.
+  pub const fn flags(&self) -> u8 {
+    self.flags
+  }
+
+  /// The header, its compressed fields restored.
+  pub const fn header(&self) -> &BlockHeader {
+    &self.header
+  }
+
+  /// The time delta, on the wire when the timestamp is compressed, else 0.
+  pub const fn time_offset(&self) -> i16 {
+    self.time_offset
   }
 
   /// The version's 1-based place in the version list, 0 when on the wire.
@@ -281,11 +298,15 @@ codec_p2p!(GetHeaders2 {
 /// Each message starts a fresh version list, so the compression state never
 /// crosses messages. Core encodes in two modes: [`Headers2::reply`] for a
 /// `getheaders2` reply and [`Headers2::announce`] for a block announcement.
+///
+/// The headers come from decoding or from those encoders, so their restored
+/// fields always agree with their wire form; deserialization checks it by
+/// decoding the message's own encoding.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(try_from = "Headers2Fields", into = "Headers2Fields"))]
 pub struct Headers2 {
-  /// The headers, in wire order.
-  pub headers: Vec<CompressedHeader>,
+  headers: Vec<CompressedHeader>,
 }
 
 impl_p2p!(Headers2);
@@ -326,6 +347,11 @@ impl Headers2 {
     Self::compress(headers, true)
   }
 
+  /// The headers, in wire order.
+  pub fn headers(&self) -> &[CompressedHeader] {
+    &self.headers
+  }
+
   /// The headers with their compressed fields restored.
   pub fn block_headers(&self) -> impl ExactSizeIterator<Item = &BlockHeader> {
     self.headers.iter().map(|h| &h.header)
@@ -349,8 +375,8 @@ impl Headers2 {
   /// `hash` is called once for every header after the first whose previous
   /// block hash is left off, in order, and only for headers read before a
   /// failure, as in Core. A count above the limit for `ctx` is rejected
-  /// before any header is read, and a count the payload cannot hold fails
-  /// at the count.
+  /// before any header is read, and so is a count larger than the bytes
+  /// left; another count the headers cannot fill fails where they run out.
   ///
   /// # Errors
   ///
@@ -407,6 +433,36 @@ impl Headers2 {
 impl MsgDecode for Headers2 {
   fn decode_msg(data: &mut &[u8], ctx: &ProtoCtx) -> Result<Self, P2pDecodeError> {
     Self::decode_with_hasher(data, ctx, |h| h.hash())
+  }
+}
+
+/// A [`Headers2`]'s fields, checked by a round trip through the wire when
+/// deserialized.
+#[cfg(feature = "serde")]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Unencodable, ::serde::Serialize, ::serde::Deserialize)]
+struct Headers2Fields {
+  headers: Vec<CompressedHeader>,
+}
+
+#[cfg(feature = "serde")]
+impl TryFrom<Headers2Fields> for Headers2 {
+  type Error = &'static str;
+
+  fn try_from(f: Headers2Fields) -> Result<Self, Self::Error> {
+    let msg = Self { headers: f.headers };
+    let mut wire = Vec::new();
+    msg.encode(&mut wire);
+    match Self::decode(&mut &wire[..]) {
+      Ok(decoded) if decoded == msg => Ok(msg),
+      _ => Err("headers2 headers must be the ones their wire form decodes to"),
+    }
+  }
+}
+
+#[cfg(feature = "serde")]
+impl From<Headers2> for Headers2Fields {
+  fn from(m: Headers2) -> Self {
+    Self { headers: m.headers }
   }
 }
 
@@ -538,7 +594,7 @@ mod tests {
     let (r, nonces) = hashed(&bytes[..bytes.len() - 50]);
     assert!(r.is_err());
     assert_eq!(nonces, [0, 1]);
-    // A count the payload cannot hold fails before any header.
+    // A count larger than the bytes left fails before any header.
     let mut count = Vec::new();
     CompactSize::from(bytes.len()).encode(&mut count);
     let (r, nonces) = hashed(&[&count[..], &bytes[1..]].concat());

@@ -206,7 +206,7 @@ fn core_headers2_round_trip_in_their_mode() {
   assert_eq!(oracle.len(), 4);
   for m in &oracle {
     let msg = check_headers2(&vec_from_hex(&m.raw), &m.mode, &m.name);
-    assert_eq!(msg.headers.len(), 300, "{}", m.name);
+    assert_eq!(msg.headers().len(), 300, "{}", m.name);
   }
 }
 

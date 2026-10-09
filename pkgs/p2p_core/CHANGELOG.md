@@ -36,7 +36,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   computes a previous block hash only where Core computes it. A first header with a field left off, or a version
   offset past the list, fails with `DecodeError::InvalidValue`, where Core's `Uncompress` leaves the fields zero.
   `Headers2` keeps each header's wire form as a `CompressedHeader`, replacing `CompressionState`; a caller that needs
-  Core's reconstruction parses each `CompressedHeader` and restores the fields itself.
+  Core's reconstruction parses each `CompressedHeader` and restores the fields itself. The fields of both are private,
+  read through accessors (`Headers2::headers`, `CompressedHeader::flags`, `header` and `time_offset`), so a header's
+  restored fields always agree with what it encodes; deserializing a `Headers2` checks it.
 - The `headers2` encoders compress as Core's `Compress`: the previous block hash always, and a time delta only when
   the time does not step backwards.
 - `encode_v2` takes the peer's common version.
