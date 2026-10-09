@@ -26,6 +26,13 @@ pub enum P2pDecodeError {
     /// The raw command bytes.
     bytes: [u8; 12],
   },
+  /// A command or long-form type Core's transport refuses, which it drops
+  /// while keeping the peer.
+  #[error("invalid command: {:02x?}", .command.as_bytes())]
+  InvalidCommand {
+    /// The command as received.
+    command: CommandString,
+  },
   /// V2 short ID does not map to a known message.
   #[error("unknown v2 short id: {id}")]
   UnknownShortId {

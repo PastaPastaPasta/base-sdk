@@ -51,11 +51,42 @@ impl CommandString {
   }
 
   /// Returns the command as a `&str` (trimmed of null padding).
+  ///
+  /// A command that is not UTF-8 up to its first NUL gives the empty string.
   pub fn as_str(&self) -> &str {
     let end = self.0.iter().position(|&b| b == 0).unwrap_or(12);
-    // The bytes are always valid ASCII written by from_static or
-    // validated on decode, so this conversion is sound.
     core::str::from_utf8(&self.0[..end]).unwrap_or("")
+  }
+
+  /// Whether Core's V1 transport accepts the command (`IsCommandValid`).
+  ///
+  /// The bytes before the first NUL must be in 0x20 to 0x7e, and every byte
+  /// after it NUL. Core drops any other message and keeps the peer.
+  pub const fn is_valid_v1(&self) -> bool {
+    self.is_valid_up_to(0x7e)
+  }
+
+  /// Whether Core's V2 transport accepts a long-form type (`GetMessageType`).
+  ///
+  /// As [`Self::is_valid_v1`], but 0x7f is accepted too.
+  pub const fn is_valid_v2(&self) -> bool {
+    self.is_valid_up_to(0x7f)
+  }
+
+  /// Printable bytes in 0x20 to `max` up to the first NUL, then only NULs.
+  const fn is_valid_up_to(&self, max: u8) -> bool {
+    let mut padding = false;
+    let mut i = 0;
+    while i < self.0.len() {
+      let b = self.0[i];
+      if b == 0 {
+        padding = true;
+      } else if padding || b < b' ' || b > max {
+        return false;
+      }
+      i += 1;
+    }
+    true
   }
 }
 

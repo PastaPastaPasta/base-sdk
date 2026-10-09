@@ -50,6 +50,9 @@ pub fn decode_v2(payload: &[u8]) -> Result<P2pMsg, P2pDecodeError> {
     let mut cmd_bytes = [0u8; 12];
     cmd_bytes.copy_from_slice(&rest[..12]);
     let cmd = CommandString::from_bytes(cmd_bytes);
+    if !cmd.is_valid_v2() {
+      return Err(P2pDecodeError::InvalidCommand { command: cmd });
+    }
     P2pMsg::decode_payload(&cmd, &rest[12..])
   } else {
     // Short ID: resolve to command, then decode payload.

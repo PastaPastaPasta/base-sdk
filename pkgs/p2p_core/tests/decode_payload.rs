@@ -36,3 +36,40 @@ fn every_command_is_bound_by_the_message_limit(#[case] name: &str) {
     })
   );
 }
+
+fn command(bytes: &[u8]) -> CommandString {
+  let mut raw = [0u8; 12];
+  raw[..bytes.len()].copy_from_slice(bytes);
+  CommandString::from_bytes(raw)
+}
+
+/// Core's V1 `IsCommandValid` (`protocol.cpp:232-249` in v24.0.0-rc.3) and
+/// V2 `GetMessageType` (`net.cpp:1496-1530`): printable bytes up to the
+/// first NUL, then only NULs. V2 also accepts 0x7f.
+#[rstest]
+#[case::known(b"ping", true, true)]
+#[case::full_width(b"abcdefghijkl", true, true)]
+#[case::space(b"a b", true, true)]
+#[case::empty(b"", true, true)]
+#[case::del(b"pi\x7fng", false, true)]
+#[case::control(b"pi\x1fng", false, false)]
+#[case::high(b"pi\x80ng", false, false)]
+#[case::after_nul(b"pi\0ng", false, false)]
+fn command_validity_follows_core(#[case] bytes: &[u8], #[case] v1: bool, #[case] v2: bool) {
+  let cmd = command(bytes);
+  assert_eq!((cmd.is_valid_v1(), cmd.is_valid_v2()), (v1, v2));
+}
+
+/// A V2 long-form type that `GetMessageType` refuses is dropped before any
+/// handler sees it.
+#[rstest]
+fn invalid_v2_long_form_type_is_refused() {
+  let mut contents = vec![0u8];
+  contents.extend_from_slice(command(b"pi\0ng").as_bytes());
+  assert_eq!(
+    dash_p2p_core::decode_v2(&contents),
+    Err(P2pDecodeError::InvalidCommand {
+      command: command(b"pi\0ng"),
+    })
+  );
+}
