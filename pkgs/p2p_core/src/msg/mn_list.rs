@@ -15,7 +15,7 @@ use dash_primitives::{
 };
 use dash_script::PubKeyHash;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
-use dash_types::{type_id::TypeId, Numeric};
+use dash_types::{type_id::TypeId, CoreBool, Numeric};
 
 use core::fmt;
 
@@ -152,7 +152,7 @@ pub struct SimplifiedMnListEntry {
   /// Voting key hash (HASH160).
   pub voting_key_id: PubKeyHash,
   /// Whether this masternode is currently valid.
-  pub is_valid: bool,
+  pub is_valid: CoreBool,
   /// Masternode type (Regular or Evo).
   pub mn_type: MnType,
   /// Platform HTTP port (Evo masternodes only).
@@ -172,7 +172,7 @@ impl BaseCodec for SimplifiedMnListEntry {
     let service = ServiceV1::decode(data)?;
     let operator_key = BlsPkBytes::<BlsScIetf>::decode(data)?;
     let voting_key_id = PubKeyHash::decode(data)?;
-    let is_valid = bool::decode(data)?;
+    let is_valid = CoreBool::decode(data)?;
 
     // nType is gated by the entry's version
     let mn_type = if version >= 2 {

@@ -6,15 +6,17 @@
 
 //! Version and capability handshake.
 
-use crate::codec::{codec_p2p, impl_p2p};
+use crate::codec::{codec_p2p, impl_p2p, MsgDecode};
+use crate::ctx::ProtoCtx;
 use crate::prelude::*;
 use crate::version::ProtocolVersion;
+use crate::P2pDecodeError;
 
 use dash_num::Hash256;
 use dash_primitives::{hash_impl, ServiceV1};
 use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{make_num, CompactSize};
+use dash_types::{make_num, CompactSize, CoreBool};
 
 use core::fmt;
 use core::ops::{BitAnd, BitOr, BitOrAssign};
@@ -93,7 +95,7 @@ impl_p2p!(UserAgent);
 
 impl BaseCodec for UserAgent {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let len = CompactSize::decode(data)?.into_len(MAX_USER_AGENT)?;
+    let len = CompactSize::decode_size(data)?.into_len(MAX_USER_AGENT)?;
     let raw = codec::read_bytes(data, len)?;
     Ok(Self(raw.to_vec()))
   }
@@ -180,6 +182,12 @@ impl fmt::Display for VersionAddr {
 ///
 /// Dash extends the Bitcoin version message with two additional
 /// fields for masternode authentication.
+///
+/// Core reads the fields up to `addr_recv` unconditionally, then each later
+/// field only while payload bytes remain, `addr_send` and `nonce` together.
+/// A field is `None` when the payload ends before it, and a field cut short
+/// is a decode error, so the fields present form a prefix. Encoding stops at
+/// the first absent field. Decode from a cursor that ends with the payload.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct Version {
@@ -187,46 +195,152 @@ pub struct Version {
   pub protocol_version: ProtocolVersion,
   /// Sender's advertised services.
   pub services: ServiceFlags,
-  /// Unix timestamp of the sender.
+  /// Unix timestamp of the sender, unchecked.
   pub timestamp: i64,
   /// Receiver's address as seen by the sender.
   pub addr_recv: VersionAddr,
-  /// Sender's own address.
-  pub addr_send: VersionAddr,
+  /// Sender's own address, present with `nonce`.
+  pub addr_send: Option<VersionAddr>,
   /// Random nonce for connection deduplication.
-  #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::str_u64"))]
-  pub nonce: u64,
+  #[cfg_attr(feature = "serde", serde(default, with = "dash_types::serialize::opt_str_u64"))]
+  pub nonce: Option<u64>,
   /// User agent string.
-  pub user_agent: UserAgent,
+  pub user_agent: Option<UserAgent>,
   /// Sender's best block height.
-  pub start_height: i32,
+  pub start_height: Option<i32>,
   /// Whether the sender wants transaction relay.
-  pub relay: bool,
+  pub relay: Option<CoreBool>,
   /// Dash: masternode authentication challenge.
-  pub mnauth_challenge: Hash256,
+  pub mnauth_challenge: Option<Hash256>,
   /// Dash: whether the sender identifies as a masternode.
-  pub mn_connection: bool,
+  pub mn_connection: Option<CoreBool>,
 }
 
-codec_p2p!(Version {
-  protocol_version,
-  services,
-  timestamp,
-  addr_recv,
-  addr_send,
-  nonce,
-  user_agent,
-  start_height,
-  relay,
-  mnauth_challenge,
-  mn_connection,
-});
+impl_p2p!(Version);
+
+/// Decodes `T` when bytes remain, as Core's `if (!vRecv.empty())`.
+fn read_if_any<T: BaseCodec>(data: &mut &[u8]) -> Result<Option<T>, DecodeError> {
+  if data.is_empty() {
+    return Ok(None);
+  }
+  T::decode(data).map(Some)
+}
+
+impl BaseCodec for Version {
+  fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
+    let mut version = Self::decode_head(data)?;
+    version.decode_optional(data)?;
+    Ok(version)
+  }
+
+  fn encode(&self, buf: &mut impl EncodeBuf) {
+    self.protocol_version.encode(buf);
+    self.services.encode(buf);
+    self.timestamp.encode(buf);
+    self.addr_recv.encode(buf);
+    self.encode_optional(buf);
+  }
+}
+
+hash_impl!(Version);
+
+impl Version {
+  /// Decodes the fields Core reads unconditionally, leaving the rest absent.
+  fn decode_head(data: &mut &[u8]) -> Result<Self, DecodeError> {
+    Ok(Self {
+      protocol_version: ProtocolVersion::decode(data)?,
+      services: ServiceFlags::decode(data)?,
+      timestamp: i64::decode(data)?,
+      addr_recv: VersionAddr::decode(data)?,
+      addr_send: None,
+      nonce: None,
+      user_agent: None,
+      start_height: None,
+      relay: None,
+      mnauth_challenge: None,
+      mn_connection: None,
+    })
+  }
+
+  /// Decodes the optional fields in Core's order while bytes remain.
+  fn decode_optional(&mut self, data: &mut &[u8]) -> Result<(), DecodeError> {
+    if let Some(addr_send) = read_if_any(data)? {
+      self.addr_send = Some(addr_send);
+      self.nonce = Some(u64::decode(data)?);
+    }
+    self.user_agent = read_if_any(data)?;
+    self.start_height = read_if_any(data)?;
+    self.relay = read_if_any(data)?;
+    self.mnauth_challenge = read_if_any(data)?;
+    self.mn_connection = read_if_any(data)?;
+    Ok(())
+  }
+
+  /// Writes the optional fields up to the first absent one.
+  fn encode_optional(&self, buf: &mut impl EncodeBuf) -> Option<()> {
+    let (addr_send, nonce) = (self.addr_send.as_ref()?, self.nonce?);
+    addr_send.encode(buf);
+    nonce.encode(buf);
+    self.user_agent.as_ref()?.encode(buf);
+    self.start_height?.encode(buf);
+    self.relay?.encode(buf);
+    self.mnauth_challenge.as_ref()?.encode(buf);
+    self.mn_connection?.encode(buf);
+    Some(())
+  }
+
+  /// Whether the optional fields present are a prefix of Core's read order.
+  ///
+  /// Only such a `Version` decodes from a payload; encoding another one stops
+  /// at its first absent field.
+  pub fn has_prefix_tail(&self) -> bool {
+    let present = [
+      self.addr_send.is_some(),
+      self.nonce.is_some(),
+      self.user_agent.is_some(),
+      self.start_height.is_some(),
+      self.relay.is_some(),
+      self.mnauth_challenge.is_some(),
+      self.mn_connection.is_some(),
+    ];
+    present.windows(2).all(|pair| pair[0] || !pair[1]) && present[0] == present[1]
+  }
+
+  /// This message with every optional field absent.
+  fn into_head(self) -> Self {
+    Self {
+      addr_send: None,
+      nonce: None,
+      user_agent: None,
+      start_height: None,
+      relay: None,
+      mnauth_challenge: None,
+      mn_connection: None,
+      ..self
+    }
+  }
+}
+
+/// Core checks the peer's version and services right after the fields it
+/// reads unconditionally, so a failure in the optional fields keeps them.
+impl MsgDecode for Version {
+  fn decode_msg(data: &mut &[u8], _ctx: &ProtoCtx) -> Result<Self, P2pDecodeError> {
+    let mut version = Self::decode_head(data)?;
+    match version.decode_optional(data) {
+      Ok(()) => Ok(version),
+      Err(e) => Err(P2pDecodeError::VersionTail {
+        head: Box::new(version.into_head()),
+        error: format!("{e}"),
+      }),
+    }
+  }
+}
 
 #[cfg(all(test, feature = "serde"))]
 mod tests {
   use super::*;
 
-  use dash_dev::{assert_json_rt, assert_serde_rt, check_wire, Corpus};
+  use dash_dev::{assert_json_rt, assert_serde_rt, check_wire, vec_from_hex, Corpus};
   use rstest::rstest;
 
   #[rstest]
@@ -236,6 +350,32 @@ mod tests {
   #[case::max(alloc::vec![0x80; MAX_USER_AGENT])]
   fn user_agent_json_round_trips(#[case] bytes: Vec<u8>) {
     assert_json_rt(&UserAgent(bytes));
+  }
+
+  /// A payload ending after `addr_recv`, as Core accepts it, keeps every
+  /// optional field absent through the wire and JSON, `nonce` included.
+  #[rstest]
+  fn head_only_version_round_trips() {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "decode_domain").into_value();
+    let raw = corpus["version"]
+      .as_array()
+      .and_then(|cases| cases.iter().find(|c| c["name"] == "cut_46_mandatory_only"))
+      .and_then(|c| c["raw"].as_str())
+      .map(vec_from_hex)
+      .unwrap_or_default();
+    let mut cursor = &raw[..];
+    let decoded = Version::decode(&mut cursor);
+    assert!(cursor.is_empty());
+    assert!(
+      matches!(&decoded, Ok(v) if v.addr_send.is_none() && v.nonce.is_none() && v.mn_connection.is_none()),
+      "{decoded:?}"
+    );
+    if let Ok(version) = decoded {
+      let mut buf = Vec::new();
+      version.encode(&mut buf);
+      assert_eq!(buf, raw);
+      assert_json_rt(&version);
+    }
   }
 
   #[rstest]

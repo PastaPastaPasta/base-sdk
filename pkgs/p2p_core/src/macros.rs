@@ -7,37 +7,16 @@
 //! Shared macro definitions.
 
 use crate::codec::MAX_P2P_PAYLOAD_SIZE;
-use crate::prelude::*;
+use crate::command::CommandString;
 use crate::P2pDecodeError;
 
-use bitcoin_consensus_encoding::{decode_from_slice, Decode, Decoder};
-
-/// Decode from slice, mapping the error.
-pub(crate) fn decode_msg<T: Decode>(payload: &[u8]) -> Result<T, P2pDecodeError>
-where
-  <T::Decoder as Decoder>::Error: core::fmt::Display,
-{
-  decode_from_slice(payload).map_err(|e| P2pDecodeError::Consensus(format!("{e}")))
-}
-
-/// Reject payloads that exceed the protocol limit.
-pub(crate) fn check_payload(command: &'static str, payload: &[u8]) -> Result<(), P2pDecodeError> {
+/// Rejects a V1 payload above Core's `MAX_PROTOCOL_MESSAGE_LENGTH`.
+pub(crate) fn check_payload(command: &CommandString, payload: &[u8]) -> Result<(), P2pDecodeError> {
   if payload.len() > MAX_P2P_PAYLOAD_SIZE {
     return Err(P2pDecodeError::PayloadTooLarge {
-      command,
+      command: *command,
       size: payload.len(),
       max: MAX_P2P_PAYLOAD_SIZE,
-    });
-  }
-  Ok(())
-}
-
-/// Reject payloads that should be empty.
-pub(crate) fn check_empty(command: &'static str, payload: &[u8]) -> Result<(), P2pDecodeError> {
-  if !payload.is_empty() {
-    return Err(P2pDecodeError::PayloadNotEmpty {
-      command,
-      size: payload.len(),
     });
   }
   Ok(())
@@ -53,7 +32,7 @@ macro_rules! define_p2p {
         $p_variant:ident ( $p_type:ty ) => $p_cmd:ident $p_wire:literal $(@ $p_sid:literal)?
       ),* $(,)?
     }
-    // Fully-parsed messages with an empty payload.
+    // Fully-parsed messages whose handler reads no payload.
     parsed_empty {
       $(
         $(#[$pe_attr:meta])*
@@ -67,7 +46,7 @@ macro_rules! define_p2p {
         $s_variant:ident => $s_cmd:ident $s_wire:literal $(@ $s_sid:literal)?
       ),* $(,)?
     }
-    // Recognised but not-yet-implemented (empty payload).
+    // Recognised but not-yet-implemented, handler reads no payload.
     stub_empty {
       $(
         $(#[$se_attr:meta])*
@@ -129,6 +108,23 @@ macro_rules! define_p2p {
       $( $(#[$pe_attr])* $pe_variant, )*
       $( $(#[$s_attr])* $s_variant(Vec<u8>), )*
       $( $(#[$se_attr])* $se_variant, )*
+      /// A command no handler knows, which Core logs and ignores.
+      Unknown {
+        /// The command as received.
+        command: CommandString,
+        /// The raw payload.
+        payload: Vec<u8>,
+      },
+    }
+
+    /// A message decoded by [`P2pMsg::decode_with_policy`].
+    #[derive(Clone, Debug, Eq, PartialEq, Unencodable)]
+    pub struct DecodedMsg {
+      /// The decoded message.
+      pub msg: P2pMsg,
+      /// Payload bytes the handler reads or the message keeps raw. Core
+      /// ignores the bytes after them.
+      pub consumed: usize,
     }
 
     impl P2pMsg {
@@ -139,6 +135,7 @@ macro_rules! define_p2p {
           $( Self::$pe_variant => CommandString::$pe_cmd, )*
           $( Self::$s_variant(_) => CommandString::$s_cmd, )*
           $( Self::$se_variant => CommandString::$se_cmd, )*
+          Self::Unknown { command, .. } => *command,
         }
       }
 
@@ -154,43 +151,73 @@ macro_rules! define_p2p {
           $( Self::$pe_variant => false, )*
           $( Self::$s_variant(_) => true, )*
           $( Self::$se_variant => true, )*
+          Self::Unknown { .. } => false,
         }
       }
 
-      /// Decodes a message from its command string and raw payload.
-      pub fn decode_payload(
+      /// Returns `true` for a command no handler knows.
+      pub fn is_unknown(&self) -> bool {
+        matches!(self, Self::Unknown { .. })
+      }
+
+      /// Decodes a V1 message as Core's handler for `cmd` reads its payload.
+      ///
+      /// V1 only: a V2 message decodes with [`crate::decode_v2_payload`] or
+      /// [`crate::V2Message::decode`], whose transport rules differ.
+      ///
+      /// An unknown command decodes to [`P2pMsg::Unknown`]. A command whose
+      /// handler reads nothing ignores its payload, and a typed message
+      /// reports the bytes its handler reads in [`DecodedMsg::consumed`].
+      /// The payload is bound by the V1 transport's 3 MiB limit, then the
+      /// command by its byte rules; [`crate::decode_v2`] applies the V2 rules
+      /// instead. Gates that depend on connection state, node configuration
+      /// or sync state run before this: Core does not read `sendtxrcncl`
+      /// without `-txreconciliation`, nor `ssc` once its sync has finished.
+      ///
+      /// # Errors
+      ///
+      /// Returns `PayloadTooLarge`, on which Core disconnects, `InvalidCommand`,
+      /// on which it drops the message, or a `P2pDecodeError` where its
+      /// handler throws or stops before reading the rest.
+      pub fn decode_with_policy(
         cmd: &CommandString,
         payload: &[u8],
-      ) -> Result<Self, crate::P2pDecodeError> {
-        let raw = || Vec::from(payload);
+        ctx: &crate::ctx::ProtoCtx,
+      ) -> Result<DecodedMsg, crate::P2pDecodeError> {
+        crate::macros::check_payload(cmd, payload)?;
+        if !cmd.is_valid_v1() {
+          return Err(crate::P2pDecodeError::InvalidCommand { command: *cmd });
+        }
+        Self::dispatch(cmd, payload, ctx)
+      }
+
+      /// Decodes as `cmd`'s handler reads, once the transport checks passed.
+      pub(crate) fn dispatch(
+        cmd: &CommandString,
+        payload: &[u8],
+        ctx: &crate::ctx::ProtoCtx,
+      ) -> Result<DecodedMsg, crate::P2pDecodeError> {
+        let mut cursor = payload;
         let msg = match *cmd {
           $(
             CommandString::$p_cmd => {
-              crate::macros::check_payload($p_wire, payload)?;
-              Self::$p_variant(crate::macros::decode_msg(payload)?)
+              Self::$p_variant(<$p_type as crate::codec::MsgDecode>::decode_msg(&mut cursor, ctx)?)
             }
           )*
-          $(
-            CommandString::$pe_cmd => {
-              crate::macros::check_empty($pe_wire, payload)?;
-              Self::$pe_variant
-            }
-          )*
+          $( CommandString::$pe_cmd => Self::$pe_variant, )*
           $(
             CommandString::$s_cmd => {
-              crate::macros::check_payload($s_wire, payload)?;
-              Self::$s_variant(raw())
+              cursor = &[];
+              Self::$s_variant(Vec::from(payload))
             }
           )*
-          $(
-            CommandString::$se_cmd => {
-              crate::macros::check_empty($se_wire, payload)?;
-              Self::$se_variant
-            }
-          )*
-          _ => return Err(crate::P2pDecodeError::UnknownCommand { bytes: *cmd.as_bytes() }),
+          $( CommandString::$se_cmd => Self::$se_variant, )*
+          _ => {
+            cursor = &[];
+            Self::Unknown { command: *cmd, payload: Vec::from(payload) }
+          }
         };
-        Ok(msg)
+        Ok(DecodedMsg { msg, consumed: payload.len() - cursor.len() })
       }
 
       /// Encodes this message's payload (without command/short-ID framing).
@@ -198,12 +225,13 @@ macro_rules! define_p2p {
         match self {
           $(
             Self::$p_variant(m) => {
-              buf.extend_from_slice(&encoding::encode_to_vec(m));
+              $crate::__private::dash_types::codec::BaseCodec::encode(m, buf);
             }
           )*
           $( Self::$pe_variant => {} )*
           $( Self::$s_variant(raw) => buf.extend_from_slice(raw), )* // nosemgrep: codec-no-raw-extend
           $( Self::$se_variant => {} )*
+          Self::Unknown { payload, .. } => buf.extend_from_slice(payload), // nosemgrep: codec-no-raw-extend
         }
       }
     }

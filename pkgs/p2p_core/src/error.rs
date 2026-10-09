@@ -6,6 +6,8 @@
 
 //! P2P-layer decoding errors.
 
+use crate::command::CommandString;
+use crate::msg::Version;
 use crate::prelude::*;
 
 use dash_types::codec::DecodeError;
@@ -16,13 +18,8 @@ use core::fmt;
 /// An error encountered during P2P message decoding.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Unencodable)]
 pub enum P2pDecodeError {
-  /// Underlying consensus decoding error.
-  Consensus(String),
-  /// Unrecognised 12-byte command string.
-  UnknownCommand {
-    /// The raw command bytes.
-    bytes: [u8; 12],
-  },
+  /// A field failed to decode, as a Core read throws.
+  Consensus(DecodeError),
   /// V2 short ID does not map to a known message.
   UnknownShortId {
     /// The short ID byte.
@@ -30,19 +27,56 @@ pub enum P2pDecodeError {
   },
   /// Message payload exceeds the allowed size.
   PayloadTooLarge {
-    /// Wire command name.
-    command: &'static str,
+    /// The message's command.
+    command: CommandString,
     /// Size of the raw payload, in bytes.
     size: usize,
     /// Maximum allowed size, in bytes.
     max: usize,
   },
-  /// Message carries a payload where none is permitted.
-  PayloadNotEmpty {
+  /// V2 packet contents exceed the transport limit.
+  ///
+  /// Core disconnects on the decrypted length, before reading the type.
+  ContentsTooLarge {
+    /// Size of the contents, type included, in bytes.
+    size: usize,
+    /// Maximum allowed size, in bytes.
+    max: usize,
+  },
+  /// A command or long-form type Core's transport refuses, which it drops.
+  ///
+  /// Core keeps the peer and never hands the message to its handlers.
+  InvalidCommand {
+    /// The command as received.
+    command: CommandString,
+  },
+  /// V2 packet contents without a type byte, which Core drops.
+  EmptyV2Contents,
+  /// A V2 long-form type cut short, which Core drops.
+  TruncatedV2Type {
+    /// Type bytes present, of 12.
+    remaining: usize,
+  },
+  /// A message lists more entries than its handler accepts.
+  ///
+  /// Core checks the count before reading any entry and penalises the peer.
+  TooManyEntries {
     /// Wire command name.
     command: &'static str,
-    /// Size of the raw payload, in bytes.
-    size: usize,
+    /// The decoded entry count.
+    count: u64,
+    /// The handler's limit.
+    max: u64,
+  },
+  /// A `version` whose fields after `addr_recv` fail to decode.
+  ///
+  /// Core checks the peer's version and services in `head` before it reads
+  /// the later fields, and throws only after those checks pass.
+  VersionTail {
+    /// The fields decoded before the failure, the optional ones absent.
+    head: Box<Version>,
+    /// The decode failure in the optional fields.
+    error: String,
   },
   /// A field value is outside the valid range.
   InvalidValue {
@@ -53,7 +87,7 @@ pub enum P2pDecodeError {
 
 impl From<DecodeError> for P2pDecodeError {
   fn from(e: DecodeError) -> Self {
-    Self::Consensus(format!("{e}"))
+    Self::Consensus(e)
   }
 }
 
@@ -61,29 +95,24 @@ impl fmt::Display for P2pDecodeError {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
       Self::Consensus(e) => write!(f, "{e}"),
-      Self::UnknownCommand { bytes } => {
-        write!(f, "unknown command: ")?;
-        for &b in bytes {
-          if b == 0 {
-            break;
-          }
-          if b.is_ascii_graphic() || b == b' ' {
-            write!(f, "{}", b as char)?;
-          } else {
-            write!(f, "\\x{b:02x}")?;
-          }
-        }
-        Ok(())
-      }
       Self::UnknownShortId { id } => {
         write!(f, "unknown v2 short id: {id}")
       }
       Self::PayloadTooLarge { command, size, max } => {
         write!(f, "{command} payload too large: {size} bytes, max {max}")
       }
-      Self::PayloadNotEmpty { command, size } => {
-        write!(f, "{command} must have an empty payload, got {size} bytes")
+      Self::ContentsTooLarge { size, max } => {
+        write!(f, "v2 contents too large: {size} bytes, max {max}")
       }
+      Self::InvalidCommand { command } => write!(f, "invalid command {:x?}", command.as_bytes()),
+      Self::EmptyV2Contents => f.write_str("empty v2 contents"),
+      Self::TruncatedV2Type { remaining } => {
+        write!(f, "v2 long-form type cut short: {remaining} of 12 bytes")
+      }
+      Self::TooManyEntries { command, count, max } => {
+        write!(f, "{command} lists {count} entries, max {max}")
+      }
+      Self::VersionTail { error, .. } => write!(f, "version after addr_recv: {error}"),
       Self::InvalidValue { field } => {
         write!(f, "invalid value for {field}")
       }
