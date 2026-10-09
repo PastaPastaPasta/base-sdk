@@ -188,6 +188,9 @@ macro_rules! define_p2p {
 
       /// Decodes a V1 message as Core's handler for `cmd` reads its payload.
       ///
+      /// V1 only: a V2 message decodes with [`crate::decode_v2_payload`] or
+      /// [`crate::V2Message::decode`], whose transport rules differ.
+      ///
       /// An unknown command decodes to [`P2pMsg::Unknown`]. A command whose
       /// handler reads nothing ignores its payload, and a typed message
       /// reports the bytes its handler reads in [`DecodedMsg::consumed`].

@@ -34,7 +34,7 @@ pub mod __private {
   pub use dash_primitives;
   pub use dash_types;
 }
-pub use bip324::{decode_v2, encode_v2, split_v2, V2Message};
+pub use bip324::{decode_v2, decode_v2_payload, encode_v2, split_v2, V2Message};
 pub use codec::MsgDecode;
 pub use command::CommandString;
 pub use ctx::ProtoCtx;
