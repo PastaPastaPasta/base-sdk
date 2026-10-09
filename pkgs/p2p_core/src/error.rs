@@ -6,6 +6,7 @@
 
 //! P2P-layer decoding errors.
 
+use crate::command::CommandString;
 use crate::prelude::*;
 
 use dash_types::codec::DecodeError;
@@ -34,8 +35,8 @@ pub enum P2pDecodeError {
   /// Message payload exceeds the allowed size.
   #[error("{command} payload too large: {size} bytes, max {max}")]
   PayloadTooLarge {
-    /// Wire command name.
-    command: &'static str,
+    /// The message's command.
+    command: CommandString,
     /// Size of the raw payload, in bytes.
     size: usize,
     /// Maximum allowed size, in bytes.

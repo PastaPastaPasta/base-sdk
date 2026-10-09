@@ -7,6 +7,7 @@
 //! Shared macro definitions.
 
 use crate::codec::MAX_P2P_PAYLOAD_SIZE;
+use crate::command::CommandString;
 use crate::prelude::*;
 use crate::P2pDecodeError;
 
@@ -21,10 +22,10 @@ where
 }
 
 /// Reject payloads that exceed the protocol limit.
-pub(crate) fn check_payload(command: &'static str, payload: &[u8]) -> Result<(), P2pDecodeError> {
+pub(crate) fn check_payload(command: &CommandString, payload: &[u8]) -> Result<(), P2pDecodeError> {
   if payload.len() > MAX_P2P_PAYLOAD_SIZE {
     return Err(P2pDecodeError::PayloadTooLarge {
-      command,
+      command: *command,
       size: payload.len(),
       max: MAX_P2P_PAYLOAD_SIZE,
     });
@@ -158,17 +159,19 @@ macro_rules! define_p2p {
       }
 
       /// Decodes a message from its command string and raw payload.
+      ///
+      /// Every command, known or not, is bound by Core's 3 MiB message limit
+      /// first, as Core's transports refuse a larger message before reading
+      /// its command.
       pub fn decode_payload(
         cmd: &CommandString,
         payload: &[u8],
       ) -> Result<Self, crate::P2pDecodeError> {
+        crate::macros::check_payload(cmd, payload)?;
         let raw = || Vec::from(payload);
         let msg = match *cmd {
           $(
-            CommandString::$p_cmd => {
-              crate::macros::check_payload($p_wire, payload)?;
-              Self::$p_variant(crate::macros::decode_msg(payload)?)
-            }
+            CommandString::$p_cmd => Self::$p_variant(crate::macros::decode_msg(payload)?),
           )*
           $(
             CommandString::$pe_cmd => {
@@ -176,12 +179,7 @@ macro_rules! define_p2p {
               Self::$pe_variant
             }
           )*
-          $(
-            CommandString::$s_cmd => {
-              crate::macros::check_payload($s_wire, payload)?;
-              Self::$s_variant(raw())
-            }
-          )*
+          $( CommandString::$s_cmd => Self::$s_variant(raw()), )*
           $(
             CommandString::$se_cmd => {
               crate::macros::check_empty($se_wire, payload)?;
