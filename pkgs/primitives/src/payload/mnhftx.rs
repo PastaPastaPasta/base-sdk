@@ -6,12 +6,14 @@
 
 //! MnHardFork hard-fork signal (type 7).
 
+use super::bls;
 use super::QuorumHash;
-use crate::codec_type;
+use crate::hash_impl;
 
-use dash_pkc::bls::{BlsScIetf, BlsSigBytes};
+use dash_pkc::bls::{BlsEagerSig, BlsSchemeKind, BlsSchemeSource};
+use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::Checkable;
+use dash_types::{impl_type, Checkable};
 
 use core::fmt;
 
@@ -29,16 +31,30 @@ pub struct MnHardFork {
   pub version_bit: u8,
   /// Quorum hash.
   pub quorum_hash: QuorumHash,
-  /// Quorum BLS signature.
-  pub sig: BlsSigBytes<BlsScIetf>,
+  /// Quorum BLS signature, always under the basic scheme.
+  #[cfg_attr(feature = "serde", serde(with = "super::bls::serde::always_basic"))]
+  pub sig: BlsEagerSig,
 }
 
-codec_type!(MnHardFork {
-  version,
-  version_bit,
-  quorum_hash,
-  sig,
-});
+impl_type!(MnHardFork);
+
+impl BaseCodec for MnHardFork {
+  fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
+    Ok(Self {
+      version: u8::decode(data)?,
+      version_bit: u8::decode(data)?,
+      quorum_hash: QuorumHash::decode(data)?,
+      sig: bls::read_eager(data, BlsSchemeSource::AlwaysBasic)?,
+    })
+  }
+
+  fn encode(&self, buf: &mut impl EncodeBuf) {
+    self.version.encode(buf);
+    self.version_bit.encode(buf);
+    self.quorum_hash.encode(buf);
+    self.sig.to_bytes(BlsSchemeKind::Basic).encode(buf);
+  }
+}
 
 /// MNHF signal validation failure.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Unencodable)]
@@ -73,6 +89,8 @@ impl Checkable for MnHardFork {
     None
   }
 }
+
+hash_impl!(MnHardFork);
 
 impl fmt::Display for MnHardFork {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

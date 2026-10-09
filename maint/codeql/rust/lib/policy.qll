@@ -68,6 +68,9 @@ predicate isSecretType(TypeItem t) {
       // The identifier a share is issued against is the participant's, known to every member of the
       // quorum; only the scalar the share carries is secret.
       "BlsShareId",
+      // A masternode's owner payouts and shared-collateral entries (v24 ProTx) hold public scripts,
+      // key ids and amounts, and the share-update payload a public script and signature.
+      "PayoutShare", "CollateralShare", "ProUpShareTx",
       // Serde artifact to deserialize a tagged enum.
       "__Seed"
     ]
@@ -124,6 +127,20 @@ private predicate hasFloatField(TypeItem t) {
     fieldTypeInCrate(t, name, crate) and
     typeNameInCrate(inner, name, crate) and
     hasFloatField(inner)
+  )
+}
+
+/**
+ * Holds if `t` has a lazy BLS field, directly or through a type of its own
+ * crate.
+ */
+private predicate hasLazyBlsField(TypeItem t) {
+  typeFieldName(t) = ["BlsLazy", "BlsLazyPk", "BlsLazySig"]
+  or
+  exists(TypeItem inner, string name, string crate |
+    fieldTypeInCrate(t, name, crate) and
+    typeNameInCrate(inner, name, crate) and
+    hasLazyBlsField(inner)
   )
 }
 
@@ -225,6 +242,9 @@ predicate isSuppressed(TypeItem t, string trait) {
   isOpaqueCrate(fileOf(t)) and
   nameOf(t) = "BlsLazy" and
   trait = ["Eq", "Hash"]
+  or
+  // A type holding one compares through it: suppress Eq and Hash
+  hasLazyBlsField(t) and trait = ["Eq", "Hash"]
 }
 
 /** Holds if `t` is exempt from serde derivation requirements. */
