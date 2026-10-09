@@ -38,12 +38,11 @@ pub use gov::{
   GovData, GovObject, GovObjectType, GovVote, Proposal, ProposalInvalid, Trigger, VoteOutcome, VoteSignal,
 };
 pub use payload::{
-  commitment_bls_scheme, llmq_sign_hash, message_bytes, protx_bls_scheme, AssetLock, AssetLockInvalid, AssetUnlock,
+  commitment_bls_scheme, llmq_sign_hash, protx_bls_scheme, AssetLock, AssetLockInvalid, AssetUnlock,
   AssetUnlockInvalid, CbTxInvalid, CoinbaseCommitment, CollateralShare, Commitment, CommitmentInvalid, CompactSig,
   FinalCommitment, InputsHash, MnHardFork, MnHardForkInvalid, MnType, PayloadDecode, PayloadError, PayloadInvalid,
   PayoutShare, PlatformNodeId, ProDisTx, ProRegTx, ProTxInvalid, ProUpRegTx, ProUpRevTx, ProUpServTx, ProUpShareTx,
-  ProUpSharedRegTx, QuorumHash, QuorumVvecHash, SpecialPayload, TxType, COMPACT_SIG_LEN, MESSAGE_MAGIC,
-  VERSIONBITS_NUM_BITS,
+  ProUpSharedRegTx, QuorumHash, QuorumVvecHash, SpecialPayload, TxType, COMPACT_SIG_LEN, VERSIONBITS_NUM_BITS,
 };
 pub use support::{DynBitset, DynBitsetIterator, LlmqType, RevocationReason};
 pub use transaction::{

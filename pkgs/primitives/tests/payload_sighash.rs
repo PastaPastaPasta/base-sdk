@@ -185,7 +185,7 @@ fn check_signed(txid: &str, entry: &Value) -> (u16, u16) {
           scheme,
           &c.quorum_public_key,
           &c.quorum_sig,
-          &hash(&c.sig_hash_bytes(scheme)),
+          &hash(&p.sig_hash_bytes(scheme)),
         )
       });
       (c.version, signed)

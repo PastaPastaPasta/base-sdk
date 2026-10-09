@@ -19,13 +19,13 @@ use dash_types::{impl_type, Checkable};
 
 use core::fmt;
 
-/// AssetUnlock: Platform-to-L1 (type 9).
-///
-/// Versions 1 and 2 share a layout; version 2 (v24) changes the txid only.
 /// Prefix of an asset unlock's request id, Core's
 /// `ASSET_UNLOCK_REQUESTID_PREFIX`.
 const ASSET_UNLOCK_REQUESTID_PREFIX: &str = "plwdtx";
 
+/// AssetUnlock: Platform-to-L1 (type 9).
+///
+/// Versions 1 and 2 share a layout; version 2 (v24) changes the txid only.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]

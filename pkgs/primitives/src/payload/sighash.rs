@@ -23,11 +23,11 @@ use dash_types::Numeric;
 use hex_conservative::DisplayHex;
 
 /// Core's `MESSAGE_MAGIC`, which prefixes a signed text message.
-pub const MESSAGE_MAGIC: &str = "DarkCoin Signed Message:\n";
+pub(crate) const MESSAGE_MAGIC: &str = "DarkCoin Signed Message:\n";
 
 /// The bytes Core hashes for a signed text message, the input of its
 /// `MessageHash`: the magic and the message, each as a serialized string.
-pub fn message_bytes(message: &str) -> Vec<u8> {
+pub(crate) fn message_bytes(message: &str) -> Vec<u8> {
   let mut buf = Vec::new();
   String::from(MESSAGE_MAGIC).encode(&mut buf);
   String::from(message).encode(&mut buf);
