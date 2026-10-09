@@ -25,8 +25,7 @@ pub enum P2pDecodeError {
     /// The raw command bytes.
     bytes: [u8; 12],
   },
-  /// A command or long-form type Core's transport refuses, which it drops
-  /// while keeping the peer.
+  /// A V2 long-form type that Core's `GetMessageType` refuses.
   #[error("invalid command: {:02x?}", .command.as_bytes())]
   InvalidCommand {
     /// The command as received.
@@ -43,7 +42,7 @@ pub enum P2pDecodeError {
   PayloadTooLarge {
     /// The message's command.
     command: CommandString,
-    /// Size of the raw payload, in bytes.
+    /// Size of the payload, or of the whole contents for V2, in bytes.
     size: usize,
     /// Maximum allowed size, in bytes.
     max: usize,

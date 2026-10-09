@@ -164,16 +164,25 @@ macro_rules! define_p2p {
         }
       }
 
-      /// Decodes a message from its command string and raw payload.
+      /// Decodes a V1 message from its command string and raw payload.
       ///
       /// Every command, known or not, is bound by Core's 3 MiB message limit
-      /// first, as Core's transports refuse a larger message before reading
-      /// its command.
+      /// first, as Core's V1 transport refuses a larger message before it
+      /// reads the command. Callers check [`CommandString::is_valid_v1`]
+      /// themselves; an invalid command gives `UnknownCommand`.
       pub fn decode_payload(
         cmd: &CommandString,
         payload: &[u8],
       ) -> Result<Self, crate::P2pDecodeError> {
         crate::macros::check_payload(cmd, payload)?;
+        Self::decode_unbounded(cmd, payload)
+      }
+
+      /// Decodes a payload whose transport has already bounded its size.
+      pub(crate) fn decode_unbounded(
+        cmd: &CommandString,
+        payload: &[u8],
+      ) -> Result<Self, crate::P2pDecodeError> {
         let raw = || Vec::from(payload);
         let msg = match *cmd {
           $(
