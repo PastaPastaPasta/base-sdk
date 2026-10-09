@@ -24,7 +24,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `InvType` names every type Core knows, with Core's `command`, `is_known`, `is_gen_tx`, `is_gen_blk` and
   `request_interval`; `AssetUnlockInv` selects whether type 34 is known (v24.0) or not (v23.1.8).
 - `Headers2::reply` and `Headers2::announce`, Core's two `headers2` encoders, and `Headers2::decode_with_hasher`.
-- `GetBlockTxn::new`, which refuses indexes that do not strictly increase, as Core's serializer does.
+- `GetBlockTxn::new`, which refuses indexes that do not strictly increase, as Core's serializer does, with the
+  `block_hash` and `indexes` accessors.
+- `decode_v2_payload`, which decodes a V2 payload kept apart from its type under V2 rules (the contents limit after a
+  short ID, 0x7f in a long-form type).
 - `CommandString::EMPTY`, the all-zero type.
 
 ### Changed
@@ -36,3 +39,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   the time does not step backwards.
 - `encode_v2` takes the peer's common version.
 - `filterclear`, `mempool` and `qwatch` are no longer stubs.
+- `P2pDecodeError::Consensus` carries the `DecodeError` instead of its text.
+- `GetBlockTxn`'s fields are private and deserialization checks their order; `getblocktxn` reads every declared index
+  until one is missing or overflows, so a failure leaves the cursor where Core's does.
+- A `cmpctblock` listing more than 65,535 transactions fails with `DecodeError::BadLen`.
+- `ProtocolVersion::CURRENT` is deprecated in favour of `V23_1` and `V24_0`.
+
+### Not provided
+
+- A Core-style `CmpctBlock` constructor from a block (coinbase prefilled, random nonce, txid or instance hash by
+  release); P3 builds it from `short_id_keys` and `short_id_with_keys`.
