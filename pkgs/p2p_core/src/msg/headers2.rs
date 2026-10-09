@@ -163,21 +163,36 @@ impl CompressedHeader {
     self.flags = flags;
   }
 
-  /// Core's `Uncompress`: restores the fields left off the wire from the
-  /// previous header of the message and the version list.
+  /// Restores the fields left off the wire from the previous header of the
+  /// message and the version list, as Core's `Uncompress` does for the
+  /// headers its `Compress` builds.
   ///
-  /// The first header of a message (`previous` is `None`) restores nothing;
-  /// its version, zero if left off, joins the list. A version offset beyond
-  /// the list leaves the version at zero.
+  /// The first header of a message (`previous` is `None`) must carry every
+  /// field, and its version joins the list. A version offset must name an
+  /// entry of the list. Core's `Uncompress` instead leaves the missing
+  /// fields zero; a peer needing that reconstruction parses each
+  /// [`CompressedHeader`] and restores them itself.
+  ///
+  /// # Errors
+  ///
+  /// Returns `InvalidValue` for a first header with a field left off, or for
+  /// a version offset past the list.
   fn uncompress(
     &mut self,
     previous: Option<&BlockHeader>,
     versions: &mut VersionList,
     hash: &mut impl FnMut(&BlockHeader) -> BlockHash,
-  ) {
+  ) -> Result<(), DecodeError> {
     let Some(previous) = previous else {
+      let fields = self.flags & (VERSION_OFFSET_MASK | UNCOMPRESSED);
+      if fields != UNCOMPRESSED {
+        return Err(DecodeError::InvalidValue {
+          expected: vec![u64::from(UNCOMPRESSED)],
+          actual: u64::from(fields),
+        });
+      }
       versions.save(self.header.version);
-      return;
+      return Ok(());
     };
     let offset = usize::from(self.version_offset());
     if offset == 0 {
@@ -185,6 +200,11 @@ impl CompressedHeader {
     } else if offset <= versions.len() {
       self.header.version = versions.get(offset - 1);
       versions.mark_most_recent(offset - 1);
+    } else {
+      return Err(DecodeError::InvalidValue {
+        expected: (0..=versions.len() as u64).collect(),
+        actual: offset as u64,
+      });
     }
     if self.is_prev_hash_compressed() {
       self.header.prev_hash = hash(previous);
@@ -196,6 +216,7 @@ impl CompressedHeader {
     if self.flags & FLAG_NBITS == 0 {
       self.header.bits = previous.bits;
     }
+    Ok(())
   }
 }
 
@@ -270,8 +291,8 @@ pub struct Headers2 {
 impl_p2p!(Headers2);
 
 impl BaseCodec for Headers2 {
-  /// The message's codec, not Core's handler read: no 2000 or 8000 limit,
-  /// and a count the bytes cannot hold fails before any header. Use
+  /// The message's codec, not Core's handler read: no 2000 or 8000 limit.
+  /// Use
   /// [`P2pMsg::decode_with_policy`](crate::P2pMsg::decode_with_policy) or
   /// [`Headers2::decode_with_hasher`].
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
@@ -328,12 +349,14 @@ impl Headers2 {
   /// `hash` is called once for every header after the first whose previous
   /// block hash is left off, in order, and only for headers read before a
   /// failure, as in Core. A count above the limit for `ctx` is rejected
-  /// before any header is read.
+  /// before any header is read, and a count the payload cannot hold fails
+  /// at the count.
   ///
   /// # Errors
   ///
-  /// Returns `TooManyEntries` for a count above Core's limit, or the read
-  /// error where Core's handler throws.
+  /// Returns `TooManyEntries` for a count above Core's limit, the read error
+  /// where Core's handler throws, or `InvalidValue` for a header Core's
+  /// `Compress` never builds (see [`CompressedHeader`]'s uncompress rules).
   pub fn decode_with_hasher(
     data: &mut &[u8],
     ctx: &ProtoCtx,
@@ -356,11 +379,10 @@ impl Headers2 {
     hash: &mut impl FnMut(&BlockHeader) -> BlockHash,
   ) -> Result<Self, DecodeError> {
     let mut versions = VersionList::default();
-    // At most what the payload can hold, whatever the count says.
-    let mut headers: Vec<CompressedHeader> = Vec::with_capacity(count.min(data.len() / MIN_HEADERS2_ENTRY));
+    let mut headers: Vec<CompressedHeader> = Vec::with_capacity(count);
     for _ in 0..count {
       let mut h = CompressedHeader::decode(data)?;
-      h.uncompress(headers.last().map(|p| &p.header), &mut versions, hash);
+      h.uncompress(headers.last().map(|p| &p.header), &mut versions, hash)?;
       headers.push(h);
     }
     Ok(Self { headers })
@@ -469,29 +491,39 @@ mod tests {
   }
 
   #[test]
-  fn the_first_header_restores_nothing() {
+  fn a_first_header_must_carry_every_field() {
     // flags 0x01: version offset 1, prev hash, delta time and bits left off.
     let mut payload = vec![1, 0x01];
     [0xab_u8; 32].encode(&mut payload);
     (-5i16).encode(&mut payload);
     7u32.encode(&mut payload);
-    let msg = Headers2::decode_msg(&mut &payload[..], &ctx()).unwrap();
-    let h = msg.headers[0].header;
     assert_eq!(
-      (h.version, h.prev_hash, h.time, h.bits, h.nonce),
-      (0, BlockHash::default(), 0, 0, 7)
+      Headers2::decode_msg(&mut &payload[..], &ctx()),
+      Err(P2pDecodeError::Consensus(DecodeError::InvalidValue {
+        expected: vec![u64::from(UNCOMPRESSED)],
+        actual: 0x01
+      }))
     );
-    assert_eq!(msg.headers[0].time_offset, -5);
-    assert_eq!(wire(&msg), payload);
+    // The wire fields still parse, for a caller restoring them as Core does.
+    let h = CompressedHeader::decode(&mut &payload[1..]).unwrap();
+    assert_eq!((h.version_offset(), h.time_offset, h.header.nonce), (1, -5, 7));
+    let mut again = Vec::new();
+    h.encode(&mut again);
+    assert_eq!(again, payload[1..]);
   }
 
   #[test]
-  fn an_offset_past_the_list_leaves_version_zero() {
+  fn a_version_offset_must_name_a_listed_version() {
     let mut msg = Headers2::announce(&chain(2));
-    // Header 1 carried its version; with offset 2 it is not on the wire.
+    // Header 1 carried its version; offset 2 names nothing in a 1-entry list.
     msg.headers[1].flags = (msg.headers[1].flags & !VERSION_OFFSET_MASK) | 2;
-    let decoded = Headers2::decode(&mut &wire(&msg)[..]).unwrap();
-    assert_eq!(decoded.headers[1].header.version, 0);
+    assert_eq!(
+      Headers2::decode(&mut &wire(&msg)[..]),
+      Err(DecodeError::InvalidValue {
+        expected: vec![0, 1],
+        actual: 2
+      })
+    );
   }
 
   #[test]
@@ -506,12 +538,12 @@ mod tests {
     let (r, nonces) = hashed(&bytes[..bytes.len() - 50]);
     assert!(r.is_err());
     assert_eq!(nonces, [0, 1]);
-    // A count past the end of the data: read and hashed up to the end.
-    let mut long = bytes.clone();
-    long[0] = 79;
-    let (r, nonces) = hashed(&long);
+    // A count the payload cannot hold fails before any header.
+    let mut count = Vec::new();
+    CompactSize::from(bytes.len()).encode(&mut count);
+    let (r, nonces) = hashed(&[&count[..], &bytes[1..]].concat());
     assert!(r.is_err());
-    assert_eq!(nonces, [0, 1, 3]);
+    assert!(nonces.is_empty());
   }
 
   #[test]

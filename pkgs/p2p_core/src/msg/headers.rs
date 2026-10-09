@@ -32,8 +32,7 @@ pub(crate) fn read_entry_count(data: &mut &[u8], min_entry: usize) -> Result<usi
 ///
 /// Core's handler compares the count with its limit and penalises the peer
 /// without reading further (`GetHeadersLimit`). A count the payload cannot
-/// hold is not rejected here: Core reads, and for `headers2` hashes, the
-/// headers before the end of the data.
+/// hold fails here too, where Core reads up to the end of the data first.
 pub(crate) fn read_header_count(data: &mut &[u8], command: &'static str, max: usize) -> Result<usize, P2pDecodeError> {
   let count = CompactSize::decode_size(data)?;
   if count.to_base() > max as u64 {
@@ -43,7 +42,7 @@ pub(crate) fn read_header_count(data: &mut &[u8], command: &'static str, max: us
       max: max as u64,
     });
   }
-  Ok(count.into_len(max)?)
+  Ok(count.into_len(data.len())?)
 }
 
 /// Requests block headers starting from a locator.
@@ -127,8 +126,7 @@ impl Headers {
   /// Reads `count` headers, each followed by a transaction count that Core
   /// reads with `ReadCompactSize` and ignores.
   fn read(data: &mut &[u8], count: usize) -> Result<Self, DecodeError> {
-    // At most what the payload can hold, whatever the count says.
-    let mut headers = Vec::with_capacity(count.min(data.len() / MIN_HEADERS_ENTRY));
+    let mut headers = Vec::with_capacity(count);
     for _ in 0..count {
       headers.push(BlockHeader {
         version: i32::decode(data)?,
