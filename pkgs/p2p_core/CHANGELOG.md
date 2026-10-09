@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - `limits`, Dash Core's P2P protocol limits, and `ProtocolVersion` constants for every `version.h` boundary, with
-  `V23_1`, `V24_0` and `INIT`.
+  `V23_1`, `V24_0`, `INIT` and `MIN_MASTERNODE` (`MIN_MASTERNODE_PROTO_VERSION`).
 - V1 framing: `V1Header`, `encode_v1` and `checksum`, with Core's header checks (magic, then the 3 MiB length) and
   payload checks (checksum, then the command bytes) as `V1FrameError`, which says whether Core disconnects.
 - `ShortId::for_send` and `ShortId::min_version`, Core's V2 send gate: short IDs from common version 70235, 70240 for
@@ -22,7 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `P2pMsg::Unread` for the commands Core knows but has no handler for (`merkleblock`, `cfilter`, `cfheaders`,
   `cfcheckpt`); their typed variants are for sending.
 - `InvType` names every type Core knows, with Core's `command`, `is_known`, `is_gen_tx`, `is_gen_blk` and
-  `request_interval`; `AssetUnlockInv` selects whether type 34 is known (v24.0) or not (v23.1.8).
+  `request_interval`; type 34, `MSG_ASSET_UNLOCK`, is known and carried in a `tx`, as at v24.0.
 - `Headers2::reply` and `Headers2::announce`, Core's two `headers2` encoders, and `Headers2::decode_with_hasher`.
 - `GetBlockTxn::new`, which refuses indexes that do not strictly increase, as Core's serializer does, with the
   `block_hash` and `indexes` accessors.
@@ -43,7 +43,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `GetBlockTxn`'s fields are private and deserialization checks their order; `getblocktxn` reads every declared index
   until one is missing or overflows, so a failure leaves the cursor where Core's does.
 - A `cmpctblock` listing more than 65,535 transactions fails with `DecodeError::BadLen`.
-- `ProtocolVersion::CURRENT` is deprecated in favour of `V23_1` and `V24_0`.
+- A V2 short ID with no message, including the slots Core reserves (5, 29 to 32), fails with `UnknownShortId`: drop
+  the message and keep the peer. Core types those slots as the empty command and ignores them.
+
+### Removed
+
+- `ProtocolVersion::CURRENT`; use `V24_0`, or a version the caller defines.
 
 ### Not provided
 
