@@ -6,8 +6,9 @@
 
 //! Network information types and trait.
 
+use super::addrv2::MAX_ADDR_LEN;
 use super::netaddr::{is_bad_port, NetAddr};
-use super::{AddrV2, NetAddrError, ServiceV1, ServiceV2};
+use super::{AddrV1, AddrV2, NetAddrError, NetworkType, ServiceV1, ServiceV2};
 use crate::hash_impl;
 use crate::prelude::*;
 
@@ -20,12 +21,26 @@ use core::fmt;
 
 /// Maximum entries per purpose.
 const MAX_ENTRIES: usize = 4;
+/// The fewest bytes a purpose group takes, its purpose and an empty count.
+const MIN_GROUP_LEN: usize = 2;
 /// Maximum label length per RFC 1035.
 const DOMAIN_LABEL_MAX: usize = 63;
 /// Maximum FQDN length.
 const DOMAIN_MAX: usize = 253;
 /// Minimum FQDN length.
 const DOMAIN_MIN: usize = 3;
+/// The tag Core writes for an entry it marked invalid.
+const ENTRY_INVALID: u8 = 0xff;
+/// An IPv4 address embedded in the legacy IPv6 form.
+const IPV4_IN_IPV6_PREFIX: [u8; 12] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff];
+/// A TORv2 address embedded in IPv6, which Core no longer reads.
+const TORV2_IN_IPV6_PREFIX: [u8; 6] = [0xfd, 0x87, 0xd8, 0x7e, 0xeb, 0x43];
+/// Core's internal pseudo-network embedded in IPv6.
+const INTERNAL_IN_IPV6_PREFIX: [u8; 6] = [0xfd, 0x6b, 0x88, 0xc0, 0x87, 0x24];
+/// The IPv6 documentation prefix (RFC 3849).
+const RFC3849_PREFIX: [u8; 4] = [0x20, 0x01, 0x0d, 0xb8];
+/// Core's first CJDNS address byte.
+const CJDNS_PREFIX: u8 = 0xfc;
 
 /// Reserved and privacy TLDs that must be rejected.
 const TLDS_BAD: &[&str] = &[
@@ -135,6 +150,10 @@ impl fmt::Display for NIError {
 impl std::error::Error for NIError {}
 
 /// A single network info entry within a purpose group.
+///
+/// Decoding follows Core's `NetInfoEntry::Unserialize`. An entry Core cannot
+/// use is [`NIEntry::Invalid`], which re-encodes as Core's one tag byte. A
+/// hand-built entry encodes as written, even one Core would write as invalid.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
@@ -149,22 +168,29 @@ pub enum NIEntry {
     /// Network port (big-endian on wire).
     port: u16,
   },
+  /// An entry Core marked invalid: an unknown tag, an address that fails to
+  /// decode or is not valid, or a domain that fails `DomainPort::Validate`.
+  Invalid,
 }
 
 impl BaseCodec for NIEntry {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     match NIEntryCode::from_base(u8::decode(data)?) {
-      NIEntryCode::Service => Ok(Self::Service(ServiceV2::decode(data)?)),
+      NIEntryCode::Service => Ok(read_service_entry(data)),
       NIEntryCode::Domain => {
-        let name_len = CompactSize::decode(data)?.into_len(data.len())?;
+        // v24 caps the name with `LIMITED_STRING` and lets a failed read fail
+        // the payload.
+        let name_len = CompactSize::decode_size(data)?.into_len(DOMAIN_MAX)?;
         let name = codec::read_bytes(data, name_len)?.to_vec();
         let port = codec::read_u16_be(data)?;
-        Ok(Self::Domain { name, port })
+        Ok(if is_valid_domain_port(&name, port) {
+          Self::Domain { name, port }
+        } else {
+          Self::Invalid
+        })
       }
-      NIEntryCode::Unknown(t) => Err(DecodeError::InvalidValue {
-        expected: NIEntryCode::variants().iter().map(|v| u64::from(v.to_base())).collect(),
-        actual: u64::from(t),
-      }),
+      // Core reads nothing more for an unknown tag.
+      NIEntryCode::Unknown(_) => Ok(Self::Invalid),
     }
   }
 
@@ -179,41 +205,127 @@ impl BaseCodec for NIEntry {
         name.encode(buf);
         buf.extend_from_slice(&port.to_be_bytes());
       }
+      Self::Invalid => ENTRY_INVALID.encode(buf),
     }
   }
 }
 
+/// Reads a service entry's address and port as Core does in a `try` block.
+///
+/// A failed read gives [`NIEntry::Invalid`] and leaves the cursor where Core's
+/// stream stops: after what it consumed, as a failed read consumes nothing.
+fn read_service_entry(data: &mut &[u8]) -> NIEntry {
+  read_service_v2(data)
+    .ok()
+    .flatten()
+    .map_or(NIEntry::Invalid, NIEntry::Service)
+}
+
+/// Core's `CService` read in the ADDRv2 format, then `IsValid`.
+///
+/// Returns `None` for a service Core reads but does not keep. Network ids
+/// are kept as Core keeps them, so an IPv6 address in `fc00::/8` stays IPv6.
+/// `CompactSize::decode` consumes the size's first byte even when the wider
+/// read fails, as Core's `ReadCompactSize` does.
+fn read_service_v2(data: &mut &[u8]) -> Result<Option<ServiceV2>, DecodeError> {
+  let network = NetworkType::from_base(u8::decode(data)?);
+  let size = CompactSize::decode_size(data)?.into_len(MAX_ADDR_LEN)?;
+  let Some(expected) = network.expected_len() else {
+    // An unknown network's bytes are skipped and the address is invalid.
+    codec::read_bytes(data, size)?;
+    codec::read_u16_be(data)?;
+    return Ok(None);
+  };
+  if size != expected {
+    return Err(DecodeError::BadLen {
+      expected: vec![expected],
+      actual: size,
+    });
+  }
+  let raw = codec::read_bytes(data, expected)?;
+  let addr = match network {
+    NetworkType::Ipv4 => Some(AddrV2::Ipv4(array(raw))),
+    // Internal, IPv4 and TORv2 addresses in IPv6 are never valid.
+    NetworkType::Ipv6 => Some(array(raw)).filter(|ip| !is_embedded_in_ipv6(ip)).map(AddrV2::Ipv6),
+    NetworkType::Cjdns => Some(AddrV2::Cjdns(array(raw))),
+    NetworkType::TorV3 => Some(AddrV2::TorV3(array(raw))),
+    NetworkType::I2p => Some(AddrV2::I2p(array(raw))),
+    NetworkType::Unknown(_) => None,
+  };
+  let port = codec::read_u16_be(data)?;
+  Ok(addr.filter(is_valid_addr).map(|addr| ServiceV2 { addr, port }))
+}
+
+/// Whether an IPv6 address carries a network Core reads out of IPv6: an
+/// IPv4, TORv2 or internal address.
+fn is_embedded_in_ipv6(ip: &[u8; 16]) -> bool {
+  [
+    &IPV4_IN_IPV6_PREFIX[..],
+    &TORV2_IN_IPV6_PREFIX,
+    &INTERNAL_IN_IPV6_PREFIX,
+  ]
+  .iter()
+  .any(|prefix| ip.starts_with(prefix))
+}
+
+/// Copies a slice of known length into an array.
+fn array<const N: usize>(raw: &[u8]) -> [u8; N] {
+  let mut out = [0u8; N];
+  out.copy_from_slice(raw);
+  out
+}
+
+/// Core's `CNetAddr::IsValid` for an address as Core keeps it.
+fn is_valid_addr(addr: &AddrV2) -> bool {
+  match addr {
+    AddrV2::Ipv4(ip) => !matches!(u32::from_be_bytes(*ip), 0 | u32::MAX),
+    AddrV2::Ipv6(ip) => *ip != [0u8; 16] && !ip.starts_with(&RFC3849_PREFIX),
+    AddrV2::Cjdns(ip) => ip[0] == CJDNS_PREFIX,
+    AddrV2::TorV3(_) | AddrV2::I2p(_) => true,
+    AddrV2::Unknown { .. } => false,
+  }
+}
+
+/// Core's `CNetAddr::IsValid` for an address read in the legacy 16-byte form,
+/// after `SetLegacyIPv6` classifies it.
+fn is_valid_legacy_addr(ip: &[u8; 16]) -> bool {
+  if ip.starts_with(&IPV4_IN_IPV6_PREFIX) {
+    is_valid_addr(&AddrV2::Ipv4(array(&ip[12..])))
+  } else {
+    // TORv2 reads as the unspecified address and internal ones are invalid.
+    !is_embedded_in_ipv6(ip) && is_valid_addr(&AddrV2::Ipv6(*ip))
+  }
+}
+
+/// Core's `DomainPort::Validate`, which decides whether a decoded domain entry
+/// is kept.
+fn is_valid_domain_port(name: &[u8], port: u16) -> bool {
+  port != 0 && is_valid_domain(name)
+}
+
+/// Core's `DomainPort::ValidateDomain` on a lowercase name: 3 to 253 RFC 1035
+/// characters in two or more labels of 1 to 63, no label starting or ending
+/// with a hyphen.
+fn is_valid_domain(name: &[u8]) -> bool {
+  if name.len() < DOMAIN_MIN || name.len() > DOMAIN_MAX {
+    return false;
+  }
+  let lowercase_rfc1035 = |b: &u8| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'.' || *b == b'-';
+  if !name.iter().all(lowercase_rfc1035) || name[0] == b'.' || name[name.len() - 1] == b'.' {
+    return false;
+  }
+  let labels = name.split(|b| *b == b'.');
+  let valid_label = |l: &[u8]| !l.is_empty() && l.len() <= DOMAIN_LABEL_MAX && l[0] != b'-' && l[l.len() - 1] != b'-';
+  labels.clone().all(valid_label) && labels.count() >= 2
+}
+
 /// Validates a domain name per RFC 1035 consensus rules.
 fn check_domain(name: &[u8]) -> Option<NIError> {
-  let s = match core::str::from_utf8(name) {
-    Ok(s) => s,
-    Err(_) => return Some(NIError::Malformed),
-  };
-  if s.len() < DOMAIN_MIN || s.len() > DOMAIN_MAX {
+  if !is_valid_domain(name) {
     return Some(NIError::Malformed);
   }
-  if s.bytes().any(|b| b.is_ascii_uppercase()) {
-    return Some(NIError::Malformed);
-  }
-  if !s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-') {
-    return Some(NIError::Malformed);
-  }
-  if s.as_bytes()[0] == b'.' || s.as_bytes()[s.len() - 1] == b'.' {
-    return Some(NIError::Malformed);
-  }
-  let mut label_count = 0usize;
-  for label in s.split('.') {
-    if label.is_empty() || label.len() > DOMAIN_LABEL_MAX {
-      return Some(NIError::Malformed);
-    }
-    if label.as_bytes()[0] == b'-' || label.as_bytes()[label.len() - 1] == b'-' {
-      return Some(NIError::Malformed);
-    }
-    label_count += 1;
-  }
-  if label_count < 2 {
-    return Some(NIError::Malformed);
-  }
+  // Every byte is ASCII after `is_valid_domain`.
+  let s = core::str::from_utf8(name).unwrap_or_default();
   // Reject reserved and privacy TLDs.
   if TLDS_BAD.iter().chain(TLDS_PRIVACY.iter()).any(|tld| s.ends_with(tld)) {
     return Some(NIError::Malformed);
@@ -246,6 +358,7 @@ impl Checkable for NIEntry {
         }
         check_domain(name)
       }
+      Self::Invalid => Some(NIError::Malformed),
     }
   }
 }
@@ -260,6 +373,7 @@ impl fmt::Display for NIEntry {
         let s = core::str::from_utf8(name).unwrap_or("<invalid utf-8>");
         write!(f, "{s}:{port}")
       }
+      Self::Invalid => f.write_str("[invalid entry]"),
     }
   }
 }
@@ -272,7 +386,8 @@ pub trait NITrait: fmt::Display {
   /// Returns the primary service if available.
   fn primary(&self) -> Option<ServiceV2>;
 
-  /// Returns `true` when this value carries no addresses.
+  /// Returns `true` when this value is empty as Core's `IsEmpty` sees it: no
+  /// address for legacy info, a known version with no groups for extended.
   fn is_empty(&self) -> bool;
 
   /// Returns `true` if entries exist for the given purpose.
@@ -292,7 +407,12 @@ pub trait NITrait: fmt::Display {
 pub struct NetInfoV2 {
   /// Format version.
   pub version: u8,
-  /// Purpose-grouped entries.
+  /// Purpose-grouped entries, one group per purpose in purpose order.
+  ///
+  /// A decoded value keeps the first group the payload gave for a purpose, as
+  /// Core's `std::map` does, so the groups, their order and the map framing
+  /// re-encode as Core's do. An entry Core marks invalid is
+  /// [`NIEntry::Invalid`]. A version Core does not know has no groups.
   pub entries: Vec<(NIPurpose, Vec<NIEntry>)>,
 }
 
@@ -301,22 +421,34 @@ impl_type!(NetInfoV2);
 impl BaseCodec for NetInfoV2 {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let version = u8::decode(data)?;
-    let purpose_count = CompactSize::decode(data)?.into_len(data.len())?;
-    let mut entries = Vec::with_capacity(purpose_count);
-    for _ in 0..purpose_count {
-      let purpose = NIPurpose::from_base(u8::decode(data)?);
-      let entry_count = CompactSize::decode(data)?.into_len(data.len())?;
-      let mut group = Vec::with_capacity(entry_count);
-      for _ in 0..entry_count {
-        group.push(NIEntry::decode(data)?);
-      }
-      entries.push((purpose, group));
+    if !Self::is_known_version(version) {
+      // Core reads nothing more of a version it does not know.
+      return Ok(Self {
+        version,
+        entries: Vec::new(),
+      });
     }
+    // Core reads a `std::map`: a repeated purpose is read and dropped, and the
+    // groups come out in purpose order. Each group takes 2 bytes or more.
+    let purpose_count = CompactSize::decode_size(data)?.into_len(data.len() / MIN_GROUP_LEN)?;
+    let mut groups = BTreeMap::new();
+    for _ in 0..purpose_count {
+      let purpose = u8::decode(data)?;
+      let group = Vec::<NIEntry>::decode(data)?;
+      groups.entry(purpose).or_insert(group);
+    }
+    let entries = groups
+      .into_iter()
+      .map(|(purpose, group)| (NIPurpose::from_base(purpose), group))
+      .collect();
     Ok(Self { version, entries })
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
     self.version.encode(buf);
+    if !Self::is_known_version(self.version) {
+      return;
+    }
     CompactSize::from(self.entries.len()).encode(buf);
     for (purpose, group) in &self.entries {
       purpose.to_base().encode(buf);
@@ -332,7 +464,7 @@ impl Checkable for NetInfoV2 {
   type Error = NIError;
 
   fn check(&self) -> Option<Self::Error> {
-    if self.version == 0 || self.version > Self::CURRENT_VERSION {
+    if !Self::is_known_version(self.version) {
       return Some(NIError::Malformed);
     }
     if self.entries.is_empty() {
@@ -401,6 +533,12 @@ hash_impl!(NetInfoV2);
 impl NetInfoV2 {
   /// Highest supported format version.
   const CURRENT_VERSION: u8 = 1;
+
+  /// Whether Core reads past the version, `ExtNetInfo::CURRENT_VERSION` at
+  /// both pins.
+  const fn is_known_version(version: u8) -> bool {
+    version != 0 && version <= Self::CURRENT_VERSION
+  }
 }
 
 impl fmt::Display for NetInfoV2 {
@@ -448,8 +586,9 @@ impl NITrait for NetInfoV2 {
       })
   }
 
+  /// Core's `ExtNetInfo::IsEmpty`: a known version with no groups.
   fn is_empty(&self) -> bool {
-    self.entries.iter().all(|(_, group)| group.is_empty())
+    Self::is_known_version(self.version) && self.entries.is_empty()
   }
 
   fn has_entries(&self, purpose: NIPurpose) -> bool {
@@ -472,6 +611,9 @@ fn same_addr(a: &NIEntry, b: &NIEntry) -> bool {
 }
 
 /// Legacy network information wrapper.
+///
+/// Decoding follows Core's `MnNetInfo`: an address Core does not keep reads
+/// as the empty service, which is how Core re-serializes it.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
@@ -481,7 +623,15 @@ impl_type!(NetInfoV1);
 
 impl BaseCodec for NetInfoV1 {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    Ok(Self(ServiceV1::decode(data)?))
+    let service = ServiceV1::decode(data)?;
+    if is_valid_legacy_addr(&service.addr.0) {
+      Ok(Self(service))
+    } else {
+      Ok(Self(ServiceV1 {
+        addr: AddrV1([0u8; 16]),
+        port: 0,
+      }))
+    }
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
@@ -662,10 +812,19 @@ mod tests {
     assert_eq!(buf, wire);
   }
 
+  /// Core reads only the tag of an unknown entry type, marks the entry
+  /// invalid and writes it back as `ff` (`NetInfoEntry::Unserialize` and
+  /// `Serialize`, both pins).
   #[rstest]
-  fn nientry_unknown_type_fails() {
-    let wire = hex!("ff");
-    assert!(NIEntry::decode(&mut &wire[..]).is_err());
+  #[case::invalid_tag(&hex!("ff01"))]
+  #[case::unknown_tag(&hex!("0301"))]
+  fn nientry_unknown_type_is_invalid(#[case] wire: &[u8]) {
+    let mut cursor = wire;
+    assert_eq!(NIEntry::decode(&mut cursor).ok(), Some(NIEntry::Invalid));
+    assert_eq!(cursor, &wire[1..]);
+    let mut buf = Vec::new();
+    NIEntry::Invalid.encode(&mut buf);
+    assert_eq!(buf, [0xff]);
   }
 
   #[rstest]
@@ -974,6 +1133,16 @@ mod tests {
     assert!(!valid_v2().is_empty());
     assert!(valid_v2().has_entries(NIPurpose::CoreP2p));
     assert!(valid_v2().stores_platform());
+  }
+
+  /// Core's `ExtNetInfo::IsEmpty` is a known version with no groups: an
+  /// unknown version, or a group with no entries, is not empty.
+  #[rstest]
+  #[case::unknown_version(NetInfoV2 { version: 2, entries: vec![] }, false)]
+  #[case::empty_group(NetInfoV2 { version: 1, entries: vec![(NIPurpose::CoreP2p, vec![])] }, false)]
+  #[case::no_groups(NetInfoV2 { version: 1, entries: vec![] }, true)]
+  fn v2_is_empty_as_core(#[case] info: NetInfoV2, #[case] empty: bool) {
+    assert_eq!(info.is_empty(), empty);
   }
 
   #[rstest]

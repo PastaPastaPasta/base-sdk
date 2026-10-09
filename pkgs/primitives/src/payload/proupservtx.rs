@@ -6,17 +6,19 @@
 
 //! ProUpServTx service-update payload (type 2).
 
-use super::proregtx::check_platform_fields;
-use super::{check_sptx_netinfo, InputsHash, MnType, ProTxInvalid, PROTX_VERSION_BASIC_BLS, PROTX_VERSION_EXT_ADDR};
-use crate::codec::impl_payload;
+use super::bls::{self, protx_bls_scheme, protx_source};
+use super::{
+  check_platform_fields, check_sptx_netinfo, read_net_info, read_platform_fields, write_net_info,
+  write_platform_fields, InputsHash, MnType, ProTxInvalid, PROTX_VERSION_BASIC_BLS, PROTX_VERSION_EXT_ADDR,
+};
 use crate::payload::PlatformNodeId;
-use crate::types::{NITrait, NetInfo, NetInfoV1, NetInfoV2, ServiceV1};
+use crate::types::{NITrait, NetInfo};
 use crate::{hash_impl, TxHash};
 
 use bitcoin_primitives::script::ScriptPubKeyBuf;
-use dash_pkc::bls::{BlsScIetf, BlsSigBytes};
+use dash_pkc::bls::BlsEagerSig;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
-use dash_types::{type_id::TypeId, Checkable, Numeric};
+use dash_types::{impl_type, type_id::TypeId, Checkable, Numeric};
 
 use core::fmt;
 
@@ -27,7 +29,7 @@ use core::fmt;
 /// - v3: ExtAddr (extended network info)
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "serde", serde(into = "ProUpServTxSerde", try_from = "ProUpServTxSerde"))]
 pub struct ProUpServTx {
   /// 1=LegacyBLS, 2=BasicBLS, 3=ExtAddr.
   pub version: u16,
@@ -44,45 +46,52 @@ pub struct ProUpServTx {
   /// Platform node id (Evo only).
   pub platform_node_id: Option<PlatformNodeId>,
   /// Platform P2P port (Evo + version < 3 only).
-  #[cfg_attr(feature = "serde", serde(rename = "platformP2PPort"))]
   pub platform_p2p_port: Option<u16>,
   /// Platform HTTP port (Evo + version < 3 only).
-  #[cfg_attr(feature = "serde", serde(rename = "platformHTTPPort"))]
   pub platform_http_port: Option<u16>,
-  /// Operator BLS signature.
-  pub sig: BlsSigBytes<BlsScIetf>,
+  /// Operator BLS signature under the version's scheme (legacy for v1).
+  ///
+  /// Core verifies it under its process-wide flag instead.
+  pub sig: BlsEagerSig,
 }
 
-impl_payload!(ProUpServTx);
+impl_type!(ProUpServTx);
+
+/// The serde form of [`ProUpServTx`], with the signature as raw bytes.
+#[cfg(feature = "serde")]
+#[derive(
+  Clone, Debug, Eq, Hash, PartialEq, dash_types::type_id::Unencodable, ::serde::Serialize, ::serde::Deserialize,
+)]
+#[serde(rename_all = "camelCase")]
+struct ProUpServTxSerde {
+  version: u16,
+  mn_type: MnType,
+  pro_tx_hash: TxHash,
+  net_info: NetInfo,
+  script_operator_payout: ScriptPubKeyBuf,
+  inputs_hash: InputsHash,
+  platform_node_id: Option<PlatformNodeId>,
+  #[serde(rename = "platformP2PPort")]
+  platform_p2p_port: Option<u16>,
+  #[serde(rename = "platformHTTPPort")]
+  platform_http_port: Option<u16>,
+  #[serde(with = "dash_types::serialize::hex")]
+  sig: [u8; dash_pkc::bls::BLS_SIG_LEN],
+}
 
 impl BaseCodec for ProUpServTx {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let version = u16::decode(data)?;
-
-    let mn_type = if version >= 2 {
+    let mn_type = if version >= PROTX_VERSION_BASIC_BLS {
       MnType::from_base(u16::decode(data)?)
     } else {
       MnType::Regular
     };
-
     let pro_tx_hash = TxHash::decode(data)?;
-    let net_info = if version >= 3 {
-      NetInfo::Extended(NetInfoV2::decode(data)?)
-    } else {
-      NetInfo::Legacy(NetInfoV1(ServiceV1::decode(data)?))
-    };
+    let net_info = read_net_info(data, version)?;
     let script_operator_payout = ScriptPubKeyBuf::decode(data)?;
     let inputs_hash = InputsHash::decode(data)?;
-    let (platform_node_id, platform_p2p_port, platform_http_port) = if mn_type == MnType::Evo {
-      let node_id = PlatformNodeId::decode(data)?;
-      if version < 3 {
-        (Some(node_id), Some(u16::decode(data)?), Some(u16::decode(data)?))
-      } else {
-        (Some(node_id), None, None)
-      }
-    } else {
-      (None, None, None)
-    };
+    let (platform_node_id, platform_p2p_port, platform_http_port) = read_platform_fields(data, mn_type, version)?;
 
     Ok(Self {
       version,
@@ -94,35 +103,28 @@ impl BaseCodec for ProUpServTx {
       platform_node_id,
       platform_p2p_port,
       platform_http_port,
-      sig: BlsSigBytes::<BlsScIetf>::decode(data)?,
+      sig: bls::read_eager(data, protx_source(version))?,
     })
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
     self.version.encode(buf);
-    if self.version >= 2 {
+    if self.version >= PROTX_VERSION_BASIC_BLS {
       self.mn_type.to_base().encode(buf);
     }
     self.pro_tx_hash.encode(buf);
-    // Branch on version to match the decode path. Validation
-    // guarantees the variant matches the version.
-    if self.version >= 3 {
-      if let NetInfo::Extended(ext) = &self.net_info {
-        ext.encode(buf);
-      }
-    } else if let NetInfo::Legacy(svc) = &self.net_info {
-      svc.encode(buf);
-    }
+    write_net_info(buf, &self.net_info, self.version);
     self.script_operator_payout.encode(buf);
     self.inputs_hash.encode(buf);
-    if self.mn_type == MnType::Evo {
-      self.platform_node_id.unwrap_or_default().encode(buf);
-      if self.version < 3 {
-        self.platform_p2p_port.unwrap_or(0).encode(buf);
-        self.platform_http_port.unwrap_or(0).encode(buf);
-      }
-    }
-    self.sig.encode(buf);
+    write_platform_fields(
+      buf,
+      self.mn_type,
+      self.version,
+      &self.platform_node_id,
+      self.platform_p2p_port,
+      self.platform_http_port,
+    );
+    self.sig.to_bytes(protx_bls_scheme(self.version)).encode(buf);
   }
 }
 
@@ -182,6 +184,44 @@ hash_impl!(ProUpServTx);
 impl fmt::Display for ProUpServTx {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(f, "ProUpServTx {{ v{}, mn_type: {} }}", self.version, self.mn_type,)
+  }
+}
+
+#[cfg(feature = "serde")]
+impl From<ProUpServTx> for ProUpServTxSerde {
+  fn from(tx: ProUpServTx) -> Self {
+    Self {
+      version: tx.version,
+      mn_type: tx.mn_type,
+      pro_tx_hash: tx.pro_tx_hash,
+      net_info: tx.net_info,
+      script_operator_payout: tx.script_operator_payout,
+      inputs_hash: tx.inputs_hash,
+      platform_node_id: tx.platform_node_id,
+      platform_p2p_port: tx.platform_p2p_port,
+      platform_http_port: tx.platform_http_port,
+      sig: tx.sig.to_bytes(protx_bls_scheme(tx.version)),
+    }
+  }
+}
+
+#[cfg(feature = "serde")]
+impl TryFrom<ProUpServTxSerde> for ProUpServTx {
+  type Error = DecodeError;
+
+  fn try_from(raw: ProUpServTxSerde) -> Result<Self, Self::Error> {
+    Ok(Self {
+      version: raw.version,
+      mn_type: raw.mn_type,
+      pro_tx_hash: raw.pro_tx_hash,
+      net_info: raw.net_info,
+      script_operator_payout: raw.script_operator_payout,
+      inputs_hash: raw.inputs_hash,
+      platform_node_id: raw.platform_node_id,
+      platform_p2p_port: raw.platform_p2p_port,
+      platform_http_port: raw.platform_http_port,
+      sig: bls::eager_from(&raw.sig, protx_source(raw.version))?,
+    })
   }
 }
 

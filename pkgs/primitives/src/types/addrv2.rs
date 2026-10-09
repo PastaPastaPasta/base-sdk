@@ -21,7 +21,7 @@ use core::net::{Ipv4Addr, Ipv6Addr};
 use core::str::FromStr;
 
 /// Maximum raw address length for any known BIP155 network type.
-const MAX_ADDR_LEN: usize = 512;
+pub(super) const MAX_ADDR_LEN: usize = 512;
 
 /// BIP155 network address.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
