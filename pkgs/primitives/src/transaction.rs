@@ -168,6 +168,20 @@ pub enum TxInvalid {
   PayloadCheck(PayloadInvalid),
 }
 
+/// An encode target that counts the bytes written instead of storing them.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Unencodable)]
+struct ByteCount(usize);
+
+impl EncodeBuf for ByteCount {
+  fn push(&mut self, _byte: u8) {
+    self.0 += 1;
+  }
+
+  fn extend_from_slice(&mut self, data: &[u8]) {
+    self.0 += data.len();
+  }
+}
+
 /// A Dash transaction.
 ///
 /// The wire format packs `version` (i16) and `tx_type` (u16) into a single
@@ -243,6 +257,12 @@ impl Checkable for Transaction {
     }
     if !allows_empty_vout && self.outputs.is_empty() {
       return Some(TxInvalid::EmptyOutputs);
+    }
+
+    let mut size = ByteCount::default();
+    self.encode(&mut size);
+    if size.0 > crate::MAX_LEGACY_BLOCK_SIZE {
+      return Some(TxInvalid::Oversize { size: size.0 });
     }
 
     if !self.has_extra_payload() && !self.extra_payload.is_empty() {
@@ -386,6 +406,7 @@ impl fmt::Display for Transaction {
 #[cfg(all(test, feature = "serde"))]
 mod tests {
   use super::*;
+  use crate::MAX_LEGACY_BLOCK_SIZE;
 
   use dash_dev::{assert_serde_rt, check_tx, Corpus};
   use rstest::rstest;
@@ -398,5 +419,74 @@ mod tests {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), section);
     let items = corpus.entries::<Transaction>(section, check_tx);
     assert_serde_rt(section, &items);
+  }
+
+  fn encoded_len(tx: &Transaction) -> usize {
+    let mut size = ByteCount::default();
+    tx.encode(&mut size);
+    size.0
+  }
+
+  /// A spend with one output whose script makes the transaction `size` bytes.
+  fn tx_of_size(tx_type: TxType, extra_payload: Vec<u8>, size: usize) -> Transaction {
+    let mut tx = Transaction {
+      version: 3,
+      tx_type,
+      inputs: vec![TxIn {
+        prevout: OutPoint {
+          hash: TxHash::from_lendian([1; 32]),
+          index: 0,
+        },
+        script_sig: ScriptSigBuf::new(),
+        sequence: u32::MAX,
+      }],
+      outputs: vec![TxOut {
+        value: Amount::ZERO,
+        script_pubkey: ScriptPubKeyBuf::from_bytes(vec![0; 0x10000]),
+      }],
+      lock_time: 0,
+      extra_payload,
+    };
+    let base = encoded_len(&tx) - 0x10000;
+    tx.outputs[0].script_pubkey = ScriptPubKeyBuf::from_bytes(vec![0; size - base]);
+    assert_eq!(encoded_len(&tx), size);
+    tx
+  }
+
+  /// A transaction of `MAX_LEGACY_BLOCK_SIZE` bytes passes, one byte more is
+  /// oversize.
+  #[rstest]
+  fn oversize_bounds_the_serialized_size() {
+    let at_max = tx_of_size(TxType::Spend, vec![], MAX_LEGACY_BLOCK_SIZE);
+    assert_eq!(at_max.check(), None);
+    let above = tx_of_size(TxType::Spend, vec![], MAX_LEGACY_BLOCK_SIZE + 1);
+    assert_eq!(
+      above.check(),
+      Some(TxInvalid::Oversize {
+        size: MAX_LEGACY_BLOCK_SIZE + 1
+      })
+    );
+  }
+
+  /// The serialized size is checked before the payload size.
+  #[rstest]
+  fn oversize_comes_before_payload_oversize() {
+    let payload = vec![0; MAX_TX_EXTRA_PAYLOAD + 1];
+    let tx = tx_of_size(TxType::ProviderRegister, payload, MAX_LEGACY_BLOCK_SIZE + 1);
+    assert_eq!(
+      tx.check(),
+      Some(TxInvalid::Oversize {
+        size: MAX_LEGACY_BLOCK_SIZE + 1
+      })
+    );
+  }
+
+  /// The empty checks come before the size checks.
+  #[rstest]
+  fn empty_inputs_come_before_oversize() {
+    let mut tx = tx_of_size(TxType::Spend, vec![], MAX_LEGACY_BLOCK_SIZE + 100);
+    tx.inputs.clear();
+    assert!(encoded_len(&tx) > MAX_LEGACY_BLOCK_SIZE);
+    assert_eq!(tx.check(), Some(TxInvalid::EmptyInputs));
   }
 }
