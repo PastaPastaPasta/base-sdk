@@ -19,9 +19,6 @@ hash_impl!(ProtocolVersion);
 /// Core's `version.h` values, the same at v23.1.8 and v24.0.0-rc.3 unless a
 /// constant names a release.
 impl ProtocolVersion {
-  /// Current protocol version.
-  #[deprecated(note = "ambiguous across releases; use `V23_1` or `V24_0`")]
-  pub const CURRENT: Self = Self(70240);
   /// `PROTOCOL_VERSION` of Dash Core v23.1.8.
   pub const V23_1: Self = Self(70240);
   /// `PROTOCOL_VERSION` of Dash Core v24.0.
@@ -30,6 +27,9 @@ impl ProtocolVersion {
   pub const INIT: Self = Self(209);
   /// Minimum acceptable peer version.
   pub const MIN_PEER: Self = Self(70221);
+  /// Minimum masternode version accepted in DKGs, Core's
+  /// `MIN_MASTERNODE_PROTO_VERSION` (v24.0).
+  pub const MIN_MASTERNODE: Self = Self(70242);
   /// BIP155 `addrv2` and `sendaddrv2`.
   pub const ADDRV2: Self = Self(70223);
   /// BLS signature scheme version boundary.
