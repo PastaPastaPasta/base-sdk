@@ -29,6 +29,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `decode_v2_payload`, which decodes a V2 payload kept apart from its type under V2 rules (the contents limit after the
   shortest type that carries the command, 0x7f in a long-form type).
 - `CommandString::EMPTY`, the all-zero type.
+- `P2pDecodeError::HandlerPayloadTooLarge`, a payload over its handler's own length limit.
 - Typed overlay messages: `clsig` (`ClSig`), `isdlock` (`IsdLock`), `qsigrec` (`RecoveredSig`), `qfcommit` (the
   final commitment, versions 1 to 4), `mnauth` (`MnAuth`), `spork` (`Spork`), `platformban` (`PlatformBan`, whose
   hash is Core's `GetHash()`, without the signature), `qgetdata` (`QuorumDataRequest`), `qdata` (`QData`),
@@ -58,7 +59,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `encode_v2` takes the peer's common version.
 - `filterclear`, `mempool` and `qwatch` are no longer stubs.
 - A `qgetdata` over 67 bytes fails with `HandlerPayloadTooLarge`, as Core's handler refuses it before reading; Core
-  penalises the peer, where it disconnects for `PayloadTooLarge`.
+  disconnects and discourages the peer, where for `PayloadTooLarge` it disconnects without discouraging.
 - `SimplifiedMnListEntry`'s hash is Core's `CalcHash()`, its leaf in `merkleRootMNList`: the entry without its
   version.
 - `P2pDecodeError::Consensus` carries the `DecodeError` instead of its text.

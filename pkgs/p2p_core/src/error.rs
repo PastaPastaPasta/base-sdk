@@ -59,8 +59,10 @@ pub enum P2pDecodeError {
   },
   /// A payload longer than its handler accepts, below the transport's limit.
   ///
-  /// Core's handler checks the length before reading and penalises the
-  /// peer; unlike `PayloadTooLarge`, it does not disconnect for this alone.
+  /// Core's handler checks the length before reading and scores the peer's
+  /// misbehaviour at the discouragement threshold: it disconnects and
+  /// discourages the peer, except one it may not ban. `PayloadTooLarge`
+  /// disconnects at the transport without discouraging.
   HandlerPayloadTooLarge {
     /// Wire command name.
     command: &'static str,
