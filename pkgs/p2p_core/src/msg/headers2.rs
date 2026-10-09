@@ -270,6 +270,10 @@ pub struct Headers2 {
 impl_p2p!(Headers2);
 
 impl BaseCodec for Headers2 {
+  /// The message's codec, not Core's handler read: no 2000 or 8000 limit,
+  /// and a count the bytes cannot hold fails before any header. Use
+  /// [`P2pMsg::decode_with_policy`](crate::P2pMsg::decode_with_policy) or
+  /// [`Headers2::decode_with_hasher`].
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let count = read_entry_count(data, MIN_HEADERS2_ENTRY)?;
     Self::read(data, count, &mut |h| h.hash())

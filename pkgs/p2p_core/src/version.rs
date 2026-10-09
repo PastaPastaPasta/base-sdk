@@ -20,6 +20,7 @@ hash_impl!(ProtocolVersion);
 /// constant names a release.
 impl ProtocolVersion {
   /// Current protocol version.
+  #[deprecated(note = "ambiguous across releases; use `V23_1` or `V24_0`")]
   pub const CURRENT: Self = Self(70240);
   /// `PROTOCOL_VERSION` of Dash Core v23.1.8.
   pub const V23_1: Self = Self(70240);
