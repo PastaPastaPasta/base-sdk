@@ -26,8 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `Headers2::reply` and `Headers2::announce`, Core's two `headers2` encoders, and `Headers2::decode_with_hasher`.
 - `GetBlockTxn::new`, which refuses indexes that do not strictly increase, as Core's serializer does, with the
   `block_hash` and `indexes` accessors.
-- `decode_v2_payload`, which decodes a V2 payload kept apart from its type under V2 rules (the contents limit after a
-  short ID, 0x7f in a long-form type).
+- `decode_v2_payload`, which decodes a V2 payload kept apart from its type under V2 rules (the contents limit after the
+  shortest type that carries the command, 0x7f in a long-form type).
 - `CommandString::EMPTY`, the all-zero type.
 
 ### Changed

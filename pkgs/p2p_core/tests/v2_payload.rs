@@ -10,6 +10,7 @@
 #![expect(clippy::unwrap_used, reason = "test code")]
 
 use dash_dev::Corpus;
+use dash_p2p_core::limits::MAX_V2_CONTENTS_LEN;
 use dash_p2p_core::{decode_v2_payload, split_v2, CommandString, P2pDecodeError, P2pMsg, ProtoCtx, ProtocolVersion};
 use dash_pkc::bls::BlsCtx;
 use rstest::rstest;
@@ -56,6 +57,27 @@ fn a_short_id_payload_may_exceed_the_v1_limit() {
     P2pMsg::decode_with_policy(&CommandString::TX, &owned, &ctx()),
     Err(P2pDecodeError::PayloadTooLarge { .. })
   ));
+}
+
+/// A type without a short ID arrives only in the long form, so its payload
+/// is bound 12 bytes lower.
+#[rstest]
+fn a_long_form_payload_leaves_room_for_its_type() {
+  let cmd = CommandString::from_bytes(*b"bs7\0\0\0\0\0\0\0\0\0");
+  let mut contents = vec![0u8];
+  contents.extend_from_slice(cmd.as_bytes());
+  contents.resize(MAX_V2_CONTENTS_LEN, 0);
+  let m = split_v2(&contents).unwrap();
+  assert_eq!(decode_v2_payload(&cmd, m.payload(), &ctx()), m.decode(&ctx()));
+  let mut payload = m.payload().to_vec();
+  payload.push(0);
+  assert_eq!(
+    decode_v2_payload(&cmd, &payload, &ctx()),
+    Err(P2pDecodeError::ContentsTooLarge {
+      size: MAX_V2_CONTENTS_LEN + 1,
+      max: MAX_V2_CONTENTS_LEN
+    })
+  );
 }
 
 /// BS4a's Core-judged V2 contents (probe_v2.py, both pins): an owned

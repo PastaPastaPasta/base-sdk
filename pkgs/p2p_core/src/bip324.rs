@@ -71,7 +71,9 @@ impl<'a> V2Message<'a> {
 /// once the transport has split the contents into type and payload.
 ///
 /// The V2 rules apply, not V1's: the payload may be as long as the contents
-/// limit allows after a 1-byte short ID, and a long-form type may hold 0x7f.
+/// limit allows after the shortest type that carries `cmd` (a 1-byte short ID
+/// if Core's V2 transport maps one to it, else the 13-byte long form), and a
+/// long-form type may hold 0x7f.
 /// [`split_v2`] already enforces both, so this only matters for a caller that
 /// keeps the type and payload apart before decoding.
 ///
@@ -81,9 +83,11 @@ impl<'a> V2Message<'a> {
 /// Core disconnects, `InvalidCommand` for a type Core's V2 transport refuses,
 /// on which it drops the message, or the error of the payload's handler.
 pub fn decode_v2_payload(cmd: &CommandString, payload: &[u8], ctx: &ProtoCtx) -> Result<DecodedMsg, P2pDecodeError> {
-  if payload.len() > MAX_V2_CONTENTS_SIZE - 1 {
+  let short = *cmd == CommandString::EMPTY || ShortId::from_command(cmd).is_some();
+  let size = payload.len().saturating_add(if short { 1 } else { 13 });
+  if size > MAX_V2_CONTENTS_SIZE {
     return Err(P2pDecodeError::ContentsTooLarge {
-      size: payload.len() + 1,
+      size,
       max: MAX_V2_CONTENTS_SIZE,
     });
   }
