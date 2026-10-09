@@ -6,7 +6,7 @@
 
 //! BIP152 compact block messages.
 
-use crate::codec::{codec_p2p, impl_p2p};
+use crate::codec::{codec_p2p, decode_flag, impl_p2p};
 use crate::prelude::*;
 
 use bitcoin_hashes::{sha256, siphash24};
@@ -35,16 +35,7 @@ impl BaseCodec for SendCmpct {
   /// Reads the flag as 0 or 1, the bytes Core writes. Core reads any other
   /// byte as `true`; here it is an error.
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let high_bandwidth = match u8::decode(data)? {
-      0 => false,
-      1 => true,
-      other => {
-        return Err(DecodeError::InvalidValue {
-          expected: vec![0, 1],
-          actual: u64::from(other),
-        })
-      }
-    };
+    let high_bandwidth = decode_flag(data)?;
     Ok(Self {
       high_bandwidth,
       version: u64::decode(data)?,
