@@ -218,10 +218,20 @@ fn overlay_reads_are_cores() {
         assert_eq!(Some(r.consumed), *consumed, "{label}: bytes read");
         assert_eq!((r.error_code, r.vvec_size), (*error_code, *vvec_size), "{label}: qdata");
         // Core writes back an eager BLS field or the cbTx under its own
-        // rules, which live node-side; otherwise it writes what it read, and
-        // hashes the object as base-sdk does.
-        if reenc.is_none() {
-          assert_eq!(r.reenc, raw[..r.consumed], "{label}: write-back");
+        // rules, most of which live node-side; otherwise it writes what it
+        // read. A commitment's BLS fields and an entry's address list are
+        // base-sdk's to write as Core does.
+        let core_reenc = reenc.as_deref().map(vec_from_hex);
+        match &core_reenc {
+          None => assert_eq!(r.reenc, raw[..r.consumed], "{label}: write-back"),
+          Some(w) if ["qfcommit", "smlentry"].contains(&c.command.as_str()) => {
+            assert_eq!(&r.reenc, w, "{label}: write-back");
+          }
+          Some(_) => {}
+        }
+        // Core hashes the object as base-sdk does, except a ChainLock whose
+        // signature it re-serialized, which the node normalizes first.
+        if core_reenc.is_none() || c.command != "clsig" {
           let hash = hash.as_deref().map(|h| decode_to_array::<32>(h).unwrap());
           assert_eq!(r.hash, hash, "{label}: hash");
         }
