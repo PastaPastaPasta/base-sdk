@@ -10,13 +10,15 @@
 #![expect(clippy::panic, clippy::unwrap_used, reason = "test code")]
 
 use dash_dev::{vec_from_hex, Corpus};
+use dash_num::Hash256;
 use dash_p2p_core::{
   CommandString, P2pDecodeError, P2pMsg, ProtoCtx, ProtocolVersion, QData, QuorumDataError, QuorumDataRequest,
   QuorumSnapshot, SimplifiedMnListEntry,
 };
 use dash_pkc::bls::BlsCtx;
 use dash_types::codec::{BaseCodec, DecodeError};
-use dash_types::Numeric;
+use dash_types::{Hashable, Numeric};
+use hex_conservative::decode_to_array;
 use rstest::rstest;
 
 /// Hex, or a list of hex and `{"b", "n"}` byte runs (the corpus RLE).
@@ -72,14 +74,18 @@ struct Core {
   /// A verification vector's size, where it is not the threshold.
   #[serde(rename = "vvecSize")]
   vvec_size: Option<usize>,
+  /// The hash Core keys the object by, where it hashes one.
+  hash: Option<String>,
 }
 
-/// The bytes base-sdk read and what it writes back for them.
+/// The bytes base-sdk read, what it writes back for them and its hash of
+/// the object.
 struct Read {
   consumed: usize,
   reenc: Vec<u8>,
   error_code: Option<u8>,
   vvec_size: Option<usize>,
+  hash: Option<[u8; 32]>,
 }
 
 impl Read {
@@ -89,6 +95,14 @@ impl Read {
       reenc,
       error_code: None,
       vvec_size: None,
+      hash: None,
+    }
+  }
+
+  fn hashed(consumed: usize, reenc: Vec<u8>, obj: &impl Hashable<Hash = Hash256>) -> Self {
+    Self {
+      hash: Some(obj.hash().to_lendian()),
+      ..Self::plain(consumed, reenc)
     }
   }
 }
@@ -138,7 +152,7 @@ fn read(c: &Case, raw: &[u8]) -> Result<Read, P2pDecodeError> {
       let e = SimplifiedMnListEntry::decode_as(&mut data, versioned)?;
       let mut reenc = Vec::new();
       e.encode_as(&mut reenc, versioned);
-      return Ok(Read::plain(raw.len() - data.len(), reenc));
+      return Ok(Read::hashed(raw.len() - data.len(), reenc, &e));
     }
     "qsnapshot" => {
       let s = QuorumSnapshot::decode(&mut data)?;
@@ -153,7 +167,15 @@ fn read(c: &Case, raw: &[u8]) -> Result<Read, P2pDecodeError> {
   }
   let mut reenc = Vec::new();
   d.msg.encode_payload(&mut reenc);
-  Ok(Read::plain(d.consumed, reenc))
+  Ok(match &d.msg {
+    P2pMsg::ClSig(m) => Read::hashed(d.consumed, reenc, m),
+    P2pMsg::IsdLock(m) => Read::hashed(d.consumed, reenc, m),
+    P2pMsg::QSigRec(m) => Read::hashed(d.consumed, reenc, m),
+    P2pMsg::QfCommit(m) => Read::hashed(d.consumed, reenc, m.as_ref()),
+    P2pMsg::Spork(m) => Read::hashed(d.consumed, reenc, m),
+    P2pMsg::PlatformBan(m) => Read::hashed(d.consumed, reenc, m),
+    _ => Read::plain(d.consumed, reenc),
+  })
 }
 
 fn cases() -> Vec<Case> {
@@ -187,6 +209,7 @@ fn overlay_reads_are_cores() {
           reenc,
           error_code,
           vvec_size,
+          hash,
           ..
         },
         _,
@@ -195,9 +218,12 @@ fn overlay_reads_are_cores() {
         assert_eq!(Some(r.consumed), *consumed, "{label}: bytes read");
         assert_eq!((r.error_code, r.vvec_size), (*error_code, *vvec_size), "{label}: qdata");
         // Core writes back an eager BLS field or the cbTx under its own
-        // rules, which live node-side; otherwise it writes what it read.
+        // rules, which live node-side; otherwise it writes what it read, and
+        // hashes the object as base-sdk does.
         if reenc.is_none() {
           assert_eq!(r.reenc, raw[..r.consumed], "{label}: write-back");
+          let hash = hash.as_deref().map(|h| decode_to_array::<32>(h).unwrap());
+          assert_eq!(r.hash, hash, "{label}: hash");
         }
       }
       (
