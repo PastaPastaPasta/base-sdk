@@ -104,6 +104,15 @@ define_p2p! {
     GetCFHeaders(GetCFHeaders) => GETCFHEADERS "getcfheaders" @ 24,
     /// BIP157: request compact filter checkpoints.
     GetCFCheckpt(GetCFCheckpt) => GETCFCHECKPT "getcfcheckpt" @ 26,
+    /// BIP37: filtered block. Core has no handler for it and ignores it.
+    MerkleBlock(MerkleBlock) => MERKLEBLOCK "merkleblock" @ 16,
+    /// BIP157: compact block filter. Core has no handler for it and ignores it.
+    CFilter(CFilter) => CFILTER "cfilter" @ 23,
+    /// BIP157: compact filter headers. Core has no handler for it and ignores it.
+    CFHeaders(CFHeaders) => CFHEADERS "cfheaders" @ 25,
+    /// BIP157: compact filter checkpoints. Core has no handler for it and
+    /// ignores it.
+    CFCheckpt(CFCheckpt) => CFCHECKPT "cfcheckpt" @ 27,
     /// BIP330: transaction reconciliation.
     SendTxRcncl(SendTxRcncl) => SENDTXRCNCL "sendtxrcncl",
     /// Masternode sync status count.
@@ -127,17 +136,6 @@ define_p2p! {
     Mempool => MEMPOOL "mempool" @ 15,
     /// LLMQ: watch quorums.
     QWatch => QWATCH "qwatch" @ 151,
-  }
-
-  send_only {
-    /// BIP37: filtered block.
-    MerkleBlock(MerkleBlock) => MERKLEBLOCK "merkleblock" @ 16,
-    /// BIP157: compact block filter.
-    CFilter(CFilter) => CFILTER "cfilter" @ 23,
-    /// BIP157: compact filter headers.
-    CFHeaders(CFHeaders) => CFHEADERS "cfheaders" @ 25,
-    /// BIP157: compact filter checkpoints.
-    CFCheckpt(CFCheckpt) => CFCHECKPT "cfcheckpt" @ 27,
   }
 
   stub {
@@ -233,5 +231,9 @@ impl MsgDecode for BlockTxn {}
 impl MsgDecode for GetCFilters {}
 impl MsgDecode for GetCFHeaders {}
 impl MsgDecode for GetCFCheckpt {}
+impl MsgDecode for MerkleBlock {}
+impl MsgDecode for CFilter {}
+impl MsgDecode for CFHeaders {}
+impl MsgDecode for CFCheckpt {}
 impl MsgDecode for SendTxRcncl {}
 impl MsgDecode for Ssc {}

@@ -11,8 +11,8 @@
 
 use dash_dev::{vec_from_hex, Corpus};
 use dash_p2p_core::{
-  CFCheckpt, CFHeaders, CFilter, CmpctBlock, CommandString, FilterLoad, Headers2, Magic, MerkleBlock, P2pDecodeError,
-  P2pMsg, ProtoCtx, ProtocolVersion, SendCmpct, V1FrameError, V1Header,
+  CmpctBlock, CommandString, FilterLoad, Headers2, Magic, P2pDecodeError, P2pMsg, ProtoCtx, ProtocolVersion, SendCmpct,
+  V1FrameError, V1Header,
 };
 use dash_pkc::bls::BlsCtx;
 use dash_primitives::{Block, BlockHeader};
@@ -113,16 +113,6 @@ fn open(name: &str) -> Corpus {
   Corpus::open(env!("CARGO_MANIFEST_DIR"), name)
 }
 
-/// Decodes with the command's own codec and re-encodes, for a message Core
-/// has no handler for.
-fn typed_round_trip<T: BaseCodec>(raw: &[u8]) -> bool {
-  let mut cursor = raw;
-  let value = T::decode(&mut cursor).unwrap();
-  let mut buf = Vec::new();
-  value.encode(&mut buf);
-  cursor.is_empty() && buf == raw
-}
-
 /// Commands whose base-sdk shape another task owns (DDE-SWEEP §5), with the
 /// divergence: their decode stops short of Core's request.
 const OTHER_OWNERS: [(&str, &str); 1] = [("govsync", "BS9b: govsync reads only the bloom filter data")];
@@ -136,17 +126,6 @@ fn every_message_core_sent_round_trips() {
     let label = format!("{} {} from {}", m.command, m.source, m.pin);
     let d = P2pMsg::decode_with_policy(&command(&m.command), &raw, &ctx()).unwrap_or_else(|e| panic!("{label}: {e}"));
     assert!(!d.msg.is_unknown(), "{label}");
-    if let P2pMsg::Unread(_) = d.msg {
-      let ok = match m.command.as_str() {
-        "merkleblock" => typed_round_trip::<MerkleBlock>(&raw),
-        "cfilter" => typed_round_trip::<CFilter>(&raw),
-        "cfheaders" => typed_round_trip::<CFHeaders>(&raw),
-        "cfcheckpt" => typed_round_trip::<CFCheckpt>(&raw),
-        other => panic!("{other} has no handler"),
-      };
-      assert!(ok, "{label}");
-      continue;
-    }
     let mut buf = Vec::new();
     d.msg.encode_payload(&mut buf);
     assert_eq!(buf, raw[..d.consumed], "{label}");
@@ -231,6 +210,10 @@ fn core_headers2_round_trip_in_their_mode() {
   }
 }
 
+/// Commands Core has no handler for and ignores unread. base-sdk types them
+/// both ways, so the node ignores them before decoding (D-14).
+const IGNORED_BY_CORE: [&str; 4] = ["merkleblock", "cfilter", "cfheaders", "cfcheckpt"];
+
 #[rstest]
 fn handler_verdicts_are_cores() {
   let cases: Vec<Case> = open("core_verdicts").value("cases");
@@ -254,7 +237,9 @@ fn handler_verdicts_are_cores() {
         matches!(r, Err(P2pDecodeError::TooManyEntries { .. })),
         "{label}: {r:?}"
       ),
-      "unread" => assert_eq!(r.unwrap().msg, P2pMsg::Unread(command(&c.command)), "{label}"),
+      // Core's verdict is to ignore the message whatever its payload; base-sdk
+      // reads it, the probe's garbage included.
+      "unread" => assert!(IGNORED_BY_CORE.contains(&c.command.as_str()), "{label}"),
       "read" => {
         let d = r.unwrap_or_else(|e| panic!("{label}: {e}"));
         assert!(!d.msg.is_unknown(), "{label}");
