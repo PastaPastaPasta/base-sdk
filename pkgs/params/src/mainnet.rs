@@ -4,219 +4,189 @@
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
 
-//! Mainnet chain parameters.
+//! Mainnet chain parameters (Core's `CMainParams`).
 
-use crate::prelude::*;
+use crate::data::{deployments, llmqs, v23_only, v24_only, LLMQ_25_67_ACTIVATION_HEIGHT};
+use crate::genesis::genesis_block;
+use crate::network::{NetworkKind, Release};
 use crate::types::*;
 
-use bitcoin_primitives::script::{ScriptPubKeyBuf, ScriptSigBuf};
 use dash_num::{Arith256, Hash256};
-use dash_primitives::{
-  Block, BlockHash, BlockHeader, LlmqType, MerkleRoot, OutPoint, Transaction, TxHash, TxIn, TxOut, TxType,
-};
+use dash_primitives::{BlockHeader, LlmqType};
 use dash_script::AddrParams;
 use hex_conservative::hex;
 
-/// Returns the mainnet genesis block.
-pub fn genesis() -> Block {
-  let coinbase = Transaction {
-    version: 1,
-    tx_type: TxType::Spend,
-    inputs: vec![TxIn {
-      prevout: OutPoint {
-        hash: TxHash::default(),
-        index: 0xFFFF_FFFF,
-      },
-      script_sig: ScriptSigBuf::from_bytes(
-        hex!(concat!(
-          "04ffff001d01044c5957697265642030392f4a616e2f323031342054686520",
-          "4772616e64204578706572696d656e7420476f6573204c6976653a204f7665",
-          "7273746f636b2e636f6d204973204e6f7720416363657074696e6720426974",
-          "636f696e73"
-        ))
-        .to_vec(),
+/// Mainnet parameters of `release`.
+pub(crate) fn params(release: Release) -> ChainParams {
+  ChainParams {
+    network: NetworkKind::Mainnet,
+    release,
+    devnet_name: None,
+    consensus: ConsensusParams {
+      hash_genesis_block: Hash256::from_bendian(hex!(
+        "00000ffd590b1485b3caadc19b22e6379c733355108f107a430458cdf3407ab6"
+      )),
+      hash_devnet_genesis_block: Hash256::default(),
+      subsidy_halving_interval: 210_240,
+      masternode_payments_start_block: BlockHeight::from_u32(100_000),
+      masternode_payments_increase_block: BlockHeight::from_u32(158_000),
+      masternode_payments_increase_period: 576 * 30,
+      instant_send_confirmations_required: 6,
+      instant_send_keep_lock: 24,
+      budget_payments_start_block: BlockHeight::from_u32(328_008),
+      budget_payments_cycle_blocks: 16_616,
+      budget_payments_window_blocks: 100,
+      superblock_start: (
+        BlockHeight::from_u32(614_820),
+        Hash256::from_bendian(hex!("0000000000020cb27c7ef164d21003d5d20cdca2f54dd9a9ca6d45f4d47f8aa3")),
       ),
-      sequence: 0xFFFF_FFFF,
-    }],
-    outputs: vec![TxOut::new(
-      bitcoin_units::Amount::from_btc_u16(50),
-      ScriptPubKeyBuf::from_bytes(
-        hex!(concat!(
-          "41040184710fa689ad5023690c80f3a49c8f13f8d45b8c857fbcbc8bc4a8e4",
-          "d3eb4b10f4d4604fa08dce601aaf0f470216fe1b51850b4acf21b179c45070",
-          "ac7b03a9ac"
-        ))
-        .to_vec(),
+      superblock_cycle: 16_616,
+      superblock_maturity_window: 1_662,
+      governance_min_quorum: 10,
+      governance_filter_elements: 20_000,
+      masternode_minimum_confirmations: 15,
+      bip34: (
+        BlockHeight::from_u32(951),
+        Hash256::from_bendian(hex!("000001f35e70f7c5705f64c6c5cc3dea9449e74d5b5c7cf74dad1bcca14a8012")),
       ),
-    )],
-    lock_time: 0,
-    extra_payload: Vec::new(),
-  };
-
-  let mut block = Block {
-    header: BlockHeader {
-      version: 1,
-      prev_hash: BlockHash::default(),
-      merkle_root: MerkleRoot::default(),
+      bip65_height: BlockHeight::from_u32(619_382),
+      bip66_height: BlockHeight::from_u32(245_817),
+      bip147_height: BlockHeight::from_u32(939_456),
+      csv_height: BlockHeight::from_u32(622_944),
+      dip0001_height: BlockHeight::from_u32(782_208),
+      dip0003_height: BlockHeight::from_u32(1_028_160),
+      dip0003_enforcement: (
+        BlockHeight::from_u32(1_047_200),
+        Hash256::from_bendian(hex!("000000000000002d1734087b4c5afc3133e4e1c3e1a89218f62bcd9bb3d17f81")),
+      ),
+      dip0008_height: BlockHeight::from_u32(1_088_640),
+      brr_height: BlockHeight::from_u32(1_374_912),
+      dip0020_height: BlockHeight::from_u32(1_516_032),
+      dip0024_height: BlockHeight::from_u32(1_737_792),
+      dip0024_quorums_height: BlockHeight::from_u32(1_738_698),
+      v19_height: BlockHeight::from_u32(1_899_072),
+      v20_height: BlockHeight::from_u32(1_987_776),
+      mn_rr_height: BlockHeight::from_u32(2_128_896),
+      withdrawals_height: BlockHeight::from_u32(2_201_472),
+      min_bip9_warning_height: BlockHeight::from_u32(2_201_472 + 2016),
+      rule_change_activation_threshold: 1815,
+      miner_confirmation_window: 2016,
+      deployments: deployments(
+        release,
+        Bip9Deployment::NEVER_ACTIVE,
+        Bip9Deployment::NEVER_ACTIVE,
+        [4032, 3226, 2420],
+      ),
+      pow_limit: Arith256::from_bendian(hex!("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")),
+      pow_allow_min_difficulty_blocks: false,
+      pow_no_retargeting: false,
+      pow_target_spacing: 150,
+      pow_target_timespan: 86_400,
+      pow_kgw_height: BlockHeight::from_u32(15_200),
+      pow_dgw_height: BlockHeight::from_u32(34_140),
+      minimum_chain_work: Arith256::from_bendian(hex!(
+        "00000000000000000000000000000000000000000000ba7225adc3153945d14d"
+      )),
+      default_assume_valid: Hash256::from_bendian(hex!(
+        "00000000000000119fe42827219e0686d3f7b494ae65f823194c740c5dbab492"
+      )),
+      minimum_difficulty_blocks: 0,
+      high_subsidy_blocks: 0,
+      high_subsidy_factor: 1,
+      llmqs: llmqs(&[
+        LlmqType::Llmq50_60,
+        LlmqType::Llmq60_75,
+        LlmqType::Llmq400_60,
+        LlmqType::Llmq400_85,
+        LlmqType::Llmq100_67,
+      ]),
+      llmq_type_chain_locks: LlmqType::Llmq400_60,
+      llmq_type_dip0024_instant_send: LlmqType::Llmq60_75,
+      llmq_type_platform: LlmqType::Llmq100_67,
+      llmq_type_mnhf: LlmqType::Llmq400_85,
+    },
+    message_start: [0xbf, 0x0c, 0x6b, 0xbd],
+    default_port: 9999,
+    default_platform_p2p_port: 26656,
+    default_platform_http_port: 443,
+    rpc_port: 9998,
+    onion_service_target_port: 9996,
+    prune_after_height: 100_000,
+    assumed_blockchain_size_gb: 57,
+    assumed_chain_state_size_gb: 1,
+    dns_seeds: &["dnsseed.dash.org."],
+    fixed_seeds: &MAINNET_FIXED_SEEDS,
+    addr_params: AddrParams {
+      pubkey_addr: 76,
+      script_addr: 16,
+      secret_key: 204,
+      ext_pubkey: [0x04, 0x88, 0xB2, 0x1E],
+      ext_secret: [0x04, 0x88, 0xAD, 0xE4],
+      bip44_idx: 5,
+    },
+    platform_hrp: v24_only(release, "dash"),
+    is_test_chain: false,
+    require_standard: v23_only(release, true),
+    default_consistency_checks: false,
+    is_mockable_chain: false,
+    require_routable_external_ip: true,
+    allow_multiple_addresses_from_group: false,
+    llmq_connection_retry_timeout: 60,
+    pool_min_participants: 3,
+    pool_max_participants: 20,
+    fulfilled_request_expire_time: 60 * 60,
+    credit_pool_period_blocks: 576,
+    spork: SporkParams {
+      addresses: &["Xgtyuk76vhuFW2iT7UAiHgNdWXCf3J34wh"],
+      min_spork_keys: v23_only(release, 1),
+    },
+    spork_signers: SporkSigners::default(),
+    checkpoints: MAINNET_CHECKPOINTS.to_vec(),
+    assumeutxo: &[],
+    chain_tx_data: ChainTxData {
+      timestamp: 1_781_318_234,
+      tx_count: 69_770_814,
+      tx_rate: 0.1569520632249578,
+    },
+    genesis: genesis_block(BlockHeader {
       time: 1_390_095_618,
       bits: 0x1e0f_fff0,
       nonce: 28_917_698,
+      ..BlockHeader::default()
+    }),
+    devnet_genesis: None,
+    pins: HardCodedPins {
+      pre_dgw_tolerance_until: Some(BlockHeight::from_u32(68_589)),
+      llmq_25_67_activation_height: LLMQ_25_67_ACTIVATION_HEIGHT,
     },
-    transactions: vec![coinbase],
-  };
-  block.header.merkle_root = block.merkle().0;
-  block
+  }
 }
 
-pub static PARAMS: ChainParams = ChainParams {
-  consensus: ConsensusParams {
-    hash_genesis_block: Hash256::from_bendian(hex!("00000ffd590b1485b3caadc19b22e6379c733355108f107a430458cdf3407ab6")),
-    subsidy_halving_interval: 210_240,
-    masternode_payments_start_block: BlockHeight::from_u32(100_000),
-    masternode_payments_increase_block: BlockHeight::from_u32(158_000),
-    masternode_payments_increase_period: 576 * 30, // 17280
-    instant_send_confirmations_required: 6,
-    instant_send_keep_lock: 24,
-    budget_payments_start_block: BlockHeight::from_u32(328_008),
-    budget_payments_cycle_blocks: 16_616,
-    budget_payments_window_blocks: 100,
-    superblock_start: (
-      BlockHeight::from_u32(614_820),
-      Hash256::from_bendian(hex!("0000000000020cb27c7ef164d21003d5d20cdca2f54dd9a9ca6d45f4d47f8aa3")),
-    ),
-    superblock_cycle: 16_616,
-    superblock_maturity_window: 1_662,
-    governance_min_quorum: 10,
-    governance_filter_elements: 20_000,
-    masternode_minimum_confirmations: 15,
-    bip34: (
-      BlockHeight::from_u32(951),
-      Hash256::from_bendian(hex!("000001f35e70f7c5705f64c6c5cc3dea9449e74d5b5c7cf74dad1bcca14a8012")),
-    ),
-    bip65_height: BlockHeight::from_u32(619_382),
-    bip66_height: BlockHeight::from_u32(245_817),
-    bip147_height: BlockHeight::from_u32(939_456),
-    csv_height: BlockHeight::from_u32(622_944),
-    dip0001_height: BlockHeight::from_u32(782_208),
-    dip0003_height: BlockHeight::from_u32(1_028_160),
-    dip0003_enforcement: (
-      BlockHeight::from_u32(1_047_200),
-      Hash256::from_bendian(hex!("000000000000002d1734087b4c5afc3133e4e1c3e1a89218f62bcd9bb3d17f81")),
-    ),
-    dip0008_height: BlockHeight::from_u32(1_088_640),
-    brr_height: BlockHeight::from_u32(1_374_912),
-    dip0020_height: BlockHeight::from_u32(1_516_032),
-    dip0024_height: BlockHeight::from_u32(1_737_792),
-    dip0024_quorums_height: BlockHeight::from_u32(1_738_698),
-    v19_height: BlockHeight::from_u32(1_899_072),
-    v20_height: BlockHeight::from_u32(1_987_776),
-    mn_rr_height: BlockHeight::from_u32(2_128_896),
-    withdrawals_height: BlockHeight::from_u32(2_201_472),
-    min_bip9_warning_height: BlockHeight::from_u32(2_201_472 + 2016),
-    rule_change_activation_threshold: 1815, // 90% of 2016
-    miner_confirmation_window: 2016,
-    deployments: Bip9Deployments {
-      test_dummy: Bip9Deployment {
-        bit: 28,
-        start_time: Bip9Deployment::NEVER_ACTIVE,
-        timeout: Bip9Deployment::NO_TIMEOUT,
-        min_activation_height: BlockHeight::from_u32(0),
-        window_size: 0,
-        threshold_start: 0,
-        threshold_min: 0,
-        falloff_coeff: 0,
-        use_ehf: false,
-      },
-      v24: Bip9Deployment {
-        bit: 12,
-        start_time: Bip9Deployment::NEVER_ACTIVE,
-        timeout: Bip9Deployment::NO_TIMEOUT,
-        min_activation_height: BlockHeight::from_u32(0),
-        window_size: 4032,
-        threshold_start: 3226, // 80% of 4032
-        threshold_min: 2420,   // 60% of 4032
-        falloff_coeff: 5,
-        use_ehf: true,
-      },
-    },
-    // ~uint256(0) >> 20
-    pow_limit: Arith256::from_bendian(hex!("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")),
-    pow_allow_min_difficulty_blocks: false,
-    pow_no_retargeting: false,
-    pow_target_spacing: 150,     // 2.5 minutes
-    pow_target_timespan: 86_400, // 1 day
-    pow_kgw_height: BlockHeight::from_u32(15_200),
-    pow_dgw_height: BlockHeight::from_u32(34_140),
-    minimum_chain_work: Arith256::from_bendian(hex!(
-      "00000000000000000000000000000000000000000000b567e2d53a06de194061"
-    )),
-    default_assume_valid: Hash256::from_bendian(hex!(
-      "00000000000000018fb7d55a2d7ab5f3d1369cf0d7eef25db727bf8c9ca7d4b2"
-    )),
-    llmq_type_chain_locks: LlmqType::Llmq400_60,
-    llmq_type_dip0024_instant_send: LlmqType::Llmq60_75,
-    llmq_type_platform: LlmqType::Llmq100_67,
-    llmq_type_mnhf: LlmqType::Llmq400_85,
-  },
-  message_start: [0xbf, 0x0c, 0x6b, 0xbd],
-  default_port: 9999,
-  default_platform_p2p_port: 26656,
-  default_platform_http_port: 443,
-  rpc_port: 9998,
-  onion_service_target_port: 9996,
-  prune_after_height: 100_000,
-  assumed_blockchain_size_gb: 57,
-  assumed_chain_state_size_gb: 1,
-  dns_seeds: &["dnsseed.dash.org."],
-  addr_params: AddrParams {
-    pubkey_addr: 76,                      // addresses start with 'X'
-    script_addr: 16,                      // addresses start with '7'
-    secret_key: 204,                      // keys start with '7' or 'X'
-    ext_pubkey: [0x04, 0x88, 0xB2, 0x1E], // xpub
-    ext_secret: [0x04, 0x88, 0xAD, 0xE4], // xprv
-    bip44_idx: 5,
-  },
-  network_id: "main",
-  is_test_chain: false,
-  require_standard: true,
-  default_consistency_checks: false,
-  is_mockable_chain: false,
-  pool_min_participants: 3,
-  pool_max_participants: 20,
-  credit_pool_period_blocks: 576,
-  checkpoints: &CHECKPOINTS,
-  chain_tx_data: ChainTxData {
-    timestamp: 1_770_962_602,
-    tx_count: 64_859_329,
-    tx_rate: 0.9523581589072819,
-  },
-};
-
 #[rustfmt::skip]
-const CHECKPOINTS: [Checkpoint; 37] = [
-  (BlockHeight::from_u32(   1_500), Hash256::from_bendian(hex!("000000aaf0300f59f49bc3e970bad15c11f961fe2347accffff19d96ec9778e3"))),
-  (BlockHeight::from_u32(   4_991), Hash256::from_bendian(hex!("000000003b01809551952460744d5dbb8fcbd6cbae3c220267bf7fa43f837367"))),
-  (BlockHeight::from_u32(   9_918), Hash256::from_bendian(hex!("00000000213e229f332c0ffbe34defdaa9e74de87f2d8d1f01af8d121c3c170b"))),
-  (BlockHeight::from_u32(  16_912), Hash256::from_bendian(hex!("00000000075c0d10371d55a60634da70f197548dbbfa4123e12abfcbc5738af9"))),
-  (BlockHeight::from_u32(  23_912), Hash256::from_bendian(hex!("0000000000335eac6703f3b1732ec8b2f89c3ba3a7889e5767b090556bb9a276"))),
-  (BlockHeight::from_u32(  35_457), Hash256::from_bendian(hex!("0000000000b0ae211be59b048df14820475ad0dd53b9ff83b010f71a77342d9f"))),
-  (BlockHeight::from_u32(  45_479), Hash256::from_bendian(hex!("000000000063d411655d590590e16960f15ceea4257122ac430c6fbe39fbf02d"))),
-  (BlockHeight::from_u32(  55_895), Hash256::from_bendian(hex!("0000000000ae4c53a43639a4ca027282f69da9c67ba951768a20415b6439a2d7"))),
-  (BlockHeight::from_u32(  68_899), Hash256::from_bendian(hex!("0000000000194ab4d3d9eeb1f2f792f21bb39ff767cb547fe977640f969d77b7"))),
-  (BlockHeight::from_u32(  74_619), Hash256::from_bendian(hex!("000000000011d28f38f05d01650a502cc3f4d0e793fbc26e2a2ca71f07dc3842"))),
-  (BlockHeight::from_u32(  75_095), Hash256::from_bendian(hex!("0000000000193d12f6ad352a9996ee58ef8bdc4946818a5fec5ce99c11b87f0d"))),
-  (BlockHeight::from_u32(  88_805), Hash256::from_bendian(hex!("00000000001392f1652e9bf45cd8bc79dc60fe935277cd11538565b4a94fa85f"))),
-  (BlockHeight::from_u32( 107_996), Hash256::from_bendian(hex!("00000000000a23840ac16115407488267aa3da2b9bc843e301185b7d17e4dc40"))),
-  (BlockHeight::from_u32( 137_993), Hash256::from_bendian(hex!("00000000000cf69ce152b1bffdeddc59188d7a80879210d6e5c9503011929c3c"))),
-  (BlockHeight::from_u32( 167_996), Hash256::from_bendian(hex!("000000000009486020a80f7f2cc065342b0c2fb59af5e090cd813dba68ab0fed"))),
-  (BlockHeight::from_u32( 207_992), Hash256::from_bendian(hex!("00000000000d85c22be098f74576ef00b7aa00c05777e966aff68a270f1e01a5"))),
-  (BlockHeight::from_u32( 312_645), Hash256::from_bendian(hex!("0000000000059dcb71ad35a9e40526c44e7aae6c99169a9e7017b7d84b1c2daf"))),
-  (BlockHeight::from_u32( 407_452), Hash256::from_bendian(hex!("000000000003c6a87e73623b9d70af7cd908ae22fee466063e4ffc20be1d2dbc"))),
-  (BlockHeight::from_u32( 523_412), Hash256::from_bendian(hex!("000000000000e54f036576a10597e0e42cc22a5159ce572f999c33975e121d4d"))),
-  (BlockHeight::from_u32( 523_930), Hash256::from_bendian(hex!("0000000000000bccdb11c2b1cfb0ecab452abf267d89b7f46eaf2d54ce6e652c"))),
-  (BlockHeight::from_u32( 750_000), Hash256::from_bendian(hex!("00000000000000b4181bbbdddbae464ce11fede5d0292fb63fdede1e7c8ab21c"))),
-  (BlockHeight::from_u32( 888_900), Hash256::from_bendian(hex!("0000000000000026c29d576073ab51ebd1d3c938de02e9a44c7ee9e16f82db28"))),
-  (BlockHeight::from_u32( 967_800), Hash256::from_bendian(hex!("0000000000000024e26c7df7e46d673724d223cf4ca2b2adc21297cc095600f4"))),
+pub(crate) static MAINNET_CHECKPOINTS: [Checkpoint; 39] = [
+  (BlockHeight::from_u32(    1_500), Hash256::from_bendian(hex!("000000aaf0300f59f49bc3e970bad15c11f961fe2347accffff19d96ec9778e3"))),
+  (BlockHeight::from_u32(    4_991), Hash256::from_bendian(hex!("000000003b01809551952460744d5dbb8fcbd6cbae3c220267bf7fa43f837367"))),
+  (BlockHeight::from_u32(    9_918), Hash256::from_bendian(hex!("00000000213e229f332c0ffbe34defdaa9e74de87f2d8d1f01af8d121c3c170b"))),
+  (BlockHeight::from_u32(   16_912), Hash256::from_bendian(hex!("00000000075c0d10371d55a60634da70f197548dbbfa4123e12abfcbc5738af9"))),
+  (BlockHeight::from_u32(   23_912), Hash256::from_bendian(hex!("0000000000335eac6703f3b1732ec8b2f89c3ba3a7889e5767b090556bb9a276"))),
+  (BlockHeight::from_u32(   35_457), Hash256::from_bendian(hex!("0000000000b0ae211be59b048df14820475ad0dd53b9ff83b010f71a77342d9f"))),
+  (BlockHeight::from_u32(   45_479), Hash256::from_bendian(hex!("000000000063d411655d590590e16960f15ceea4257122ac430c6fbe39fbf02d"))),
+  (BlockHeight::from_u32(   55_895), Hash256::from_bendian(hex!("0000000000ae4c53a43639a4ca027282f69da9c67ba951768a20415b6439a2d7"))),
+  (BlockHeight::from_u32(   68_899), Hash256::from_bendian(hex!("0000000000194ab4d3d9eeb1f2f792f21bb39ff767cb547fe977640f969d77b7"))),
+  (BlockHeight::from_u32(   74_619), Hash256::from_bendian(hex!("000000000011d28f38f05d01650a502cc3f4d0e793fbc26e2a2ca71f07dc3842"))),
+  (BlockHeight::from_u32(   75_095), Hash256::from_bendian(hex!("0000000000193d12f6ad352a9996ee58ef8bdc4946818a5fec5ce99c11b87f0d"))),
+  (BlockHeight::from_u32(   88_805), Hash256::from_bendian(hex!("00000000001392f1652e9bf45cd8bc79dc60fe935277cd11538565b4a94fa85f"))),
+  (BlockHeight::from_u32(  107_996), Hash256::from_bendian(hex!("00000000000a23840ac16115407488267aa3da2b9bc843e301185b7d17e4dc40"))),
+  (BlockHeight::from_u32(  137_993), Hash256::from_bendian(hex!("00000000000cf69ce152b1bffdeddc59188d7a80879210d6e5c9503011929c3c"))),
+  (BlockHeight::from_u32(  167_996), Hash256::from_bendian(hex!("000000000009486020a80f7f2cc065342b0c2fb59af5e090cd813dba68ab0fed"))),
+  (BlockHeight::from_u32(  207_992), Hash256::from_bendian(hex!("00000000000d85c22be098f74576ef00b7aa00c05777e966aff68a270f1e01a5"))),
+  (BlockHeight::from_u32(  312_645), Hash256::from_bendian(hex!("0000000000059dcb71ad35a9e40526c44e7aae6c99169a9e7017b7d84b1c2daf"))),
+  (BlockHeight::from_u32(  407_452), Hash256::from_bendian(hex!("000000000003c6a87e73623b9d70af7cd908ae22fee466063e4ffc20be1d2dbc"))),
+  (BlockHeight::from_u32(  523_412), Hash256::from_bendian(hex!("000000000000e54f036576a10597e0e42cc22a5159ce572f999c33975e121d4d"))),
+  (BlockHeight::from_u32(  523_930), Hash256::from_bendian(hex!("0000000000000bccdb11c2b1cfb0ecab452abf267d89b7f46eaf2d54ce6e652c"))),
+  (BlockHeight::from_u32(  750_000), Hash256::from_bendian(hex!("00000000000000b4181bbbdddbae464ce11fede5d0292fb63fdede1e7c8ab21c"))),
+  (BlockHeight::from_u32(  888_900), Hash256::from_bendian(hex!("0000000000000026c29d576073ab51ebd1d3c938de02e9a44c7ee9e16f82db28"))),
+  (BlockHeight::from_u32(  967_800), Hash256::from_bendian(hex!("0000000000000024e26c7df7e46d673724d223cf4ca2b2adc21297cc095600f4"))),
   (BlockHeight::from_u32(1_067_570), Hash256::from_bendian(hex!("000000000000001e09926bcf5fa4513d23e870a34f74e38200db99eb3f5b7a70"))),
   (BlockHeight::from_u32(1_167_570), Hash256::from_bendian(hex!("000000000000000fb7b1e9b81700283dff0f7d87cf458e5edfdae00c669de661"))),
   (BlockHeight::from_u32(1_364_585), Hash256::from_bendian(hex!("00000000000000022f355c52417fca9b73306958f7c0832b3a7bce006ca369ef"))),
@@ -231,4 +201,58 @@ const CHECKPOINTS: [Checkpoint; 37] = [
   (BlockHeight::from_u32(2_216_986), Hash256::from_bendian(hex!("0000000000000010b1135dc743f27f6fc8a138c6420a9d963fc676f96c2048f4"))),
   (BlockHeight::from_u32(2_361_500), Hash256::from_bendian(hex!("0000000000000009ba1e8f47851d036bb618a4f6565eb3c32d1f647d450ff195"))),
   (BlockHeight::from_u32(2_421_800), Hash256::from_bendian(hex!("000000000000000718ed026ebd644a8b70b42d4cbd7b25304c066c9bf15f85b7"))),
+  (BlockHeight::from_u32(2_471_728), Hash256::from_bendian(hex!("000000000000001a19ad7270422a00f86123ea94e0b295a3a796d6861bd7b032"))),
+  (BlockHeight::from_u32(2_487_500), Hash256::from_bendian(hex!("00000000000000119fe42827219e0686d3f7b494ae65f823194c740c5dbab492"))),
 ];
+
+#[rustfmt::skip]
+pub(crate) static MAINNET_FIXED_SEEDS: [u8; 2260] = hex!(concat!(
+  "0420ba5bab3a877c7498c27006d1350849b96b17d52621cca8c173319a4476cbd777270f0420b4c38d95481f090029a5",
+  "ab00a37aae2d5e30728a3d082fabba6bbfe6fa59b8aa270f04209d329c4d1e352dbd4982b9a5664f455256ac5db3e7e3",
+  "393eac8122102f23260d270f04207e87e89bd53f4bb62621ff57a7bef3085e90979dacc987ec5ca6db72b9b67932270f",
+  "0420627b986dc470d769116ae85b7eace8a1ed4a67d733109bf1416bda703145ecfe270f04205c0de69424577850c8c3",
+  "c0a1e8913f20e02371f2f320caca11f73a820833f8b3270f04205783984d479e719412674376a5625be6a2bc89905465",
+  "d404123c04b1535b21e9270f0420574c369aa062ed8658fa037d05832f355675468a049de6d7be1efaf2366f29d0270f",
+  "04204c2524e1b55c2c543a236d2faac27e32db1d970fc3cb604a28c85f63853a5d67270f04204a527b624ae4f68fb629",
+  "c5f112f3094c18e5938373ac607dad561283ecec47e1270f0420463d6c95fee97af210f0a404783c91bf63c84b012b2b",
+  "51a4e4d015b41bcf9ec1270f042044d4098b4679554a85892aee6881aa9a6327285fb0a8da6bac87df38325f2d89270f",
+  "042047fb8b8727ca95e877ae41bd72206225e5679841850e9a5d4ab10f8f46a987a4270f04203f2381376b32e603dea5",
+  "bcc9e8e698a6dce06cbb075e2364eaa9fa104088fcb7270f04203e84f83123dc6043c5ddd4a643a3956e1c5be18580e4",
+  "4b88e72fc6f0854e8298270f0420304dab0f94b0baafdba9ddb9ecc49e8f50e2668b3262851277af2045603936b3270f",
+  "04202e5decf0624cca6e90df00651cca4acb66eea2a694278d6cec154be0a486e321270f04202109f10f0d0a69f782fc",
+  "e559b0bbe00651fd4030359537d55bf9dd737d2a8133270f0420060f6b3d30e44db0c9619cff8226183d058042410fe6",
+  "de742b3f23fba7dab15c270f0420ed7ab30c6e589039cf5061d95c281a258f3e314c627fb996d443162519900f57270f",
+  "0420ef3468e6b3c6c4d0cf22dc9209d02a634f6d6afd316ad4e9717306f046cb1713270f0420e0c1c978b5cead3f7f4a",
+  "bde0688388a45d39712dce5847ac239fc0145fdde952270f0420dd2a24e18845d1e6f99a7f8b23613755f42200921fc8",
+  "e7a36ffa5bbf711dcfb9270f0420d89d506e4d6230388c108cb29eaa2da25f632a843e94970e8de1ea8bab78eafb270f",
+  "0420d063bfe7a859b68dc416b2b2d61fcb38b217417dc8e2533140bb65c9bcb1bb29270f0104d99ae714270f0104d8ee",
+  "4b2e270f0104d8e6e87d270f0104d48469be270f0104d41868e1270f0104d18d24ce270f0104d057665b270f0104cff4",
+  "f728270f0104ca470e4f270f0104ca051021270f0104c3625fd2270f0104c31afee4270f0104c2ee19c7270f0104c287",
+  "5464270f0104c2059dd6270f0104c0af7fc6270f0104c0a90657270f0104b9f373db270f0104b9e4539c270f0104b9e4",
+  "5384270f0104b9d8b305270f0104b9c113d6270f0104b9b92868270f0104b9a6d99a270f0104b9a5ab75270f0104b9a4",
+  "a3da270f0104b9a4a355270f0104b970f935270f0104b970f931270f0104b91c6591270f0104b86bb6c6270f0104b2fd",
+  "fd05270f0104b2d7ed87270f0104b2d7ed86270f0104b2d057e2270f0104b2d057d5270f0104b29d5bb1270f0104b23f",
+  "7981270f0104b15d8d56270f0104b15d8d3c270f0104b0664191270f0104acee0719270f0104acecf451270f0104ac68",
+  "91a6270f0104ac565b9e270f0104ac5649a0270f0104a87757c4270f0104a8775004270f0104a768d81c270f0104a758",
+  "a910270f0104a516ea87270f0104a516dd61270f0104a3ac4229270f0104a161a573270f01049f4b79a3270f01049a10",
+  "3f70270f010498435fb8270f010497f455db270f010497f455c3270f010497f455b2270f010497f4557b270f01049568",
+  "6e77270f0104932d29d2270f0104901fbc2a270f01049018eeb2270f010488f46311270f0104851261e2270f010484f3",
+  "c5f0270f010484f3c5b3270f010484f3c563270f010484f3c517270f010482ff9ba3270f010482a2e9ba270f01047bc1",
+  "40a6270f010473bef839270f01047284acd7270f01046deb43f6270f01046ca083c0270f01046bbd034a270f01046bb3",
+  "ca4a270f01046baecce8270f01046baafea0270f01046a370916270f010468eaa773270f01045d73ac27270f01045d73",
+  "ac25270f01045bc795b1270f01045bc66c28270f01045bc66c27270f01045bc66c25270f01045bc66c23270f01045bb8",
+  "f9d1270f010459b34960270f0104597dd1c3270f0104597dd16e270f0104597dd145270f01045975391b270f01045975",
+  "03f2270f0104592e2ada270f010459238395270f010457e41840270f010455d1f1f5270f010455d1f15d270f010455d1",
+  "f157270f010455d1f156270f0104559bbc8a270f010454f7b4c9270f010454f2b3cc270f010454620cc4270f01045409",
+  "3211270f010453ef6328270f0104539564ba270f0104539564b9270f0104539564b8270f0104539564b7270f010452ca",
+  "e653270f010452b492c0270f010451e3fa33270f010450f99308270f010450f084e7270f010450d0e690270f01044e53",
+  "1300270f01044ddf6304270f01044ddd94cc270f01044a325a71270f0104483e3a6c270f0104483c26a0270f0104453d",
+  "6bd7270f010442f5c434270f010442f4f346270f010442a37171270f010442a3715b270f010442a37107270f01043eab",
+  "857d270f01043e3cf4ae270f01043424665b270f0104342109ac270f0104339ebc58270f0104339ea9ed270f0104339e",
+  "a71f270f01042efafe0a270f01042e2428f2270f01042e1ebdbb270f01042e04a27f270f01042d99ba64270f01042d95",
+  "9ac2270f01042d809c1e270f01042d4f126a270f01042d3dba79270f01042d3a384f270f01042cf063d6270f01042be5",
+  "4d2e270f01042ba7f46d270f01042ba7ef91270f01042b86b471270f01042b85ab65270f010426667d6c270f01042636",
+  "0c6f270f01042561e315270f010422f6b019270f01041f946394270f01041f0a6124270f010417a300ae270f010405a1",
+  "6e4f270f010405236713270f01040502493a270f0104050243be270f010402e97823270f0104023bdb36270f01040175",
+  "4bdc270f",
+));

@@ -6,5 +6,8 @@
 
 //! Re-exports for no_std compatibility.
 
+pub(crate) use alloc::collections::BTreeSet;
+pub(crate) use alloc::format;
+pub(crate) use alloc::string::String;
 pub(crate) use alloc::vec;
 pub(crate) use alloc::vec::Vec;
