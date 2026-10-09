@@ -30,10 +30,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   shortest type that carries the command, 0x7f in a long-form type).
 - `CommandString::EMPTY`, the all-zero type.
 - Typed overlay messages: `clsig` (`ClSig`), `isdlock` (`IsdLock`), `qsigrec` (`RecoveredSig`), `qfcommit` (the
-  final commitment, versions 1 to 4), `mnauth` (`MnAuth`), `spork` (`Spork`), `platformban` (`PlatformBan`, with
-  `signed_hash`), `qgetdata` (`QuorumDataRequest`), `qdata` (`QData`), `getqrinfo` (`GetQrInfo`) and `qrinfo`
-  (`QrInfo`, with `QuorumSnapshot` and `CycleInfo`). BLS keys and signatures are bytes, except a commitment's, which
-  go through the BLS wire-form classifier as before.
+  final commitment, versions 1 to 4), `mnauth` (`MnAuth`), `spork` (`Spork`), `platformban` (`PlatformBan`, whose
+  hash is Core's `GetHash()`, without the signature), `qgetdata` (`QuorumDataRequest`), `qdata` (`QData`),
+  `getqrinfo` (`GetQrInfo`) and `qrinfo` (`QrInfo`, with `QuorumSnapshot` and `CycleInfo`). BLS keys and signatures
+  are bytes, except a commitment's, which go through the BLS wire-form classifier as before.
 - `MnListFormat`, the `mnlistdiff` layouts by protocol version (no version, version after the cbTx, versioned
   entries, version first, ChainLock signatures), with `MnListDiff::decode_as`; `qrinfo` and `mnlistdiff` decode in the
   layout of the context's version.
@@ -56,6 +56,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `encode_v2` takes the peer's common version.
 - `filterclear`, `mempool` and `qwatch` are no longer stubs.
 - A `qgetdata` over 67 bytes fails with `PayloadTooLarge`, as Core's handler refuses it before reading.
+- `SimplifiedMnListEntry`'s hash is Core's `CalcHash()`, its leaf in `merkleRootMNList`: the entry without its
+  version.
 - `P2pDecodeError::Consensus` carries the `DecodeError` instead of its text.
 - `GetBlockTxn`'s fields are private and deserialization checks their order; an index past 65,535 fails, as in Core.
 - `SendCmpct::high_bandwidth` is a `bool` read as 0 or 1, the bytes Core writes; another byte, which Core reads as

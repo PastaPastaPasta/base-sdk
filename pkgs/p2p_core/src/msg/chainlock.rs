@@ -18,7 +18,10 @@ use core::fmt;
 /// A ChainLock signature, the `clsig` payload (Core's `ChainLockSig`).
 ///
 /// Core reads the signature eagerly under its process-wide BLS scheme; the
-/// field holds the wire bytes.
+/// field holds the wire bytes. The hash is over the wire bytes; Core's
+/// inventory hash is over the signature as it re-serializes it, which the
+/// node-side BLS classifier gives, so the two agree once the classifier has
+/// normalized the signature.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct ClSig {

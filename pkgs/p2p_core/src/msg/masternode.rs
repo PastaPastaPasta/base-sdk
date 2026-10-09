@@ -6,16 +6,16 @@
 
 //! Masternode messages: authentication, sporks and platform bans.
 
-use crate::codec::{codec_p2p, impl_p2p, read_limited_byte_vec};
+use crate::codec::{codec_p2p, impl_p2p, read_limited_byte_vec, MAX_P2P_PAYLOAD_SIZE};
 use crate::prelude::*;
 
 use bitcoin_hashes::sha256d;
 use dash_num::Hash256;
 use dash_pkc::bls::{BlsScIetf, BlsSigBytes};
-use dash_primitives::{hash_impl, QuorumHash, TxHash};
+use dash_primitives::{codec_base, hash_impl, QuorumHash, TxHash};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
-use dash_types::Numeric;
+use dash_types::{Hashable, Numeric};
 
 use core::fmt;
 
@@ -110,17 +110,19 @@ pub struct PlatformBan {
   pub sig: BlsSigBytes<BlsScIetf>,
 }
 
-codec_p2p!(PlatformBan {
+codec_base!(PlatformBan, MAX_P2P_PAYLOAD_SIZE, {
   pro_tx_hash,
   requested_height,
   quorum_hash,
   sig
 });
 
-impl PlatformBan {
-  /// Core's `GetHash()`: the double SHA-256 of the message without its
-  /// signature.
-  pub fn signed_hash(&self) -> Hash256 {
+impl Hashable for PlatformBan {
+  type Hash = Hash256;
+
+  /// Core's `GetHash()`, the message's inventory hash: the double SHA-256
+  /// of the message without its signature.
+  fn hash(&self) -> Hash256 {
     let mut buf = Vec::new();
     self.pro_tx_hash.encode(&mut buf);
     self.requested_height.encode(&mut buf);

@@ -13,6 +13,8 @@ use crate::msg::bloom::PartialMerkleTree;
 use crate::prelude::*;
 use crate::version::ProtocolVersion;
 
+use bitcoin_hashes::sha256d;
+use dash_num::Hash256;
 use dash_pkc::bls::{BlsPkBytes, BlsScIetf, BlsSigBytes};
 use dash_primitives::{
   hash_impl, protx_bls_scheme, BlockHash, Commitment, LlmqType, MnType, NetInfo, NetInfoV1, NetInfoV2, PlatformNodeId,
@@ -21,8 +23,7 @@ use dash_primitives::{
 use dash_script::PubKeyHash;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::CompactSize;
-use dash_types::Numeric;
+use dash_types::{CompactSize, Hashable, Numeric};
 
 use core::fmt;
 
@@ -348,7 +349,18 @@ impl BaseCodec for SimplifiedMnListEntry {
   }
 }
 
-hash_impl!(SimplifiedMnListEntry);
+impl Hashable for SimplifiedMnListEntry {
+  type Hash = Hash256;
+
+  /// Core's `CalcHash()`, the entry's leaf in `merkleRootMNList`: the double
+  /// SHA-256 of the entry without its version, with the fields its version
+  /// and type carry.
+  fn hash(&self) -> Hash256 {
+    let mut buf = Vec::new();
+    self.encode_as(&mut buf, false);
+    Hash256::from_lendian(sha256d::Hash::hash(&buf).to_byte_array())
+  }
+}
 
 impl SimplifiedMnListEntry {
   /// Decodes an entry that carries its version or, before protocol 70228,
