@@ -290,6 +290,8 @@ impl ProRegTx {
   /// `vch_sig`. Its SHA256d ends the string an external collateral's key
   /// signs; see [`Self::sign_string`].
   ///
+  /// # Errors
+  ///
   /// Unsupported versions are refused.
   pub fn sig_hash_bytes(&self) -> Result<Vec<u8>, ProTxInvalid> {
     supported_version(self.version)?;
@@ -303,8 +305,12 @@ impl ProRegTx {
   /// voting addresses and the payload hash, separated by `|`.
   ///
   /// It depends on the network through the address prefixes in `addr`.
+  ///
+  /// # Errors
+  ///
   /// Unsupported versions are refused.
   pub fn sign_string(&self, addr: &AddrParams) -> Result<String, ProTxInvalid> {
+    let hash = hash256(&self.sig_hash_bytes()?);
     let payout = if self.version >= PROTX_VERSION_EXT_ADDR {
       let entries: Vec<String> = self
         .payouts
@@ -326,13 +332,16 @@ impl ProRegTx {
       self.operator_reward,
       self.key_id_owner.to_base58c(addr.pubkey_addr),
       self.key_id_voting.to_base58c(addr.pubkey_addr),
-      hash256(&self.sig_hash_bytes()?),
+      hash,
     ))
   }
 
   /// The bytes whose SHA256d an external collateral's key signs, Core's
-  /// `MessageHash` input for [`Self::sign_string`]. Unsupported versions
-  /// are refused.
+  /// `MessageHash` input for [`Self::sign_string`].
+  ///
+  /// # Errors
+  ///
+  /// Unsupported versions are refused.
   pub fn sign_message_bytes(&self, addr: &AddrParams) -> Result<Vec<u8>, ProTxInvalid> {
     Ok(message_bytes(&self.sign_string(addr)?))
   }
@@ -342,8 +351,11 @@ impl ProRegTx {
   ///
   /// The digest binds the funding inputs and their sequences, every output,
   /// the share table, the penalty terms and the registrar configuration of
-  /// `tx`, the transaction that carries this payload. Unsupported versions
-  /// are refused.
+  /// `tx`, the transaction that carries this payload.
+  ///
+  /// # Errors
+  ///
+  /// Unsupported versions are refused.
   pub fn shared_consent_bytes(&self, tx: &Transaction) -> Result<Vec<u8>, ProTxInvalid> {
     supported_version(self.version)?;
     let mut inputs = Vec::new();
