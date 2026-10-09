@@ -11,8 +11,8 @@ use super::shares::{self, CollateralShare, CompactSig, PayoutShare};
 use super::sighash::{destination_string, hash256, message_bytes, write_tx_header};
 use super::{
   check_platform_fields, check_sptx_netinfo, check_version, is_known_protx_version, read_net_info,
-  read_platform_fields, write_net_info, write_platform_fields, InputsHash, MnType, ProTxInvalid, MAX_OPERATOR_REWARD,
-  PROTX_VERSION_BASIC_BLS, PROTX_VERSION_EXT_ADDR,
+  read_platform_fields, supported_version, write_net_info, write_platform_fields, InputsHash, MnType, ProTxInvalid,
+  MAX_OPERATOR_REWARD, PROTX_VERSION_BASIC_BLS, PROTX_VERSION_EXT_ADDR,
 };
 use crate::payload::PlatformNodeId;
 use crate::prelude::*;
@@ -289,10 +289,13 @@ impl ProRegTx {
   /// The payload's `SER_GETHASH` serialization, which leaves out
   /// `vch_sig`. Its SHA256d ends the string an external collateral's key
   /// signs; see [`Self::sign_string`].
-  pub fn sig_hash_bytes(&self) -> Vec<u8> {
+  ///
+  /// Unsupported versions are refused.
+  pub fn sig_hash_bytes(&self) -> Result<Vec<u8>, ProTxInvalid> {
+    supported_version(self.version)?;
     let mut buf = Vec::new();
     self.encode_unsigned(&mut buf);
-    buf
+    Ok(buf)
   }
 
   /// Core's `MakeSignString`, which the key of an external collateral signs
@@ -300,7 +303,8 @@ impl ProRegTx {
   /// voting addresses and the payload hash, separated by `|`.
   ///
   /// It depends on the network through the address prefixes in `addr`.
-  pub fn sign_string(&self, addr: &AddrParams) -> String {
+  /// Unsupported versions are refused.
+  pub fn sign_string(&self, addr: &AddrParams) -> Result<String, ProTxInvalid> {
     let payout = if self.version >= PROTX_VERSION_EXT_ADDR {
       let entries: Vec<String> = self
         .payouts
@@ -317,19 +321,20 @@ impl ProRegTx {
     } else {
       destination_string(self.script_payout.as_bytes(), addr)
     };
-    format!(
+    Ok(format!(
       "{payout}|{}|{}|{}|{}",
       self.operator_reward,
       self.key_id_owner.to_base58c(addr.pubkey_addr),
       self.key_id_voting.to_base58c(addr.pubkey_addr),
-      hash256(&self.sig_hash_bytes()),
-    )
+      hash256(&self.sig_hash_bytes()?),
+    ))
   }
 
   /// The bytes whose SHA256d an external collateral's key signs, Core's
-  /// `MessageHash` input for [`Self::sign_string`].
-  pub fn sign_message_bytes(&self, addr: &AddrParams) -> Vec<u8> {
-    message_bytes(&self.sign_string(addr))
+  /// `MessageHash` input for [`Self::sign_string`]. Unsupported versions
+  /// are refused.
+  pub fn sign_message_bytes(&self, addr: &AddrParams) -> Result<Vec<u8>, ProTxInvalid> {
+    Ok(message_bytes(&self.sign_string(addr)?))
   }
 
   /// The bytes whose SHA256d each share owner signs to consent to a shared
@@ -337,8 +342,10 @@ impl ProRegTx {
   ///
   /// The digest binds the funding inputs and their sequences, every output,
   /// the share table, the penalty terms and the registrar configuration of
-  /// `tx`, the transaction that carries this payload.
-  pub fn shared_consent_bytes(&self, tx: &Transaction) -> Vec<u8> {
+  /// `tx`, the transaction that carries this payload. Unsupported versions
+  /// are refused.
+  pub fn shared_consent_bytes(&self, tx: &Transaction) -> Result<Vec<u8>, ProTxInvalid> {
+    supported_version(self.version)?;
     let mut inputs = Vec::new();
     let mut outputs = Vec::new();
     for input in &tx.inputs {
@@ -369,7 +376,7 @@ impl ProRegTx {
     shares::write_list(&self.shares, &mut buf);
     self.early_period_blocks.encode(&mut buf);
     self.early_penalty.encode(&mut buf);
-    buf
+    Ok(buf)
   }
 
   /// Every field but `vch_sig`, as [`BaseCodec::encode`] writes them.

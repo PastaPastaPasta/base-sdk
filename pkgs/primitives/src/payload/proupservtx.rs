@@ -9,7 +9,7 @@
 use super::bls::{self, protx_bls_scheme, protx_source};
 use super::{
   check_platform_fields, check_sptx_netinfo, check_version, is_known_protx_version, read_net_info,
-  read_platform_fields, write_net_info, write_platform_fields, InputsHash, MnType, ProTxInvalid,
+  read_platform_fields, supported_version, write_net_info, write_platform_fields, InputsHash, MnType, ProTxInvalid,
   PROTX_VERSION_BASIC_BLS, PROTX_VERSION_EXT_ADDR,
 };
 use crate::payload::PlatformNodeId;
@@ -175,10 +175,13 @@ hash_impl!(ProUpServTx);
 impl ProUpServTx {
   /// The payload's `SER_GETHASH` serialization, which leaves out `sig`. The
   /// operator signs its SHA256d.
-  pub fn sig_hash_bytes(&self) -> Vec<u8> {
+  ///
+  /// Unsupported versions are refused.
+  pub fn sig_hash_bytes(&self) -> Result<Vec<u8>, ProTxInvalid> {
+    supported_version(self.version)?;
     let mut buf = Vec::new();
     self.encode_unsigned(&mut buf);
-    buf
+    Ok(buf)
   }
 
   /// Every field but `sig`, as [`BaseCodec::encode`] writes them.

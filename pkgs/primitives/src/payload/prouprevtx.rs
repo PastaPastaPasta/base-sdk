@@ -7,7 +7,7 @@
 //! ProUpRevTx revocation payload (type 4).
 
 use super::bls::{self, protx_bls_scheme, protx_source};
-use super::{check_version, is_known_protx_version, InputsHash, ProTxInvalid};
+use super::{check_version, is_known_protx_version, supported_version, InputsHash, ProTxInvalid};
 use crate::prelude::*;
 use crate::support::RevocationReason;
 use crate::{hash_impl, TxHash};
@@ -102,10 +102,13 @@ hash_impl!(ProUpRevTx);
 impl ProUpRevTx {
   /// The payload's `SER_GETHASH` serialization, which leaves out `sig`. The
   /// operator signs its SHA256d.
-  pub fn sig_hash_bytes(&self) -> Vec<u8> {
+  ///
+  /// Unsupported versions are refused.
+  pub fn sig_hash_bytes(&self) -> Result<Vec<u8>, ProTxInvalid> {
+    supported_version(self.version)?;
     let mut buf = Vec::new();
     self.encode_unsigned(&mut buf);
-    buf
+    Ok(buf)
   }
 
   /// Every field but `sig`, as [`BaseCodec::encode`] writes them.

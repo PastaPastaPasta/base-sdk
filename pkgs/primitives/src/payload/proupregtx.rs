@@ -8,7 +8,9 @@
 
 use super::bls::{self, protx_bls_scheme, protx_source};
 use super::shares::{self, PayoutShare};
-use super::{check_version, is_known_protx_version, InputsHash, ProTxInvalid, PROTX_VERSION_EXT_ADDR};
+use super::{
+  check_version, is_known_protx_version, supported_version, InputsHash, ProTxInvalid, PROTX_VERSION_EXT_ADDR,
+};
 use crate::prelude::*;
 use crate::{hash_impl, TxHash};
 
@@ -158,10 +160,13 @@ hash_impl!(ProUpRegTx);
 impl ProUpRegTx {
   /// The payload's `SER_GETHASH` serialization, which leaves out
   /// `vch_sig`. The owner key signs its SHA256d.
-  pub fn sig_hash_bytes(&self) -> Vec<u8> {
+  ///
+  /// Unsupported versions are refused.
+  pub fn sig_hash_bytes(&self) -> Result<Vec<u8>, ProTxInvalid> {
+    supported_version(self.version)?;
     let mut buf = Vec::new();
     self.encode_unsigned(&mut buf);
-    buf
+    Ok(buf)
   }
 
   /// Every field but `vch_sig`, as [`BaseCodec::encode`] writes them.

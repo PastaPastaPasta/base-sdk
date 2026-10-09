@@ -94,6 +94,16 @@ pub(crate) fn check_version(version: u16) -> Result<u16, DecodeError> {
   }
 }
 
+/// Refuses a provider payload version the crate does not support, for
+/// the sign-hash methods.
+pub(crate) fn supported_version(version: u16) -> Result<(), ProTxInvalid> {
+  if is_known_protx_version(version) {
+    Ok(())
+  } else {
+    Err(ProTxInvalid::BadVersion { version })
+  }
+}
+
 /// Checks that platform fields are consistent with mn_type and version.
 pub(super) fn check_platform_fields(
   mn_type: MnType,

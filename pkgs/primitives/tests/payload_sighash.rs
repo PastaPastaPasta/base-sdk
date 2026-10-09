@@ -22,7 +22,9 @@ use dash_pkc::bls::{
   BlsSchemeSource, BlsSigBytes, BlsSigId, BlsSignature,
 };
 use dash_pkc::ecdsa::{EcdsaPkBytes, EcdsaPublicKey, EcdsaRecSigBytes, EcdsaRecSignature};
-use dash_primitives::{llmq_sign_hash, CompactSig, LlmqType, PayloadDecode, QuorumHash, SpecialPayload, Transaction};
+use dash_primitives::{
+  llmq_sign_hash, CompactSig, LlmqType, PayloadDecode, ProTxInvalid, QuorumHash, SpecialPayload, Transaction,
+};
 use dash_script::AddrParams;
 use dash_types::codec::BaseCodec;
 use dash_types::{Hashable, Numeric};
@@ -155,27 +157,27 @@ fn check_signed(txid: &str, entry: &Value) -> (u16, u16) {
         .iter()
         .map(|s| s.key_id_owner.as_bytes().to_lower_hex_string())
         .collect();
-      let hash = hash(&p.shared_consent_bytes(&tx));
+      let hash = hash(&p.shared_consent_bytes(&tx).unwrap());
       (
         p.version,
         owners_signed(&owners, p.join_sigs.iter().map(compact), &hash),
       )
     }
     SpecialPayload::ProviderRegister(p) => {
-      let hash = hash(&p.sign_message_bytes(addr));
+      let hash = hash(&p.sign_message_bytes(addr).unwrap());
       (p.version, owners_signed(&key_ids, [&p.vch_sig[..]], &hash))
     }
     SpecialPayload::ProviderUpdateService(p) => (
       p.version,
-      bls_verifies_any(&operator(), &p.sig, &hash(&p.sig_hash_bytes())),
+      bls_verifies_any(&operator(), &p.sig, &hash(&p.sig_hash_bytes().unwrap())),
     ),
     SpecialPayload::ProviderUpdateRegistrar(p) => (
       p.version,
-      owners_signed(&key_ids, [&p.vch_sig[..]], &hash(&p.sig_hash_bytes())),
+      owners_signed(&key_ids, [&p.vch_sig[..]], &hash(&p.sig_hash_bytes().unwrap())),
     ),
     SpecialPayload::ProviderUpdateRevoke(p) => (
       p.version,
-      bls_verifies_any(&operator(), &p.sig, &hash(&p.sig_hash_bytes())),
+      bls_verifies_any(&operator(), &p.sig, &hash(&p.sig_hash_bytes().unwrap())),
     ),
     SpecialPayload::QuorumCommitment(p) => {
       // The key enters the hash under the flag the signature verifies under.
@@ -234,6 +236,47 @@ fn core_signatures_verify_over_sighash() {
   let commitments = (1..=4).map(|v| (6, v));
   let others = [(7, 1), (9, 1), (9, 2), (10, 1), (11, 1), (12, 1)];
   assert_eq!(shapes, protx.chain(commitments).chain(others).collect());
+}
+
+/// The provider payloads' sign hashes refuse unsupported versions.
+#[test]
+fn provider_sighash_refuses_unsupported_versions() {
+  let mut checked = BTreeSet::new();
+  for entry in corpus("sighash").as_object().unwrap().values() {
+    let tx = decode_tx(entry["raw"].as_str().unwrap());
+    let PayloadDecode { payload, .. } = tx.decode_payload().unwrap().unwrap();
+    for version in [0, 4, u16::MAX] {
+      let refused = ProTxInvalid::BadVersion { version };
+      let tx_type = match payload.clone() {
+        SpecialPayload::ProviderRegister(mut p) => {
+          p.version = version;
+          assert_eq!(p.sig_hash_bytes().unwrap_err(), refused);
+          assert_eq!(p.sign_string(&REGTEST).unwrap_err(), refused);
+          assert_eq!(p.sign_message_bytes(&REGTEST).unwrap_err(), refused);
+          assert_eq!(p.shared_consent_bytes(&tx).unwrap_err(), refused);
+          1
+        }
+        SpecialPayload::ProviderUpdateService(mut p) => {
+          p.version = version;
+          assert_eq!(p.sig_hash_bytes().unwrap_err(), refused);
+          2
+        }
+        SpecialPayload::ProviderUpdateRegistrar(mut p) => {
+          p.version = version;
+          assert_eq!(p.sig_hash_bytes().unwrap_err(), refused);
+          3
+        }
+        SpecialPayload::ProviderUpdateRevoke(mut p) => {
+          p.version = version;
+          assert_eq!(p.sig_hash_bytes().unwrap_err(), refused);
+          4
+        }
+        _ => continue,
+      };
+      checked.insert(tx_type);
+    }
+  }
+  assert_eq!(checked, (1..=4).collect());
 }
 
 /// Asset unlocks: the txid is Core's, and the instance hash is the one Core
