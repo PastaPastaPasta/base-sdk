@@ -547,6 +547,46 @@ mod tests {
   }
 
   #[test]
+  fn negative_time_deltas_wrap_as_in_core() {
+    let first = BlockHeader {
+      version: 0x2000_0000,
+      prev_hash: BlockHash::decode(&mut &[7u8; 32][..]).unwrap(),
+      merkle_root: MerkleRoot::decode(&mut &[1u8; 32][..]).unwrap(),
+      time: 5,
+      bits: 0x207f_ffff,
+      nonce: 11,
+    };
+    // Core never sends a negative delta, but adds any delta modulo 2^32.
+    let mut payload = vec![3, UNCOMPRESSED];
+    first.encode(&mut payload);
+    for (merkle, delta, nonce) in [(2u8, -1i16, 12u32), (3, i16::MIN, 13)] {
+      // Version offset 1, every other field left off.
+      payload.push(0x01);
+      [merkle; 32].encode(&mut payload);
+      delta.encode(&mut payload);
+      nonce.encode(&mut payload);
+    }
+    let second = BlockHeader {
+      prev_hash: first.hash(),
+      merkle_root: MerkleRoot::decode(&mut &[2u8; 32][..]).unwrap(),
+      time: 4,
+      nonce: 12,
+      ..first
+    };
+    let third = BlockHeader {
+      prev_hash: second.hash(),
+      merkle_root: MerkleRoot::decode(&mut &[3u8; 32][..]).unwrap(),
+      time: 4_294_934_532,
+      nonce: 13,
+      ..first
+    };
+    let decoded = Headers2::decode_msg(&mut &payload[..], &ctx()).unwrap();
+    assert!(decoded.block_headers().copied().eq([first, second, third]));
+    assert_eq!(decoded.headers()[2].time_offset(), i16::MIN);
+    assert_eq!(wire(&decoded), payload);
+  }
+
+  #[test]
   fn a_first_header_must_carry_every_field() {
     // flags 0x01: version offset 1, prev hash, delta time and bits left off.
     let mut payload = vec![1, 0x01];
