@@ -22,6 +22,9 @@ impl_bytes!(CommandString, 12);
 hash_impl!(CommandString);
 
 impl CommandString {
+  /// The all-zero command, the empty type Core's handlers treat as unknown.
+  pub const EMPTY: Self = Self([0; 12]);
+
   /// Builds a command string from a static `&str` at compile time.
   ///
   /// # Panics

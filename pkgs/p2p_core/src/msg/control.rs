@@ -4,7 +4,7 @@
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
 
-//! Peer preference messages carrying one flag.
+//! Small control messages: peer preferences and sync counts.
 
 use crate::codec::codec_p2p;
 
@@ -30,3 +30,33 @@ pub struct QSendRecSigs {
 }
 
 codec_p2p!(QSendRecSigs { send_rec_sigs });
+
+/// BIP330 reconciliation support, the `sendtxrcncl` payload.
+///
+/// Core reads it only with `-txreconciliation`, a debug option off by
+/// default; otherwise the handler reads nothing.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
+#[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
+pub struct SendTxRcncl {
+  /// Reconciliation protocol version.
+  pub version: u32,
+  /// The sender's salt.
+  #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::str_u64"))]
+  pub salt: u64,
+}
+
+codec_p2p!(SendTxRcncl { version, salt });
+
+/// A masternode sync item count, the `ssc` payload.
+///
+/// Core reads it only until its own sync finishes, and only logs it.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
+#[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
+pub struct Ssc {
+  /// The sync item, Core's `nItemID`.
+  pub item_id: i32,
+  /// The item's count.
+  pub count: i32,
+}
+
+codec_p2p!(Ssc { item_id, count });

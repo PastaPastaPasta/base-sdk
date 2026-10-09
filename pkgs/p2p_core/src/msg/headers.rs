@@ -8,6 +8,7 @@
 
 use crate::codec::{codec_p2p, impl_p2p, MsgDecode};
 use crate::ctx::ProtoCtx;
+use crate::limits::MAX_HEADERS_UNCOMPRESSED_RESULT;
 use crate::prelude::*;
 use crate::version::ProtocolVersion;
 use crate::P2pDecodeError;
@@ -16,12 +17,6 @@ use dash_primitives::{hash_impl, BlockHash, BlockHeader, MerkleRoot};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
 use dash_types::{CompactSize, Numeric};
-
-/// Core's `MAX_HEADERS_UNCOMPRESSED_RESULT`, the `headers` limit.
-pub(crate) const MAX_HEADERS_UNCOMPRESSED: u64 = 2_000;
-
-/// Core's `MAX_HEADERS_COMPRESSED_RESULT`, the raised `headers2` limit.
-pub(crate) const MAX_HEADERS_COMPRESSED: u64 = 8_000;
 
 /// The fewest bytes a `headers` entry takes, a header and its tx count.
 const MIN_HEADERS_ENTRY: usize = 81;
@@ -36,14 +31,17 @@ pub(crate) fn read_entry_count(data: &mut &[u8], min_entry: usize) -> Result<usi
 /// Reads a header count, rejecting one above `max` before any header.
 ///
 /// Core's handler compares the count with its limit and penalises the peer
-/// without reading further (`GetHeadersLimit`).
-pub(crate) fn read_header_count(data: &mut &[u8], command: &'static str, max: u64) -> Result<usize, P2pDecodeError> {
+/// without reading further (`GetHeadersLimit`). A count larger than the
+/// bytes left fails here too, where Core reads up to the end of the data
+/// first; a smaller count the headers cannot fill fails where they run out,
+/// as in Core.
+pub(crate) fn read_header_count(data: &mut &[u8], command: &'static str, max: usize) -> Result<usize, P2pDecodeError> {
   let count = CompactSize::decode_size(data)?;
-  if count.to_base() > max {
+  if count.to_base() > max as u64 {
     return Err(P2pDecodeError::TooManyEntries {
       command,
       count: count.to_base(),
-      max,
+      max: max as u64,
     });
   }
   Ok(count.into_len(data.len())?)
@@ -67,6 +65,27 @@ codec_p2p!(GetHeaders {
   hash_stop
 });
 
+/// Requests an `inv` of the blocks after a locator, Core's `getblocks`.
+///
+/// The wire form equals [`GetHeaders`]'s: Core's `CBlockLocator` and a stop
+/// hash.
+#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
+pub struct GetBlocks {
+  /// The sender's stream version, which Core reads and ignores.
+  pub version: ProtocolVersion,
+  /// Block locator hashes (newest first).
+  pub locator_hashes: Vec<BlockHash>,
+  /// Stop hash (zero to get as many as possible).
+  pub hash_stop: BlockHash,
+}
+
+codec_p2p!(GetBlocks {
+  version,
+  locator_hashes,
+  hash_stop
+});
+
 /// Response carrying block headers.
 ///
 /// Each header is followed by a CompactSize transaction count
@@ -81,6 +100,9 @@ pub struct Headers {
 impl_p2p!(Headers);
 
 impl BaseCodec for Headers {
+  /// The message's codec, not Core's handler read: no 2000 limit, and a count
+  /// the bytes cannot hold fails before any header. Use
+  /// [`P2pMsg::decode_with_policy`](crate::P2pMsg::decode_with_policy).
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let count = read_entry_count(data, MIN_HEADERS_ENTRY)?;
     Self::read(data, count)
@@ -124,7 +146,7 @@ impl Headers {
 
 impl MsgDecode for Headers {
   fn decode_msg(data: &mut &[u8], _ctx: &ProtoCtx) -> Result<Self, P2pDecodeError> {
-    let count = read_header_count(data, "headers", MAX_HEADERS_UNCOMPRESSED)?;
+    let count = read_header_count(data, "headers", MAX_HEADERS_UNCOMPRESSED_RESULT)?;
     Ok(Self::read(data, count)?)
   }
 }

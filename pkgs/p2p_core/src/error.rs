@@ -18,8 +18,8 @@ use core::fmt;
 /// An error encountered during P2P message decoding.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Unencodable)]
 pub enum P2pDecodeError {
-  /// Underlying consensus decoding error.
-  Consensus(String),
+  /// A field failed to decode, as a Core read throws.
+  Consensus(DecodeError),
   /// V2 short ID does not map to a known message.
   UnknownShortId {
     /// The short ID byte.
@@ -87,7 +87,7 @@ pub enum P2pDecodeError {
 
 impl From<DecodeError> for P2pDecodeError {
   fn from(e: DecodeError) -> Self {
-    Self::Consensus(format!("{e}"))
+    Self::Consensus(e)
   }
 }
 

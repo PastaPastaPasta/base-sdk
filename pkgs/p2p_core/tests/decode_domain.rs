@@ -299,13 +299,18 @@ fn v2_contents_are_bound_as_core() {
         matches!(decoded, Err(P2pDecodeError::UnknownShortId { .. })),
         "{label}: {decoded:?}"
       ),
-      "accept: Unknown command" => {
-        let expected = long_form.unwrap_or(CommandString::from_bytes([0; 12]));
-        assert!(
+      "accept: Unknown command" => match long_form {
+        Some(expected) => assert!(
           matches!(&decoded, Ok(DecodedMsg { msg: P2pMsg::Unknown { command, .. }, .. }) if *command == expected),
           "{label}: {decoded:?}"
-        );
-      }
+        ),
+        // A reserved short ID: Core ignores the empty command and keeps the
+        // peer; base-sdk drops the message, which keeps the peer too.
+        None => assert!(
+          matches!(decoded, Err(P2pDecodeError::UnknownShortId { .. })),
+          "{label}: {decoded:?}"
+        ),
+      },
       other => panic!("{label}: unexpected outcome {other}"),
     }
   }
@@ -360,8 +365,9 @@ fn v2_type_errors_differ_from_payload_errors() {
     (CommandString::PING, &[0x2a][..])
   );
   assert!(matches!(message.decode(&ctx(70240)), Err(P2pDecodeError::Consensus(_))));
-  // Short IDs 29 to 32 are reserved like 5; 169 is past Dash's slots.
-  assert_eq!(split_v2(&[32, 1]).map(|m| *m.command().as_bytes()), Ok([0; 12]));
+  // Short IDs 29 to 32 are reserved like 5, and 169 is past Dash's slots:
+  // none carries a message.
+  assert_eq!(split_v2(&[32, 1]), Err(P2pDecodeError::UnknownShortId { id: 32 }));
   assert_eq!(split_v2(&[169]), Err(P2pDecodeError::UnknownShortId { id: 169 }));
 }
 

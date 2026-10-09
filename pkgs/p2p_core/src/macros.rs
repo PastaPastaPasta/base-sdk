@@ -162,12 +162,17 @@ macro_rules! define_p2p {
 
       /// Decodes a V1 message as Core's handler for `cmd` reads its payload.
       ///
+      /// V1 only: a V2 message decodes with [`crate::decode_v2_payload`] or
+      /// [`crate::V2Message::decode`], whose transport rules differ.
+      ///
       /// An unknown command decodes to [`P2pMsg::Unknown`]. A command whose
       /// handler reads nothing ignores its payload, and a typed message
       /// reports the bytes its handler reads in [`DecodedMsg::consumed`].
       /// The payload is bound by the V1 transport's 3 MiB limit, then the
       /// command by its byte rules; [`crate::decode_v2`] applies the V2 rules
-      /// instead. Gates that depend on connection state run before this.
+      /// instead. Gates that depend on connection state, node configuration
+      /// or sync state run before this: Core does not read `sendtxrcncl`
+      /// without `-txreconciliation`, nor `ssc` once its sync has finished.
       ///
       /// # Errors
       ///
