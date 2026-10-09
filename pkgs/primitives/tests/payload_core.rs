@@ -652,10 +652,16 @@ fn lazy_keys_encode_alike_before_and_after_use() {
   }
 }
 
-/// Payloads Core accepts encode as Core serializes them: the coinbase and
-/// asset-unlock signatures as their wire bytes, whichever scheme they are
-/// canonical in, and an always-basic field holding legacy-only bytes as
-/// zeros.
+/// Payloads Core accepts encode as follows: the coinbase and asset-unlock
+/// signatures as their raw wire bytes, whichever scheme they are canonical
+/// in, and an always-basic field holding legacy-only bytes as zeros, as Core
+/// serializes it.
+///
+/// Core would write those signatures under its flag at the time, as zeros
+/// when canonical only in the other scheme. No consensus result sees the
+/// difference: a txid covers the raw payload, Core re-serializes a CbTx only
+/// when mining a fresh one, and an asset unlock's signed hash clears the
+/// signature first.
 #[test]
 fn payloads_encode_as_core_serializes_them() {
   let names = [
