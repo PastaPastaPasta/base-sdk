@@ -45,15 +45,12 @@ pub trait MsgDecode: BaseCodec {
 }
 
 /// Reads a flag as 0 or 1, the bytes Core writes. Core reads any other byte
-/// as `true`; here it is an error.
+/// as `true`; here it is [`DecodeError::NonCanonicalBool`].
 pub(crate) fn decode_flag(data: &mut &[u8]) -> Result<bool, DecodeError> {
   match u8::decode(data)? {
     0 => Ok(false),
     1 => Ok(true),
-    other => Err(DecodeError::InvalidValue {
-      expected: vec![0, 1],
-      actual: u64::from(other),
-    }),
+    value => Err(DecodeError::NonCanonicalBool { value }),
   }
 }
 

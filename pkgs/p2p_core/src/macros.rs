@@ -176,9 +176,11 @@ macro_rules! define_p2p {
       ///
       /// # Errors
       ///
-      /// Returns `PayloadTooLarge`, on which Core disconnects, `InvalidCommand`,
-      /// on which it drops the message, or a `P2pDecodeError` where its
-      /// handler throws or stops before reading the rest.
+      /// Returns `PayloadTooLarge` for a payload over the transport's limit, on
+      /// which Core disconnects, `InvalidCommand`, on which it drops the
+      /// message, or a `P2pDecodeError` where its handler throws or stops
+      /// before reading the rest: `HandlerPayloadTooLarge` and `TooManyEntries`
+      /// where the handler checks a length or count first.
       pub fn decode_with_policy(
         cmd: &CommandString,
         payload: &[u8],

@@ -172,7 +172,10 @@ fn overlay_reads_are_cores() {
       // BSX A-12: a flag is 0 or 1; Core reads any other byte as `true`.
       (Core { ok: true, .. }, Some("flag")) => {
         assert!(
-          matches!(&ours, Err(P2pDecodeError::Consensus(DecodeError::InvalidValue { expected, .. })) if expected[..] == [0, 1]),
+          matches!(
+            &ours,
+            Err(P2pDecodeError::Consensus(DecodeError::NonCanonicalBool { .. }))
+          ),
           "{label}: {:?}",
           ours.err()
         );
@@ -232,5 +235,5 @@ fn too_long_and_too_many_are_typed() {
     .unwrap();
   let ctx = ProtoCtx::new(ProtocolVersion::from_base(oversized.version), BlsCtx::BASIC);
   let r = P2pMsg::decode_with_policy(&CommandString::from_static("qgetdata"), &oversized.raw.bytes(), &ctx);
-  assert!(matches!(r, Err(P2pDecodeError::PayloadTooLarge { .. })), "{r:?}");
+  assert!(matches!(r, Err(P2pDecodeError::HandlerPayloadTooLarge { .. })), "{r:?}");
 }

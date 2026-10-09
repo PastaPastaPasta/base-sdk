@@ -7,7 +7,6 @@
 //! LLMQ messages: recovered signatures and quorum data requests.
 
 use crate::codec::{codec_p2p, impl_p2p, read_count_at_most, MsgDecode};
-use crate::command::CommandString;
 use crate::ctx::ProtoCtx;
 use crate::error::P2pDecodeError;
 use crate::prelude::*;
@@ -94,11 +93,12 @@ impl QuorumDataRequest {
 
 impl MsgDecode for QuorumDataRequest {
   /// Core's `qgetdata` handler refuses a payload longer than the request
-  /// before reading it; the response error byte is never read.
+  /// before reading it, with [`P2pDecodeError::HandlerPayloadTooLarge`]; the
+  /// response error byte is never read.
   fn decode_msg(data: &mut &[u8], _ctx: &ProtoCtx) -> Result<Self, P2pDecodeError> {
     if data.len() > Self::SIZE {
-      return Err(P2pDecodeError::PayloadTooLarge {
-        command: CommandString::from_static("qgetdata"),
+      return Err(P2pDecodeError::HandlerPayloadTooLarge {
+        command: "qgetdata",
         size: data.len(),
         max: Self::SIZE,
       });

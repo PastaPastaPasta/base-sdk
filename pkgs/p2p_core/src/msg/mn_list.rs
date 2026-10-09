@@ -326,7 +326,8 @@ pub struct SimplifiedMnListEntry {
   /// Voting key hash (HASH160).
   pub voting_key_id: PubKeyHash,
   /// Whether this masternode is currently valid, read as 0 or 1: Core
-  /// reads any other byte as `true`, which here is an error.
+  /// reads any other byte as `true`, which here is
+  /// `DecodeError::NonCanonicalBool`.
   pub is_valid: bool,
   /// Masternode type, carried from version 2.
   pub mn_type: MnType,

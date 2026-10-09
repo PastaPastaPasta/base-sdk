@@ -33,7 +33,7 @@ impl_p2p!(SendCmpct);
 
 impl BaseCodec for SendCmpct {
   /// Reads the flag as 0 or 1, the bytes Core writes. Core reads any other
-  /// byte as `true`; here it is an error.
+  /// byte as `true`; here it is `DecodeError::NonCanonicalBool`.
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let high_bandwidth = decode_flag(data)?;
     Ok(Self {

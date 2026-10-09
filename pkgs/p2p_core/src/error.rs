@@ -57,6 +57,18 @@ pub enum P2pDecodeError {
     /// Type bytes present, of 12.
     remaining: usize,
   },
+  /// A payload longer than its handler accepts, below the transport's limit.
+  ///
+  /// Core's handler checks the length before reading and penalises the
+  /// peer; unlike `PayloadTooLarge`, it does not disconnect for this alone.
+  HandlerPayloadTooLarge {
+    /// Wire command name.
+    command: &'static str,
+    /// Size of the payload, in bytes.
+    size: usize,
+    /// The handler's limit, in bytes.
+    max: usize,
+  },
   /// A message lists more entries than its handler accepts.
   ///
   /// Core checks the count before reading any entry and penalises the peer.
@@ -108,6 +120,9 @@ impl fmt::Display for P2pDecodeError {
       Self::EmptyV2Contents => f.write_str("empty v2 contents"),
       Self::TruncatedV2Type { remaining } => {
         write!(f, "v2 long-form type cut short: {remaining} of 12 bytes")
+      }
+      Self::HandlerPayloadTooLarge { command, size, max } => {
+        write!(f, "{command} payload over its handler's limit: {size} bytes, max {max}")
       }
       Self::TooManyEntries { command, count, max } => {
         write!(f, "{command} lists {count} entries, max {max}")

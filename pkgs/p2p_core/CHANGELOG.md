@@ -55,13 +55,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   the time does not step backwards.
 - `encode_v2` takes the peer's common version.
 - `filterclear`, `mempool` and `qwatch` are no longer stubs.
-- A `qgetdata` over 67 bytes fails with `PayloadTooLarge`, as Core's handler refuses it before reading.
+- A `qgetdata` over 67 bytes fails with `HandlerPayloadTooLarge`, as Core's handler refuses it before reading; Core
+  penalises the peer, where it disconnects for `PayloadTooLarge`.
 - `SimplifiedMnListEntry`'s hash is Core's `CalcHash()`, its leaf in `merkleRootMNList`: the entry without its
   version.
 - `P2pDecodeError::Consensus` carries the `DecodeError` instead of its text.
 - `GetBlockTxn`'s fields are private and deserialization checks their order; an index past 65,535 fails, as in Core.
 - `SendCmpct::high_bandwidth` is a `bool` read as 0 or 1, the bytes Core writes; another byte, which Core reads as
-  `true`, is an error.
+  `true`, fails with `DecodeError::NonCanonicalBool`.
 - A `cmpctblock` listing more than 65,535 transactions fails with `DecodeError::BadLen`.
 - A V2 short ID with no message, including the slots Core reserves (5, 29 to 32), fails with `UnknownShortId`: drop
   the message and keep the peer. Core types those slots as the empty command and ignores them.
@@ -75,7 +76,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `protx` payloads read it), replacing `service`; `decode_as` and `encode_as` read and write it with or without the
   version.
 - `SimplifiedMnListEntry::is_valid` and `GetQrInfo::extra_share`, like the `qrinfo` extra share flag, are a `bool` read
-  as 0 or 1, the bytes Core writes; another byte, which Core reads as `true`, is an error.
+  as 0 or 1, the bytes Core writes; another byte, which Core reads as `true`, fails with
+  `DecodeError::NonCanonicalBool`. Core serves a `getqrinfo` with such a byte.
 
 ### Removed
 

@@ -77,7 +77,8 @@ pub struct GetQrInfo {
   /// Block the rotation info is asked for.
   pub block_request_hash: BlockHash,
   /// Whether the cycle at H-4C is asked for too, read as 0 or 1: Core reads
-  /// any other byte as `true`, which here is an error.
+  /// any other byte as `true` and serves the request, which here is
+  /// `DecodeError::NonCanonicalBool`.
   pub extra_share: bool,
 }
 
@@ -152,7 +153,7 @@ pub struct QrInfo {
   pub diff_h_3c: MnListDiff,
   /// The cycle at H-4C, present when the extra share flag is set. The flag
   /// is read as 0 or 1: Core reads any other byte as `true`, which here is
-  /// an error.
+  /// `DecodeError::NonCanonicalBool`.
   pub cycle_h_4c: Option<CycleInfo>,
   /// Last commitment of each quorum index.
   pub last_commitment_per_index: Vec<Commitment>,

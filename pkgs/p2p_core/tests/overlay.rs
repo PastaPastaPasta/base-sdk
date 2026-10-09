@@ -209,7 +209,11 @@ fn qgetdata_is_refused_over_its_size_and_never_reads_an_error() {
   long.push(0);
   assert!(matches!(
     decode("qgetdata", &long, 70242),
-    Err(P2pDecodeError::PayloadTooLarge { size: 68, max: 67, .. })
+    Err(P2pDecodeError::HandlerPayloadTooLarge {
+      command: "qgetdata",
+      size: 68,
+      max: 67
+    })
   ));
   assert!(decode("qgetdata", &raw[..66], 70242).is_err());
 }
