@@ -55,9 +55,9 @@ pub enum DecodeError<E = Infallible> {
   MalleableBls,
   /// A boolean byte other than 0 or 1, which Dash Core reads as `true`.
   ///
-  /// A strict read refuses it where Core reads it. Core's handler then acts
-  /// on the message, so a caller that follows Core does not treat this like
-  /// a failed read.
+  /// A strict read refuses it where Core reads it, as 1, and acts on the
+  /// message, so a caller that follows Core does not penalise or drop the
+  /// peer for it.
   NonCanonicalBool {
     /// The byte read.
     value: u8,
