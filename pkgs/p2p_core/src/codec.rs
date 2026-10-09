@@ -23,9 +23,6 @@ pub(crate) const MAX_P2P_PAYLOAD_SIZE: usize = limits::MAX_PROTOCOL_MESSAGE_LENG
 /// short-ID message may carry 12 payload bytes more than the V1 limit.
 pub(crate) const MAX_V2_CONTENTS_SIZE: usize = limits::MAX_V2_CONTENTS_LEN;
 
-/// Core's `MAX_VECTOR_ALLOCATE`: bytes a vector read reserves at a time.
-pub(crate) const MAX_VECTOR_ALLOCATE: usize = 5_000_000;
-
 /// A message payload decoded the way Core's handler reads it.
 ///
 /// The handler's reads, not `Unserialize` alone, define what a peer may send.

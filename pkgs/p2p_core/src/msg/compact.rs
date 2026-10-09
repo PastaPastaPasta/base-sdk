@@ -34,6 +34,7 @@ codec_p2p!(SendCmpct {
   version
 });
 
+
 /// A 6-byte transaction short ID, Core's `CustomUintFormatter<6>`.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -200,20 +201,15 @@ pub struct GetBlockTxn {
 impl_p2p!(GetBlockTxn);
 
 impl BaseCodec for GetBlockTxn {
-  /// Reads as Core does: every declared difference in order, until one is
-  /// missing or overflows, so a failure leaves the cursor where Core's does.
+  /// Reads the differences in order, with Core's verdict: a count the
+  /// payload cannot hold (each difference takes a byte at least) or an index
+  /// past 65,535 fails.
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let block_hash = BlockHash::decode(data)?;
-    let count = CompactSize::decode_size(data)?.into_len(usize::MAX)?;
-    let batch = crate::codec::MAX_VECTOR_ALLOCATE / core::mem::size_of::<u16>();
-    let mut indexes: Vec<u16> = Vec::new();
+    let count = CompactSize::decode_size(data)?.into_len(data.len())?;
+    let mut indexes: Vec<u16> = Vec::with_capacity(count);
     let mut shift: u64 = 0;
     for _ in 0..count {
-      if indexes.len() == indexes.capacity() {
-        // Core's batches, capped by the bytes left: a difference takes one at
-        // least, so no more can be read.
-        indexes.reserve_exact(batch.min(count - indexes.len()).min(data.len().max(1)));
-      }
       let diff = u64::from(CompactSize::decode_size(data)?);
       // Core's "differential value overflow": a wrapped sum, the u64
       // sentinel or the element type's range.
