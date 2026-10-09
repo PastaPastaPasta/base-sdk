@@ -58,4 +58,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Not provided
 
 - A Core-style `CmpctBlock` constructor from a block (coinbase prefilled, random nonce, txid or instance hash by
-  release); P3 builds it from `short_id_keys` and `short_id_with_keys`.
+  release); a caller builds it from `short_id_keys` and `short_id_with_keys`.

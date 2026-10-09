@@ -1,10 +1,10 @@
 // Dash Core's V2 short IDs at v23.1.8 and v24.0.0-rc.3 (identical), derived
-// by rust-dashcore contrib/node/dde-probe/bs7_short_ids.py from the tags'
-// protocol.cpp, net.cpp, net.h and version.h. "send": for each command in
-// allNetMessageTypes and the empty type, Core's V2MessageMap slot and the
-// common version from which SetMessageToSend uses it (null: always the long
-// form). "recv": the type GetMessageType reads for each first byte ("long":
-// 12 type bytes follow; "": a reserved slot, the empty type; null: dropped).
+// from the tags' protocol.cpp, net.cpp, net.h and version.h. "send": for
+// each command in allNetMessageTypes and the empty type, Core's
+// V2MessageMap slot and the common version from which SetMessageToSend uses
+// it (null: always the long form). "recv": the type GetMessageType reads
+// for each first byte ("long": 12 type bytes follow; "": a reserved slot,
+// the empty type; null: dropped).
 // "init_version": m_peer_version before the peer's version arrives.
 {
   "init_version": 209,

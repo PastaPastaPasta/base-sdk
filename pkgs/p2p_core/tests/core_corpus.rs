@@ -104,7 +104,7 @@ fn command(name: &str) -> CommandString {
   CommandString::from_static(name)
 }
 
-/// The probe negotiated common version 70242 with v24.0, the parity reference.
+/// The probe negotiated common version 70242 with v24.0.
 fn ctx() -> ProtoCtx {
   ProtoCtx::new(ProtocolVersion::V24_0, BlsCtx::BASIC)
 }
@@ -113,9 +113,8 @@ fn open(name: &str) -> Corpus {
   Corpus::open(env!("CARGO_MANIFEST_DIR"), name)
 }
 
-/// Commands whose base-sdk shape another task owns (DDE-SWEEP §5), with the
-/// divergence: their decode stops short of Core's request.
-const OTHER_OWNERS: [(&str, &str); 1] = [("govsync", "BS9b: govsync reads only the bloom filter data")];
+/// Commands whose decode stops short of what Core sends, with the reason.
+const READ_SHORT: [(&str, &str); 1] = [("govsync", "govsync reads only the bloom filter data")];
 
 #[rstest]
 fn every_message_core_sent_round_trips() {
@@ -129,7 +128,7 @@ fn every_message_core_sent_round_trips() {
     let mut buf = Vec::new();
     d.msg.encode_payload(&mut buf);
     assert_eq!(buf, raw[..d.consumed], "{label}");
-    if OTHER_OWNERS.iter().any(|(cmd, _)| *cmd == m.command) {
+    if READ_SHORT.iter().any(|(cmd, _)| *cmd == m.command) {
       continue;
     }
     assert_eq!(d.consumed, raw.len(), "{label}: Core sends no trailing bytes");
@@ -210,12 +209,12 @@ fn core_headers2_round_trip_in_their_mode() {
   }
 }
 
-/// Cases Core reads where base-sdk is strict by design (BSX, DEC-98): a
-/// `sendcmpct` flag other than 0 or 1, which Core reads as `true` (D-11).
+/// Cases Core reads where base-sdk is strict by design: a `sendcmpct` flag
+/// other than 0 or 1, which Core reads as `true`.
 const STRICT: [&str; 1] = ["sendcmpct_hb02_v1"];
 
 /// Commands Core has no handler for and ignores unread. base-sdk types them
-/// both ways, so the node ignores them before decoding (D-14).
+/// both ways; a node that follows Core ignores them before decoding.
 const IGNORED_BY_CORE: [&str; 4] = ["merkleblock", "cfilter", "cfheaders", "cfcheckpt"];
 
 #[rstest]
@@ -231,7 +230,7 @@ fn handler_verdicts_are_cores() {
     let r = P2pMsg::decode_with_policy(&command(&c.command), &c.raw.bytes(), &ctx);
     match c.read.as_str() {
       // The verdict only: no Core logic observes the error class or where the
-      // read stopped (DEC-98).
+      // read stopped.
       "throw" | "catch" => assert!(
         matches!(r, Err(P2pDecodeError::Consensus(_))),
         "{label}: base-sdk {r:?}, Core threw {:?}",

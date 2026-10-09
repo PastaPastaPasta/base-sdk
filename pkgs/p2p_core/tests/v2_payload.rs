@@ -31,7 +31,7 @@ fn ctx() -> ProtoCtx {
 #[rstest]
 fn a_long_form_type_with_0x7f_is_unknown() {
   let mut contents = vec![0u8];
-  contents.extend_from_slice(b"bs7\x7f\0\0\0\0\0\0\0\0");
+  contents.extend_from_slice(b"xyz\x7f\0\0\0\0\0\0\0\0");
   contents.extend_from_slice(&[1, 2, 3]);
   let m = split_v2(&contents).unwrap();
   let (cmd, payload) = (m.command(), m.payload().to_vec());
@@ -63,7 +63,7 @@ fn a_short_id_payload_may_exceed_the_v1_limit() {
 /// is bound 12 bytes lower.
 #[rstest]
 fn a_long_form_payload_leaves_room_for_its_type() {
-  let cmd = CommandString::from_bytes(*b"bs7\0\0\0\0\0\0\0\0\0");
+  let cmd = CommandString::from_bytes(*b"xyz\0\0\0\0\0\0\0\0\0");
   let mut contents = vec![0u8];
   contents.extend_from_slice(cmd.as_bytes());
   contents.resize(MAX_V2_CONTENTS_LEN, 0);
@@ -80,7 +80,7 @@ fn a_long_form_payload_leaves_room_for_its_type() {
   );
 }
 
-/// BS4a's Core-judged V2 contents (probe_v2.py, both pins): an owned
+/// The Core-judged V2 contents of the decode-domain corpus: an owned
 /// hand-off of every short-ID ping decodes as `V2Message::decode` does, and
 /// the payload Core disconnects on is refused.
 #[rstest]
