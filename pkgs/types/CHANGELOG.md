@@ -25,6 +25,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `DecodeError` gains `MalleableBls`, for BLS bytes canonical in neither scheme, which Dash Core rejects as a "malleable
   BLS object". Exhaustive matches on `DecodeError` must add an arm.
+- `DecodeError` gains `NonCanonicalBool`, for a boolean byte other than 0 or 1, which Dash Core reads as `true`.
+  Exhaustive matches on `DecodeError` must add an arm.
 - `{derive,make}_bytes!`-defined types serialize as their raw storage bytes for machine-readable formats. JSON and
   other human-readable formats retain hex in storage order for `fwd` and in reverse storage order for `rev`.
 - `derive_bytes!` emits `From<[u8; N]>` in place of `impl_bytes!`, and `make_sbytes!` emits the implementation itself.
