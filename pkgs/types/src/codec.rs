@@ -315,6 +315,16 @@ impl<T: BaseCodec> BaseCodec for Vec<T> {
   }
 }
 
+impl<T: BaseCodec> BaseCodec for Box<T> {
+  fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
+    T::decode(data).map(Box::new)
+  }
+
+  fn encode(&self, buf: &mut impl EncodeBuf) {
+    (**self).encode(buf);
+  }
+}
+
 impl BaseCodec for String {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let bytes = Vec::<u8>::decode(data)?;

@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `CompactSize::decode_size`, which applies Dash Core's `MAX_SIZE` range check to a size, as `ReadCompactSize` does by
   default.
 - `serialize::opt_str_u64`: `str_u64` for an `Option<u64>` field.
+- `BaseCodec` for `Box<T>`, which reads and writes the boxed value.
 
 ### Changed
 
