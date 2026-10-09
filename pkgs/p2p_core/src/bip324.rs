@@ -12,6 +12,8 @@ use crate::prelude::*;
 use crate::short_id::ShortId;
 use crate::P2pDecodeError;
 
+use dash_types::codec::DecodeError;
+
 /// Encodes a `P2pMsg` into V2 framed bytes.
 pub fn encode_v2(msg: &P2pMsg, buf: &mut Vec<u8>) {
   match msg.short_id() {
@@ -31,9 +33,13 @@ pub fn encode_v2(msg: &P2pMsg, buf: &mut Vec<u8>) {
 /// Decodes V2 framed bytes into a `P2pMsg`.
 pub fn decode_v2(payload: &[u8]) -> Result<P2pMsg, P2pDecodeError> {
   if payload.is_empty() {
-    return Err(P2pDecodeError::Consensus(String::from(
-      "unexpected eof: needed 1 byte, 0 remaining",
-    )));
+    return Err(
+      DecodeError::Eof {
+        needed: 1,
+        remaining: 0,
+      }
+      .into(),
+    );
   }
 
   let short_id = payload[0];
@@ -42,10 +48,13 @@ pub fn decode_v2(payload: &[u8]) -> Result<P2pMsg, P2pDecodeError> {
   if short_id == 0 {
     // Long format: next 12 bytes are the command string.
     if rest.len() < 12 {
-      return Err(P2pDecodeError::Consensus(format!(
-        "unexpected eof: needed 12 bytes, {} remaining",
-        rest.len()
-      )));
+      return Err(
+        DecodeError::Eof {
+          needed: 12,
+          remaining: rest.len(),
+        }
+        .into(),
+      );
     }
     let mut cmd_bytes = [0u8; 12];
     cmd_bytes.copy_from_slice(&rest[..12]);

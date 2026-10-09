@@ -8,17 +8,23 @@
 
 use crate::codec::MAX_P2P_PAYLOAD_SIZE;
 use crate::command::CommandString;
-use crate::prelude::*;
 use crate::P2pDecodeError;
 
-use bitcoin_consensus_encoding::{decode_from_slice, Decode, Decoder};
+use dash_types::codec::{BaseCodec, DecodeError};
 
-/// Decode from slice, mapping the error.
-pub(crate) fn decode_msg<T: Decode>(payload: &[u8]) -> Result<T, P2pDecodeError>
-where
-  <T::Decoder as Decoder>::Error: core::fmt::Display,
-{
-  decode_from_slice(payload).map_err(|e| P2pDecodeError::Consensus(format!("{e}")))
+/// Decodes a whole payload, failing on trailing bytes.
+pub(crate) fn decode_msg<T: BaseCodec>(payload: &[u8]) -> Result<T, P2pDecodeError> {
+  let mut cursor = payload;
+  let msg = T::decode(&mut cursor)?;
+  if !cursor.is_empty() {
+    return Err(
+      DecodeError::TrailingBytes {
+        remaining: cursor.len(),
+      }
+      .into(),
+    );
+  }
+  Ok(msg)
 }
 
 /// Reject payloads that exceed the protocol limit.

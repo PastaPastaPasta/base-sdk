@@ -7,6 +7,7 @@
 //! Checks `P2pMsg::decode_payload` applies before dispatching a command.
 
 use dash_p2p_core::{CommandString, P2pDecodeError, P2pMsg};
+use dash_types::codec::DecodeError;
 use rstest::rstest;
 
 /// Core's `MAX_PROTOCOL_MESSAGE_LENGTH` (`net.h:84` in v24.0.0-rc.3).
@@ -71,5 +72,29 @@ fn invalid_v2_long_form_type_is_refused() {
     Err(P2pDecodeError::InvalidCommand {
       command: command(b"pi\0ng"),
     })
+  );
+}
+
+/// A field read past the payload, or bytes left after the message, fail with
+/// the decode error itself rather than its text.
+#[rstest]
+#[case::short(&[0u8; 7], DecodeError::Eof { needed: 8, remaining: 7 })]
+#[case::trailing(&[0u8; 9], DecodeError::TrailingBytes { remaining: 1 })]
+fn decode_errors_are_typed(#[case] payload: &[u8], #[case] err: DecodeError) {
+  assert_eq!(
+    P2pMsg::decode_payload(&CommandString::from_static("ping"), payload),
+    Err(P2pDecodeError::Consensus(err))
+  );
+}
+
+/// An empty V2 message has no type byte to read.
+#[rstest]
+fn empty_v2_message_is_eof() {
+  assert_eq!(
+    dash_p2p_core::decode_v2(&[]),
+    Err(P2pDecodeError::Consensus(DecodeError::Eof {
+      needed: 1,
+      remaining: 0,
+    }))
   );
 }
