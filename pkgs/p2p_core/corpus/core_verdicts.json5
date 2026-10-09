@@ -15,7 +15,8 @@
 // mnsync reset, so Core read them; inv_type34 cases record whether Core
 // requested the object, which differs by pin.
 // mode "peerblockfilters": the node ran -peerblockfilters=1
-// -blockfilterindex=1. Both releases gave the same outcome for every case.
+// -blockfilterindex=1. Both releases gave the same verdict for every case;
+// only the inv_type34 replies differ.
 // "framing": V1 messages with a wrong magic, a length above 3 MiB, a 3 MiB
 // unknown command, a bad checksum (its ping unanswered: only the probe's
 // later ping nonce 0x5eedbeef is in "pongs"), an invalid command, and a
