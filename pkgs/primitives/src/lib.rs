@@ -46,7 +46,8 @@ pub use payload::{
 };
 pub use support::{DynBitset, DynBitsetIterator, LlmqType, RevocationReason};
 pub use transaction::{
-  OutPoint, Transaction, TxHash, TxIn, TxInvalid, TxOut, MAX_COINBASE_SCRIPT_SIZE, MAX_TX_EXTRA_PAYLOAD,
+  OutPoint, Transaction, TxHash, TxIn, TxInvalid, TxOut, ASSET_UNLOCK_PAYLOAD_SIZE, ASSET_UNLOCK_QUORUM_INFO_SIZE,
+  ASSET_UNLOCK_STABLE_TXID_VERSION, MAX_COINBASE_SCRIPT_SIZE, MAX_TX_EXTRA_PAYLOAD,
 };
 pub use types::{
   is_bad_port, AddrV1, AddrV2, NIEntry, NIEntryCode, NIError, NIPurpose, NITrait, NetAddr, NetAddrError, NetInfo,

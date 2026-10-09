@@ -28,6 +28,18 @@ pub const MAX_TX_EXTRA_PAYLOAD: usize = 10_000;
 /// Maximum coinbase script size in bytes.
 pub const MAX_COINBASE_SCRIPT_SIZE: usize = 100;
 
+/// Bytes of an asset unlock's quorum signing info: requested height, quorum
+/// hash and quorum signature, the end of its payload.
+pub const ASSET_UNLOCK_QUORUM_INFO_SIZE: usize = 4 + 32 + 96;
+
+/// Payload size of a well-formed asset unlock, Core's
+/// `ASSET_UNLOCK_PAYLOAD_SIZE`.
+pub const ASSET_UNLOCK_PAYLOAD_SIZE: usize = 1 + 8 + 4 + ASSET_UNLOCK_QUORUM_INFO_SIZE;
+
+/// First asset unlock payload version whose txid leaves out the quorum
+/// signing info.
+pub const ASSET_UNLOCK_STABLE_TXID_VERSION: u8 = 2;
+
 make_hash! {
   /// SHA256d hash of a serialized transaction.
   TxHash, 32
@@ -358,14 +370,28 @@ impl Checkable for Transaction {
   }
 }
 
+/// The txid, Core's `GetHash()`.
+///
+/// An asset unlock with a version 2 or later payload hashes with its quorum
+/// signing info zeroed, so re-signing it keeps the txid; see
+/// [`Transaction::has_stable_txid`]. Core keys this on the bytes, not on
+/// V24's activation.
 impl Hashable for Transaction {
   type Hash = TxHash;
 
   fn hash(&self) -> TxHash {
     let mut buf = Vec::new();
     self.encode(&mut buf);
-    TxHash::from_lendian(sha256d::Hash::hash(&buf).to_byte_array())
+    if self.has_stable_txid() {
+      let len = buf.len();
+      buf[len - ASSET_UNLOCK_QUORUM_INFO_SIZE..].fill(0);
+    }
+    sha256d_hash(&buf)
   }
+}
+
+fn sha256d_hash(bytes: &[u8]) -> TxHash {
+  TxHash::from_lendian(sha256d::Hash::hash(bytes).to_byte_array())
 }
 
 impl Transaction {
@@ -374,6 +400,25 @@ impl Transaction {
     let v = (self.version as u16) as i32;
     let t = (self.tx_type.to_base() as i32) << 16;
     v | t
+  }
+
+  /// The hash of the whole serialization, Core's `GetInstanceHash()`.
+  ///
+  /// It differs from the txid only for an asset unlock with a stable txid.
+  pub fn instance_hash(&self) -> TxHash {
+    let mut buf = Vec::new();
+    self.encode(&mut buf);
+    sha256d_hash(&buf)
+  }
+
+  /// Whether the txid leaves out the quorum signing info, Core's
+  /// `IsAssetUnlockWithStableTxid`: an asset unlock whose payload has the
+  /// well-formed size and a version of at least 2, before any validation.
+  pub fn has_stable_txid(&self) -> bool {
+    self.has_extra_payload()
+      && self.tx_type == TxType::AssetUnlock
+      && self.extra_payload.len() == ASSET_UNLOCK_PAYLOAD_SIZE
+      && self.extra_payload[0] >= ASSET_UNLOCK_STABLE_TXID_VERSION
   }
 
   /// Returns true when this transaction carries an extra payload.
