@@ -38,7 +38,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   entries, version first, ChainLock signatures), with `MnListDiff::decode_as`; `qrinfo` and `mnlistdiff` decode in the
   layout of the context's version.
 - `QData::read_data`, which reads the verification vector and the contributions against the quorum's threshold and
-  valid member count, as Core's `UnserializeVectorWithMaxSize` does, failing with `TooManyEntries` before the entries.
+  valid member count, as Core's `UnserializeVectorWithMaxSize` does, failing with `TooManyEntries` before the entries;
+  `QData::read_vvec` and `QData::read_contributions` read the two apart, as Core's handler does, with
+  `VerificationVector`.
 - `MAX_SPORK_SIG_LEN` and `MAX_QRINFO_BASE_HASHES`, the read limits of `spork` and `getqrinfo`. Core checks them only
   when reading, so both encode any length.
 

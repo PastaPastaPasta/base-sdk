@@ -42,7 +42,8 @@ pub use headers::{GetBlocks, GetHeaders, Headers};
 pub use headers2::{CompressedHeader, GetHeaders2, Headers2};
 pub use inv::{GetData, Inv, InvType, Inventory, NotFound};
 pub use llmq::{
-  QData, QuorumData, QuorumDataError, QuorumDataRequest, RecoveredSig, QUORUM_DATA_CONTRIBUTIONS, QUORUM_DATA_VVEC,
+  QData, QuorumData, QuorumDataError, QuorumDataRequest, RecoveredSig, VerificationVector, QUORUM_DATA_CONTRIBUTIONS,
+  QUORUM_DATA_VVEC,
 };
 pub use masternode::{MnAuth, PlatformBan, Spork, MAX_SPORK_SIG_LEN};
 pub use mn_list::{DeletedQuorum, GetMnListDiff, MnListDiff, MnListFormat, QuorumClSig, SimplifiedMnListEntry};

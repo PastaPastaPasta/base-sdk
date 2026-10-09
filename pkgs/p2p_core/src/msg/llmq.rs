@@ -201,13 +201,16 @@ impl BaseCodec for QData {
 
 hash_impl!(QData);
 
+/// A quorum's verification vector, as `qdata` carries it.
+pub type VerificationVector = Vec<BlsPkBytes<BlsScIetf>>;
+
 /// The data of a `qdata` message, read as Core's handler reads it.
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq, Unencodable)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct QuorumData {
   /// The verification vector, when asked for.
-  pub vvec: Option<Vec<BlsPkBytes<BlsScIetf>>>,
+  pub vvec: Option<VerificationVector>,
   /// The member's encrypted contributions, when asked for.
   pub contributions: Option<Vec<BlsIesBlobBytes<BlsScIetf>>>,
 }
@@ -222,20 +225,53 @@ impl QData {
   /// reads here; Core's handler then refuses any size but those two, a check
   /// left to the caller.
   ///
+  /// Core's handler checks the vector, and reads the contributions only in
+  /// the node states that use them; a caller that follows it reads the two
+  /// with [`QData::read_vvec`] and [`QData::read_contributions`].
+  ///
   /// # Errors
   ///
   /// Returns [`P2pDecodeError::TooManyEntries`] for a size over its limit,
   /// or a decode error where Core's read throws.
   pub fn read_data(&self, max_vvec: usize, max_contributions: usize) -> Result<QuorumData, P2pDecodeError> {
+    let (vvec, rest) = self.read_vvec(max_vvec)?;
+    Ok(QuorumData {
+      vvec,
+      contributions: self.read_contributions(rest, max_contributions)?,
+    })
+  }
+
+  /// Reads the verification vector, when the request's mask asks for it,
+  /// and returns it with the data after it.
+  ///
+  /// # Errors
+  ///
+  /// As [`QData::read_data`], for the vector.
+  pub fn read_vvec(&self, max_vvec: usize) -> Result<(Option<VerificationVector>, &[u8]), P2pDecodeError> {
     let mut data = &self.data[..];
-    let mut out = QuorumData::default();
-    if self.request.data_mask & QUORUM_DATA_VVEC != 0 {
-      out.vvec = Some(read_bounded(&mut data, max_vvec, "qdata vvec")?);
+    if self.request.data_mask & QUORUM_DATA_VVEC == 0 {
+      return Ok((None, data));
     }
-    if self.request.data_mask & QUORUM_DATA_CONTRIBUTIONS != 0 {
-      out.contributions = Some(read_bounded(&mut data, max_contributions, "qdata contributions")?);
+    let vvec = read_bounded(&mut data, max_vvec, "qdata vvec")?;
+    Ok((Some(vvec), data))
+  }
+
+  /// Reads the encrypted contributions from `rest`, the data after the
+  /// verification vector ([`QData::read_vvec`]), when the request's mask
+  /// asks for them.
+  ///
+  /// # Errors
+  ///
+  /// As [`QData::read_data`], for the contributions.
+  pub fn read_contributions(
+    &self,
+    mut rest: &[u8],
+    max_contributions: usize,
+  ) -> Result<Option<Vec<BlsIesBlobBytes<BlsScIetf>>>, P2pDecodeError> {
+    if self.request.data_mask & QUORUM_DATA_CONTRIBUTIONS == 0 {
+      return Ok(None);
     }
-    Ok(out)
+    Ok(Some(read_bounded(&mut rest, max_contributions, "qdata contributions")?))
   }
 }
 

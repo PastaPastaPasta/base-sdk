@@ -252,6 +252,26 @@ fn qdata_vectors_are_bounded_before_they_are_read() {
   ));
 }
 
+/// Core's handler reads the contributions only in the node states that use
+/// them: the vector reads on its own, whatever follows it.
+#[rstest]
+fn qdata_vector_reads_without_the_contributions() {
+  let mut raw = qgetdata(); // mask 3: vector and contributions
+  raw.push(0);
+  raw.extend(count(1));
+  raw.extend([0u8; 48]);
+  raw.extend(count(2)); // over a valid member count of 1
+  let q = QData::decode(&mut &raw[..]).unwrap();
+  assert!(q.read_data(1, 1).is_err());
+  let (vvec, rest) = q.read_vvec(1).unwrap();
+  assert_eq!(vvec.unwrap().len(), 1);
+  assert_eq!(rest, count(2));
+  assert!(matches!(
+    q.read_contributions(rest, 1),
+    Err(P2pDecodeError::TooManyEntries { count: 2, max: 1, .. })
+  ));
+}
+
 #[rstest]
 fn spork_signatures_are_limited_on_read_only() {
   let mut raw = vec![0x10, 0x27, 0, 0];
