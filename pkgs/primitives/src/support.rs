@@ -35,8 +35,12 @@ enum_map! {
     LlmqDevnet = 101 => "llmq_devnet",
     /// Test v17-era quorum.
     LlmqTestV17 = 102 => "llmq_test_v17",
+    /// Test DIP-0024 rotated quorum.
+    LlmqTestDip0024 = 103 => "llmq_test_dip0024",
     /// Test InstantSend quorum.
     LlmqTestInstantsend = 104 => "llmq_test_instantsend",
+    /// Devnet DIP-0024 rotated quorum.
+    LlmqDevnetDip0024 = 105 => "llmq_devnet_dip0024",
     /// Test Platform quorum.
     LlmqTestPlatform = 106 => "llmq_test_platform",
     /// Devnet Platform quorum.
@@ -239,5 +243,44 @@ impl Iterator for DynBitsetIterator<'_> {
       }
     }
     None
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::LlmqType;
+  use crate::prelude::*;
+
+  use dash_types::Numeric;
+  use rstest::rstest;
+
+  /// Core's `LLMQType` (`llmq/params.h` in v24.0.0-rc.3) and the `name` of
+  /// each type's `LLMQParams`. `LLMQ_NONE` (0xff) is a sentinel and stays
+  /// unnamed.
+  #[rstest]
+  fn llmq_types_match_core() {
+    let core: [(u8, &str); 14] = [
+      (1, "llmq_50_60"),
+      (2, "llmq_400_60"),
+      (3, "llmq_400_85"),
+      (4, "llmq_100_67"),
+      (5, "llmq_60_75"),
+      (6, "llmq_25_67"),
+      (100, "llmq_test"),
+      (101, "llmq_devnet"),
+      (102, "llmq_test_v17"),
+      (103, "llmq_test_dip0024"),
+      (104, "llmq_test_instantsend"),
+      (105, "llmq_devnet_dip0024"),
+      (106, "llmq_test_platform"),
+      (107, "llmq_devnet_platform"),
+    ];
+    let named: Vec<(u8, String)> = LlmqType::variants()
+      .iter()
+      .map(|t| (t.to_base(), t.to_string()))
+      .collect();
+    let expected: Vec<(u8, String)> = core.iter().map(|(v, n)| (*v, String::from(*n))).collect();
+    assert_eq!(named, expected);
+    assert!(matches!(LlmqType::new(0xFF), LlmqType::Unknown(0xFF)));
   }
 }
