@@ -13,7 +13,7 @@ use bitcoin_hashes::{sha256, siphash24};
 use dash_primitives::{hash_impl, BlockHash, BlockHeader, Transaction};
 use dash_types::codec::{take, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
-use dash_types::{CompactSize, CoreBool};
+use dash_types::CompactSize;
 
 /// Most transactions a compact block may describe, Core's 16-bit index.
 const MAX_BLOCK_TXS: usize = u16::MAX as usize;
@@ -23,17 +23,41 @@ const MAX_BLOCK_TXS: usize = u16::MAX as usize;
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct SendCmpct {
   /// Whether the peer wants new blocks pushed as `cmpctblock`.
-  pub high_bandwidth: CoreBool,
+  pub high_bandwidth: bool,
   /// Compact block version; Core ignores any but `CMPCTBLOCKS_VERSION`.
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::str_u64"))]
   pub version: u64,
 }
 
-codec_p2p!(SendCmpct {
-  high_bandwidth,
-  version
-});
+impl_p2p!(SendCmpct);
 
+impl BaseCodec for SendCmpct {
+  /// Reads the flag as 0 or 1, the bytes Core writes. Core reads any other
+  /// byte as `true`; here it is an error.
+  fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
+    let high_bandwidth = match u8::decode(data)? {
+      0 => false,
+      1 => true,
+      other => {
+        return Err(DecodeError::InvalidValue {
+          expected: vec![0, 1],
+          actual: u64::from(other),
+        })
+      }
+    };
+    Ok(Self {
+      high_bandwidth,
+      version: u64::decode(data)?,
+    })
+  }
+
+  fn encode(&self, buf: &mut impl EncodeBuf) {
+    u8::from(self.high_bandwidth).encode(buf);
+    self.version.encode(buf);
+  }
+}
+
+hash_impl!(SendCmpct);
 
 /// A 6-byte transaction short ID, Core's `CustomUintFormatter<6>`.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, TypeId)]

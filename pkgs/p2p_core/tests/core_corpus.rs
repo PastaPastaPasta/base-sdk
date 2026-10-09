@@ -16,7 +16,7 @@ use dash_p2p_core::{
 };
 use dash_pkc::bls::BlsCtx;
 use dash_primitives::{Block, BlockHeader};
-use dash_types::codec::BaseCodec;
+use dash_types::codec::{BaseCodec, DecodeError};
 use dash_types::Hashable;
 use rstest::rstest;
 
@@ -210,6 +210,10 @@ fn core_headers2_round_trip_in_their_mode() {
   }
 }
 
+/// Cases Core reads where base-sdk is strict by design (BSX, DEC-98): a
+/// `sendcmpct` flag other than 0 or 1, which Core reads as `true` (D-11).
+const STRICT: [&str; 1] = ["sendcmpct_hb02_v1"];
+
 /// Commands Core has no handler for and ignores unread. base-sdk types them
 /// both ways, so the node ignores them before decoding (D-14).
 const IGNORED_BY_CORE: [&str; 4] = ["merkleblock", "cfilter", "cfheaders", "cfcheckpt"];
@@ -240,6 +244,10 @@ fn handler_verdicts_are_cores() {
       // Core's verdict is to ignore the message whatever its payload; base-sdk
       // reads it, the probe's garbage included.
       "unread" => assert!(IGNORED_BY_CORE.contains(&c.command.as_str()), "{label}"),
+      "read" if STRICT.contains(&c.name.as_str()) => assert!(
+        matches!(r, Err(P2pDecodeError::Consensus(DecodeError::InvalidValue { .. }))),
+        "{label}: {r:?}"
+      ),
       "read" => {
         let d = r.unwrap_or_else(|e| panic!("{label}: {e}"));
         assert!(!d.msg.is_unknown(), "{label}");
@@ -288,15 +296,7 @@ fn handler_values_after_the_read() {
     };
     assert_eq!(hash_funcs, funcs);
   }
-  // Any non-zero byte is true; a version other than 1 is read, then ignored.
-  let P2pMsg::SendCmpct(SendCmpct {
-    high_bandwidth,
-    version,
-  }) = read("sendcmpct_hb02_v1")
-  else {
-    panic!("sendcmpct")
-  };
-  assert!(high_bandwidth.get() && version == 1);
+  // A version other than 1 is read, then ignored.
   let P2pMsg::SendCmpct(SendCmpct { version, .. }) = read("sendcmpct_v2") else {
     panic!("sendcmpct")
   };
