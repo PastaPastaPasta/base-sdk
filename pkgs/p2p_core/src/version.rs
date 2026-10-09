@@ -11,7 +11,7 @@ use dash_types::make_num;
 
 make_num! {
   /// Protocol version exchanged during the handshake.
-  ProtocolVersion, u32, 4
+  ProtocolVersion, i32, 4
 }
 
 hash_impl!(ProtocolVersion);
@@ -33,4 +33,20 @@ impl ProtocolVersion {
   pub const MNLISTDIFF_VERSION_ORDER: Self = Self(70229);
   /// Chainlock signatures in MN list diff boundary.
   pub const MNLISTDIFF_CHAINLOCKS: Self = Self(70230);
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  use dash_types::codec::BaseCodec;
+  use rstest::rstest;
+
+  /// A set top bit reads as a version below every minimum.
+  #[rstest]
+  fn top_bit_reads_below_every_minimum() {
+    let decoded = ProtocolVersion::decode(&mut &[0xFF, 0xFF, 0xFF, 0xFF][..]);
+    assert_eq!(decoded, Ok(ProtocolVersion(-1)));
+    assert!(ProtocolVersion(-1) < ProtocolVersion::MIN_PEER);
+  }
 }
