@@ -13,11 +13,7 @@ pub(crate) mod aarch64;
 #[expect(unsafe_code, reason = "intrinsics")]
 mod amd64;
 pub(crate) mod consts;
-#[cfg(all(feature = "simd", any(feature = "portable", not(target_arch = "aarch64"))))]
-pub(crate) mod cpu;
 pub(crate) mod scalar;
-#[cfg(feature = "simd")]
-pub(crate) mod simd;
 
 #[cfg(all(target_arch = "aarch64", target_endian = "little", not(feature = "portable")))]
 pub(crate) use self::aarch64::round;

@@ -7,20 +7,13 @@
 //! SIMD Echo-512 implementation.
 
 use super::consts::BLOCK;
-#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
-use crate::aes::cpu::{round, round_nk};
-#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
-use crate::aes::simd::xtime_packed_u32;
+use crate::aes::{block_from_words, round, round_nk, words_from_block, Block};
 use crate::util::memops::{load_u32_le, store_u32_le};
 
-#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
-use core::simd::Simd;
+use wide::{i8x16, u32x4};
 
 type AesState = [u32; 4];
-#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
-type CellVec = Simd<u32, 4>;
-#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
-type Grid = [AesState; 16];
+type Grid = [Block; 16];
 type Counter = [u32; 4];
 type ChainingValue = [AesState; 8];
 pub(super) type BlockWords = [u32; 32];
@@ -43,98 +36,59 @@ fn increment_counter(counter: &mut Counter, value: u32) {
   }
 }
 
-/// Builds the 16 round keys used by one substitution step.
-#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
+/// Lays four words out as one grid cell.
 #[inline(always)]
-fn build_sub_word_keys(counter: &Counter) -> ([CellVec; 16], Counter) {
-  let mut keys = [CellVec::splat(0); 16];
+fn cell(words: AesState) -> Block {
+  block_from_words(u32x4::new(words))
+}
+
+/// Builds the 16 round keys used by one substitution step.
+#[inline(always)]
+fn build_sub_word_keys(counter: &Counter) -> (Grid, Counter) {
+  let mut keys = [Block::splat(0); 16];
   let mut next = *counter;
-  let mut cell = 0;
-  while cell < 16 {
-    keys[cell] = CellVec::from_array(next);
+  let mut index = 0;
+  while index < 16 {
+    keys[index] = cell(next);
     increment_counter(&mut next, 1);
-    cell += 1;
+    index += 1;
   }
   (keys, next)
 }
 
-/// Builds the 16 round keys used by one substitution step.
-#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
+/// Runs the two AES rounds on each grid cell.
 #[inline(always)]
-fn build_sub_word_keys(counter: &Counter) -> ([AesState; 16], Counter) {
-  let mut keys = [[0u32; 4]; 16];
-  let mut next = *counter;
-  let mut cell = 0;
-  while cell < 16 {
-    keys[cell] = next;
-    increment_counter(&mut next, 1);
-    cell += 1;
-  }
-  (keys, next)
-}
-
-/// Runs the two AES-like rounds on each grid cell.
-#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
-#[inline(always)]
-fn apply_big_sub_words(grid: &mut [CellVec; 16], round_keys: &[CellVec; 16]) {
-  use crate::aes::aarch64::{block_from_vec, round_block, round_nk_block, vec_from_block};
-
-  let mut cell = 0;
-  while cell < 16 {
-    grid[cell] = vec_from_block(round_nk_block(round_block(
-      block_from_vec(grid[cell]),
-      block_from_vec(round_keys[cell]),
-    )));
-    cell += 1;
-  }
-}
-
-/// Runs the two AES-like rounds on each grid cell.
-#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
-#[inline(always)]
-fn apply_big_sub_words(grid: &mut Grid, round_keys: &[AesState; 16]) {
-  let mut cell = 0;
-  while cell < 16 {
-    grid[cell] = round(&grid[cell], &round_keys[cell]);
-    grid[cell] = round_nk(&grid[cell]);
-    cell += 1;
+fn apply_big_sub_words(grid: &mut Grid, round_keys: &Grid) {
+  let mut index = 0;
+  while index < 16 {
+    grid[index] = round_nk(round(grid[index], round_keys[index]));
+    index += 1;
   }
 }
 
 /// Rotates the second, third, and fourth grid rows.
-#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
 #[inline(always)]
 fn apply_big_shift_rows(grid: &mut Grid) {
   let saved = *grid;
-  let mut cell = 0;
-  while cell < 16 {
-    grid[cell] = saved[BIG_SHIFT_ROWS[cell]];
-    cell += 1;
+  let mut index = 0;
+  while index < 16 {
+    grid[index] = saved[BIG_SHIFT_ROWS[index]];
+    index += 1;
   }
 }
 
-/// Rotates the second, third, and fourth grid rows.
-#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
+/// Multiplies each byte by `x` in `GF(2^8)`.
 #[inline(always)]
-fn apply_big_shift_rows_vec(grid: &mut [CellVec; 16]) {
-  let saved = *grid;
-  let mut cell = 0;
-  while cell < 16 {
-    grid[cell] = saved[BIG_SHIFT_ROWS[cell]];
-    cell += 1;
-  }
+fn xtime(bytes: Block) -> Block {
+  const ZERO: i8x16 = i8x16::splat(0);
+  const POLY: Block = Block::splat(0x1B);
+  let carry = bytes.cast_signed().simd_lt(ZERO).cast_unsigned() & POLY;
+  (bytes + bytes) ^ carry
 }
 
-#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
+/// Mixes one column of four AES states in `GF(2^8)`.
 #[inline(always)]
-fn xtime_packed_vec(word: CellVec) -> CellVec {
-  (((word & CellVec::splat(0x80808080)) >> CellVec::splat(7)) * CellVec::splat(27))
-    ^ ((word & CellVec::splat(0x7F7F7F7F)) << CellVec::splat(1))
-}
-
-#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
-#[inline(always)]
-fn mix_column_vec(grid: &mut [CellVec; 16], a: usize, b: usize, c: usize, d: usize) {
+fn mix_column(grid: &mut Grid, a: usize, b: usize, c: usize, d: usize) {
   let wa = grid[a];
   let wb = grid[b];
   let wc = grid[c];
@@ -142,50 +96,16 @@ fn mix_column_vec(grid: &mut [CellVec; 16], a: usize, b: usize, c: usize, d: usi
   let ab = wa ^ wb;
   let bc = wb ^ wc;
   let cd = wc ^ wd;
-  let ab2 = xtime_packed_vec(ab);
-  let bc2 = xtime_packed_vec(bc);
-  let cd2 = xtime_packed_vec(cd);
+  let ab2 = xtime(ab);
+  let bc2 = xtime(bc);
+  let cd2 = xtime(cd);
   grid[a] = ab2 ^ bc ^ wd;
   grid[b] = bc2 ^ wa ^ cd;
   grid[c] = cd2 ^ ab ^ wd;
   grid[d] = ab2 ^ bc2 ^ cd2 ^ ab ^ wc;
 }
 
-#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
-#[inline(always)]
-fn apply_big_mix_columns_vec(grid: &mut [CellVec; 16]) {
-  mix_column_vec(grid, 0, 1, 2, 3);
-  mix_column_vec(grid, 4, 5, 6, 7);
-  mix_column_vec(grid, 8, 9, 10, 11);
-  mix_column_vec(grid, 12, 13, 14, 15);
-}
-
-/// Mixes one column of four AES states in `GF(2^8)`.
-#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
-#[inline(always)]
-fn mix_column(grid: &mut Grid, a: usize, b: usize, c: usize, d: usize) {
-  let mut word = 0;
-  while word < 4 {
-    let wa = grid[a][word];
-    let wb = grid[b][word];
-    let wc = grid[c][word];
-    let wd = grid[d][word];
-    let ab = wa ^ wb;
-    let bc = wb ^ wc;
-    let cd = wc ^ wd;
-    let ab2 = xtime_packed_u32(ab);
-    let bc2 = xtime_packed_u32(bc);
-    let cd2 = xtime_packed_u32(cd);
-    grid[a][word] = ab2 ^ bc ^ wd;
-    grid[b][word] = bc2 ^ wa ^ cd;
-    grid[c][word] = cd2 ^ ab ^ wd;
-    grid[d][word] = ab2 ^ bc2 ^ cd2 ^ ab ^ wc;
-    word += 1;
-  }
-}
-
 /// Applies the column-mixing step to all four grid columns.
-#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
 #[inline(always)]
 fn apply_big_mix_columns(grid: &mut Grid) {
   mix_column(grid, 0, 1, 2, 3);
@@ -195,72 +115,17 @@ fn apply_big_mix_columns(grid: &mut Grid) {
 }
 
 /// Runs the compression function on one 1024-bit block.
-#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
 #[inline(always)]
 pub(super) fn compress_words(chaining_value: &mut ChainingValue, block: &BlockWords, counter: &Counter) {
-  let mut grid = [CellVec::splat(0); 16];
-
-  let mut cell = 0;
-  while cell < 8 {
-    grid[cell] = CellVec::from_array(chaining_value[cell]);
-    cell += 1;
-  }
-
-  cell = 0;
-  while cell < 8 {
-    let offset = cell * 4;
-    grid[cell + 8] = CellVec::from_array([block[offset], block[offset + 1], block[offset + 2], block[offset + 3]]);
-    cell += 1;
-  }
-
-  let mut round_counter = *counter;
-  let mut round = 0;
-  while round < 10 {
-    let (round_keys, next_counter) = build_sub_word_keys(&round_counter);
-    apply_big_sub_words(&mut grid, &round_keys);
-    round_counter = next_counter;
-    apply_big_shift_rows_vec(&mut grid);
-    apply_big_mix_columns_vec(&mut grid);
-    round += 1;
-  }
-
-  let mut cell = 0;
-  while cell < 8 {
-    let block_lane = CellVec::from_array([
-      block[cell * 4],
-      block[cell * 4 + 1],
-      block[cell * 4 + 2],
-      block[cell * 4 + 3],
-    ]);
-    chaining_value[cell] =
-      (CellVec::from_array(chaining_value[cell]) ^ block_lane ^ grid[cell] ^ grid[cell + 8]).to_array();
-    cell += 1;
-  }
-}
-
-/// Runs the compression function on one 1024-bit block.
-#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
-#[inline(always)]
-pub(super) fn compress_words(chaining_value: &mut ChainingValue, block: &BlockWords, counter: &Counter) {
-  let mut grid = [[0u32; 4]; 16];
-
-  let mut cell = 0;
-  while cell < 8 {
-    grid[cell] = chaining_value[cell];
-    cell += 1;
-  }
-
-  cell = 0;
-  // The lower half of the 4x4 grid starts from the message block while the
-  // upper half starts from the chaining value. The big rounds mix both halves
-  // together before the final feedforward.
-  while cell < 8 {
-    let offset = cell * 4;
-    grid[cell + 8][0] = block[offset];
-    grid[cell + 8][1] = block[offset + 1];
-    grid[cell + 8][2] = block[offset + 2];
-    grid[cell + 8][3] = block[offset + 3];
-    cell += 1;
+  // The upper half of the 4x4 grid starts from the chaining value and the
+  // lower half from the message block.
+  let mut grid = [Block::splat(0); 16];
+  let mut index = 0;
+  while index < 8 {
+    let offset = index * 4;
+    grid[index] = cell(chaining_value[index]);
+    grid[index + 8] = cell([block[offset], block[offset + 1], block[offset + 2], block[offset + 3]]);
+    index += 1;
   }
 
   let mut round_counter = *counter;
@@ -274,15 +139,13 @@ pub(super) fn compress_words(chaining_value: &mut ChainingValue, block: &BlockWo
     round += 1;
   }
 
-  cell = 0;
-  while cell < 8 {
-    let mut word = 0;
-    while word < 4 {
-      let block_word = block[cell * 4 + word];
-      chaining_value[cell][word] ^= block_word ^ grid[cell][word] ^ grid[cell + 8][word];
-      word += 1;
-    }
-    cell += 1;
+  index = 0;
+  while index < 8 {
+    let offset = index * 4;
+    let message = cell([block[offset], block[offset + 1], block[offset + 2], block[offset + 3]]);
+    let mixed = cell(chaining_value[index]) ^ message ^ grid[index] ^ grid[index + 8];
+    chaining_value[index] = words_from_block(mixed).to_array();
+    index += 1;
   }
 }
 
