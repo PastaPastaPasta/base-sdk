@@ -23,9 +23,7 @@ bitcoin-consensus-encoding = { workspace = true, features = ["alloc"] }
 bitcoin-primitives = { workspace = true, features = ["alloc"] }
 bitcoin-units = { workspace = true, features = ["alloc"] }
 dash-num = { version = "0.1.0-beta", path = "../../../pkgs/num", default-features = false }
-dash-pow = { version = "0.0.0", path = "../../../pkgs/pow", default-features = false, features = [
-  "simd",
-] }
+dash-pow = { version = "0.0.0", path = "../../../pkgs/pow", default-features = false }
 dash-primitives = { version = "0.0.0", path = "../../../pkgs/primitives", default-features = false }
 dash-script = { version = "0.0.0", path = "../../../pkgs/script", default-features = false }
 dash-types = { version = "0.1.0-beta", path = "../../../pkgs/types", default-features = false }

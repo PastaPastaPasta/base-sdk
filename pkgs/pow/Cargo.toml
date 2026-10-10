@@ -15,9 +15,8 @@ bench = false
 [features]
 default = []
 std = ["wide/std"]
-full = ["std", "simd"]
+full = ["std"]
 portable = []
-simd = []
 
 [dependencies]
 wide = { workspace = true }
@@ -32,7 +31,6 @@ rstest = { workspace = true }
 name = "pow"
 path = "bench/main.rs"
 harness = false
-required-features = ["simd"]
 
 [lints]
 workspace = true

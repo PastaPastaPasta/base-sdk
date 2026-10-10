@@ -11,7 +11,6 @@
 //! to 256 bits.
 
 #![no_std]
-#![cfg_attr(feature = "simd", feature(portable_simd))]
 #![deny(
   unsafe_op_in_unsafe_fn,
   clippy::undocumented_unsafe_blocks,
