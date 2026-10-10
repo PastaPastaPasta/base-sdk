@@ -8,7 +8,7 @@
 
 use super::Block;
 
-use core::arch::x86_64::{__m128i, _mm_aesenc_si128};
+use core::arch::x86_64::{__m128i, _mm_aesenc_si128, _mm_aesenclast_si128, _mm_setzero_si128};
 
 #[inline(always)]
 fn to_native(block: Block) -> __m128i {
@@ -28,4 +28,12 @@ pub(crate) fn round(state: Block, key: Block) -> Block {
   // SAFETY: `aes::mod` skips this module under `portable`, and `lib.rs`
   // requires the `aes` target feature otherwise.
   from_native(unsafe { _mm_aesenc_si128(to_native(state), to_native(key)) })
+}
+
+/// Runs SubBytes and ShiftRows.
+#[inline(always)]
+pub(crate) fn sub_shift(state: Block) -> Block {
+  // SAFETY: `aes::mod` skips this module under `portable`, and `lib.rs`
+  // requires the `aes` target feature otherwise.
+  from_native(unsafe { _mm_aesenclast_si128(to_native(state), _mm_setzero_si128()) })
 }

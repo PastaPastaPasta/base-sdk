@@ -6,15 +6,10 @@
 
 //! SIMD Groestl-512 implementation.
 
-use super::consts::{BLOCK, IV_ROWS, RC_P, RC_Q, ROUNDS};
-#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
-use super::consts::{SUBSH_P, SUBSH_Q};
-#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
-use crate::aes::consts::SBOX;
+use super::consts::{BLOCK, IV_ROWS, RC_P, RC_Q, ROUNDS, SUBSH_P, SUBSH_Q};
+use crate::aes::{sub_shift as aes_sub_shift, Block};
 
 use core::simd::num::{SimdInt, SimdUint};
-#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
-use core::simd::simd_swizzle;
 use core::simd::Simd;
 
 type Row = Simd<u8, 16>;
@@ -117,68 +112,6 @@ fn mix_bytes(rows: &mut [Row; 8]) {
   rows[7] = b7;
 }
 
-/// Applies the AES S-box to every byte in every row.
-#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
-#[inline(always)]
-fn sub_bytes(rows: &mut [Row; 8]) {
-  let mut row = 0;
-  while row < 8 {
-    let mut bytes = rows[row].to_array();
-    let mut col = 0;
-    while col < 16 {
-      bytes[col] = SBOX[bytes[col] as usize];
-      col += 1;
-    }
-    rows[row] = Row::from_array(bytes);
-    row += 1;
-  }
-}
-
-#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
-const fn rotate_left_indices(shift: usize) -> [usize; 16] {
-  let mut indices = [0usize; 16];
-  let mut i = 0;
-  while i < 16 {
-    indices[i] = (i + shift) % 16;
-    i += 1;
-  }
-  indices
-}
-
-#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
-macro_rules! shift_row {
-  ($row:expr, $shift:expr) => {{
-    const PATTERN: [usize; 16] = rotate_left_indices($shift);
-    simd_swizzle!($row, PATTERN)
-  }};
-}
-
-/// Applies the `P` row shifts.
-#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
-#[inline(always)]
-fn shift_bytes_p(rows: &mut [Row; 8]) {
-  rows[1] = shift_row!(rows[1], 1);
-  rows[2] = shift_row!(rows[2], 2);
-  rows[3] = shift_row!(rows[3], 3);
-  rows[4] = shift_row!(rows[4], 4);
-  rows[5] = shift_row!(rows[5], 5);
-  rows[6] = shift_row!(rows[6], 6);
-  rows[7] = shift_row!(rows[7], 11);
-}
-
-/// Applies the `Q` row shifts.
-#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
-#[inline(always)]
-fn shift_bytes_q(rows: &mut [Row; 8]) {
-  rows[0] = shift_row!(rows[0], 1);
-  rows[1] = shift_row!(rows[1], 3);
-  rows[2] = shift_row!(rows[2], 5);
-  rows[3] = shift_row!(rows[3], 11);
-  rows[5] = shift_row!(rows[5], 2);
-  rows[6] = shift_row!(rows[6], 4);
-  rows[7] = shift_row!(rows[7], 6);
-}
-
 #[inline(always)]
 fn add_rc_p(rows: &mut [Row; 8], round: usize) {
   rows[0] ^= Row::from_array(RC_P[round]);
@@ -197,29 +130,21 @@ fn add_rc_q(rows: &mut [Row; 8], round: usize) {
   rows[7] ^= Row::from_array(RC_Q[round]);
 }
 
-/// Applies substitution and row rotation in one helper on supported targets.
-#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
-#[expect(unsafe_code, reason = "direct vector intrinsics produce the right codegen")]
+/// Applies SubBytes and the row shifts with one AES instruction per row.
+///
+/// Each mask moves bytes so that AES ShiftRows, which runs after SubBytes,
+/// lands them where the Groestl row shift puts them.
 #[inline(always)]
 fn sub_shift(rows: &mut [Row; 8], masks: &[[u8; 16]; 8]) {
-  use crate::aes::aarch64::sub_shift as hw_sub_shift;
-
-  use core::arch::aarch64::uint8x16_t;
-
-  unsafe {
-    let zero = core::mem::transmute::<[u8; 16], uint8x16_t>([0u8; 16]);
-    let mut row = 0;
-    while row < 8 {
-      let src = core::mem::transmute::<Row, uint8x16_t>(rows[row]);
-      let mask = core::mem::transmute::<[u8; 16], uint8x16_t>(masks[row]);
-      rows[row] = core::mem::transmute::<uint8x16_t, Row>(hw_sub_shift(src, mask, zero));
-      row += 1;
-    }
+  let mut row = 0;
+  while row < 8 {
+    let shifted = Block::new(rows[row].to_array()).shuffle(Block::new(masks[row]));
+    rows[row] = Row::from_array(aes_sub_shift(shifted).to_array());
+    row += 1;
   }
 }
 
 /// Applies the `P` permutation to the current state.
-#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
 #[inline(always)]
 fn perm_p(state: &mut [Row; 8]) {
   let mut round = 0;
@@ -231,22 +156,7 @@ fn perm_p(state: &mut [Row; 8]) {
   }
 }
 
-/// Applies the `P` permutation to the current state.
-#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
-#[inline(always)]
-fn perm_p(state: &mut [Row; 8]) {
-  let mut round = 0;
-  while round < ROUNDS {
-    add_rc_p(state, round);
-    sub_bytes(state);
-    shift_bytes_p(state);
-    mix_bytes(state);
-    round += 1;
-  }
-}
-
 /// Applies the `P` and `Q` permutations in lockstep for one compression.
-#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
 #[inline(always)]
 fn perm_pq(p_state: &mut [Row; 8], q_state: &mut [Row; 8]) {
   let mut round = 0;
@@ -255,24 +165,6 @@ fn perm_pq(p_state: &mut [Row; 8], q_state: &mut [Row; 8]) {
     add_rc_q(q_state, round);
     sub_shift(p_state, &SUBSH_P);
     sub_shift(q_state, &SUBSH_Q);
-    mix_bytes(p_state);
-    mix_bytes(q_state);
-    round += 1;
-  }
-}
-
-/// Applies the `P` and `Q` permutations in lockstep for one compression.
-#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
-#[inline(always)]
-fn perm_pq(p_state: &mut [Row; 8], q_state: &mut [Row; 8]) {
-  let mut round = 0;
-  while round < ROUNDS {
-    add_rc_p(p_state, round);
-    add_rc_q(q_state, round);
-    sub_bytes(p_state);
-    sub_bytes(q_state);
-    shift_bytes_p(p_state);
-    shift_bytes_q(q_state);
     mix_bytes(p_state);
     mix_bytes(q_state);
     round += 1;

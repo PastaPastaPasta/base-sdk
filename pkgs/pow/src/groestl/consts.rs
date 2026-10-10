@@ -100,8 +100,8 @@ pub(crate) const RC_Q: [[u8; 16]; ROUNDS] = {
   rc
 };
 
-/// Arm AES ShiftRows source index for a 4x4 column-major row.
-#[cfg(all(feature = "simd", target_arch = "aarch64", not(feature = "portable")))]
+/// AES ShiftRows source index for a 4x4 column-major row.
+#[cfg(any(test, feature = "simd"))]
 const fn aes_shift_rows_source(dst: usize) -> usize {
   let row = dst % 4;
   let col = dst / 4;
@@ -109,7 +109,7 @@ const fn aes_shift_rows_source(dst: usize) -> usize {
 }
 
 /// Fused SubBytes + ShiftBytes masks for the `P` permutation.
-#[cfg(all(feature = "simd", target_arch = "aarch64", not(feature = "portable")))]
+#[cfg(any(test, feature = "simd"))]
 pub(crate) const SUBSH_P: [[u8; 16]; 8] = {
   const SHIFTS: [usize; 8] = [0, 1, 2, 3, 4, 5, 6, 11];
   let mut masks = [[0u8; 16]; 8];
@@ -126,7 +126,7 @@ pub(crate) const SUBSH_P: [[u8; 16]; 8] = {
 };
 
 /// Fused SubBytes + ShiftBytes masks for the `Q` permutation.
-#[cfg(all(feature = "simd", target_arch = "aarch64", not(feature = "portable")))]
+#[cfg(feature = "simd")]
 pub(crate) const SUBSH_Q: [[u8; 16]; 8] = {
   const SHIFTS: [usize; 8] = [1, 3, 5, 11, 0, 2, 4, 6];
   let mut masks = [[0u8; 16]; 8];
@@ -191,7 +191,6 @@ mod tests {
     }
   }
 
-  #[cfg(all(feature = "simd", target_arch = "aarch64", not(feature = "portable")))]
   #[test]
   fn spot_check_subsh_p() {
     assert_eq!(

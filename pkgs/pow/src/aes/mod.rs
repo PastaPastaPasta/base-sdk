@@ -8,7 +8,7 @@
 
 #[cfg(all(target_arch = "aarch64", target_endian = "little", not(feature = "portable")))]
 #[expect(unsafe_code, reason = "intrinsics")]
-pub(crate) mod aarch64;
+mod aarch64;
 #[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
 #[expect(unsafe_code, reason = "intrinsics")]
 mod amd64;
@@ -16,14 +16,14 @@ pub(crate) mod consts;
 pub(crate) mod scalar;
 
 #[cfg(all(target_arch = "aarch64", target_endian = "little", not(feature = "portable")))]
-pub(crate) use self::aarch64::round;
+pub(crate) use self::aarch64::{round, sub_shift};
 #[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
-pub(crate) use self::amd64::round;
+pub(crate) use self::amd64::{round, sub_shift};
 #[cfg(any(
   feature = "portable",
   not(any(all(target_arch = "aarch64", target_endian = "little"), target_arch = "x86_64"))
 ))]
-pub(crate) use self::scalar::round_block as round;
+pub(crate) use self::scalar::{round_block as round, sub_shift_block as sub_shift};
 
 use wide::bytemuck::cast;
 use wide::{u32x4, u8x16};
@@ -59,7 +59,7 @@ pub(crate) fn words_from_block(block: Block) -> u32x4 {
 #[cfg(test)]
 mod tests {
   use super::consts::{SBOX, T};
-  use super::scalar::{round_block, sub_bytes};
+  use super::scalar::{round_block, sub_shift_block};
   use super::*;
 
   const STATE: [u32; 4] = [0x01020304, 0x05060708, 0x090a0b0c, 0x0d0e0f10];
@@ -111,16 +111,15 @@ mod tests {
     );
   }
 
-  /// The scalar SubBytes agrees with the S-box.
+  /// The active backend agrees with the scalar SubBytes and ShiftRows.
   #[test]
-  fn sub_bytes_matches_sbox() {
-    let input: [u8; 16] = [
+  fn sub_shift_matches_scalar() {
+    let input = Block::new([
       0x00, 0x01, 0x53, 0xFF, 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80, 0x90, 0xA0, 0xB0, 0xC0,
-    ];
-    let result = sub_bytes(&input);
-    for i in 0..16 {
-      assert_eq!(result[i], SBOX[input[i] as usize], "mismatch at byte {i}");
-    }
+    ]);
+    assert_eq!(sub_shift(input), sub_shift_block(input));
+    // Row 0 does not shift, so byte 0 is the S-box of byte 0.
+    assert_eq!(sub_shift(input).to_array()[0], SBOX[0]);
   }
 
   /// Words land in the block little-endian, word 0 first.

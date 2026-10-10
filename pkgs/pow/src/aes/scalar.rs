@@ -6,10 +6,22 @@
 
 //! Scalar AES round via T-table lookups.
 
-use super::consts::T;
+use super::consts::{SBOX, T};
 use super::{block_from_words, words_from_block, Block};
 
 use wide::u32x4;
+
+/// Source byte of each ShiftRows output byte in the column-major state.
+const SHIFT_ROWS: [usize; 16] = {
+  let mut source = [0; 16];
+  let mut dst = 0;
+  while dst < 16 {
+    let (row, col) = (dst % 4, dst / 4);
+    source[dst] = 4 * ((col + row) % 4) + row;
+    dst += 1;
+  }
+  source
+};
 
 /// One AES encryption round (SubBytes + ShiftRows + MixColumns + AddRoundKey)
 /// using T-table lookups.
@@ -58,15 +70,17 @@ pub(crate) fn round_block(state: Block, key: Block) -> Block {
   block_from_words(u32x4::new(words))
 }
 
-/// Applies the AES S-box to all 16 bytes via table lookup.
-#[cfg(test)]
-pub(crate) const fn sub_bytes(state: &[u8; 16]) -> [u8; 16] {
-  use super::consts::SBOX;
-  let mut out = [0u8; 16];
-  let mut i = 0;
-  while i < 16 {
-    out[i] = SBOX[state[i] as usize];
-    i += 1;
-  }
-  out
+/// Runs SubBytes and ShiftRows on a block.
+#[cfg_attr(
+  all(
+    not(test),
+    not(feature = "portable"),
+    any(all(target_arch = "aarch64", target_endian = "little"), target_arch = "x86_64")
+  ),
+  expect(dead_code, reason = "fallback backend")
+)]
+#[inline]
+pub(crate) fn sub_shift_block(state: Block) -> Block {
+  let bytes = state.to_array();
+  Block::new(core::array::from_fn(|dst| SBOX[bytes[SHIFT_ROWS[dst]] as usize]))
 }
