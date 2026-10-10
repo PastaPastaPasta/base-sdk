@@ -7,9 +7,7 @@
 //! AES rounds via the Armv8 Cryptographic Extension.
 
 #[cfg(feature = "simd")]
-pub(crate) use self::packed::{
-  block_from_vec, load_state, round_block, round_nk_block, store_state, sub_shift, vec_from_block, xor_block,
-};
+pub(crate) use self::packed::{block_from_vec, round_block, round_nk_block, sub_shift, vec_from_block};
 use super::Block;
 
 use core::arch::aarch64::{uint8x16_t, vaeseq_u8, vaesmcq_u8, vdupq_n_u8};
@@ -44,20 +42,7 @@ mod packed {
   use core::arch::aarch64::{uint8x16_t, vaeseq_u8, vaesmcq_u8, veorq_u8, vqtbl1q_u8};
   use core::simd::Simd;
 
-  type AesState = [u32; 4];
   pub(crate) type AesBlock = uint8x16_t;
-
-  #[inline(always)]
-  pub(crate) fn load_state(state: &AesState) -> AesBlock {
-    // On little-endian targets the packed-word layout already matches the byte
-    // layout expected by the AES instructions, so the state can stay packed.
-    unsafe { core::mem::transmute(*state) }
-  }
-
-  #[inline(always)]
-  pub(crate) fn store_state(state: AesBlock) -> AesState {
-    unsafe { core::mem::transmute(state) }
-  }
 
   #[inline(always)]
   pub(crate) fn block_from_vec(state: Simd<u32, 4>) -> AesBlock {
@@ -91,11 +76,6 @@ mod packed {
     // Safety: `aes::mod` skips this module under `portable`, and `lib.rs`
     // requires the `aes` target feature otherwise.
     unsafe { round_block_impl(state, key) }
-  }
-
-  #[inline(always)]
-  pub(crate) fn xor_block(state: AesBlock, key: AesBlock) -> AesBlock {
-    unsafe { veorq_u8(state, key) }
   }
 
   #[inline]

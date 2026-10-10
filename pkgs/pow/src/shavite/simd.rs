@@ -7,8 +7,10 @@
 //! SIMD SHAvite-3-512 implementation.
 
 use super::consts::{BLOCK, IV};
-use crate::aes::cpu::round_nk;
+use crate::aes::{block_from_words, round_nk, words_from_block, Block};
 use crate::util::memops::{load_u32_le, store_u32_le};
+
+use wide::u32x4;
 
 const SCHEDULE_BUNDLES: usize = 112;
 type Bundle = [u32; 4];
@@ -140,7 +142,7 @@ fn expand_round_keys(msg: &[u8; BLOCK], counter: &[u32; 4]) -> [Bundle; SCHEDULE
 /// Applies the AES-based bundle step used by the key schedule.
 #[inline(always)]
 fn expand_aes_step(schedule: &[Bundle; SCHEDULE_BUNDLES], bundle: usize) -> Bundle {
-  let expanded = round_nk(&rotate_bundle_words(schedule[bundle - 8]));
+  let expanded = words_from_block(round_nk(lane(rotate_bundle_words(schedule[bundle - 8])))).to_array();
   [
     expanded[0] ^ schedule[bundle - 1][0],
     expanded[1] ^ schedule[bundle - 1][1],
@@ -170,51 +172,29 @@ fn inject_counter_words(bundle_words: &mut Bundle, counter: &[u32; 4], injection
   }
 }
 
-/// Runs the 4-round AES bundle that updates one 4-word half.
-#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
+/// Lays four state words out as one AES block.
 #[inline(always)]
-fn apply_round_bundle(state: &mut State, left: [usize; 4], right: [usize; 4], keys: &[Bundle]) {
-  use crate::aes::aarch64::{load_state, round_nk_block, store_state, xor_block};
-
-  // The bundle always stays in one 128-bit lane. Keeping it packed across the
-  // four rounds avoids rebuilding the lane after every round.
-  let mut lane = load_state(&[state[right[0]], state[right[1]], state[right[2]], state[right[3]]]);
-
-  let mut round = 0;
-  while round < 4 {
-    lane = round_nk_block(xor_block(lane, load_state(&keys[round])));
-    round += 1;
-  }
-
-  let lane = store_state(lane);
-  state[left[0]] ^= lane[0];
-  state[left[1]] ^= lane[1];
-  state[left[2]] ^= lane[2];
-  state[left[3]] ^= lane[3];
+fn lane(words: Bundle) -> Block {
+  block_from_words(u32x4::new(words))
 }
 
 /// Runs the 4-round AES bundle that updates one 4-word half.
-#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
 #[inline(always)]
 fn apply_round_bundle(state: &mut State, left: [usize; 4], right: [usize; 4], keys: &[Bundle]) {
-  // Each bundle reads one 4-word half, runs four AES-like rounds, then xors
+  // Each bundle reads one 4-word half, runs four keyed AES rounds, then xors
   // the result into the opposite half in Feistel order.
-  let mut lane = [state[right[0]], state[right[1]], state[right[2]], state[right[3]]];
-
+  let mut block = lane([state[right[0]], state[right[1]], state[right[2]], state[right[3]]]);
   let mut round = 0;
   while round < 4 {
-    lane[0] ^= keys[round][0];
-    lane[1] ^= keys[round][1];
-    lane[2] ^= keys[round][2];
-    lane[3] ^= keys[round][3];
-    lane = round_nk(&lane);
+    block = round_nk(block ^ lane(keys[round]));
     round += 1;
   }
 
-  state[left[0]] ^= lane[0];
-  state[left[1]] ^= lane[1];
-  state[left[2]] ^= lane[2];
-  state[left[3]] ^= lane[3];
+  let mixed = words_from_block(block).to_array();
+  state[left[0]] ^= mixed[0];
+  state[left[1]] ^= mixed[1];
+  state[left[2]] ^= mixed[2];
+  state[left[3]] ^= mixed[3];
 }
 
 /// Rotates the four columns after one round pair.

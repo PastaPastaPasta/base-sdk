@@ -13,7 +13,7 @@ pub(crate) mod aarch64;
 #[expect(unsafe_code, reason = "intrinsics")]
 mod amd64;
 pub(crate) mod consts;
-#[cfg(feature = "simd")]
+#[cfg(all(feature = "simd", any(feature = "portable", not(target_arch = "aarch64"))))]
 pub(crate) mod cpu;
 pub(crate) mod scalar;
 #[cfg(feature = "simd")]

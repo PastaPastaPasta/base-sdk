@@ -11,7 +11,6 @@ use super::{block_from_words, words_from_block};
 use wide::u32x4;
 
 /// Runs one AES round on four packed words.
-#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
 #[inline(always)]
 pub(crate) fn round(state: &[u32; 4], key: &[u32; 4]) -> [u32; 4] {
   let mixed = super::round(block_from_words(u32x4::new(*state)), block_from_words(u32x4::new(*key)));
