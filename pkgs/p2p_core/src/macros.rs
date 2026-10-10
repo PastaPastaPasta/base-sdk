@@ -168,6 +168,9 @@ macro_rules! define_p2p {
       /// An unknown command decodes to [`P2pMsg::Unknown`]. A command whose
       /// handler reads nothing ignores its payload, and a typed message
       /// reports the bytes its handler reads in [`DecodedMsg::consumed`].
+      /// `mnlistdiff` and `qrinfo` decode as Core's serializer reads them:
+      /// Core's handlers penalise a peer that sends either and read nothing,
+      /// so a node decodes only the replies to its own requests.
       /// The payload is bound by the V1 transport's 3 MiB limit, then the
       /// command by its byte rules; [`crate::decode_v2`] applies the V2 rules
       /// instead. Gates that depend on connection state, node configuration
@@ -176,9 +179,11 @@ macro_rules! define_p2p {
       ///
       /// # Errors
       ///
-      /// Returns `PayloadTooLarge`, on which Core disconnects, `InvalidCommand`,
-      /// on which it drops the message, or a `P2pDecodeError` where its
-      /// handler throws or stops before reading the rest.
+      /// Returns `PayloadTooLarge` for a payload over the transport's limit, on
+      /// which Core disconnects, `InvalidCommand`, on which it drops the
+      /// message, or a `P2pDecodeError` where its handler throws or stops
+      /// before reading the rest: `HandlerPayloadTooLarge` and `TooManyEntries`
+      /// where the handler checks a length or count first.
       pub fn decode_with_policy(
         cmd: &CommandString,
         payload: &[u8],

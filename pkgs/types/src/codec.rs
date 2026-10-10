@@ -53,6 +53,15 @@ pub enum DecodeError<E = Infallible> {
   },
   /// BLS bytes canonical in neither scheme, Core's "malleable BLS object".
   MalleableBls,
+  /// A boolean byte other than 0 or 1, which Dash Core reads as `true`.
+  ///
+  /// A strict read refuses it where Core reads it, as 1, and acts on the
+  /// message, so a caller that follows Core does not penalise or drop the
+  /// peer for it.
+  NonCanonicalBool {
+    /// The byte read.
+    value: u8,
+  },
   /// CompactSize encoding is not minimal.
   NonMinimalCompactSize {
     /// The decoded value that was not minimally encoded.
@@ -76,6 +85,7 @@ impl DecodeError {
       Self::InvalidUtf8 => DecodeError::InvalidUtf8,
       Self::InvalidValue { expected, actual } => DecodeError::InvalidValue { expected, actual },
       Self::MalleableBls => DecodeError::MalleableBls,
+      Self::NonCanonicalBool { value } => DecodeError::NonCanonicalBool { value },
       Self::NonMinimalCompactSize { value } => DecodeError::NonMinimalCompactSize { value },
       Self::TrailingBytes { remaining } => DecodeError::TrailingBytes { remaining },
     }
@@ -100,6 +110,7 @@ impl<E: fmt::Display> fmt::Display for DecodeError<E> {
         write!(f, "invalid value: expected one of {expected:?}, got {actual}")
       }
       Self::MalleableBls => write!(f, "malleable BLS object"),
+      Self::NonCanonicalBool { value } => write!(f, "non-canonical bool: got {value}"),
       Self::NonMinimalCompactSize { value } => {
         write!(f, "non-minimal compact size encoding for value {value}",)
       }
@@ -315,6 +326,16 @@ impl<T: BaseCodec> BaseCodec for Vec<T> {
   }
 }
 
+impl<T: BaseCodec> BaseCodec for Box<T> {
+  fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
+    T::decode(data).map(Box::new)
+  }
+
+  fn encode(&self, buf: &mut impl EncodeBuf) {
+    (**self).encode(buf);
+  }
+}
+
 impl BaseCodec for String {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let bytes = Vec::<u8>::decode(data)?;
@@ -401,6 +422,7 @@ mod tests {
   #[case::eof(DecodeError::Eof { needed: 4, remaining: 1 })]
   #[case::invalid_utf8(DecodeError::InvalidUtf8)]
   #[case::invalid_value(DecodeError::InvalidValue { expected: vec![0, 1], actual: 7 })]
+  #[case::non_canonical_bool(DecodeError::NonCanonicalBool { value: 2 })]
   #[case::non_minimal(DecodeError::NonMinimalCompactSize { value: 1 })]
   #[case::trailing(DecodeError::TrailingBytes { remaining: 3 })]
   fn lift_preserves_variant_and_message(#[case] err: DecodeError) {

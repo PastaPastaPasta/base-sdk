@@ -9,14 +9,18 @@
 mod addr;
 mod bloom;
 mod cfilter;
+mod chainlock;
 mod compact;
 mod control;
 mod gov;
 mod headers;
 mod headers2;
 mod inv;
+mod llmq;
+mod masternode;
 mod mn_list;
 mod ping;
+mod rotation;
 mod version;
 
 use crate::codec::MsgDecode;
@@ -24,20 +28,27 @@ use crate::command::CommandString;
 use crate::prelude::*;
 use crate::short_id::ShortId;
 
-use dash_primitives::{Block, GovObject, GovVote, Transaction};
+use dash_primitives::{Block, Commitment, GovObject, GovVote, Transaction};
 use dash_types::type_id::Unencodable;
 
 pub use addr::{Addr, AddrV2Entry, AddrV2Msg, TimestampedAddr};
 pub use bloom::{FilterAdd, FilterLoad, MerkleBlock, PartialMerkleTree};
 pub use cfilter::{CFCheckpt, CFHeaders, CFilter, GetCFCheckpt, GetCFHeaders, GetCFilters};
+pub use chainlock::{ClSig, IsdLock};
 pub use compact::{short_id_with_keys, BlockTxn, CmpctBlock, GetBlockTxn, PrefilledTx, SendCmpct, ShortTxId};
 pub use control::{QSendRecSigs, SendDsq, SendTxRcncl, Ssc};
 pub use gov::GovSync;
 pub use headers::{GetBlocks, GetHeaders, Headers};
 pub use headers2::{CompressedHeader, GetHeaders2, Headers2};
 pub use inv::{GetData, Inv, InvType, Inventory, NotFound};
-pub use mn_list::{DeletedQuorum, GetMnListDiff, MnListDiff, MnListDiffPayload, QuorumClSig, SimplifiedMnListEntry};
+pub use llmq::{
+  QData, QuorumData, QuorumDataError, QuorumDataRequest, RecoveredSig, VerificationVector, QUORUM_DATA_CONTRIBUTIONS,
+  QUORUM_DATA_VVEC,
+};
+pub use masternode::{MnAuth, PlatformBan, Spork, MAX_SPORK_SIG_LEN};
+pub use mn_list::{DeletedQuorum, GetMnListDiff, MnListDiff, MnListFormat, QuorumClSig, SimplifiedMnListEntry};
 pub use ping::{Ping, Pong};
+pub use rotation::{CycleInfo, GetQrInfo, QrInfo, QuorumSnapshot, SnapshotSkipMode, MAX_QRINFO_BASE_HASHES};
 pub use version::{ServiceFlags, UserAgent, UserAgentTooLong, Version, VersionAddr};
 
 define_p2p! {
@@ -117,6 +128,28 @@ define_p2p! {
     SendTxRcncl(SendTxRcncl) => SENDTXRCNCL "sendtxrcncl",
     /// Masternode sync status count.
     Ssc(Ssc) => SSC "ssc" @ 139,
+    /// Spork broadcast.
+    Spork(Spork) => SPORK "spork" @ 128,
+    /// LLMQ: final commitment.
+    QfCommit(Box<Commitment>) => QFCOMMIT "qfcommit" @ 146,
+    /// LLMQ: recovered signature.
+    QSigRec(RecoveredSig) => QSIGREC "qsigrec" @ 156,
+    /// LLMQ: request quorum data.
+    QGetData(QuorumDataRequest) => QGETDATA "qgetdata" @ 158,
+    /// LLMQ: quorum data.
+    QData(QData) => QDATA "qdata" @ 159,
+    /// ChainLock signature.
+    ClSig(ClSig) => CLSIG "clsig" @ 160,
+    /// InstantSend deterministic lock.
+    IsdLock(IsdLock) => ISDLOCK "isdlock" @ 161,
+    /// Masternode authentication.
+    MnAuth(MnAuth) => MNAUTH "mnauth" @ 162,
+    /// Request quorum rotation info.
+    GetQrInfo(GetQrInfo) => GETQRINFO "getqrinfo" @ 166,
+    /// Quorum rotation info.
+    QrInfo(Box<QrInfo>) => QRINFO "qrinfo" @ 167,
+    /// DIP-0031: platform ban.
+    PlatformBan(PlatformBan) => PLATFORMBAN "platformban" @ 168,
   }
 
   parsed_empty {
@@ -139,8 +172,6 @@ define_p2p! {
   }
 
   stub {
-    /// Spork broadcast/request.
-    Spork => SPORK "spork" @ 128,
     /// CoinJoin: accept denomination.
     Dsa => DSA "dsa" @ 131,
     /// CoinJoin: submit inputs.
@@ -157,8 +188,6 @@ define_p2p! {
     Dstx => DSTX "dstx" @ 137,
     /// CoinJoin: queue entry.
     Dsq => DSQ "dsq" @ 138,
-    /// LLMQ: final commitment.
-    QfCommit => QFCOMMIT "qfcommit" @ 146,
     /// LLMQ: contribution.
     QContrib => QCONTRIB "qcontrib" @ 147,
     /// LLMQ: complaint.
@@ -175,26 +204,8 @@ define_p2p! {
     QGetSigs => QGETSIGS "qgetsigs" @ 154,
     /// LLMQ: batched signature shares.
     QbSigs => QBSIGS "qbsigs" @ 155,
-    /// LLMQ: recovered signature.
-    QSigRec => QSIGREC "qsigrec" @ 156,
     /// LLMQ: single signature share.
     QSigShare => QSIGSHARE "qsigshare" @ 157,
-    /// LLMQ: request quorum data.
-    QGetData => QGETDATA "qgetdata" @ 158,
-    /// LLMQ: quorum data.
-    QData => QDATA "qdata" @ 159,
-    /// ChainLock signature.
-    ClSig => CLSIG "clsig" @ 160,
-    /// InstantSend deterministic lock.
-    IsdLock => ISDLOCK "isdlock" @ 161,
-    /// Masternode authentication.
-    MnAuth => MNAUTH "mnauth" @ 162,
-    /// Request quorum rotation info.
-    GetQrInfo => GETQRINFO "getqrinfo" @ 166,
-    /// Quorum rotation info.
-    QrInfo => QRINFO "qrinfo" @ 167,
-    /// DIP-0031: platform ban.
-    PlatformBan => PLATFORMBAN "platformban" @ 168,
   }
 
   stub_empty {
@@ -216,7 +227,6 @@ impl MsgDecode for GovSync {}
 impl MsgDecode for GovObject {}
 impl MsgDecode for GovVote {}
 impl MsgDecode for GetMnListDiff {}
-impl MsgDecode for MnListDiff {}
 impl MsgDecode for SendDsq {}
 impl MsgDecode for QSendRecSigs {}
 impl MsgDecode for Block {}
@@ -237,3 +247,12 @@ impl MsgDecode for CFHeaders {}
 impl MsgDecode for CFCheckpt {}
 impl MsgDecode for SendTxRcncl {}
 impl MsgDecode for Ssc {}
+impl MsgDecode for Spork {}
+impl MsgDecode for Commitment {}
+impl MsgDecode for RecoveredSig {}
+impl MsgDecode for ClSig {}
+impl MsgDecode for IsdLock {}
+impl MsgDecode for MnAuth {}
+impl MsgDecode for PlatformBan {}
+impl MsgDecode for QData {}
+impl MsgDecode for GetQrInfo {}
