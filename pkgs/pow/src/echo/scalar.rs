@@ -7,7 +7,7 @@
 //! Scalar Echo-512 implementation.
 
 use super::consts::BLOCK;
-use crate::aes::{round, round_nk};
+use crate::aes::scalar::{round, round_nk};
 use crate::util::memops::{extract, load_u32_le, store_u32_le};
 
 /// Increments a 128-bit counter by `val`.

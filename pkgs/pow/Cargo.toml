@@ -14,10 +14,13 @@ bench = false
 
 [features]
 default = []
-std = []
+std = ["wide/std"]
 full = ["std", "simd"]
 portable = []
 simd = []
+
+[dependencies]
+wide = { workspace = true }
 
 [dev-dependencies]
 dash-dev = { version = "0.0.0", path = "../dev", features = ["full"] }

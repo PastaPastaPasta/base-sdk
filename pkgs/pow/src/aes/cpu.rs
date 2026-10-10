@@ -4,19 +4,22 @@
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
 
-//! Best available AES round.
-//!
-//! Hardware AES on aarch64 and x86_64 with `simd` unless `portable` is
-//! enabled, scalar T-table fallback otherwise.
+//! AES rounds on four packed words through the active backend.
 
-#[cfg(all(feature = "simd", target_arch = "aarch64", test, not(feature = "portable")))]
-pub(crate) use super::aarch64::round;
-#[cfg(all(feature = "simd", target_arch = "aarch64", not(feature = "portable")))]
-pub(crate) use super::aarch64::round_nk;
-#[cfg(all(feature = "simd", target_arch = "x86_64", not(feature = "portable")))]
-pub(crate) use super::amd64::{round, round_nk};
-#[cfg(any(
-  feature = "portable",
-  not(all(feature = "simd", any(target_arch = "aarch64", target_arch = "x86_64")))
-))]
-pub(crate) use super::scalar::{round, round_nk};
+use super::{block_from_words, words_from_block};
+
+use wide::u32x4;
+
+/// Runs one AES round on four packed words.
+#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
+#[inline(always)]
+pub(crate) fn round(state: &[u32; 4], key: &[u32; 4]) -> [u32; 4] {
+  let mixed = super::round(block_from_words(u32x4::new(*state)), block_from_words(u32x4::new(*key)));
+  words_from_block(mixed).to_array()
+}
+
+/// Runs one AES round on four packed words with an all-zero round key.
+#[inline(always)]
+pub(crate) fn round_nk(state: &[u32; 4]) -> [u32; 4] {
+  words_from_block(super::round_nk(block_from_words(u32x4::new(*state)))).to_array()
+}
