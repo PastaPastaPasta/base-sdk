@@ -12,6 +12,7 @@ use crate::prelude::*;
 use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{enum_map, impl_num, impl_type, CompactSize, Numeric};
+use getset::{CopyGetters, Getters};
 
 enum_map! {
   /// Revocation reason for provider update revocation.
@@ -59,14 +60,16 @@ pub enum DynBitsetError {
 }
 
 /// LSB-first dynamic bitset.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(into = "DynBitsetSerde"))]
 pub struct DynBitset {
   /// Number of bits in the bitset.
-  pub num_bits: u64,
+  #[getset(get_copy = "pub")]
+  num_bits: u64,
   /// Raw byte data (LSB-first encoding).
-  pub data: Vec<u8>,
+  #[getset(get = "pub")]
+  data: Vec<u8>,
 }
 
 impl_type!(DynBitset);
@@ -107,30 +110,7 @@ impl BaseCodec for DynBitset {
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
     CompactSize::from(self.num_bits).encode(buf);
-    let required = (self.num_bits as usize).div_ceil(8);
-    let src = &self.data;
-    let take = src.len().min(required);
-    if take > 0 {
-      // nosemgrep: codec-no-raw-extend
-      buf.extend_from_slice(&src[..take - 1]);
-      // Mask padding bits only when the last source byte is
-      // also the final output byte (take == required).
-      let last_byte = if take == required {
-        let remainder = (self.num_bits % 8) as u32;
-        if remainder != 0 {
-          src[take - 1] & ((1u8 << remainder) - 1)
-        } else {
-          src[take - 1]
-        }
-      } else {
-        src[take - 1]
-      };
-      buf.push(last_byte);
-    }
-    // Pad with zero bytes if data is shorter than required.
-    for _ in take..required {
-      buf.push(0);
-    }
+    buf.extend_from_slice(&self.data); // nosemgrep: codec-no-raw-extend
   }
 }
 
@@ -177,17 +157,9 @@ impl DynBitset {
     self.data.get(byte_idx).map(|b| (b >> bit_idx) & 1 == 1)
   }
 
-  /// Counts the number of set bits (respects [`num_bits`](Self::num_bits)).
+  /// Counts the number of set bits.
   pub fn count_ones(&self) -> u64 {
-    let byte_len = (self.num_bits as usize).div_ceil(8);
-    let relevant = &self.data[..byte_len.min(self.data.len())];
-    let remainder = (self.num_bits % 8) as u32;
-    if remainder == 0 || relevant.is_empty() {
-      return relevant.iter().map(|b| u64::from(b.count_ones())).sum();
-    }
-    let (full, last) = relevant.split_at(relevant.len() - 1);
-    let mask = (1u8 << remainder) - 1;
-    full.iter().map(|b| u64::from(b.count_ones())).sum::<u64>() + u64::from((last[0] & mask).count_ones())
+    self.data.iter().map(|b| u64::from(b.count_ones())).sum()
   }
 
   /// Iterates over indices of set bits.
