@@ -41,7 +41,6 @@ full = [
   "std",
 ]
 serde = [
-  "codec",
   "dash-types/serde",
   "dep:serde",
 ]
