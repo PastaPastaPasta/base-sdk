@@ -22,6 +22,7 @@ use dash_types::{Checkable, Signable};
 
 use core::fmt;
 
+codec_payload! { @no_new
 /// ProUpRegTx -- update MN keys/payout (type 3).
 ///
 /// - v1: LegacyBLS
@@ -47,17 +48,7 @@ pub struct ProUpRegTx {
   /// Owner ECDSA signature.
   pub vch_sig: OwnerSig,
 }
-
-codec_payload!(ProUpRegTx {
-  version,
-  pro_tx_hash,
-  mode,
-  pub_key_operator,
-  key_id_voting,
-  script_payout,
-  inputs_hash,
-  vch_sig,
-});
+}
 
 impl Signable for ProUpRegTx {
   type Key = PubKeyHash;

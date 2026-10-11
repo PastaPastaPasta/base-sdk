@@ -21,6 +21,7 @@ use dash_types::{Checkable, Signable};
 
 use core::fmt;
 
+codec_payload! { @no_new
 /// ProUpRevTx -- revoke a masternode (type 4).
 ///
 /// - v1: LegacyBLS
@@ -40,14 +41,7 @@ pub struct ProUpRevTx {
   /// Operator BLS signature.
   pub sig: OperatorSig,
 }
-
-codec_payload!(ProUpRevTx {
-  version,
-  pro_tx_hash,
-  reason,
-  inputs_hash,
-  sig,
-});
+}
 
 impl Signable for ProUpRevTx {
   type Key = BlsPkBytes;

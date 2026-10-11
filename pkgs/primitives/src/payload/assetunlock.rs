@@ -15,6 +15,7 @@ use dash_types::Checkable;
 
 use core::fmt;
 
+codec_payload! {
 /// AssetUnlock: Platform-to-L1 (type 9).
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -33,15 +34,7 @@ pub struct AssetUnlock {
   /// Quorum BLS authorization signature.
   pub quorum_sig: BlsSigBytes,
 }
-
-codec_payload!(AssetUnlock {
-  version,
-  index,
-  fee,
-  requested_height,
-  quorum_hash,
-  quorum_sig,
-});
+}
 
 /// Asset unlock validation failure.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, thiserror::Error, Unencodable)]

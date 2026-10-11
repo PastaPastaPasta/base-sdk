@@ -35,6 +35,7 @@ make_hash! {
 
 hash_impl!(TxHash);
 
+codec_type! {
 /// A reference to a previous transaction output.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -45,8 +46,7 @@ pub struct OutPoint {
   /// Index of the referenced output within the transaction.
   pub index: u32,
 }
-
-codec_type!(OutPoint { hash, index });
+}
 
 impl OutPoint {
   /// Returns `true` for the null outpoint (all-zero hash, index `u32::MAX`).
@@ -61,6 +61,7 @@ impl fmt::Display for OutPoint {
   }
 }
 
+codec_type! {
 /// A transaction input.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -73,12 +74,7 @@ pub struct TxIn {
   /// Sequence number.
   pub sequence: u32,
 }
-
-codec_type!(TxIn {
-  prevout,
-  script_sig,
-  sequence
-});
+}
 
 impl fmt::Display for TxIn {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

@@ -18,6 +18,7 @@ use core::fmt;
 /// Number of version bits available for signalling.
 pub const VERSIONBITS_NUM_BITS: u8 = 29;
 
+codec_payload! {
 /// MnHardFork -- hard-fork signal (type 7).
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -32,13 +33,7 @@ pub struct MnHardFork {
   /// Quorum BLS signature.
   pub sig: BlsSigBytes,
 }
-
-codec_payload!(MnHardFork {
-  version,
-  version_bit,
-  quorum_hash,
-  sig,
-});
+}
 
 /// MNHF signal validation failure.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, thiserror::Error, Unencodable)]

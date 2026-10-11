@@ -43,6 +43,7 @@ make_hash! {
 
 hash_impl!(MerkleRoot);
 
+codec_base! {
 /// A block header.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -61,15 +62,7 @@ pub struct BlockHeader {
   /// Nonce used for proof-of-work.
   pub nonce: u32,
 }
-
-codec_base!(BlockHeader {
-  version,
-  prev_hash,
-  merkle_root,
-  time,
-  bits,
-  nonce,
-});
+}
 
 impl Hashable for BlockHeader {
   type Hash = BlockHash;
@@ -121,6 +114,7 @@ pub enum BlockInvalid {
   Transaction { index: usize, error: TxInvalid },
 }
 
+codec_type! {
 /// A Dash block: header followed by a vector of transactions.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -130,8 +124,7 @@ pub struct Block {
   /// Transactions in the block.
   pub transactions: Vec<Transaction>,
 }
-
-codec_type!(Block { header, transactions });
+}
 
 impl Checkable for Block {
   type Error = BlockInvalid;

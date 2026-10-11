@@ -16,6 +16,7 @@ use dash_types::Checkable;
 
 use core::fmt;
 
+codec_payload! {
 /// AssetLock: L1-to-Platform (type 8).
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -26,11 +27,7 @@ pub struct AssetLock {
   /// Platform credit allocations.
   pub credit_outputs: Vec<TxOut>,
 }
-
-codec_payload!(AssetLock {
-  version,
-  credit_outputs
-});
+}
 
 /// Asset lock validation failure.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, thiserror::Error, Unencodable)]

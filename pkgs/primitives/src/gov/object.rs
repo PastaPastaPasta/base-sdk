@@ -110,6 +110,7 @@ pub enum GovData {
   Unknown(Vec<u8>),
 }
 
+codec_base! {
 /// A governance object as serialized on the wire.
 ///
 /// ```text
@@ -141,17 +142,7 @@ pub struct GovObject {
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::hex"))]
   pub sig: Vec<u8>,
 }
-
-codec_base!(GovObject {
-  hash_parent,
-  revision,
-  time,
-  collateral_hash,
-  data,
-  object_type,
-  masternode_outpoint,
-  sig,
-});
+}
 
 impl Hashable for GovObject {
   type Hash = Hash256;
