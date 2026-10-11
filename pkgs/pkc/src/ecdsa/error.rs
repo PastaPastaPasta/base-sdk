@@ -6,43 +6,31 @@
 
 //! Error types for secp256k1 operations.
 
-use core::fmt;
-
 /// Errors produced by secp256k1 operations.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, thiserror::Error)]
 pub enum EcdsaError {
   /// public key bytes are not a valid curve point
+  #[error("public key bytes are not a valid curve point")]
   InvalidPublicKey,
   /// recovery id is out of range (must be 0..4)
+  #[error("recovery id out of range (must be 0..4)")]
   InvalidRecoveryId,
   /// secret key bytes are not a valid scalar
+  #[error("secret key bytes are not a valid scalar")]
   InvalidSecretKey,
   /// signature bytes are malformed
+  #[error("signature bytes are malformed")]
   InvalidSignature,
   /// tweak is not below the order, or the result is zero or infinity
+  #[error("tweak is not below the order, or the result is zero or infinity")]
   InvalidTweak,
   /// DER-encoded private key has invalid structure
+  #[error("DER-encoded private key has invalid structure")]
   MalformedDer,
   /// recovery failed; no valid public key for this signature and message
+  #[error("recovery failed; no valid public key")]
   RecoveryFailed,
   /// signature verification failed
+  #[error("signature verification failed")]
   VerifyFailed,
 }
-
-impl fmt::Display for EcdsaError {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      Self::InvalidPublicKey => write!(f, "public key bytes are not a valid curve point"),
-      Self::InvalidRecoveryId => write!(f, "recovery id out of range (must be 0..4)"),
-      Self::InvalidSecretKey => write!(f, "secret key bytes are not a valid scalar"),
-      Self::InvalidSignature => write!(f, "signature bytes are malformed"),
-      Self::InvalidTweak => write!(f, "tweak is not below the order, or the result is zero or infinity"),
-      Self::MalformedDer => write!(f, "DER-encoded private key has invalid structure"),
-      Self::RecoveryFailed => write!(f, "recovery failed; no valid public key"),
-      Self::VerifyFailed => write!(f, "signature verification failed"),
-    }
-  }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for EcdsaError {}
