@@ -52,7 +52,7 @@ pub struct AddrV2Entry {
 impl BaseCodec for AddrV2Entry {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let time = u32::decode(data)?;
-    let services = ServiceFlags(CompactSize::decode_unbounded(data)?.to_base());
+    let services = ServiceFlags::new(CompactSize::decode_unbounded(data)?.to_base());
     let addr = AddrV2::decode(data)?;
     let port = codec::read_u16_be(data)?;
     Ok(Self {
@@ -65,7 +65,7 @@ impl BaseCodec for AddrV2Entry {
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
     self.time.encode(buf);
-    CompactSize::from(self.services.0).encode(buf);
+    CompactSize::from(self.services.get()).encode(buf);
     self.addr.encode(buf);
     buf.extend_from_slice(&self.port.to_be_bytes());
   }

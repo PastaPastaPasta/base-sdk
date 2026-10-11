@@ -392,6 +392,6 @@ mod tests {
   #[case::below(70234, 2_000)]
   #[case::at(70235, 8_000)]
   fn max_count_follows_the_common_version(#[case] common: i32, #[case] max: usize) {
-    assert_eq!(Headers2::max_count(ProtocolVersion(common)), max);
+    assert_eq!(Headers2::max_count(ProtocolVersion::new(common)), max);
   }
 }

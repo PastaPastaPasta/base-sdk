@@ -117,7 +117,7 @@ macro_rules! define_p2p {
 
       /// Resolves the short ID to its command name, if one is assigned.
       pub const fn to_command_str(self) -> Option<&'static str> {
-        match self.0 {
+        match self.get() {
           $( $( $p_sid => Some($p_wire), )? )*
           $( $( $pe_sid => Some($pe_wire), )? )*
           $( $( $s_sid => Some($s_wire), )? )*

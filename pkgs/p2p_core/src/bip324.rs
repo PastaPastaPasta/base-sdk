@@ -14,13 +14,12 @@ use crate::short_id::ShortId;
 use crate::P2pDecodeError;
 
 use dash_types::codec::BaseCodec;
-use dash_types::Numeric;
 
 /// Encodes a `P2pMsg` into V2 framed bytes.
 pub fn encode_v2(msg: &P2pMsg, buf: &mut Vec<u8>) {
   match msg.short_id() {
     Some(id) => {
-      buf.push(id.to_base());
+      buf.push(id.get());
     }
     None => {
       // Long format: ID 0 + 12-byte command string.

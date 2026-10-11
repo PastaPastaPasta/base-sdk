@@ -15,7 +15,7 @@ use hex_conservative::{decode_to_array, decode_to_vec};
 use rstest::rstest;
 
 fn ipv4_entry(ip: [u8; 4], port: u16, time: u32) -> AddrV2Entry {
-  AddrV2Entry::new(time, ServiceFlags(1), AddrV2::Ipv4(ip), port)
+  AddrV2Entry::new(time, ServiceFlags::new(1), AddrV2::Ipv4(ip), port)
 }
 
 /// Multi-entry addrv2 payloads must decode every entry, not just
@@ -93,18 +93,18 @@ fn addrv2_bip155_wire_vector() {
   };
 
   assert_eq!(decoded.addrs()[0].time(), 0x4966bc61);
-  assert_eq!(decoded.addrs()[0].services(), ServiceFlags(0));
+  assert_eq!(decoded.addrs()[0].services(), ServiceFlags::new(0));
   assert_eq!(decoded.addrs()[0].addr().network(), NetworkType::Ipv6);
   assert_eq!(decoded.addrs()[0].addr(), &AddrV2::Ipv6(loopback));
   assert_eq!(decoded.addrs()[0].port(), 0);
 
   assert_eq!(decoded.addrs()[1].time(), 0x83766279);
-  assert_eq!(decoded.addrs()[1].services(), ServiceFlags(1));
+  assert_eq!(decoded.addrs()[1].services(), ServiceFlags::new(1));
   assert_eq!(decoded.addrs()[1].addr(), &AddrV2::Ipv6(loopback));
   assert_eq!(decoded.addrs()[1].port(), 241);
 
   assert_eq!(decoded.addrs()[2].time(), 0xffffffff);
-  assert_eq!(decoded.addrs()[2].services(), ServiceFlags(1024));
+  assert_eq!(decoded.addrs()[2].services(), ServiceFlags::new(1024));
   assert_eq!(decoded.addrs()[2].addr(), &AddrV2::Ipv6(loopback));
   assert_eq!(decoded.addrs()[2].port(), 0xf1f2);
 
@@ -137,15 +137,15 @@ fn addr_v1_wire_vector() {
   assert_eq!(decoded.addrs().len(), 3);
 
   assert_eq!(decoded.addrs()[0].time(), 0x4966bc61);
-  assert_eq!(decoded.addrs()[0].services(), ServiceFlags(0));
+  assert_eq!(decoded.addrs()[0].services(), ServiceFlags::new(0));
   assert_eq!(decoded.addrs()[0].addr().port(), 0);
 
   assert_eq!(decoded.addrs()[1].time(), 0x83766279);
-  assert_eq!(decoded.addrs()[1].services(), ServiceFlags(1));
+  assert_eq!(decoded.addrs()[1].services(), ServiceFlags::new(1));
   assert_eq!(decoded.addrs()[1].addr().port(), 241);
 
   assert_eq!(decoded.addrs()[2].time(), 0xffffffff);
-  assert_eq!(decoded.addrs()[2].services(), ServiceFlags(1024));
+  assert_eq!(decoded.addrs()[2].services(), ServiceFlags::new(1024));
   assert_eq!(decoded.addrs()[2].addr().port(), 0xf1f2);
 
   assert_eq!(encode_to_vec(&decoded), bytes);
@@ -162,20 +162,20 @@ fn addrv2_all_bip155_network_types() {
     .unwrap_or_else(|e| panic!("bad hex: {e}"));
 
   let original = AddrV2Msg::new(vec![
-    AddrV2Entry::new(1_700_000_000, ServiceFlags(1), AddrV2::Ipv4([1, 2, 3, 4]), 9999),
+    AddrV2Entry::new(1_700_000_000, ServiceFlags::new(1), AddrV2::Ipv4([1, 2, 3, 4]), 9999),
     AddrV2Entry::new(
       1_700_000_001,
-      ServiceFlags(1),
+      ServiceFlags::new(1),
       AddrV2::Ipv6([
         0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10,
       ]),
       9999,
     ),
-    AddrV2Entry::new(1_700_000_002, ServiceFlags(1), AddrV2::TorV3(torv3_bytes), 9999),
-    AddrV2Entry::new(1_700_000_003, ServiceFlags(1), AddrV2::I2p(i2p_bytes), 9999),
+    AddrV2Entry::new(1_700_000_002, ServiceFlags::new(1), AddrV2::TorV3(torv3_bytes), 9999),
+    AddrV2Entry::new(1_700_000_003, ServiceFlags::new(1), AddrV2::I2p(i2p_bytes), 9999),
     AddrV2Entry::new(
       1_700_000_004,
-      ServiceFlags(1),
+      ServiceFlags::new(1),
       AddrV2::Cjdns([
         0xfc, 0x00, 0x00, 0x01, 0x00, 0x02, 0x00, 0x03, 0x00, 0x04, 0x00, 0x05, 0x00, 0x06, 0x00, 0x07,
       ]),
