@@ -105,7 +105,6 @@ full = [
 ]
 portable = ["blst?/portable"]
 serde = [
-  "codec",
   "dash-num/serde",
   "dash-types/serde",
   "dep:serde",

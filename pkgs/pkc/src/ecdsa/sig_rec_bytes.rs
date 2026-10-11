@@ -8,7 +8,7 @@
 
 use super::sig_bytes::{EcdsaSigBytes, ECDSA_SIG_LEN};
 use super::Compression;
-#[cfg(feature = "codec")]
+#[cfg(any(feature = "codec", feature = "serde"))]
 use crate::prelude::*;
 
 use bitcoin_hashes::sha256d;
