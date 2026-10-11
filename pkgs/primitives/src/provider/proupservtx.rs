@@ -73,7 +73,7 @@ impl BaseCodec for ProUpServTx {
     let net_info = if version >= ProTxVersion::ExtAddr {
       NetInfo::Extended(NetInfoV2::decode(data)?)
     } else {
-      NetInfo::Legacy(NetInfoV1(ServiceV1::decode(data)?))
+      NetInfo::Legacy(NetInfoV1::new(ServiceV1::decode(data)?))
     };
     let script_operator_payout = ScriptPubKeyBuf::decode(data)?;
     let inputs_hash = InputsHash::decode(data)?;

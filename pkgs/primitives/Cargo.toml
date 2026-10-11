@@ -57,6 +57,7 @@ dash-types = { version = "0.2.0-beta", path = "../types", default-features = fal
   "codec",
 ] }
 cfg-if = "1"
+getset = { workspace = true }
 hex-conservative = { workspace = true, features = [
   "alloc",
 ] }

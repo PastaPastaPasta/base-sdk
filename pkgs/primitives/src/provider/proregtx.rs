@@ -110,7 +110,7 @@ impl BaseCodec for ProRegTx {
     let net_info = if version >= ProTxVersion::ExtAddr {
       NetInfo::Extended(NetInfoV2::decode(data)?)
     } else {
-      NetInfo::Legacy(NetInfoV1(ServiceV1::decode(data)?))
+      NetInfo::Legacy(NetInfoV1::new(ServiceV1::decode(data)?))
     };
     let key_id_owner = PubKeyHash::decode(data)?;
     let pub_key_operator = BlsPkBytes::decode(data)?;
