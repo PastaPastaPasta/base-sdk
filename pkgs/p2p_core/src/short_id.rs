@@ -8,7 +8,8 @@
 
 use crate::command::CommandString;
 
-use dash_types::type_id::Unencodable;
+use dash_primitives::hash_impl;
+use dash_types::make_num;
 
 /// Number of short IDs from 0 that a V2 transport takes.
 const LOW_TABLE_COUNT: u8 = table_count(0);
@@ -30,10 +31,12 @@ const fn table_count(start: u8) -> u8 {
   count
 }
 
-/// A resolved V2 short ID.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
-#[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
-pub struct ShortId(pub u8);
+make_num! {
+  /// A resolved V2 short ID.
+  ShortId, u8, 1
+}
+
+hash_impl!(ShortId);
 
 impl ShortId {
   /// Long-format sentinel (a 12-byte command follows).
