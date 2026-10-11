@@ -97,7 +97,7 @@ jobs:
       - name: Test package
         if: matrix.config.name != 'full'
         run: |
-          cargo nextest run --config-file maint/nextest.toml --profile=ci -p ${{ inputs.package }} ${{ matrix.config.args }}
+          cargo nextest run --config-file .cargo/nextest.toml -p ${{ inputs.package }} ${{ matrix.config.args }}
           cargo test --doc -p ${{ inputs.package }} ${{ matrix.config.args }}
 
       - name: Check formatting
@@ -108,7 +108,7 @@ jobs:
         if: matrix.config.name == 'full'
         run: |
           cargo llvm-cov clean --workspace
-          cargo llvm-cov --no-report nextest --config-file maint/nextest.toml --profile=ci ${{ matrix.config.args }} --package ${{ inputs.package }}
+          cargo llvm-cov --no-report nextest --config-file .cargo/nextest.toml ${{ matrix.config.args }} --package ${{ inputs.package }}
           cargo llvm-cov report --lcov --output-path lcov.info
           cargo test --doc -p ${{ inputs.package }} ${{ matrix.config.args }}
 
@@ -121,10 +121,10 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Upload test results to Codecov
-        if: ${{ !cancelled() && matrix.config.name == 'full' && env.HAS_CODECOV == 'true' && hashFiles('target/nextest/ci/junit.xml') != '' }}
+        if: ${{ !cancelled() && matrix.config.name == 'full' && env.HAS_CODECOV == 'true' && hashFiles('target/nextest/default/junit.xml') != '' }}
         uses: codecov/codecov-action@v5
         with:
-          files: target/nextest/ci/junit.xml
+          files: target/nextest/default/junit.xml
           report_type: test_results
           flags: ${{ inputs.package }}
           token: ${{ secrets.CODECOV_TOKEN }}

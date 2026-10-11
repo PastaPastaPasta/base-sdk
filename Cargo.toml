@@ -57,10 +57,13 @@ repository = "https://github.com/dashpay/base-sdk"
 rust-version = "1.89.0"
 
 [profile.release]
-lto = true
+codegen-units = 1
+debug = false
+incremental = false
+lto = "fat"
 opt-level = 3
 panic = "abort"
-strip = true
+strip = "symbols"
 
 [profile.dev]
 codegen-units = 1
