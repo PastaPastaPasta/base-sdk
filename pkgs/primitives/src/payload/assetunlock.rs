@@ -12,27 +12,34 @@ use crate::sptx::QuorumHash;
 use dash_pkc::bls::BlsSigBytes;
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::Checkable;
+use getset::CopyGetters;
 
 use core::fmt;
 
 codec_payload! {
 /// AssetUnlock: Platform-to-L1 (type 9).
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct AssetUnlock {
   /// Payload version.
-  pub version: u8,
+  #[getset(get_copy = "pub")]
+  version: u8,
   /// Monotonic withdrawal sequence number.
-  pub index: u64,
+  #[getset(get_copy = "pub")]
+  index: u64,
   /// Duffs deducted from withdrawal.
-  pub fee: u32,
+  #[getset(get_copy = "pub")]
+  fee: u32,
   /// Requested block height.
-  pub requested_height: u32,
+  #[getset(get_copy = "pub")]
+  requested_height: u32,
   /// Quorum hash.
-  pub quorum_hash: QuorumHash,
+  #[getset(get_copy = "pub")]
+  quorum_hash: QuorumHash,
   /// Quorum BLS authorization signature.
-  pub quorum_sig: BlsSigBytes,
+  #[getset(get_copy = "pub")]
+  quorum_sig: BlsSigBytes,
 }
 }
 

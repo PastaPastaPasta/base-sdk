@@ -376,10 +376,10 @@ impl Transaction {
     let result = crate::sptx::SpecialPayload::decode(self.tx_type, &mut cursor);
     Some(result.and_then(|payload| {
       if !cursor.is_empty() {
-        return Err(crate::sptx::PayloadError {
-          tx_type: self.tx_type,
-          message: format!("trailing bytes: {} remaining", cursor.len()),
-        });
+        return Err(crate::sptx::PayloadError::new(
+          self.tx_type,
+          format!("trailing bytes: {} remaining", cursor.len()),
+        ));
       }
       Ok(payload)
     }))
