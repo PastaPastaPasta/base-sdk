@@ -220,6 +220,7 @@ impl Default for CompressionState {
   }
 }
 
+codec_p2p! {
 /// Requests compressed block headers starting from a locator.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -231,12 +232,7 @@ pub struct GetHeaders2 {
   /// Stop hash (zero to get as many as possible).
   pub hash_stop: BlockHash,
 }
-
-codec_p2p!(GetHeaders2 {
-  version,
-  locator_hashes,
-  hash_stop
-});
+}
 
 /// Response carrying delta-compressed block headers.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]

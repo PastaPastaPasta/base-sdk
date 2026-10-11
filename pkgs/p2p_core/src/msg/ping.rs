@@ -10,6 +10,7 @@ use crate::codec::codec_p2p;
 
 use dash_types::type_id::TypeId;
 
+codec_p2p! {
 /// Keepalive request carrying a random nonce.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -18,9 +19,9 @@ pub struct Ping {
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::str_u64"))]
   pub nonce: u64,
 }
+}
 
-codec_p2p!(Ping { nonce });
-
+codec_p2p! {
 /// Keepalive response echoing the nonce from a `Ping`.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -29,8 +30,7 @@ pub struct Pong {
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::str_u64"))]
   pub nonce: u64,
 }
-
-codec_p2p!(Pong { nonce });
+}
 
 #[cfg(all(test, feature = "serde"))]
 mod tests {

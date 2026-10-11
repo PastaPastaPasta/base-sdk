@@ -17,6 +17,7 @@ use dash_types::{CompactSize, Numeric};
 
 use core::fmt;
 
+codec_p2p! {
 /// V1 address announcement carrying timestamped addresses.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -24,8 +25,7 @@ pub struct Addr {
   /// Timestamped v1 address entries.
   pub addrs: Vec<TimestampedAddr>,
 }
-
-codec_p2p!(Addr { addrs });
+}
 
 /// BIP155 timestamped v2 address entry used in `addrv2` messages.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
@@ -73,6 +73,7 @@ impl fmt::Display for AddrV2Entry {
   }
 }
 
+codec_p2p! {
 /// BIP155 v2 address announcement.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -80,9 +81,9 @@ pub struct AddrV2Msg {
   /// BIP155 address entries.
   pub addrs: Vec<AddrV2Entry>,
 }
+}
 
-codec_p2p!(AddrV2Msg { addrs });
-
+codec_p2p! {
 /// Timestamped v1 address entry used in `addr` messages.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -94,5 +95,4 @@ pub struct TimestampedAddr {
   /// Network address.
   pub addr: ServiceV1,
 }
-
-codec_p2p!(TimestampedAddr { time, services, addr });
+}

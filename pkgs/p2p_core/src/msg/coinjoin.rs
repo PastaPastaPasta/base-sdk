@@ -10,6 +10,7 @@ use crate::codec::codec_p2p;
 
 use dash_types::type_id::TypeId;
 
+codec_p2p! {
 /// Asks the peer to relay CoinJoin queue messages, or to stop.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -17,8 +18,7 @@ pub struct SendDsq {
   /// Whether the sender wants `dsq` messages.
   pub relay: bool,
 }
-
-codec_p2p!(SendDsq { relay });
+}
 
 #[cfg(all(test, feature = "serde"))]
 mod tests {

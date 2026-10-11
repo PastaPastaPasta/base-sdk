@@ -13,6 +13,7 @@ use crate::version::ProtocolVersion;
 use dash_primitives::BlockHash;
 use dash_types::type_id::TypeId;
 
+codec_p2p! {
 /// Announces compact block support, and whether new blocks should be
 /// announced to the sender as compact blocks.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
@@ -24,12 +25,9 @@ pub struct SendCmpct {
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::str_u64"))]
   pub version: u64,
 }
+}
 
-codec_p2p!(SendCmpct {
-  high_bandwidth,
-  version
-});
-
+codec_p2p! {
 /// Requests the hashes of the blocks that follow a locator.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -41,12 +39,7 @@ pub struct GetBlocks {
   /// Stop hash (zero to get as many as possible).
   pub hash_stop: BlockHash,
 }
-
-codec_p2p!(GetBlocks {
-  version,
-  locator_hashes,
-  hash_stop
-});
+}
 
 #[cfg(all(test, feature = "serde"))]
 mod tests {

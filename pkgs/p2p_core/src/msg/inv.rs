@@ -17,6 +17,7 @@ use dash_types::{enum_map, impl_num};
 
 use core::fmt;
 
+codec_p2p! {
 /// Requests specific inventory items from a peer.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -24,8 +25,7 @@ pub struct GetData {
   /// Inventory items being requested.
   pub inventory: Vec<Inventory>,
 }
-
-codec_p2p!(GetData { inventory });
+}
 
 enum_map! {
   /// Inventory object type.
@@ -116,6 +116,7 @@ impl InvType {
   }
 }
 
+codec_p2p! {
 /// An inventory vector: a typed 32-byte hash.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -126,8 +127,7 @@ pub struct Inventory {
   /// Object hash.
   pub hash: Hash256,
 }
-
-codec_p2p!(Inventory { inv_type, hash });
+}
 
 impl fmt::Display for Inventory {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -135,6 +135,7 @@ impl fmt::Display for Inventory {
   }
 }
 
+codec_p2p! {
 /// Announces available inventory to a peer.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -142,9 +143,9 @@ pub struct Inv {
   /// Inventory items being announced.
   pub inventory: Vec<Inventory>,
 }
+}
 
-codec_p2p!(Inv { inventory });
-
+codec_p2p! {
 /// Indicates requested inventory items were not found.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -152,8 +153,7 @@ pub struct NotFound {
   /// Missing inventory items.
   pub inventory: Vec<Inventory>,
 }
-
-codec_p2p!(NotFound { inventory });
+}
 
 #[cfg(all(test, feature = "serde"))]
 mod tests {

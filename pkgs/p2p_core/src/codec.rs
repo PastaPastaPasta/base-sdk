@@ -17,11 +17,23 @@ macro_rules! impl_p2p {
 }
 pub(crate) use impl_p2p;
 
-/// Generates `BaseCodec` + `Encode` + `Decode` for flat structs
-/// with P2P payload size limit.
+/// Declares a flat struct with `new` and generates `BaseCodec`, `Encode`,
+/// `Decode` and `Hashable` over its fields, under the P2P payload size limit.
 macro_rules! codec_p2p {
-  ($ty:ty { $($field:ident),+ $(,)? }) => {
-    $crate::__private::dash_primitives::codec_type!($ty, crate::codec::MAX_P2P_PAYLOAD_SIZE, { $($field),+ });
+  (
+    $(#[$attr:meta])*
+    $vis:vis struct $name:ident {
+      $($(#[$fattr:meta])* $fvis:vis $field:ident: $fty:ty),+ $(,)?
+    }
+  ) => {
+    $crate::__private::dash_types::impl_new! {
+      $(#[$attr])*
+      $vis struct $name {
+        $($(#[$fattr])* $fvis $field: $fty),+
+      }
+    }
+
+    $crate::__private::dash_primitives::codec_type!($name, crate::codec::MAX_P2P_PAYLOAD_SIZE, { $($field),+ });
   };
 }
 pub(crate) use codec_p2p;

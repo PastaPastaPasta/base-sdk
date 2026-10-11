@@ -12,6 +12,7 @@ use crate::prelude::*;
 use dash_num::Hash256;
 use dash_types::type_id::TypeId;
 
+codec_p2p! {
 /// Requests governance objects and votes from a peer.
 ///
 /// When `hash` is zero, the peer responds with all governance
@@ -25,9 +26,9 @@ pub struct GovSync {
   /// Serialised bloom filter (empty for no filtering).
   pub bloom_filter: Vec<u8>,
 }
+}
 
-codec_p2p!(GovSync { hash, bloom_filter });
-
+codec_p2p! {
 /// Tells how many items of a kind the sender is about to announce.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -37,8 +38,7 @@ pub struct GovSyncStatusCount {
   /// The number of items announced.
   pub count: i32,
 }
-
-codec_p2p!(GovSyncStatusCount { item_id, count });
+}
 
 #[cfg(all(test, feature = "serde"))]
 mod tests {

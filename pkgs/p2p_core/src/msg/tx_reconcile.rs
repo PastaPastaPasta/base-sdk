@@ -10,6 +10,7 @@ use crate::codec::codec_p2p;
 
 use dash_types::type_id::TypeId;
 
+codec_p2p! {
 /// Offers transaction reconciliation.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -20,8 +21,7 @@ pub struct SendTxRcncl {
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::str_u64"))]
   pub salt: u64,
 }
-
-codec_p2p!(SendTxRcncl { version, salt });
+}
 
 #[cfg(all(test, feature = "serde"))]
 mod tests {

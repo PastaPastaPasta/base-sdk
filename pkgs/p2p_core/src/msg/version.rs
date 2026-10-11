@@ -159,6 +159,7 @@ impl<'de> ::serde::Deserialize<'de> for UserAgent {
   }
 }
 
+codec_p2p! {
 /// Network address with service flags (used inside the version message).
 ///
 /// Wire format: `u64 services` + `[u8; 16] addr` + `u16 BE port`.
@@ -170,8 +171,7 @@ pub struct VersionAddr {
   /// IPv4-mapped IPv6 address + port.
   pub addr: ServiceV1,
 }
-
-codec_p2p!(VersionAddr { services, addr });
+}
 
 impl fmt::Display for VersionAddr {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -179,6 +179,7 @@ impl fmt::Display for VersionAddr {
   }
 }
 
+codec_p2p! {
 /// The `version` message initiates the P2P handshake.
 ///
 /// Dash extends the Bitcoin version message with two additional
@@ -210,20 +211,7 @@ pub struct Version {
   /// Dash: whether the sender identifies as a masternode.
   pub mn_connection: bool,
 }
-
-codec_p2p!(Version {
-  protocol_version,
-  services,
-  timestamp,
-  addr_recv,
-  addr_send,
-  nonce,
-  user_agent,
-  start_height,
-  relay,
-  mnauth_challenge,
-  mn_connection,
-});
+}
 
 #[cfg(all(test, feature = "serde"))]
 mod tests {

@@ -18,6 +18,7 @@ use dash_types::{type_id::TypeId, Numeric};
 
 use core::fmt;
 
+codec_p2p! {
 /// Deleted quorum identifier (type + hash).
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -28,9 +29,9 @@ pub struct DeletedQuorum {
   /// Quorum hash.
   pub hash: BlockHash,
 }
+}
 
-codec_p2p!(DeletedQuorum { llmq_type, hash });
-
+codec_p2p! {
 /// Requests a masternode list diff between two blocks.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -40,12 +41,9 @@ pub struct GetMnListDiff {
   /// Target block hash (end of range).
   pub block_hash: BlockHash,
 }
+}
 
-codec_p2p!(GetMnListDiff {
-  base_block_hash,
-  block_hash
-});
-
+codec_p2p! {
 /// Response carrying the masternode list diff.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -53,9 +51,9 @@ pub struct MnListDiff {
   /// The full diff payload.
   pub payload: MnListDiffPayload,
 }
+}
 
-codec_p2p!(MnListDiff { payload });
-
+codec_p2p! {
 /// Full masternode list diff payload.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -87,21 +85,7 @@ pub struct MnListDiffPayload {
   /// Chainlock signature mappings.
   pub quorum_cl_sigs: Vec<QuorumClSig>,
 }
-
-codec_p2p!(MnListDiffPayload {
-  version,
-  base_block_hash,
-  block_hash,
-  total_transactions,
-  merkle_hashes,
-  merkle_flags,
-  cb_tx,
-  deleted_mns,
-  mn_list,
-  deleted_quorums,
-  new_quorums,
-  quorum_cl_sigs,
-});
+}
 
 impl fmt::Display for MnListDiffPayload {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -117,6 +101,7 @@ impl fmt::Display for MnListDiffPayload {
   }
 }
 
+codec_p2p! {
 /// Chainlock signature entry in the MN list diff.
 ///
 /// Each entry maps a BLS signature to the indices (within
@@ -130,8 +115,7 @@ pub struct QuorumClSig {
   /// Indices into the `new_quorums` vector.
   pub index_set: Vec<u16>,
 }
-
-codec_p2p!(QuorumClSig { sig, index_set });
+}
 
 /// A single entry in the simplified masternode list.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
