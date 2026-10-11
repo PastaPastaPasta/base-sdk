@@ -61,7 +61,7 @@ impl Checkable for AssetLock {
     let max_money = bitcoin_units::Amount::MAX_MONEY.to_sat();
     let mut total: u64 = 0;
     for (i, out) in self.credit_outputs.iter().enumerate() {
-      let sat = out.value.to_sat();
+      let sat = out.value().to_sat();
       if sat == 0 || sat > max_money {
         return Some(AssetLockInvalid::CreditOutOfRange { index: i });
       }
@@ -70,7 +70,7 @@ impl Checkable for AssetLock {
         return Some(AssetLockInvalid::CreditOutOfRange { index: i });
       }
       if !matches!(
-        Recipient::from_script(out.script_pubkey.as_bytes()),
+        Recipient::from_script(out.script_pubkey().as_bytes()),
         Some(Recipient::PubKeyHash(_))
       ) {
         return Some(AssetLockInvalid::CreditNotP2pkh { index: i });

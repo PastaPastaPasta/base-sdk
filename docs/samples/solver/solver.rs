@@ -42,24 +42,18 @@ struct ScanResult {
 fn build_coinbase(script_sig: Vec<u8>, script_pubkey: Vec<u8>, amount_duffs: &str) -> Result<Transaction, String> {
   let sat: u64 = amount_duffs.parse().map_err(|e| format!("invalid amount: {e}"))?;
   let value = Amount::from_sat(sat).map_err(|e| format!("invalid amount: {e}"))?;
-  Ok(Transaction {
-    version: 1,
-    tx_type: TxType::Spend,
-    inputs: vec![TxIn {
-      prevout: OutPoint {
-        txid: TxHash::default(),
-        index: 0xFFFF_FFFF,
-      },
-      script_sig: ScriptSigBuf::from_bytes(script_sig),
-      sequence: 0xFFFF_FFFF,
-    }],
-    outputs: vec![TxOut {
-      value,
-      script_pubkey: ScriptPubKeyBuf::from_bytes(script_pubkey),
-    }],
-    lock_time: 0,
-    extra_payload: Vec::new(),
-  })
+  Ok(Transaction::new(
+    1,
+    TxType::Spend,
+    vec![TxIn::new(
+      OutPoint::new(TxHash::default(), 0xFFFF_FFFF),
+      ScriptSigBuf::from_bytes(script_sig),
+      0xFFFF_FFFF,
+    )],
+    vec![TxOut::new(value, ScriptPubKeyBuf::from_bytes(script_pubkey))],
+    0,
+    Vec::new(),
+  ))
 }
 
 /// Compute the merkle root from coinbase parameters.

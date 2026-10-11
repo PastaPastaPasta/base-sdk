@@ -164,8 +164,8 @@ impl Signable for GovVoteEcdsa {
       GovVoteEcdsaSer::SignatureString => {
         let msg = format!(
           "{}-{}|{}|{}|{}|{}",
-          self.masternode_outpoint.txid,
-          self.masternode_outpoint.index,
+          self.masternode_outpoint.txid(),
+          self.masternode_outpoint.index(),
           self.parent_hash,
           self.signal.to_base() as i32,
           self.outcome.to_base() as i32,
@@ -268,8 +268,8 @@ impl Hashable for GovVote {
   fn hash(&self) -> Hash256 {
     let (masternode_outpoint, parent_hash, outcome, signal, time) = self.parts();
     let mut buf = ArrayBuf::<89>::new();
-    masternode_outpoint.txid.encode(&mut buf);
-    masternode_outpoint.index.encode(&mut buf);
+    masternode_outpoint.txid().encode(&mut buf);
+    masternode_outpoint.index().encode(&mut buf);
     0u8.encode(&mut buf);
     0xFFFF_FFFFu32.encode(&mut buf);
     parent_hash.encode(&mut buf);
@@ -370,10 +370,7 @@ mod tests {
   #[rstest]
   fn bls_vote_signs_under_the_basic_scheme() {
     let mut vote = GovVoteBls {
-      masternode_outpoint: OutPoint {
-        txid: TxHash::from([0x11; 32]),
-        index: 3,
-      },
+      masternode_outpoint: OutPoint::new(TxHash::from([0x11; 32]), 3),
       parent_hash: TxHash::from([0x22; 32]),
       outcome: VoteOutcome::Yes,
       signal: VoteSignal::Funding,
@@ -396,10 +393,7 @@ mod tests {
   #[case::vote_hash(GovVoteEcdsaSer::VoteHash)]
   fn ecdsa_vote_signs_the_payload(#[case] ctx: GovVoteEcdsaSer) {
     let mut vote = GovVoteEcdsa {
-      masternode_outpoint: OutPoint {
-        txid: TxHash::from([0x11; 32]),
-        index: 3,
-      },
+      masternode_outpoint: OutPoint::new(TxHash::from([0x11; 32]), 3),
       parent_hash: TxHash::from([0x22; 32]),
       outcome: VoteOutcome::Yes,
       signal: VoteSignal::Funding,

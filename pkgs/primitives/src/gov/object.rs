@@ -162,8 +162,8 @@ impl Hashable for GovObject {
     // data hex is serialized as a string (CompactSize + bytes)
     data_hex.encode(&mut buf);
     // outpoint + dummy padding for legacy hash compat
-    self.masternode_outpoint.txid.encode(&mut buf);
-    self.masternode_outpoint.index.encode(&mut buf);
+    self.masternode_outpoint.txid().encode(&mut buf);
+    self.masternode_outpoint.index().encode(&mut buf);
     0u8.encode(&mut buf);
     0xFFFF_FFFFu32.encode(&mut buf);
     self.sig.encode(&mut buf);

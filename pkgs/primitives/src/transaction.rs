@@ -18,7 +18,8 @@ use bitcoin_units::Amount;
 use dash_num::make_hash;
 use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{impl_type, Checkable, CompactSize, Hashable, Numeric};
+use dash_types::{impl_new, impl_type, Checkable, CompactSize, Hashable, Numeric};
+use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
@@ -37,15 +38,17 @@ hash_impl!(TxHash);
 
 codec_type! {
 /// A reference to a previous transaction output.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, TypeId)]
+#[derive(Debug, Clone, Copy, CopyGetters, PartialEq, Eq, Hash, PartialOrd, Ord, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct OutPoint {
   /// Transaction hash of the referenced output.
   #[cfg_attr(feature = "serde", serde(rename = "hash"))]
-  pub txid: TxHash,
+  #[getset(get_copy = "pub")]
+  txid: TxHash,
   /// Index of the referenced output within the transaction.
-  pub index: u32,
+  #[getset(get_copy = "pub")]
+  index: u32,
 }
 }
 
@@ -64,16 +67,19 @@ impl fmt::Display for OutPoint {
 
 codec_type! {
 /// A transaction input.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct TxIn {
   /// The outpoint being spent.
-  pub prevout: OutPoint,
+  #[getset(get_copy = "pub")]
+  prevout: OutPoint,
   /// Unlocking script.
-  pub script_sig: ScriptSigBuf,
+  #[getset(get = "pub")]
+  script_sig: ScriptSigBuf,
   /// Sequence number.
-  pub sequence: u32,
+  #[getset(get_copy = "pub")]
+  sequence: u32,
 }
 }
 
@@ -83,17 +89,21 @@ impl fmt::Display for TxIn {
   }
 }
 
+impl_new! {
 /// A transaction output.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct TxOut {
   /// Output value in duffs.
   #[cfg_attr(feature = "serde", serde(with = "crate::serialize::amount"))]
-  pub value: Amount,
+  #[getset(get_copy = "pub")]
+  value: Amount,
   /// Locking script.
   #[cfg_attr(feature = "serde", serde(rename = "scriptPubKey"))]
-  pub script_pubkey: ScriptPubKeyBuf,
+  #[getset(get = "pub")]
+  script_pubkey: ScriptPubKeyBuf,
+}
 }
 
 impl_type!(TxOut);
@@ -166,6 +176,7 @@ pub enum TxInvalid {
   PayloadCheck(PayloadInvalid),
 }
 
+impl_new! {
 /// A Dash transaction.
 ///
 /// The wire format packs `version` (i16) and `tx_type` (u16) into a single
@@ -173,23 +184,30 @@ pub enum TxInvalid {
 ///
 /// Special transactions (type != Spend, version >= 3) carry an `extra_payload`
 /// decoded separately by payload-specific decoders.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Transaction {
   /// Transaction version (lower 16 bits of the wire i32).
-  pub version: i16,
+  #[getset(get_copy = "pub")]
+  version: i16,
   /// Transaction type (upper 16 bits of the wire i32).
-  pub tx_type: TxType,
+  #[getset(get_copy = "pub")]
+  tx_type: TxType,
   /// Transaction inputs.
-  pub inputs: Vec<TxIn>,
+  #[getset(get = "pub")]
+  inputs: Vec<TxIn>,
   /// Transaction outputs.
-  pub outputs: Vec<TxOut>,
+  #[getset(get = "pub")]
+  outputs: Vec<TxOut>,
   /// Lock time.
-  pub lock_time: u32,
+  #[getset(get_copy = "pub")]
+  lock_time: u32,
   /// Extra payload for special transactions.
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::hex"))]
-  pub extra_payload: Vec<u8>,
+  #[getset(get = "pub")]
+  extra_payload: Vec<u8>,
+}
 }
 
 impl_type!(Transaction);
