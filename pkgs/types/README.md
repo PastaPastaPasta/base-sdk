@@ -44,7 +44,7 @@ This crate is `#![no_std]` + `alloc` by default.
 | `bitcoin-primitives` | | Enables [adapters](https://github.com/dashpay/base-sdk/blob/develop/pkgs/types/src/adapters.rs) for types defined in [`bitcoin-primitives`](https://docs.rs/bitcoin-primitives). _Implies `codec`._ |
 | `codec` | :white_check_mark: | Enables support for encoding and decoding types using [`bitcoin-consensus-encoding`](https://docs.rs/bitcoin-consensus-encoding) |
 | `full` | | Enables all features and `std` support. |
-| `serde` | | Enables support for encoding and decoding `codec`-backed types using [`serde`](https://github.com/serde-rs/serde). _Implies `codec`._ |
+| `serde` | | Enables support for encoding and decoding types using [`serde`](https://github.com/serde-rs/serde). |
 
 ## Documentation
 

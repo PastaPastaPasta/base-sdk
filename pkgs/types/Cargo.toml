@@ -47,7 +47,6 @@ full = [
   "std",
 ]
 serde = [
-  "codec",
   "dep:serde",
   "hex-conservative/alloc",
 ]
