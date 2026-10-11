@@ -65,14 +65,14 @@ impl BaseCodec for Headers {
     let count = decode_count(data, Self::MAX_COUNT, MIN_HEADERS_SIZE)?;
     let mut headers = Vec::with_capacity(count);
     for _ in 0..count {
-      headers.push(BlockHeader {
-        version: i32::decode(data)?,
-        prev_hash: BlockHash::decode(data)?,
-        merkle_root: MerkleRoot::decode(data)?,
-        time: u32::decode(data)?,
-        bits: u32::decode(data)?,
-        nonce: u32::decode(data)?,
-      });
+      headers.push(BlockHeader::new(
+        i32::decode(data)?,
+        BlockHash::decode(data)?,
+        MerkleRoot::decode(data)?,
+        u32::decode(data)?,
+        u32::decode(data)?,
+        u32::decode(data)?,
+      ));
       // Consume the trailing tx_count (always 0).
       CompactSize::decode(data)?.into_len(0)?;
     }
@@ -82,12 +82,12 @@ impl BaseCodec for Headers {
   fn encode(&self, buf: &mut impl EncodeBuf) {
     CompactSize::from(self.headers.len()).encode(buf);
     for h in &self.headers {
-      h.version.encode(buf);
-      h.prev_hash.encode(buf);
-      h.merkle_root.encode(buf);
-      h.time.encode(buf);
-      h.bits.encode(buf);
-      h.nonce.encode(buf);
+      h.version().encode(buf);
+      h.prev_hash().encode(buf);
+      h.merkle_root().encode(buf);
+      h.time().encode(buf);
+      h.bits().encode(buf);
+      h.nonce().encode(buf);
       0u8.encode(buf); // tx_count = 0
     }
   }

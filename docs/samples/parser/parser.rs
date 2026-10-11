@@ -46,7 +46,7 @@ fn enrich_block(block: &Block, val: &mut Value) -> Vec<String> {
     Some(a) => a,
     None => return warnings,
   };
-  for (i, (tx, json_tx)) in block.transactions.iter().zip(txs.iter_mut()).enumerate() {
+  for (i, (tx, json_tx)) in block.transactions().iter().zip(txs.iter_mut()).enumerate() {
     if let Some(msg) = enrich_tx(tx, json_tx) {
       warnings.push(format!("tx {i}: {msg}"));
     }

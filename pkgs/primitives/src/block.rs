@@ -20,6 +20,7 @@ use dash_pow::X11;
 use dash_types::codec::{self, BaseCodec};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{ArrayBuf, Checkable, Hashable, Numeric};
+use getset::{CopyGetters, Getters, Setters};
 
 use core::fmt;
 
@@ -45,22 +46,28 @@ hash_impl!(MerkleRoot);
 
 codec_base! {
 /// A block header.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, Copy, CopyGetters, Debug, Default, Eq, Hash, PartialEq, Setters, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct BlockHeader {
   /// Block version.
-  pub version: i32,
+  #[getset(get_copy = "pub")]
+  version: i32,
   /// Hash of the previous block header.
-  pub prev_hash: BlockHash,
+  #[getset(get_copy = "pub")]
+  prev_hash: BlockHash,
   /// Merkle root of the transaction tree.
-  pub merkle_root: MerkleRoot,
+  #[getset(get_copy = "pub", set = "pub")]
+  merkle_root: MerkleRoot,
   /// Block timestamp (unix epoch seconds).
-  pub time: u32,
+  #[getset(get_copy = "pub", set = "pub")]
+  time: u32,
   /// Compact difficulty target.
-  pub bits: u32,
+  #[getset(get_copy = "pub")]
+  bits: u32,
   /// Nonce used for proof-of-work.
-  pub nonce: u32,
+  #[getset(get_copy = "pub", set = "pub")]
+  nonce: u32,
 }
 }
 
@@ -116,13 +123,15 @@ pub enum BlockInvalid {
 
 codec_type! {
 /// A Dash block: header followed by a vector of transactions.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct Block {
   /// Block header (80 bytes).
-  pub header: BlockHeader,
+  #[getset(get_copy = "pub")]
+  header: BlockHeader,
   /// Transactions in the block.
-  pub transactions: Vec<Transaction>,
+  #[getset(get = "pub")]
+  transactions: Vec<Transaction>,
 }
 }
 

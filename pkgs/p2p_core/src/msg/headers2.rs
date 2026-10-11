@@ -120,7 +120,7 @@ impl CompressionState {
     } else {
       let delta = i16::decode(sl)?;
       match &self.prev_header {
-        Some(prev) => (prev.time as i64 + delta as i64) as u32,
+        Some(prev) => (prev.time() as i64 + delta as i64) as u32,
         None => delta as u32,
       }
     };
@@ -129,21 +129,14 @@ impl CompressionState {
       u32::decode(sl)?
     } else {
       match &self.prev_header {
-        Some(prev) => prev.bits,
+        Some(prev) => prev.bits(),
         None => 0,
       }
     };
 
     let nonce = u32::decode(sl)?;
 
-    let header = BlockHeader {
-      version,
-      prev_hash,
-      merkle_root,
-      time,
-      bits,
-      nonce,
-    };
+    let header = BlockHeader::new(version, prev_hash, merkle_root, time, bits, nonce);
     self.prev_block_hash = Some(header.hash());
     self.prev_header = Some(header);
     Ok(header)
@@ -153,14 +146,14 @@ impl CompressionState {
   pub(crate) fn encode_header(&mut self, header: &BlockHeader, buf: &mut impl EncodeBuf) {
     let mut flags: u8 = 0;
 
-    let version_offset = match self.find_version(header.version) {
+    let version_offset = match self.find_version(header.version()) {
       Some(pos) => (pos + 1) as u8,
       None => 0,
     };
     flags |= version_offset & VERSION_OFFSET_MASK;
 
     let need_prev_hash = match self.prev_hash() {
-      Some(hash) => header.prev_hash != hash,
+      Some(hash) => header.prev_hash() != hash,
       None => true,
     };
     if need_prev_hash {
@@ -169,7 +162,7 @@ impl CompressionState {
 
     let time_delta = match &self.prev_header {
       Some(prev) => {
-        let d = header.time as i64 - prev.time as i64;
+        let d = header.time() as i64 - prev.time() as i64;
         if (i16::MIN as i64..=i16::MAX as i64).contains(&d) {
           Some(d as i16)
         } else {
@@ -183,7 +176,7 @@ impl CompressionState {
     }
 
     let need_nbits = match &self.prev_header {
-      Some(prev) => header.bits != prev.bits,
+      Some(prev) => header.bits() != prev.bits(),
       None => true,
     };
     if need_nbits {
@@ -193,29 +186,29 @@ impl CompressionState {
     buf.push(flags);
 
     if version_offset == 0 {
-      header.version.encode(buf);
-      self.save_version_mru(header.version);
+      header.version().encode(buf);
+      self.save_version_mru(header.version());
     } else {
       let pos = (version_offset - 1) as usize;
       self.mark_version_mru(pos);
     }
 
     if need_prev_hash {
-      header.prev_hash.encode(buf);
+      header.prev_hash().encode(buf);
     }
 
-    header.merkle_root.encode(buf);
+    header.merkle_root().encode(buf);
 
     match time_delta {
       Some(d) => d.encode(buf),
-      None => header.time.encode(buf),
+      None => header.time().encode(buf),
     }
 
     if need_nbits {
-      header.bits.encode(buf);
+      header.bits().encode(buf);
     }
 
-    header.nonce.encode(buf);
+    header.nonce().encode(buf);
     self.prev_block_hash = Some(header.hash());
     self.prev_header = Some(*header);
   }
@@ -318,13 +311,15 @@ mod tests {
   fn counts_past_the_headers_limit_decode() {
     let headers = (0..)
       .take(Headers::MAX_COUNT + 1)
-      .map(|i| BlockHeader {
-        version: 0x2000_0000,
-        prev_hash: BlockHash::from_lendian([0; 32]),
-        merkle_root: MerkleRoot::from_lendian([1; 32]),
-        time: 1_700_000_000 + i,
-        bits: 0x1e0f_ffff,
-        nonce: i,
+      .map(|i| {
+        BlockHeader::new(
+          0x2000_0000,
+          BlockHash::from_lendian([0; 32]),
+          MerkleRoot::from_lendian([1; 32]),
+          1_700_000_000 + i,
+          0x1e0f_ffff,
+          i,
+        )
       })
       .collect();
     let msg = Headers2 { headers };
@@ -338,14 +333,14 @@ mod tests {
     let mut prev_hash = BlockHash::from_lendian([0; 32]);
     let headers = (0..Headers2::MAX_COUNT as u32)
       .map(|i| {
-        let header = BlockHeader {
-          version: 0x2000_0000,
+        let header = BlockHeader::new(
+          0x2000_0000,
           prev_hash,
-          merkle_root: MerkleRoot::from_lendian([1; 32]),
-          time: 1_700_000_000 + i,
-          bits: 0x1e0f_ffff,
-          nonce: i,
-        };
+          MerkleRoot::from_lendian([1; 32]),
+          1_700_000_000 + i,
+          0x1e0f_ffff,
+          i,
+        );
         prev_hash = header.hash();
         header
       })

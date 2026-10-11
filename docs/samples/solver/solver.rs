@@ -86,14 +86,7 @@ pub fn scanhash(
   let coinbase = build_coinbase(sig_bytes, pk_bytes, amount_duffs)?;
   let merkle_root = MerkleRoot::from_lendian(*coinbase.hash().as_bytes());
 
-  let header = BlockHeader {
-    version,
-    prev_hash,
-    merkle_root,
-    time,
-    bits,
-    nonce: 0,
-  };
+  let header = BlockHeader::new(version, prev_hash, merkle_root, time, bits, nonce_start);
   let mut header_buf = encode_to_vec(&header);
 
   let decoded = CompactTarget::new(bits).expand();
