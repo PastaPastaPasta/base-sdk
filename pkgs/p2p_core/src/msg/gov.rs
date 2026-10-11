@@ -11,6 +11,7 @@ use crate::prelude::*;
 
 use dash_num::Hash256;
 use dash_types::type_id::TypeId;
+use getset::{CopyGetters, Getters};
 
 codec_p2p! {
 /// Requests governance objects and votes from a peer.
@@ -18,26 +19,30 @@ codec_p2p! {
 /// When `object_hash` is zero, the peer responds with all governance
 /// objects. When non-zero, it responds with votes for that
 /// specific object.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct GovSync {
   /// Object hash (zero for full sync).
   #[cfg_attr(feature = "serde", serde(rename = "hash"))]
-  pub object_hash: Hash256,
+  #[getset(get_copy = "pub")]
+  object_hash: Hash256,
   /// Serialised bloom filter (empty for no filtering).
-  pub bloom_filter: Vec<u8>,
+  #[getset(get = "pub")]
+  bloom_filter: Vec<u8>,
 }
 }
 
 codec_p2p! {
 /// Tells how many items of a kind the sender is about to announce.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, Copy, CopyGetters, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct GovSyncStatusCount {
   /// The kind of item announced.
-  pub item_id: i32,
+  #[getset(get_copy = "pub")]
+  item_id: i32,
   /// The number of items announced.
-  pub count: i32,
+  #[getset(get_copy = "pub")]
+  count: i32,
 }
 }
 

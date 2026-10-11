@@ -14,16 +14,18 @@ use dash_num::Hash256;
 use dash_primitives::hash_impl;
 use dash_types::type_id::TypeId;
 use dash_types::{enum_map, impl_num};
+use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
 codec_p2p! {
 /// Requests specific inventory items from a peer.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct GetData {
   /// Inventory items being requested.
-  pub inventory: Vec<Inventory>,
+  #[getset(get = "pub")]
+  inventory: Vec<Inventory>,
 }
 }
 
@@ -118,15 +120,17 @@ impl InvType {
 
 codec_p2p! {
 /// An inventory vector: a typed 32-byte hash.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, Copy, CopyGetters, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct Inventory {
   /// Object type.
   #[cfg_attr(feature = "serde", serde(rename = "type"))]
-  pub inv_type: InvType,
+  #[getset(get_copy = "pub")]
+  inv_type: InvType,
   /// Object hash.
   #[cfg_attr(feature = "serde", serde(rename = "hash"))]
-  pub inv_hash: Hash256,
+  #[getset(get_copy = "pub")]
+  inv_hash: Hash256,
 }
 }
 
@@ -138,21 +142,23 @@ impl fmt::Display for Inventory {
 
 codec_p2p! {
 /// Announces available inventory to a peer.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct Inv {
   /// Inventory items being announced.
-  pub inventory: Vec<Inventory>,
+  #[getset(get = "pub")]
+  inventory: Vec<Inventory>,
 }
 }
 
 codec_p2p! {
 /// Indicates requested inventory items were not found.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct NotFound {
   /// Missing inventory items.
-  pub inventory: Vec<Inventory>,
+  #[getset(get = "pub")]
+  inventory: Vec<Inventory>,
 }
 }
 
