@@ -14,7 +14,6 @@ on:
       - Cargo.toml
       - .github/workflows/pkg_p2p_core.yml
       - .github/workflows/build_stable.yml
-      - .github/workflows/build_nightly.yml
       - contrib/nix/**
       - pyproject.toml
       - rust-toolchain.toml
@@ -32,10 +31,3 @@ jobs:
     with:
       package: dash-p2p-core
       package_dir: p2p_core
-
-  nightly:
-    uses: ./.github/workflows/build_nightly.yml
-    with:
-      package: dash-p2p-core
-      package_dir: p2p_core
-    secrets: inherit

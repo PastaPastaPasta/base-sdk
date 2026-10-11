@@ -11,11 +11,6 @@ on:
         description: Package directory relative to pkgs/ (e.g. num)
         required: true
         type: string
-      features:
-        description: Cargo features to enable (default full)
-        required: false
-        type: string
-        default: full
 
 permissions:
   contents: read
@@ -56,6 +51,11 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+
       - name: Manage cargo registry
         uses: actions/cache@v5
         with:
@@ -73,17 +73,12 @@ jobs:
           restore-keys: |
             cargo-build-stable-${{ runner.os }}-${{ runner.arch }}-${{ inputs.package }}-
 
-      - name: Build package
-        run: cargo build -p ${{ inputs.package }} --features ${{ inputs.features }}
+      - name: Build every feature
+        run: cargo hack -p ${{ inputs.package }} --exclude-features default --each-feature build
         env:
           RUSTUP_TOOLCHAIN: stable
 
-      - name: Build package without default features
-        run: cargo build -p ${{ inputs.package }} --no-default-features
-        env:
-          RUSTUP_TOOLCHAIN: stable
-
-      - name: Test package
-        run: cargo test -p ${{ inputs.package }} --features ${{ inputs.features }}
+      - name: Test every feature
+        run: cargo hack -p ${{ inputs.package }} --exclude-features default --each-feature test
         env:
           RUSTUP_TOOLCHAIN: stable

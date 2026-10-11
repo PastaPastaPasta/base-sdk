@@ -10,7 +10,7 @@
 > [!WARNING]
 > Some platforms offer Rust through their package manager. Depending on the maintainer policy, this version may be
 > well out of date relative to `stable`. `base-sdk` is only validated against its specified minimum supported Rust
-> version (MSRV), its pinned `nightly` and `stable`.
+> version (MSRV) and `stable`. Its pinned `nightly` serves development and linting only.
 >
 > Anything outside that set is untested and may result in unexpected behaviour.
 

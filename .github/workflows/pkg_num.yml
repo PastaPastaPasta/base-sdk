@@ -9,7 +9,6 @@ on:
       - Cargo.toml
       - .github/workflows/pkg_num.yml
       - .github/workflows/build_stable.yml
-      - .github/workflows/build_nightly.yml
       - contrib/nix/**
       - pyproject.toml
       - rust-toolchain.toml
@@ -27,10 +26,3 @@ jobs:
     with:
       package: dash-num
       package_dir: num
-
-  nightly:
-    uses: ./.github/workflows/build_nightly.yml
-    with:
-      package: dash-num
-      package_dir: num
-    secrets: inherit

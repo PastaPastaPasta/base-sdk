@@ -10,7 +10,6 @@ on:
       - Cargo.toml
       - .github/workflows/pkg_pow.yml
       - .github/workflows/build_stable.yml
-      - .github/workflows/build_nightly.yml
       - contrib/nix/**
       - pyproject.toml
       - rust-toolchain.toml
@@ -28,11 +27,3 @@ jobs:
     with:
       package: dash-pow
       package_dir: pow
-      features: std
-
-  nightly:
-    uses: ./.github/workflows/build_nightly.yml
-    with:
-      package: dash-pow
-      package_dir: pow
-    secrets: inherit
