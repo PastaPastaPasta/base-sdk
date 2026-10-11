@@ -24,6 +24,7 @@ use dash_script::{PubKeyHash, Recipient};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
 use dash_types::{Checkable, Numeric, Signable};
+use getset::{CopyGetters, Getters};
 use hex_conservative::DisplayHex;
 
 use core::fmt;
@@ -33,44 +34,60 @@ use core::fmt;
 /// - v1: LegacyBLS
 /// - v2: BasicBLS
 /// - v3: ExtAddr (extended network info)
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ProRegTx {
   /// Payload version.
-  pub version: ProTxVersion,
+  #[getset(get_copy = "pub")]
+  version: ProTxVersion,
   /// Masternode type (Regular or Evo).
-  pub mn_type: MnType,
+  #[getset(get_copy = "pub")]
+  mn_type: MnType,
   /// Reserved, always 0.
-  pub mode: u16,
+  #[getset(get_copy = "pub")]
+  mode: u16,
   /// Collateral hash.
-  pub collateral_hash: TxHash,
+  #[getset(get_copy = "pub")]
+  collateral_hash: TxHash,
   /// Collateral index.
-  pub collateral_index: u32,
+  #[getset(get_copy = "pub")]
+  collateral_index: u32,
   /// Legacy ServiceV1 or extended NetInfo.
-  pub net_info: NetInfo,
+  #[getset(get = "pub")]
+  net_info: NetInfo,
   /// Owner key id (20 bytes).
-  pub key_id_owner: PubKeyHash,
+  #[getset(get_copy = "pub")]
+  key_id_owner: PubKeyHash,
   /// Operator BLS public key (48 bytes).
-  pub pub_key_operator: BlsPkBytes,
+  #[getset(get_copy = "pub")]
+  pub_key_operator: BlsPkBytes,
   /// Voting key id (20 bytes).
-  pub key_id_voting: PubKeyHash,
+  #[getset(get_copy = "pub")]
+  key_id_voting: PubKeyHash,
   /// Operator reward in basis points (0-10000).
-  pub operator_reward: u16,
+  #[getset(get_copy = "pub")]
+  operator_reward: u16,
   /// Payout script.
-  pub script_payout: ScriptPubKeyBuf,
+  #[getset(get = "pub")]
+  script_payout: ScriptPubKeyBuf,
   /// Hash of all inputs.
-  pub inputs_hash: InputsHash,
+  #[getset(get_copy = "pub")]
+  inputs_hash: InputsHash,
   /// Platform node id (Evo only).
-  pub platform_node_id: Option<PlatformNodeId>,
+  #[getset(get_copy = "pub")]
+  platform_node_id: Option<PlatformNodeId>,
   /// Platform P2P port (Evo + version < 3 only).
   #[cfg_attr(feature = "serde", serde(rename = "platformP2PPort"))]
-  pub platform_p2p_port: Option<u16>,
+  #[getset(get_copy = "pub")]
+  platform_p2p_port: Option<u16>,
   /// Platform HTTP port (Evo + version < 3 only).
   #[cfg_attr(feature = "serde", serde(rename = "platformHTTPPort"))]
-  pub platform_http_port: Option<u16>,
+  #[getset(get_copy = "pub")]
+  platform_http_port: Option<u16>,
   /// Collateral owner ECDSA signature.
-  pub vch_sig: CollateralSig,
+  #[getset(get = "pub")]
+  vch_sig: CollateralSig,
 }
 
 impl_payload!(ProRegTx);
@@ -293,6 +310,47 @@ impl Checkable for ProRegTx {
 }
 
 hash_impl!(ProRegTx);
+
+impl ProRegTx {
+  /// Constructs an unsigned payload. The signature is set through
+  /// [`Signable::set_signature`].
+  pub fn new(
+    version: ProTxVersion,
+    mn_type: MnType,
+    mode: u16,
+    collateral_hash: TxHash,
+    collateral_index: u32,
+    net_info: NetInfo,
+    key_id_owner: PubKeyHash,
+    pub_key_operator: BlsPkBytes,
+    key_id_voting: PubKeyHash,
+    operator_reward: u16,
+    script_payout: ScriptPubKeyBuf,
+    inputs_hash: InputsHash,
+    platform_node_id: Option<PlatformNodeId>,
+    platform_p2p_port: Option<u16>,
+    platform_http_port: Option<u16>,
+  ) -> Self {
+    Self {
+      version,
+      mn_type,
+      mode,
+      collateral_hash,
+      collateral_index,
+      net_info,
+      key_id_owner,
+      pub_key_operator,
+      key_id_voting,
+      operator_reward,
+      script_payout,
+      inputs_hash,
+      platform_node_id,
+      platform_p2p_port,
+      platform_http_port,
+      vch_sig: CollateralSig::default(),
+    }
+  }
+}
 
 impl fmt::Display for ProRegTx {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

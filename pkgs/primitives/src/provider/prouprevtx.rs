@@ -18,6 +18,7 @@ use crate::TxHash;
 use dash_pkc::bls::{BlsError, BlsPkBytes, BlsSigBytes, BLS_SIG_LEN};
 use dash_types::type_id::TypeId;
 use dash_types::{Checkable, Signable};
+use getset::CopyGetters;
 
 use core::fmt;
 
@@ -26,20 +27,25 @@ codec_payload! { @no_new
 ///
 /// - v1: LegacyBLS
 /// - v2: BasicBLS
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ProUpRevTx {
   /// Payload version.
-  pub version: ProTxVersion,
+  #[getset(get_copy = "pub")]
+  version: ProTxVersion,
   /// ProTx hash identifying the masternode.
-  pub pro_tx_hash: TxHash,
+  #[getset(get_copy = "pub")]
+  pro_tx_hash: TxHash,
   /// Revocation reason.
-  pub reason: RevocationReason,
+  #[getset(get_copy = "pub")]
+  reason: RevocationReason,
   /// Hash of all inputs.
-  pub inputs_hash: InputsHash,
+  #[getset(get_copy = "pub")]
+  inputs_hash: InputsHash,
   /// Operator BLS signature.
-  pub sig: OperatorSig,
+  #[getset(get_copy = "pub")]
+  sig: OperatorSig,
 }
 }
 
@@ -78,6 +84,20 @@ impl Checkable for ProUpRevTx {
     }
 
     None
+  }
+}
+
+impl ProUpRevTx {
+  /// Constructs an unsigned payload. The signature is set through
+  /// [`Signable::set_signature`].
+  pub fn new(version: ProTxVersion, pro_tx_hash: TxHash, reason: RevocationReason, inputs_hash: InputsHash) -> Self {
+    Self {
+      version,
+      pro_tx_hash,
+      reason,
+      inputs_hash,
+      sig: OperatorSig::default(),
+    }
   }
 }
 
