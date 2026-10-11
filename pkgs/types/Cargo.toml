@@ -60,6 +60,7 @@ cfg-if = "1"
 dash-types-marker = { version = "0.1.0-beta", path = "marker", optional = true }
 hex-conservative = { workspace = true }
 subtle = { workspace = true }
+thiserror = { workspace = true }
 serde = { workspace = true, features = [
   "derive",
   "alloc",
