@@ -169,7 +169,7 @@ impl EcdsaRecSigBytes {
   ///
   /// Returns `None` when the header byte is outside the `27..=34` range that
   /// encodes a recovery id and compression flag.
-  pub fn from_raw(bytes: [u8; ECDSA_SIG_LEN + 1]) -> Option<Self> {
+  pub fn from_bytes(bytes: [u8; ECDSA_SIG_LEN + 1]) -> Option<Self> {
     let flags = CompactFlags::try_from_base(bytes[0])?;
     let mut arr = [0u8; ECDSA_SIG_LEN];
     arr.copy_from_slice(&bytes[1..]);
@@ -245,7 +245,7 @@ cfg_if! {
           .as_slice()
           .try_into()
           .map_err(|_| DeError::custom("invalid compact recoverable signature length"))?;
-        Self::from_raw(arr).ok_or_else(|| DeError::custom("invalid compact signature header"))
+        Self::from_bytes(arr).ok_or_else(|| DeError::custom("invalid compact signature header"))
       }
     }
   }
@@ -305,13 +305,13 @@ mod tests {
   }
 
   #[rstest]
-  fn from_raw_rejects_bad_header() {
+  fn from_bytes_rejects_bad_header() {
     let mut buf = [0u8; ECDSA_SIG_LEN + 1];
     buf[0] = 0x00;
-    assert!(EcdsaRecSigBytes::from_raw(buf).is_none());
+    assert!(EcdsaRecSigBytes::from_bytes(buf).is_none());
 
     buf[0] = CompactFlags::Compressed3.to_base() + 1;
-    assert!(EcdsaRecSigBytes::from_raw(buf).is_none());
+    assert!(EcdsaRecSigBytes::from_bytes(buf).is_none());
   }
 
   #[rstest]
