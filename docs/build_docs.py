@@ -138,7 +138,7 @@ def _build_site(root: Path, zensical: str) -> None:
   reach = [str(DOCS_DIR), *([inherited] if inherited else [])]
   env = {**os.environ, "PYTHONPATH": os.pathsep.join(reach)}
   subprocess.run(  # noqa: S603
-    [zensical, "build", "--strict", "-f", str(CONFIG_FILE)],
+    [zensical, "build", "--clean", "--strict", "-f", str(CONFIG_FILE)],
     check=True,
     cwd=str(root),
     env=env,
