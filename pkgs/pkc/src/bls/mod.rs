@@ -7,7 +7,6 @@
 //! Unified BLS cryptography module.
 
 mod byte_bags;
-mod dh_bytes;
 mod error;
 mod ies_bytes;
 mod public_hash;
@@ -15,8 +14,7 @@ mod schemes;
 mod share_id;
 mod sig_id;
 
-pub use byte_bags::{BlsPkBytes, BlsSigBytes, BlsSkBytes, BLS_PK_LEN, BLS_SIG_LEN, BLS_SK_LEN};
-pub use dh_bytes::{BlsDhBytes, BLS_DH_LEN};
+pub use byte_bags::{BlsDhBytes, BlsPkBytes, BlsSigBytes, BlsSkBytes, BLS_DH_LEN, BLS_PK_LEN, BLS_SIG_LEN, BLS_SK_LEN};
 pub use error::BlsError;
 pub use ies_bytes::{BlsIesBlobBytes, BlsIesMultiBytes, IV_SEED_LEN, MAX_IES_RECIPIENTS};
 pub use public_hash::{BlsPkHash, BLS_PK_HASH_LEN};

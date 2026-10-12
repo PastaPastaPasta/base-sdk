@@ -6,7 +6,7 @@
 
 //! Scheme-generic BLS secret key.
 
-use super::dh_bytes::BlsDhBytes;
+use super::byte_bags::BlsDhBytes;
 use super::error::BlsError;
 use super::public_ops::BlsPublicKey;
 use super::scalar::Fr;
@@ -140,7 +140,7 @@ impl<S: BlsScheme> BlsSecretKey<S> {
   ///
   /// Returns `InvalidPublicKey` when the peer key or the product point
   /// is invalid.
-  pub fn dh_exchange(&self, peer_pk: &BlsPublicKey<S>) -> Result<BlsDhBytes<S>, BlsError> {
+  pub fn dh_exchange(&self, peer_pk: &BlsPublicKey<S>) -> Result<BlsDhBytes, BlsError> {
     S::dh_bytes(&self.0, &peer_pk.0)
   }
 

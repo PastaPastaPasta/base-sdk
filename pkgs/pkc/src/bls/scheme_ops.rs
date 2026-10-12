@@ -160,7 +160,7 @@ pub trait BlsScheme: BlsSchemeId + sealed::Sealed + Sized {
   /// # Errors
   ///
   /// Returns `InvalidPublicKey` when the shared secret cannot be derived.
-  fn dh_bytes(sk: &Self::InnerSk, peer_pk: &Self::InnerPk) -> Result<BlsDhBytes<Self>, BlsError> {
+  fn dh_bytes(sk: &Self::InnerSk, peer_pk: &Self::InnerPk) -> Result<BlsDhBytes, BlsError> {
     let shared = Self::dh_exchange(sk, peer_pk)?;
     Ok(BlsDhBytes::from_bytes(Self::pk_to_bytes(&shared)))
   }
@@ -170,7 +170,7 @@ pub trait BlsScheme: BlsSchemeId + sealed::Sealed + Sized {
   /// The key is the leading 32 bytes of the shared point's serialization, so
   /// it depends on the scheme and a blob is readable only by the scheme that
   /// wrote it.
-  fn ies_key(shared: &BlsDhBytes<Self>) -> Zeroizing<[u8; AES_KEY_LEN]> {
+  fn ies_key(shared: &BlsDhBytes) -> Zeroizing<[u8; AES_KEY_LEN]> {
     let mut key = Zeroizing::new([0u8; AES_KEY_LEN]);
     key.copy_from_slice(&shared.as_bytes()[..AES_KEY_LEN]);
     key

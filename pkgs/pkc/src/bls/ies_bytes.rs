@@ -8,7 +8,7 @@
 
 #[cfg(feature = "codec")]
 use crate::bls::BlsError;
-use crate::bls::{BlsPkBytes, BlsSchemeId};
+use crate::bls::BlsPkBytes;
 use crate::prelude::*;
 
 #[cfg(feature = "codec")]
@@ -27,8 +27,6 @@ use dash_types::{Checkable, Hashable};
 use hex_conservative::DisplayHex;
 
 use core::fmt;
-use core::hash::{Hash, Hasher};
-use core::marker::PhantomData;
 
 /// Byte length of the seed a BLS-IES message derives its IVs from.
 pub const IV_SEED_LEN: usize = 32;
@@ -37,23 +35,22 @@ pub const IV_SEED_LEN: usize = 32;
 pub const MAX_IES_RECIPIENTS: usize = 2048;
 
 /// A BLS-IES encrypted blob under an ephemeral key.
+#[derive(Clone, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "codec", derive(TypeId))]
-pub struct BlsIesBlobBytes<S: BlsSchemeId> {
+pub struct BlsIesBlobBytes {
   ephemeral_pk: BlsPkBytes,
-  _scheme: PhantomData<fn() -> S>,
   iv_seed: [u8; IV_SEED_LEN],
   data: Vec<u8>,
 }
 
 #[cfg(feature = "codec")]
-impl<S: BlsSchemeId> BaseCodec for BlsIesBlobBytes<S> {
+impl BaseCodec for BlsIesBlobBytes {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let ephemeral_pk = BlsPkBytes::decode(data)?;
     let iv_seed = <[u8; IV_SEED_LEN]>::decode(data)?;
     let len = CompactSize::decode_len(data)?;
     Ok(Self {
       ephemeral_pk,
-      _scheme: PhantomData,
       iv_seed,
       data: read_bytes(data, len)?.to_vec(),
     })
@@ -68,10 +65,10 @@ impl<S: BlsSchemeId> BaseCodec for BlsIesBlobBytes<S> {
 }
 
 #[cfg(feature = "codec")]
-impl_type!(for[S: BlsSchemeId] BlsIesBlobBytes<S>);
+impl_type!(BlsIesBlobBytes);
 
 #[cfg(feature = "codec")]
-impl<S: BlsSchemeId> Checkable for BlsIesBlobBytes<S> {
+impl Checkable for BlsIesBlobBytes {
   type Error = BlsError;
 
   fn check(&self) -> Option<BlsError> {
@@ -89,7 +86,7 @@ impl<S: BlsSchemeId> Checkable for BlsIesBlobBytes<S> {
 }
 
 #[cfg(feature = "codec")]
-impl<S: BlsSchemeId> Hashable for BlsIesBlobBytes<S> {
+impl Hashable for BlsIesBlobBytes {
   type Hash = Hash256;
 
   fn hash(&self) -> Self::Hash {
@@ -97,12 +94,11 @@ impl<S: BlsSchemeId> Hashable for BlsIesBlobBytes<S> {
   }
 }
 
-impl<S: BlsSchemeId> BlsIesBlobBytes<S> {
+impl BlsIesBlobBytes {
   /// Constructs from raw components.
   pub fn new(ephemeral_pk: BlsPkBytes, iv_seed: [u8; IV_SEED_LEN], data: Vec<u8>) -> Self {
     Self {
       ephemeral_pk,
-      _scheme: PhantomData,
       iv_seed,
       data,
     }
@@ -125,7 +121,7 @@ impl<S: BlsSchemeId> BlsIesBlobBytes<S> {
 }
 
 #[cfg(feature = "codec")]
-impl<S: BlsSchemeId> BlsIesBlobBytes<S> {
+impl BlsIesBlobBytes {
   /// The full wire image.
   pub fn to_bytes(&self) -> Vec<u8> {
     let mut buf = Vec::new();
@@ -134,18 +130,7 @@ impl<S: BlsSchemeId> BlsIesBlobBytes<S> {
   }
 }
 
-impl<S: BlsSchemeId> Clone for BlsIesBlobBytes<S> {
-  fn clone(&self) -> Self {
-    Self {
-      ephemeral_pk: self.ephemeral_pk,
-      _scheme: PhantomData,
-      iv_seed: self.iv_seed,
-      data: self.data.clone(),
-    }
-  }
-}
-
-impl<S: BlsSchemeId> fmt::Debug for BlsIesBlobBytes<S> {
+impl fmt::Debug for BlsIesBlobBytes {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     f.debug_struct("BlsIesBlobBytes")
       .field("ephemeral_pk", &self.ephemeral_pk)
@@ -155,33 +140,17 @@ impl<S: BlsSchemeId> fmt::Debug for BlsIesBlobBytes<S> {
   }
 }
 
-impl<S: BlsSchemeId> Eq for BlsIesBlobBytes<S> {}
-
-impl<S: BlsSchemeId> Hash for BlsIesBlobBytes<S> {
-  fn hash<H: Hasher>(&self, state: &mut H) {
-    self.ephemeral_pk.as_bytes().hash(state);
-    self.iv_seed.hash(state);
-    self.data.hash(state);
-  }
-}
-
-impl<S: BlsSchemeId> PartialEq for BlsIesBlobBytes<S> {
-  fn eq(&self, other: &Self) -> bool {
-    self.ephemeral_pk == other.ephemeral_pk && self.iv_seed == other.iv_seed && self.data == other.data
-  }
-}
-
 /// One ciphertext per recipient under an ephemeral key.
+#[derive(Clone, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "codec", derive(TypeId))]
-pub struct BlsIesMultiBytes<S: BlsSchemeId> {
+pub struct BlsIesMultiBytes {
   ephemeral_pk: BlsPkBytes,
-  _scheme: PhantomData<fn() -> S>,
   iv_seed: [u8; IV_SEED_LEN],
   blobs: Vec<Vec<u8>>,
 }
 
 #[cfg(feature = "codec")]
-impl<S: BlsSchemeId> BaseCodec for BlsIesMultiBytes<S> {
+impl BaseCodec for BlsIesMultiBytes {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let ephemeral_pk = BlsPkBytes::decode(data)?;
     let iv_seed = <[u8; IV_SEED_LEN]>::decode(data)?;
@@ -197,7 +166,6 @@ impl<S: BlsSchemeId> BaseCodec for BlsIesMultiBytes<S> {
 
     Ok(Self {
       ephemeral_pk,
-      _scheme: PhantomData,
       iv_seed,
       blobs,
     })
@@ -215,10 +183,10 @@ impl<S: BlsSchemeId> BaseCodec for BlsIesMultiBytes<S> {
 }
 
 #[cfg(feature = "codec")]
-impl_type!(for[S: BlsSchemeId] BlsIesMultiBytes<S>);
+impl_type!(BlsIesMultiBytes);
 
 #[cfg(feature = "codec")]
-impl<S: BlsSchemeId> Hashable for BlsIesMultiBytes<S> {
+impl Hashable for BlsIesMultiBytes {
   type Hash = Hash256;
 
   fn hash(&self) -> Self::Hash {
@@ -226,12 +194,11 @@ impl<S: BlsSchemeId> Hashable for BlsIesMultiBytes<S> {
   }
 }
 
-impl<S: BlsSchemeId> BlsIesMultiBytes<S> {
+impl BlsIesMultiBytes {
   /// Constructs from raw components.
   pub fn new(ephemeral_pk: BlsPkBytes, iv_seed: [u8; IV_SEED_LEN], blobs: Vec<Vec<u8>>) -> Self {
     Self {
       ephemeral_pk,
-      _scheme: PhantomData,
       iv_seed,
       blobs,
     }
@@ -254,7 +221,7 @@ impl<S: BlsSchemeId> BlsIesMultiBytes<S> {
 }
 
 #[cfg(feature = "codec")]
-impl<S: BlsSchemeId> BlsIesMultiBytes<S> {
+impl BlsIesMultiBytes {
   /// The full wire image.
   pub fn to_bytes(&self) -> Vec<u8> {
     let mut buf = Vec::new();
@@ -263,40 +230,13 @@ impl<S: BlsSchemeId> BlsIesMultiBytes<S> {
   }
 }
 
-impl<S: BlsSchemeId> Clone for BlsIesMultiBytes<S> {
-  fn clone(&self) -> Self {
-    Self {
-      ephemeral_pk: self.ephemeral_pk,
-      _scheme: PhantomData,
-      iv_seed: self.iv_seed,
-      blobs: self.blobs.clone(),
-    }
-  }
-}
-
-impl<S: BlsSchemeId> fmt::Debug for BlsIesMultiBytes<S> {
+impl fmt::Debug for BlsIesMultiBytes {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     f.debug_struct("BlsIesMultiBytes")
       .field("ephemeral_pk", &self.ephemeral_pk)
       .field("iv_seed", &self.iv_seed.as_hex())
       .field("blob_count", &self.blobs.len())
       .finish()
-  }
-}
-
-impl<S: BlsSchemeId> Eq for BlsIesMultiBytes<S> {}
-
-impl<S: BlsSchemeId> Hash for BlsIesMultiBytes<S> {
-  fn hash<H: Hasher>(&self, state: &mut H) {
-    self.ephemeral_pk.as_bytes().hash(state);
-    self.iv_seed.hash(state);
-    self.blobs.hash(state);
-  }
-}
-
-impl<S: BlsSchemeId> PartialEq for BlsIesMultiBytes<S> {
-  fn eq(&self, other: &Self) -> bool {
-    self.ephemeral_pk == other.ephemeral_pk && self.iv_seed == other.iv_seed && self.blobs == other.blobs
   }
 }
 
@@ -321,25 +261,25 @@ cfg_if! {
           Ok(value)
         }
 
-        impl<S: BlsSchemeId> ::serde::Serialize for BlsIesBlobBytes<S> {
+        impl ::serde::Serialize for BlsIesBlobBytes {
           fn serialize<T: Serializer>(&self, serializer: T) -> Result<T::Ok, T::Error> {
             serde_hex::serialize(&self.to_bytes(), serializer)
           }
         }
 
-        impl<'de, S: BlsSchemeId> ::serde::Deserialize<'de> for BlsIesBlobBytes<S> {
+        impl<'de> ::serde::Deserialize<'de> for BlsIesBlobBytes {
           fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
             from_image(deserializer)
           }
         }
 
-        impl<S: BlsSchemeId> ::serde::Serialize for BlsIesMultiBytes<S> {
+        impl ::serde::Serialize for BlsIesMultiBytes {
           fn serialize<T: Serializer>(&self, serializer: T) -> Result<T::Ok, T::Error> {
             serde_hex::serialize(&self.to_bytes(), serializer)
           }
         }
 
-        impl<'de, S: BlsSchemeId> ::serde::Deserialize<'de> for BlsIesMultiBytes<S> {
+        impl<'de> ::serde::Deserialize<'de> for BlsIesMultiBytes {
           fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
             from_image(deserializer)
           }
@@ -353,15 +293,14 @@ cfg_if! {
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
-  use crate::bls::BlsScIetf;
 
   use rstest::rstest;
 
-  fn blob(data: Vec<u8>) -> BlsIesBlobBytes<BlsScIetf> {
+  fn blob(data: Vec<u8>) -> BlsIesBlobBytes {
     BlsIesBlobBytes::new(BlsPkBytes::from_bytes([0xab; 48]), [0xcd; IV_SEED_LEN], data)
   }
 
-  fn multi(blobs: Vec<Vec<u8>>) -> BlsIesMultiBytes<BlsScIetf> {
+  fn multi(blobs: Vec<Vec<u8>>) -> BlsIesMultiBytes {
     BlsIesMultiBytes::new(BlsPkBytes::from_bytes([0xab; 48]), [0xcd; IV_SEED_LEN], blobs)
   }
 
@@ -405,7 +344,7 @@ mod tests {
     let image: Vec<u8> = bag.to_bytes().into_iter().chain([0xff; 4]).collect();
 
     let mut cursor = image.as_slice();
-    assert_eq!(BlsIesBlobBytes::<BlsScIetf>::decode(&mut cursor).unwrap(), bag);
+    assert_eq!(BlsIesBlobBytes::decode(&mut cursor).unwrap(), bag);
     assert_eq!(cursor, [0xff; 4], "the suffix is the caller's to read");
   }
 
@@ -415,11 +354,11 @@ mod tests {
   fn decode_rejects_overlong_lengths() {
     let mut encoded = blob(vec![0x11; 3]).to_bytes();
     encoded[80] = 0xfe;
-    assert!(BlsIesBlobBytes::<BlsScIetf>::decode(&mut encoded.as_slice()).is_err());
+    assert!(BlsIesBlobBytes::decode(&mut encoded.as_slice()).is_err());
 
     let mut encoded = multi(vec![vec![0x11; 3]]).to_bytes();
     encoded[80] = 0xfe;
-    assert!(BlsIesMultiBytes::<BlsScIetf>::decode(&mut encoded.as_slice()).is_err());
+    assert!(BlsIesMultiBytes::decode(&mut encoded.as_slice()).is_err());
   }
 
   /// Null key, empty ciphertext, null seed, and nothing besides.
@@ -439,14 +378,14 @@ mod tests {
     #[case] data: Vec<u8>,
     #[case] fault: Option<BlsError>,
   ) {
-    let bag = BlsIesBlobBytes::<BlsScIetf>::new(BlsPkBytes::from_bytes(ephemeral_pk), iv_seed, data);
+    let bag = BlsIesBlobBytes::new(BlsPkBytes::from_bytes(ephemeral_pk), iv_seed, data);
     assert_eq!(bag.check(), fault);
   }
 
   cfg_if! {
     if #[cfg(feature = "bls")] {
       use crate::bls::tests::RSEED;
-      use crate::bls::{BlsScChia, BlsScheme, BlsSecretKey};
+      use crate::bls::{BlsScChia, BlsScIetf, BlsScheme, BlsSecretKey};
 
       use dash_dev::{vec_from_hex, Corpus};
       use serde::Deserialize;
@@ -469,7 +408,7 @@ mod tests {
 
         for v in corpus.vectors::<BlobVec>("blob") {
           let image = vec_from_hex(&v.image);
-          let bag = BlsIesBlobBytes::<S>::decode(&mut image.as_slice()).unwrap();
+          let bag = BlsIesBlobBytes::decode(&mut image.as_slice()).unwrap();
 
           assert_eq!(bag.ephemeral_pk().as_bytes(), &eph_pk);
           assert_eq!(bag.iv_seed(), &RSEED[1]);
@@ -479,7 +418,7 @@ mod tests {
 
         for v in corpus.vectors::<MultiVec>("multi") {
           let image = vec_from_hex(&v.image);
-          let bag = BlsIesMultiBytes::<S>::decode(&mut image.as_slice()).unwrap();
+          let bag = BlsIesMultiBytes::decode(&mut image.as_slice()).unwrap();
 
           assert_eq!(bag.ephemeral_pk().as_bytes(), &eph_pk);
           assert_eq!(bag.iv_seed(), &RSEED[1]);
@@ -524,12 +463,12 @@ mod tests {
         }
 
         let image = blob(vec![0x11; 16]).to_bytes();
-        assert!(!json_rejects::<BlsIesBlobBytes<BlsScIetf>>(&quoted(&image)));
-        assert!(json_rejects::<BlsIesBlobBytes<BlsScIetf>>(&quoted(&with_suffix(&image))));
+        assert!(!json_rejects::<BlsIesBlobBytes>(&quoted(&image)));
+        assert!(json_rejects::<BlsIesBlobBytes>(&quoted(&with_suffix(&image))));
 
         let image = multi(vec![vec![0x11; 16]]).to_bytes();
-        assert!(!json_rejects::<BlsIesMultiBytes<BlsScIetf>>(&quoted(&image)));
-        assert!(json_rejects::<BlsIesMultiBytes<BlsScIetf>>(&quoted(&with_suffix(&image))));
+        assert!(!json_rejects::<BlsIesMultiBytes>(&quoted(&image)));
+        assert!(json_rejects::<BlsIesMultiBytes>(&quoted(&with_suffix(&image))));
       }
     }
   }
