@@ -11,7 +11,7 @@ use crate::util::memops::{digest_from_u32_le, load_u32_le, zero_extend};
 
 use wide::{i32x4, i32x8, u32x8};
 
-pub(super) type BlockWords = [u32; 32];
+type BlockWords = [u32; 32];
 type WordVec = u32x8;
 type IntVec = i32x8;
 type Int4 = i32x4;
@@ -248,7 +248,7 @@ fn wbread(q: &[i32], sb: usize, o1: i32, o2: i32, mm: i32, w: &mut [u32; 64]) {
 }
 
 #[inline(always)]
-pub(super) fn simd_if(x: u32, y: u32, z: u32) -> u32 {
+fn simd_if(x: u32, y: u32, z: u32) -> u32 {
   ((y ^ z) & x) ^ z
 }
 
@@ -326,7 +326,7 @@ fn store_word_vec(state: &mut [u32; 32], offset: usize, value: WordVec) {
 
 /// Runs one 8-lane state-update step group.
 #[inline(always)]
-pub(super) fn step2_big(
+fn step2_big(
   state: &mut [u32; 32],
   w: &[u32],
   w_off: usize,
@@ -354,7 +354,7 @@ pub(super) fn step2_big(
 }
 
 #[inline(always)]
-pub(super) fn one_round_big(state: &mut [u32; 32], w: &[u32; 64], isp: usize, p0: u32, p1: u32, p2: u32, p3: u32) {
+fn one_round_big(state: &mut [u32; 32], w: &[u32; 64], isp: usize, p0: u32, p1: u32, p2: u32, p3: u32) {
   step2_big(state, w, 0, simd_if, p0, p1, PP8K[isp]);
   step2_big(state, w, 8, simd_if, p1, p2, PP8K[isp + 1]);
   step2_big(state, w, 16, simd_if, p2, p3, PP8K[isp + 2]);
@@ -366,7 +366,7 @@ pub(super) fn one_round_big(state: &mut [u32; 32], w: &[u32; 64], isp: usize, p0
 }
 
 #[inline(always)]
-pub fn compress(h: &mut [u32; 32], buf: &[u8; BLOCK], last: bool) {
+fn compress(h: &mut [u32; 32], buf: &[u8; BLOCK], last: bool) {
   let words = core::array::from_fn(|i| load_u32_le(buf, i));
   compress_words(h, buf, &words, last);
 }
@@ -408,7 +408,7 @@ fn compress_words(h: &mut [u32; 32], buf: &[u8; BLOCK], words: &BlockWords, last
 
 /// Encodes the processed bit count for the final block.
 #[inline(always)]
-pub(super) fn encode_count(dst: &mut [u8], low: u32, high: u32, ptr: usize) {
+fn encode_count(dst: &mut [u8], low: u32, high: u32, ptr: usize) {
   let low_bits = low.wrapping_shl(10);
   let high_bits = high.wrapping_shl(10).wrapping_add(low >> 22);
   let low_bits = low_bits.wrapping_add((ptr as u32) << 3);
@@ -416,7 +416,7 @@ pub(super) fn encode_count(dst: &mut [u8], low: u32, high: u32, ptr: usize) {
   dst[4..8].copy_from_slice(&high_bits.to_le_bytes());
 }
 
-pub(super) fn hash_to_words(data: &[u8]) -> [u32; 16] {
+fn hash_to_words(data: &[u8]) -> [u32; 16] {
   let mut h = IV;
   let mut count_low = 0u32;
   let mut count_high = 0u32;

@@ -13,7 +13,7 @@ use crate::util::memops::{digest_from_u32_le, load_u32_le, zero_extend};
 use wide::u32x4;
 
 /// Four neighbouring state words packed into one group.
-pub type U32x4 = u32x4;
+type U32x4 = u32x4;
 
 #[inline]
 /// Swaps the low and high 2-word halves inside one 4-word register.
@@ -31,7 +31,7 @@ fn swap_pairs(words: U32x4) -> U32x4 {
 
 #[inline]
 /// Loads one 4-word register from the flat 32-word state.
-pub fn load_vec(words: &[u32; 32], index: usize) -> U32x4 {
+fn load_vec(words: &[u32; 32], index: usize) -> U32x4 {
   let base = index * 4;
   U32x4::new([words[base], words[base + 1], words[base + 2], words[base + 3]])
 }
@@ -71,7 +71,7 @@ fn load_block(block: &[u8]) -> (U32x4, U32x4) {
 /// Each round pair updates the upper half, rotates the lower half, swaps lanes,
 /// then repeats with a different rotation amount.
 #[inline]
-pub fn sixteen_rounds(s: &mut [U32x4; 8]) {
+fn sixteen_rounds(s: &mut [U32x4; 8]) {
   let mut i = 0;
   while i < 16 {
     s[4] += s[0];
@@ -117,7 +117,7 @@ pub fn sixteen_rounds(s: &mut [U32x4; 8]) {
 }
 
 /// Absorbs two word vectors into the state.
-pub fn absorb_words(state: &mut [U32x4; 8], lo: U32x4, hi: U32x4) {
+fn absorb_words(state: &mut [U32x4; 8], lo: U32x4, hi: U32x4) {
   state[0] ^= lo;
   state[1] ^= hi;
   sixteen_rounds(state);

@@ -111,7 +111,7 @@ pub(super) const fn round_pair(s: &mut [u32; 32]) {
 ///
 /// Computed by setting state = \[64, 32, 16, 0, ..., 0\] (where 64 = h/8, 32 =
 /// b, 16 = r) and running 10r = 160 rounds (80 round-pairs).
-pub const IV: [u32; 32] = {
+pub(crate) const IV: [u32; 32] = {
   let mut s = [0u32; 32];
   s[0] = 64; // h / 8 = 512 / 8
   s[1] = 32; // b (block size in bytes)

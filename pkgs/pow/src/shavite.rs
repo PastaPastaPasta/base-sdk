@@ -15,7 +15,7 @@ use wide::u32x4;
 const SCHEDULE_BUNDLES: usize = 112;
 type Bundle = [u32; 4];
 type State = [u32; 16];
-pub(super) type BlockWords = [u32; 32];
+type BlockWords = [u32; 32];
 
 /// Selects which counter word is injected at one schedule checkpoint.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -210,7 +210,7 @@ fn rotate_columns(state: &mut State) {
 
 /// Runs the SHAvite-3-512 compression function.
 #[inline(always)]
-pub fn compress_block(chaining_value: &mut State, msg: &[u8; BLOCK], counter: u128) {
+fn compress_block(chaining_value: &mut State, msg: &[u8; BLOCK], counter: u128) {
   let schedule = expand_round_keys(msg, counter);
   compress_schedule(chaining_value, &schedule);
 }

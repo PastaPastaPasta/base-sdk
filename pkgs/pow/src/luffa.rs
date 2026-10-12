@@ -123,7 +123,7 @@ fn write_output_half(state: &[[u32; 8]; 5], out: &mut [u8]) {
 
 /// Injects one message block into the five branches.
 #[inline(always)]
-pub fn inject_message(state: &mut [[u32; 8]; 5], msg: &[u32; 8]) {
+fn inject_message(state: &mut [[u32; 8]; 5], msg: &[u32; 8]) {
   let [mut b0, mut b1, mut b2, mut b3, mut b4] = *state;
 
   let mut sum = [0u32; 8];
@@ -211,7 +211,7 @@ fn permute_branch(words: &mut [u32; 8], rc0: &[u32; 8], rc4: &[u32; 8]) {
 
 /// Runs the 8-round permutation on all five branches.
 #[inline(always)]
-pub fn permute_state(state: &mut [[u32; 8]; 5]) {
+fn permute_state(state: &mut [[u32; 8]; 5]) {
   tweak_branches(state);
   permute_first_four_branches(state);
   permute_branch(&mut state[4], &RC[4][0], &RC[4][1]);

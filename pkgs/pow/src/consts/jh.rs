@@ -252,7 +252,7 @@ pub(crate) const ROUND_CONSTS: [[u64; 4]; 42] = {
 /// The config block has digest size (512 = 0x0200) in the first two bytes. With zero message, F_8 simplifies to E_8.
 #[rustfmt::skip]
 /// JH-512 IV derived from the config block.
-pub const IV: [[u64; 2]; 8] = [
+pub(crate) const IV: [[u64; 2]; 8] = [
   [0x17aa003e964bd16f, 0x43d5157a052e6a63],
   [0x0bef970c8d5e228a, 0x61c3b3f2591234e9],
   [0x1e806f53c1a01d89, 0x806d2bea6b05a92a],

@@ -165,7 +165,7 @@ fn fold_schedule(message: &[u64; WORDS], q: &[u64; QWORDS], out: &mut [u64; WORD
 }
 
 #[inline(always)]
-pub fn compress(message: &[u64; WORDS], state: &[u64; WORDS], out: &mut [u64; WORDS]) {
+fn compress(message: &[u64; WORDS], state: &[u64; WORDS], out: &mut [u64; WORDS]) {
   let mh = xor_words(message, state);
   let w = compute_w(&mh);
 

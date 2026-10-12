@@ -14,7 +14,7 @@
 pub(crate) const BLOCK: usize = 128;
 
 /// BMW-512 IV: 16 x u64 with each byte incrementing by 8.
-pub const IV: [u64; 16] = {
+pub(crate) const IV: [u64; 16] = {
   let mut out = [0u64; 16];
   let mut i = 0;
   while i < 16 {

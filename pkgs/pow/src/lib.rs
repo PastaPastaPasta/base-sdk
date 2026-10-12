@@ -74,37 +74,37 @@ mod util;
 #[doc(hidden)]
 pub mod __private {
   pub mod blake {
-    pub use crate::blake::*;
+    pub use crate::blake::hash512;
   }
   pub mod bmw {
-    pub use crate::bmw::*;
+    pub use crate::bmw::hash512;
   }
   pub mod cubehash {
-    pub use crate::cubehash::*;
+    pub use crate::cubehash::hash512;
   }
   pub mod echo {
-    pub use crate::echo::*;
+    pub use crate::echo::hash512;
   }
   pub mod groestl {
-    pub use crate::groestl::*;
+    pub use crate::groestl::hash512;
   }
   pub mod jh {
-    pub use crate::jh::*;
+    pub use crate::jh::hash512;
   }
   pub mod keccak {
-    pub use crate::keccak::*;
+    pub use crate::keccak::hash512;
   }
   pub mod luffa {
-    pub use crate::luffa::*;
+    pub use crate::luffa::hash512;
   }
   pub mod shavite {
-    pub use crate::shavite::*;
+    pub use crate::shavite::hash512;
   }
   pub mod simd {
-    pub use crate::simd::*;
+    pub use crate::simd::hash512;
   }
   pub mod skein {
-    pub use crate::skein::*;
+    pub use crate::skein::hash512;
   }
 }
 

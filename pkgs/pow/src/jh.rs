@@ -12,12 +12,12 @@ use crate::util::memops::{load_u64_le, store_u64_le, zero_extend};
 use wide::u32x4;
 
 /// One 128-bit JH row, stored as four 32-bit lanes.
-pub type Row = u32x4;
+type Row = u32x4;
 /// JH state as eight 128-bit rows.
 type State = [Row; 8];
 
 #[inline]
-pub fn row_from_u64_pair(pair: [u64; 2]) -> Row {
+fn row_from_u64_pair(pair: [u64; 2]) -> Row {
   Row::new([
     pair[0] as u32,
     (pair[0] >> 32) as u32,
@@ -27,7 +27,7 @@ pub fn row_from_u64_pair(pair: [u64; 2]) -> Row {
 }
 
 #[inline]
-pub fn row_to_u64_pair(row: Row) -> [u64; 2] {
+fn row_to_u64_pair(row: Row) -> [u64; 2] {
   let row = row.to_array();
   [
     u64::from(row[0]) | (u64::from(row[1]) << 32),
@@ -208,7 +208,7 @@ fn store_row(buf: &mut [u8], index: usize, row: Row) {
 }
 
 #[inline(always)]
-pub fn compress(state: &mut State, block_words: &[u64; 8]) {
+fn compress(state: &mut State, block_words: &[u64; 8]) {
   let mut row = 0;
   while row < 4 {
     state[row] ^= row_from_u64_pair([block_words[row * 2], block_words[row * 2 + 1]]);

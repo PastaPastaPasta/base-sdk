@@ -11,7 +11,7 @@ use crate::util::memops::{digest_from_u64_le, load_u64_le, zero_extend};
 use crate::util::threefish::encrypt;
 
 /// UBI type code for message blocks.
-pub(super) const TYPE_MSG: u64 = 48;
+const TYPE_MSG: u64 = 48;
 /// UBI type code for output blocks.
 const TYPE_OUTPUT: u64 = 63;
 /// Marks the first block in one UBI stream.
@@ -20,20 +20,20 @@ const FLAG_FIRST: u64 = 1 << 62;
 const FLAG_FINAL: u64 = 1 << 63;
 
 /// Skein chaining value, stored as eight 64-bit words.
-pub type Chaining = [u64; NW];
+type Chaining = [u64; NW];
 /// One 64-byte Skein block decoded as eight little-endian words.
-pub type BlockWords = [u64; NW];
+type BlockWords = [u64; NW];
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct UbiTweak {
+struct UbiTweak {
   /// Total number of bytes seen so far in this UBI stream.
-  pub position: u64,
+  position: u64,
   /// UBI block type, such as "message" or "output".
-  pub kind: u64,
+  kind: u64,
   /// Marks the first block in a UBI stream.
-  pub first: bool,
+  first: bool,
   /// Marks the final block in a UBI stream.
-  pub final_block: bool,
+  final_block: bool,
 }
 
 impl UbiTweak {
@@ -64,7 +64,7 @@ fn load_block(block: &[u8]) -> BlockWords {
 /// UBI uses Threefish with the current chaining value as the key. The block
 /// itself is both the plaintext and part of the feedforward step.
 #[inline(always)]
-pub fn ubi(state: &mut Chaining, plaintext: &BlockWords, tweak: UbiTweak) {
+fn ubi(state: &mut Chaining, plaintext: &BlockWords, tweak: UbiTweak) {
   let mut encrypted = *plaintext;
   encrypt(&mut encrypted, state, &tweak.as_words());
 
@@ -114,7 +114,7 @@ fn hash_message_blocks(state: &mut Chaining, data: &[u8]) {
 /// Skein treats output generation as a separate UBI stream with its own
 /// block type. Skein-512 needs only the first 64 output bytes.
 #[inline(always)]
-pub fn output_block(state: &mut Chaining) {
+fn output_block(state: &mut Chaining) {
   let zero = [0u64; NW];
   let tweak = UbiTweak {
     position: 8,

@@ -223,7 +223,7 @@ const fn wbread_const(q: &[i32], sb: usize, o1: i32, o2: i32, mm: i32) -> [u32; 
 }
 
 /// IV derived by compressing `"SIMD-512 v1.1"` into the zero state.
-pub const IV: [u32; 32] = {
+pub(crate) const IV: [u32; 32] = {
   let mut buf = [0u8; 128];
   let msg = b"SIMD-512 v1.1";
   let mut i = 0;

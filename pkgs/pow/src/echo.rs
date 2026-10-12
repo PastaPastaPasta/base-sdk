@@ -16,7 +16,7 @@ type AesState = [u32; 4];
 type Grid = [Block; 16];
 type Counter = u128;
 type ChainingValue = [AesState; 8];
-pub(super) type BlockWords = [u32; 32];
+type BlockWords = [u32; 32];
 
 /// Grid permutation used by the row-shift step.
 const BIG_SHIFT_ROWS: [usize; 16] = [0, 5, 10, 15, 4, 9, 14, 3, 8, 13, 2, 7, 12, 1, 6, 11];
@@ -101,7 +101,7 @@ fn apply_big_mix_columns(grid: &mut Grid) {
 
 /// Runs the compression function on one 1024-bit block.
 #[inline(always)]
-pub(super) fn compress_words(chaining_value: &mut ChainingValue, block: &BlockWords, counter: Counter) {
+fn compress_words(chaining_value: &mut ChainingValue, block: &BlockWords, counter: Counter) {
   // The upper half of the 4x4 grid starts from the chaining value and the
   // lower half from the message block.
   let mut grid = [Block::splat(0); 16];
@@ -136,7 +136,7 @@ pub(super) fn compress_words(chaining_value: &mut ChainingValue, block: &BlockWo
 
 /// Runs the compression function on one 1024-bit block.
 #[inline(always)]
-pub fn compress_block(chaining_value: &mut ChainingValue, block: &[u8; BLOCK], counter: Counter) {
+fn compress_block(chaining_value: &mut ChainingValue, block: &[u8; BLOCK], counter: Counter) {
   let words = core::array::from_fn(|word| load_u32_le(block, word));
   compress_words(chaining_value, &words, counter);
 }

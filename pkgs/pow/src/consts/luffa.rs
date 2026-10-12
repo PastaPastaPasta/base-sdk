@@ -17,7 +17,7 @@ pub(crate) const BLOCK: usize = 32;
 
 /// Initial branch states (Appendix C.1).
 #[rustfmt::skip]
-pub const IV: [[u32; 8]; 5] = [
+pub(crate) const IV: [[u32; 8]; 5] = [
   [
     0x6d251e69, 0x44b051e0, 0x4eaa6fb4, 0xdbf78465,
     0x6e292011, 0x90152df4, 0xee058139, 0xdef610bb,

@@ -101,7 +101,7 @@ fn round_to(src: &[u64; 25], dst: &mut [u64; 25], rc: u64) {
 /// `state`, the next reads from `alt`, and the final result ends back in
 /// `state`.
 #[inline(always)]
-pub fn keccak_f1600(state: &mut [u64; 25]) {
+fn keccak_f1600(state: &mut [u64; 25]) {
   let mut alt = [0u64; 25];
   let mut i = 0;
   while i < 24 {

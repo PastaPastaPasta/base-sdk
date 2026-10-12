@@ -13,7 +13,7 @@ use crate::util::memops::{digest_from_u64_le, load_u64_le, store_u64_le, zero_ex
 ///
 /// `t0` and `t1` are the 128-bit bit counter after this block has been counted.
 #[inline(always)]
-pub fn compress(h: &mut [u64; 8], m: &[u64; 16], t0: u64, t1: u64) {
+fn compress(h: &mut [u64; 8], m: &[u64; 16], t0: u64, t1: u64) {
   #[rustfmt::skip]
   // The working state is the chaining value, four fixed constants, and the
   // counter mixed into the last four words.
@@ -68,13 +68,13 @@ fn advance_counter(t0: &mut u64, t1: &mut u64) {
 /// Loads one block as sixteen message words in the byte order used by the
 /// compression function.
 #[inline]
-pub fn load_message(block: &[u8]) -> [u64; 16] {
+fn load_message(block: &[u8]) -> [u64; 16] {
   core::array::from_fn(|i| load_u64_le(block, i).swap_bytes())
 }
 
 /// Runs the full hash and returns the internal 8-word state.
 #[inline(always)]
-pub fn hash_to_state(data: &[u8]) -> [u64; 8] {
+fn hash_to_state(data: &[u8]) -> [u64; 8] {
   let mut h = IV;
   let mut t0: u64 = 0;
   let mut t1: u64 = 0;

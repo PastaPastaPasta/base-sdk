@@ -13,7 +13,7 @@ use crate::util::memops::zero_extend;
 use wide::{i8x16, u8x16};
 
 /// One row of the byte-sliced state, a byte per column.
-pub type Row = u8x16;
+type Row = u8x16;
 
 /// Multiplies each byte by `x` in `GF(2^8)`.
 ///
@@ -194,7 +194,7 @@ fn load_block(block: &[u8; BLOCK]) -> [Row; 8] {
 
 /// Extracts columns 8 through 15 as the 512-bit output digest.
 #[inline(always)]
-pub fn extract_right_half(rows: &[Row; 8], out: &mut [u8; 64]) {
+fn extract_right_half(rows: &[Row; 8], out: &mut [u8; 64]) {
   let mut col = 8;
   while col < 16 {
     let offset = (col - 8) * 8;
@@ -223,7 +223,7 @@ fn xor_rows(lhs: &[Row; 8], rhs: &[Row; 8]) -> [Row; 8] {
 
 /// Computes `H = H ^ P(H ^ M) ^ Q(M)`.
 #[inline(always)]
-pub fn compress_rows(chaining_value: &mut [Row; 8], message: &[Row; 8]) {
+fn compress_rows(chaining_value: &mut [Row; 8], message: &[Row; 8]) {
   let mut p_state = xor_rows(chaining_value, message);
   let mut q_state = *message;
   perm_pq(&mut p_state, &mut q_state);
@@ -232,14 +232,14 @@ pub fn compress_rows(chaining_value: &mut [Row; 8], message: &[Row; 8]) {
 
 /// Computes `H = H ^ P(H ^ M) ^ Q(M)`.
 #[inline(always)]
-pub fn compress_block(chaining_value: &mut [Row; 8], block: &[u8; BLOCK]) {
+fn compress_block(chaining_value: &mut [Row; 8], block: &[u8; BLOCK]) {
   let message = load_block(block);
   compress_rows(chaining_value, &message);
 }
 
 /// Computes `H = H ^ P(H)` before the final digest extraction.
 #[inline(always)]
-pub fn output_transform(chaining_value: &mut [Row; 8]) {
+fn output_transform(chaining_value: &mut [Row; 8]) {
   let mut state = *chaining_value;
   perm_p(&mut state);
   *chaining_value = xor_rows(chaining_value, &state);
