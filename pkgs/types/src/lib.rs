@@ -39,11 +39,13 @@ cfg_if::cfg_if! {
     #[allow(unused_macros, reason = "used by feature-gated submodules")]
     mod adapters;
     mod compact;
+    mod core_bool;
 
     pub mod codec;
     pub mod type_id;
 
     pub use compact::CompactSize;
+    pub use core_bool::CoreBool;
     pub use entity::{VecDecoder, VecEncoder, MAX_SER_SIZE};
     pub use secret::{ArrDecoder, ArrEncoder, ArrayBuf, MAX_ARR_SIZE};
   }
