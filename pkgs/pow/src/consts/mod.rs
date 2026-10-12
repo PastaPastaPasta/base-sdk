@@ -7,3 +7,4 @@
 //! Constants of each algorithm.
 
 pub(crate) mod blake;
+pub(crate) mod bmw;
