@@ -74,5 +74,5 @@ lto = false
 overflow-checks = true
 
 [profile.dev]
-codegen-units = 1
+codegen-units = 256
 overflow-checks = true

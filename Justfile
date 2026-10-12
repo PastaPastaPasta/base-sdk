@@ -50,4 +50,4 @@ test:
     {{ nextest }} --workspace --features full
     cargo test --doc --workspace --features full
     cargo doc --workspace --no-deps --features full
-    cargo bench --workspace --features full --no-run
+    cargo test --workspace --features full --benches

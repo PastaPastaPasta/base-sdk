@@ -18,6 +18,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [lib]
+bench = false
 proc-macro = true
 
 [dependencies]

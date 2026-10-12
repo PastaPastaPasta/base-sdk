@@ -9,9 +9,13 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[lib]
+bench = false
+
 [[bin]]
 name = "bsdk-util"
 path = "src/bin/bsdk_util/main.rs"
+bench = false
 required-features = ["bin"]
 
 [features]

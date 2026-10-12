@@ -130,4 +130,4 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Sanity check benchmarks
-        run: cargo bench ${{ matrix.config.args }} --package ${{ inputs.package }} --no-run
+        run: cargo test ${{ matrix.config.args }} --package ${{ inputs.package }} --benches
