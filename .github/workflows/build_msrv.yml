@@ -1,4 +1,4 @@
-name: MSRV (1.85)
+name: MSRV (1.89)
 
 on:
   push:

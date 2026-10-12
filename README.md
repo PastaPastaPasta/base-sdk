@@ -1,5 +1,5 @@
-[![GitHub License](https://img.shields.io/github/license/dashpay/base-sdk?style=flat&logo=readme&logoColor=white)](./LICENSE.md)
-![Minimum Supported Rust Version](https://img.shields.io/badge/v1.85.0-msrv?style=flat&logo=rust&label=MSRV&color=orange)
+[![GitHub License](https://img.shields.io/github/license/dashpay/base-sdk?style=flat&logo=readme&logoColor=white)](./LICENSE)
+![Minimum Supported Rust Version](https://img.shields.io/badge/v1.89.0-msrv?style=flat&logo=rust&label=MSRV&color=orange)
 
 > [!WARNING]
 >

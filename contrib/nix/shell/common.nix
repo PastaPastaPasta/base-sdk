@@ -103,7 +103,7 @@ in
       toolchains = {
         nightly = nightlyWith crossTargets;
         # Must match `workspace.package.rust-version` in root Cargo.toml.
-        msrv = bare (pkgs.rust-bin.stable."1.85.0".minimal.override { extensions = rsComponents; });
+        msrv = bare (pkgs.rust-bin.stable."1.89.0".minimal.override { extensions = rsComponents; });
       };
     };
   };
