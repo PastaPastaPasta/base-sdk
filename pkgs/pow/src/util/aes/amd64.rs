@@ -10,9 +10,7 @@
 //! performs the full AES encryption round (SubBytes + ShiftRows + MixColumns +
 //! AddRoundKey) in a single instruction.
 
-use core::arch::x86_64::{
-  __m128i, _mm_aesenc_si128, _mm_aesenclast_si128, _mm_set_epi32, _mm_setzero_si128, _mm_shuffle_epi8,
-};
+use core::arch::x86_64::{__m128i, _mm_aesenc_si128, _mm_set_epi32, _mm_setzero_si128};
 
 #[inline]
 fn to_m128i(v: &[u32; 4]) -> __m128i {
@@ -41,7 +39,8 @@ unsafe fn round_impl(state: &[u32; 4], key: &[u32; 4]) -> [u32; 4] {
 /// AES encryption round
 #[inline]
 pub(crate) fn round(state: &[u32; 4], key: &[u32; 4]) -> [u32; 4] {
-  // Safety: this module is only compiled with `aes_hw` + `x86_64`.
+  // Safety: the parent module skips this module under `portable`, and `lib.rs`
+  // requires the `aes` target feature otherwise.
   unsafe { round_impl(state, key) }
 }
 
@@ -55,33 +54,7 @@ unsafe fn round_nk_impl(state: &[u32; 4]) -> [u32; 4] {
 /// AES round without AddRoundKey (key = 0).
 #[inline]
 pub(crate) fn round_nk(state: &[u32; 4]) -> [u32; 4] {
-  // Safety: this module is only compiled with `aes_hw` + `x86_64`.
+  // Safety: the parent module skips this module under `portable`, and `lib.rs`
+  // requires the `aes` target feature otherwise.
   unsafe { round_nk_impl(state) }
-}
-
-/// Inverse AES ShiftRows shuffle for _mm_shuffle_epi8.
-#[cfg(test)]
-const INV_SHIFT_ROWS: [u8; 16] = [0, 13, 10, 7, 4, 1, 14, 11, 8, 5, 2, 15, 12, 9, 6, 3];
-
-/// Applies the AES S-box to all 16 bytes independently.
-///
-/// Uses aesenclast (SubBytes + ShiftRows + XOR key, no
-/// MixColumns) with zero key, then undoes AES ShiftRows
-/// via pshufb. Used by Groestl.
-#[cfg(test)]
-#[inline]
-#[target_feature(enable = "aes,sse2,ssse3")]
-unsafe fn sub_bytes_impl(state: &[u8; 16]) -> [u8; 16] {
-  let s: __m128i = core::mem::transmute::<[u8; 16], __m128i>(*state);
-  let zero = _mm_setzero_si128();
-  let tbl: __m128i = core::mem::transmute::<[u8; 16], __m128i>(INV_SHIFT_ROWS);
-  let after = _mm_aesenclast_si128(s, zero);
-  core::mem::transmute::<__m128i, [u8; 16]>(_mm_shuffle_epi8(after, tbl))
-}
-
-#[cfg(test)]
-#[inline]
-pub(crate) fn sub_bytes(state: &[u8; 16]) -> [u8; 16] {
-  // Safety: this module is only compiled with `aes_hw` + `x86_64`.
-  unsafe { sub_bytes_impl(state) }
 }

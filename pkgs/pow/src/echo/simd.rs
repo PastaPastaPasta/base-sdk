@@ -7,19 +7,19 @@
 //! SIMD Echo-512 implementation.
 
 use super::consts::BLOCK;
-#[cfg(not(all(feature = "aes_hw", target_arch = "aarch64")))]
+#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
 use crate::util::aes::cpu::{round, round_nk};
-#[cfg(not(all(feature = "aes_hw", target_arch = "aarch64")))]
+#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
 use crate::util::aes::simd::xtime_packed_u32;
 use crate::util::memops::{load_u32_le, store_u32_le};
 
-#[cfg(all(feature = "aes_hw", target_arch = "aarch64"))]
+#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
 use core::simd::Simd;
 
 type AesState = [u32; 4];
-#[cfg(all(feature = "aes_hw", target_arch = "aarch64"))]
+#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
 type CellVec = Simd<u32, 4>;
-#[cfg(not(all(feature = "aes_hw", target_arch = "aarch64")))]
+#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
 type Grid = [AesState; 16];
 type Counter = [u32; 4];
 type ChainingValue = [AesState; 8];
@@ -44,7 +44,7 @@ fn increment_counter(counter: &mut Counter, value: u32) {
 }
 
 /// Builds the 16 round keys used by one substitution step.
-#[cfg(all(feature = "aes_hw", target_arch = "aarch64"))]
+#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
 #[inline(always)]
 fn build_sub_word_keys(counter: &Counter) -> ([CellVec; 16], Counter) {
   let mut keys = [CellVec::splat(0); 16];
@@ -59,7 +59,7 @@ fn build_sub_word_keys(counter: &Counter) -> ([CellVec; 16], Counter) {
 }
 
 /// Builds the 16 round keys used by one substitution step.
-#[cfg(not(all(feature = "aes_hw", target_arch = "aarch64")))]
+#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
 #[inline(always)]
 fn build_sub_word_keys(counter: &Counter) -> ([AesState; 16], Counter) {
   let mut keys = [[0u32; 4]; 16];
@@ -74,7 +74,7 @@ fn build_sub_word_keys(counter: &Counter) -> ([AesState; 16], Counter) {
 }
 
 /// Runs the two AES-like rounds on each grid cell.
-#[cfg(all(feature = "aes_hw", target_arch = "aarch64"))]
+#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
 #[inline(always)]
 fn apply_big_sub_words(grid: &mut [CellVec; 16], round_keys: &[CellVec; 16]) {
   use crate::util::aes::aarch64::{block_from_vec, round_block, round_nk_block, vec_from_block};
@@ -90,7 +90,7 @@ fn apply_big_sub_words(grid: &mut [CellVec; 16], round_keys: &[CellVec; 16]) {
 }
 
 /// Runs the two AES-like rounds on each grid cell.
-#[cfg(not(all(feature = "aes_hw", target_arch = "aarch64")))]
+#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
 #[inline(always)]
 fn apply_big_sub_words(grid: &mut Grid, round_keys: &[AesState; 16]) {
   let mut cell = 0;
@@ -102,7 +102,7 @@ fn apply_big_sub_words(grid: &mut Grid, round_keys: &[AesState; 16]) {
 }
 
 /// Rotates the second, third, and fourth grid rows.
-#[cfg(not(all(feature = "aes_hw", target_arch = "aarch64")))]
+#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
 #[inline(always)]
 fn apply_big_shift_rows(grid: &mut Grid) {
   let saved = *grid;
@@ -114,7 +114,7 @@ fn apply_big_shift_rows(grid: &mut Grid) {
 }
 
 /// Rotates the second, third, and fourth grid rows.
-#[cfg(all(feature = "aes_hw", target_arch = "aarch64"))]
+#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
 #[inline(always)]
 fn apply_big_shift_rows_vec(grid: &mut [CellVec; 16]) {
   let saved = *grid;
@@ -125,14 +125,14 @@ fn apply_big_shift_rows_vec(grid: &mut [CellVec; 16]) {
   }
 }
 
-#[cfg(all(feature = "aes_hw", target_arch = "aarch64"))]
+#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
 #[inline(always)]
 fn xtime_packed_vec(word: CellVec) -> CellVec {
   (((word & CellVec::splat(0x80808080)) >> CellVec::splat(7)) * CellVec::splat(27))
     ^ ((word & CellVec::splat(0x7F7F7F7F)) << CellVec::splat(1))
 }
 
-#[cfg(all(feature = "aes_hw", target_arch = "aarch64"))]
+#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
 #[inline(always)]
 fn mix_column_vec(grid: &mut [CellVec; 16], a: usize, b: usize, c: usize, d: usize) {
   let wa = grid[a];
@@ -151,7 +151,7 @@ fn mix_column_vec(grid: &mut [CellVec; 16], a: usize, b: usize, c: usize, d: usi
   grid[d] = ab2 ^ bc2 ^ cd2 ^ ab ^ wc;
 }
 
-#[cfg(all(feature = "aes_hw", target_arch = "aarch64"))]
+#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
 #[inline(always)]
 fn apply_big_mix_columns_vec(grid: &mut [CellVec; 16]) {
   mix_column_vec(grid, 0, 1, 2, 3);
@@ -161,7 +161,7 @@ fn apply_big_mix_columns_vec(grid: &mut [CellVec; 16]) {
 }
 
 /// Mixes one column of four AES states in `GF(2^8)`.
-#[cfg(not(all(feature = "aes_hw", target_arch = "aarch64")))]
+#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
 #[inline(always)]
 fn mix_column(grid: &mut Grid, a: usize, b: usize, c: usize, d: usize) {
   let mut word = 0;
@@ -185,7 +185,7 @@ fn mix_column(grid: &mut Grid, a: usize, b: usize, c: usize, d: usize) {
 }
 
 /// Applies the column-mixing step to all four grid columns.
-#[cfg(not(all(feature = "aes_hw", target_arch = "aarch64")))]
+#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
 #[inline(always)]
 fn apply_big_mix_columns(grid: &mut Grid) {
   mix_column(grid, 0, 1, 2, 3);
@@ -195,7 +195,7 @@ fn apply_big_mix_columns(grid: &mut Grid) {
 }
 
 /// Runs the compression function on one 1024-bit block.
-#[cfg(all(feature = "aes_hw", target_arch = "aarch64"))]
+#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
 #[inline(always)]
 pub(super) fn compress_words(chaining_value: &mut ChainingValue, block: &BlockWords, counter: &Counter) {
   let mut grid = [CellVec::splat(0); 16];
@@ -239,7 +239,7 @@ pub(super) fn compress_words(chaining_value: &mut ChainingValue, block: &BlockWo
 }
 
 /// Runs the compression function on one 1024-bit block.
-#[cfg(not(all(feature = "aes_hw", target_arch = "aarch64")))]
+#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
 #[inline(always)]
 pub(super) fn compress_words(chaining_value: &mut ChainingValue, block: &BlockWords, counter: &Counter) {
   let mut grid = [[0u32; 4]; 16];

@@ -7,13 +7,13 @@
 //! SIMD Groestl-512 implementation.
 
 use super::consts::{BLOCK, IV_ROWS, RC_P, RC_Q, ROUNDS};
-#[cfg(all(feature = "aes_hw", target_arch = "aarch64"))]
+#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
 use super::consts::{SUBSH_P, SUBSH_Q};
-#[cfg(not(all(feature = "aes_hw", target_arch = "aarch64")))]
+#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
 use crate::util::aes::consts::SBOX;
 
 use core::simd::num::{SimdInt, SimdUint};
-#[cfg(not(all(feature = "aes_hw", target_arch = "aarch64")))]
+#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
 use core::simd::simd_swizzle;
 use core::simd::Simd;
 
@@ -118,7 +118,7 @@ fn mix_bytes(rows: &mut [Row; 8]) {
 }
 
 /// Applies the AES S-box to every byte in every row.
-#[cfg(not(all(feature = "aes_hw", target_arch = "aarch64")))]
+#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
 #[inline(always)]
 fn sub_bytes(rows: &mut [Row; 8]) {
   let mut row = 0;
@@ -134,7 +134,7 @@ fn sub_bytes(rows: &mut [Row; 8]) {
   }
 }
 
-#[cfg(not(all(feature = "aes_hw", target_arch = "aarch64")))]
+#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
 const fn rotate_left_indices(shift: usize) -> [usize; 16] {
   let mut indices = [0usize; 16];
   let mut i = 0;
@@ -145,7 +145,7 @@ const fn rotate_left_indices(shift: usize) -> [usize; 16] {
   indices
 }
 
-#[cfg(not(all(feature = "aes_hw", target_arch = "aarch64")))]
+#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
 macro_rules! shift_row {
   ($row:expr, $shift:expr) => {{
     const PATTERN: [usize; 16] = rotate_left_indices($shift);
@@ -154,7 +154,7 @@ macro_rules! shift_row {
 }
 
 /// Applies the `P` row shifts.
-#[cfg(not(all(feature = "aes_hw", target_arch = "aarch64")))]
+#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
 #[inline(always)]
 fn shift_bytes_p(rows: &mut [Row; 8]) {
   rows[1] = shift_row!(rows[1], 1);
@@ -167,7 +167,7 @@ fn shift_bytes_p(rows: &mut [Row; 8]) {
 }
 
 /// Applies the `Q` row shifts.
-#[cfg(not(all(feature = "aes_hw", target_arch = "aarch64")))]
+#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
 #[inline(always)]
 fn shift_bytes_q(rows: &mut [Row; 8]) {
   rows[0] = shift_row!(rows[0], 1);
@@ -198,7 +198,7 @@ fn add_rc_q(rows: &mut [Row; 8], round: usize) {
 }
 
 /// Applies substitution and row rotation in one helper on supported targets.
-#[cfg(all(feature = "aes_hw", target_arch = "aarch64"))]
+#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
 #[expect(unsafe_code, reason = "direct vector intrinsics produce the right codegen")]
 #[inline(always)]
 fn sub_shift(rows: &mut [Row; 8], masks: &[[u8; 16]; 8]) {
@@ -219,7 +219,7 @@ fn sub_shift(rows: &mut [Row; 8], masks: &[[u8; 16]; 8]) {
 }
 
 /// Applies the `P` permutation to the current state.
-#[cfg(all(feature = "aes_hw", target_arch = "aarch64"))]
+#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
 #[inline(always)]
 fn perm_p(state: &mut [Row; 8]) {
   let mut round = 0;
@@ -232,7 +232,7 @@ fn perm_p(state: &mut [Row; 8]) {
 }
 
 /// Applies the `P` permutation to the current state.
-#[cfg(not(all(feature = "aes_hw", target_arch = "aarch64")))]
+#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
 #[inline(always)]
 fn perm_p(state: &mut [Row; 8]) {
   let mut round = 0;
@@ -246,7 +246,7 @@ fn perm_p(state: &mut [Row; 8]) {
 }
 
 /// Applies the `P` and `Q` permutations in lockstep for one compression.
-#[cfg(all(feature = "aes_hw", target_arch = "aarch64"))]
+#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
 #[inline(always)]
 fn perm_pq(p_state: &mut [Row; 8], q_state: &mut [Row; 8]) {
   let mut round = 0;
@@ -262,7 +262,7 @@ fn perm_pq(p_state: &mut [Row; 8], q_state: &mut [Row; 8]) {
 }
 
 /// Applies the `P` and `Q` permutations in lockstep for one compression.
-#[cfg(not(all(feature = "aes_hw", target_arch = "aarch64")))]
+#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
 #[inline(always)]
 fn perm_pq(p_state: &mut [Row; 8], q_state: &mut [Row; 8]) {
   let mut round = 0;

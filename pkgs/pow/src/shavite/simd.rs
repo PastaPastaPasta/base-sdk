@@ -171,7 +171,7 @@ fn inject_counter_words(bundle_words: &mut Bundle, counter: &[u32; 4], injection
 }
 
 /// Runs the 4-round AES bundle that updates one 4-word half.
-#[cfg(all(feature = "aes_hw", target_arch = "aarch64"))]
+#[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
 #[inline(always)]
 fn apply_round_bundle(state: &mut State, left: [usize; 4], right: [usize; 4], keys: &[Bundle]) {
   use crate::util::aes::aarch64::{load_state, round_nk_block, store_state, xor_block};
@@ -194,7 +194,7 @@ fn apply_round_bundle(state: &mut State, left: [usize; 4], right: [usize; 4], ke
 }
 
 /// Runs the 4-round AES bundle that updates one 4-word half.
-#[cfg(not(all(feature = "aes_hw", target_arch = "aarch64")))]
+#[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
 #[inline(always)]
 fn apply_round_bundle(state: &mut State, left: [usize; 4], right: [usize; 4], keys: &[Bundle]) {
   // Each bundle reads one 4-word half, runs four AES-like rounds, then xors

@@ -7,7 +7,6 @@
 //! aarch64 AES helpers for the fused Groestl round path and packed AES rounds.
 
 use core::arch::aarch64::{uint8x16_t, vaeseq_u8, vaesmcq_u8, veorq_u8, vqtbl1q_u8};
-#[cfg(feature = "simd")]
 use core::simd::Simd;
 
 type AesState = [u32; 4];
@@ -25,13 +24,11 @@ pub(crate) fn store_state(state: AesBlock) -> AesState {
   unsafe { core::mem::transmute(state) }
 }
 
-#[cfg(feature = "simd")]
 #[inline(always)]
 pub(crate) fn block_from_vec(state: Simd<u32, 4>) -> AesBlock {
   unsafe { core::mem::transmute(state) }
 }
 
-#[cfg(feature = "simd")]
 #[inline(always)]
 pub(crate) fn vec_from_block(state: AesBlock) -> Simd<u32, 4> {
   unsafe { core::mem::transmute(state) }
@@ -56,7 +53,8 @@ unsafe fn round_block_impl(state: AesBlock, key: AesBlock) -> AesBlock {
 
 #[inline(always)]
 pub(crate) fn round_block(state: AesBlock, key: AesBlock) -> AesBlock {
-  // Safety: this module is only compiled with `aes_hw` + `aarch64`.
+  // Safety: the parent module skips this module under `portable`, and `lib.rs`
+  // requires the `aes` target feature otherwise.
   unsafe { round_block_impl(state, key) }
 }
 
@@ -74,7 +72,8 @@ unsafe fn round_nk_block_impl(state: AesBlock) -> AesBlock {
 
 #[inline(always)]
 pub(crate) fn round_nk_block(state: AesBlock) -> AesBlock {
-  // Safety: this module is only compiled with `aes_hw` + `aarch64`.
+  // Safety: the parent module skips this module under `portable`, and `lib.rs`
+  // requires the `aes` target feature otherwise.
   unsafe { round_nk_block_impl(state) }
 }
 

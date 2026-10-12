@@ -15,8 +15,7 @@ bench = false
 [features]
 default = []
 std = []
-full = ["std", "aes_hw", "simd"]
-aes_hw = ["simd"]
+full = ["std", "simd"]
 portable = []
 simd = []
 
