@@ -7,7 +7,8 @@
 //! Dash transaction with version/type packing and optional extra payload for
 //! special transactions.
 
-use crate::payload::{PayloadError, PayloadInvalid, TxType};
+use crate::block::MAX_LEGACY_BLOCK_SIZE;
+use crate::payload::{PayloadDecode, PayloadError, PayloadInvalid, SpecialPayload, TxType};
 use crate::prelude::*;
 use crate::{codec_type, hash_impl};
 
@@ -86,45 +87,48 @@ impl fmt::Display for TxIn {
 }
 
 /// A transaction output.
+///
+/// `value` is Core's signed `CAmount`. Any 8 bytes decode, as in Core, which
+/// rejects negative and oversized values in `CheckTransaction` rather than
+/// while deserializing.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct TxOut {
-  /// Output value in duffs.
-  #[cfg_attr(feature = "serde", serde(with = "crate::serialize::amount"))]
-  pub value: Amount,
+  /// Output value in duffs, unchecked.
+  #[cfg_attr(feature = "serde", serde(with = "crate::serialize::duffs"))]
+  pub value: i64,
   /// Locking script.
   #[cfg_attr(feature = "serde", serde(rename = "scriptPubKey"))]
   pub script_pubkey: ScriptPubKeyBuf,
 }
 
-impl_type!(TxOut);
+codec_type!(TxOut { value, script_pubkey });
 
-impl BaseCodec for TxOut {
-  fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let raw = u64::decode(data)?;
-    let value = Amount::from_sat(raw).map_err(|_| DecodeError::InvalidValue {
-      expected: vec![Amount::MAX_MONEY.to_sat()],
-      actual: raw,
-    })?;
-    Ok(Self {
-      value,
-      script_pubkey: ScriptPubKeyBuf::decode(data)?,
-    })
+impl TxOut {
+  /// Builds an output paying `amount`.
+  pub fn new(amount: Amount, script_pubkey: ScriptPubKeyBuf) -> Self {
+    Self {
+      value: amount.to_signed().to_sat(),
+      script_pubkey,
+    }
   }
 
-  fn encode(&self, buf: &mut impl EncodeBuf) {
-    self.value.to_sat().encode(buf);
-    self.script_pubkey.encode(buf);
+  /// Returns the value as an [`Amount`] when it lies in `0..=MAX_MONEY`.
+  pub fn amount(&self) -> Option<Amount> {
+    u64::try_from(self.value).ok().and_then(|v| Amount::from_sat(v).ok())
   }
 }
 
-hash_impl!(TxOut);
-
 impl fmt::Display for TxOut {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "TxOut {{ value: {} }}", self.value.to_sat())
+    write!(f, "TxOut {{ value: {} }}", self.value)
   }
+}
+
+/// Returns `true` for a value in Core's `MoneyRange`, `0..=MAX_MONEY`.
+pub(crate) fn money_range(value: i64) -> bool {
+  (0..=Amount::MAX_MONEY.to_signed().to_sat()).contains(&value)
 }
 
 /// Transaction validation failure.
@@ -142,12 +146,15 @@ pub enum TxInvalid {
   /// `bad-txns-payload-oversize`
   #[error("bad-txns-payload-oversize: {size} bytes")]
   PayloadOversize { size: usize },
+  /// `bad-txns-vout-negative`
+  #[error("bad-txns-vout-negative: output {index} value {value}")]
+  OutputNegative { index: usize, value: i64 },
   /// `bad-txns-vout-toolarge`
   #[error("bad-txns-vout-toolarge: output {index} value {value}")]
-  OutputTooLarge { index: usize, value: u64 },
+  OutputTooLarge { index: usize, value: i64 },
   /// `bad-txns-txouttotal-toolarge`
   #[error("bad-txns-txouttotal-toolarge: {total}")]
-  OutputTotalTooLarge { total: u64 },
+  OutputTotalTooLarge { total: i64 },
   /// `bad-txns-inputs-duplicate`
   #[error("bad-txns-inputs-duplicate: {outpoint}")]
   DuplicateInputs { outpoint: OutPoint },
@@ -166,6 +173,20 @@ pub enum TxInvalid {
   /// `bad-txns-payload-check`
   #[error("bad-txns-payload-check: {0}")]
   PayloadCheck(PayloadInvalid),
+}
+
+/// An encode target that counts the bytes written instead of storing them.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Unencodable)]
+struct ByteCount(usize);
+
+impl EncodeBuf for ByteCount {
+  fn push(&mut self, _byte: u8) {
+    self.0 += 1;
+  }
+
+  fn extend_from_slice(&mut self, data: &[u8]) {
+    self.0 += data.len();
+  }
 }
 
 /// A Dash transaction.
@@ -209,7 +230,7 @@ impl BaseCodec for Transaction {
       outputs: Vec::decode(data)?,
       lock_time: u32::decode(data)?,
       extra_payload: if version >= 3 && tx_type != TxType::Spend {
-        let len = CompactSize::decode(data)?.into_len(crate::codec::MAX_SPTX_PAYLOAD_SIZE)?;
+        let len = CompactSize::decode_size(data)?.into_len(data.len())?;
         codec::read_bytes(data, len)?.to_vec()
       } else {
         Vec::new()
@@ -245,6 +266,12 @@ impl Checkable for Transaction {
       return Some(TxInvalid::EmptyOutputs);
     }
 
+    let mut size = ByteCount::default();
+    self.encode(&mut size);
+    if size.0 > MAX_LEGACY_BLOCK_SIZE {
+      return Some(TxInvalid::Oversize { size: size.0 });
+    }
+
     if !self.has_extra_payload() && !self.extra_payload.is_empty() {
       return Some(TxInvalid::PayloadNotAllowed);
     }
@@ -254,15 +281,18 @@ impl Checkable for Transaction {
       });
     }
 
-    let max_money = bitcoin_units::Amount::MAX_MONEY.to_sat();
-    let mut total: u64 = 0;
+    // Core checks the sign, then the per-output cap, then the running total.
+    let mut total: i64 = 0;
     for (i, output) in self.outputs.iter().enumerate() {
-      let sat = output.value.to_sat();
-      if sat > max_money {
-        return Some(TxInvalid::OutputTooLarge { index: i, value: sat });
+      let value = output.value;
+      if value < 0 {
+        return Some(TxInvalid::OutputNegative { index: i, value });
       }
-      total = total.saturating_add(sat);
-      if total > max_money {
+      if !money_range(value) {
+        return Some(TxInvalid::OutputTooLarge { index: i, value });
+      }
+      total += value;
+      if !money_range(total) {
         return Some(TxInvalid::OutputTotalTooLarge { total });
       }
     }
@@ -299,11 +329,17 @@ impl Checkable for Transaction {
 
     if let Some(result) = self.decode_payload() {
       match result {
-        Ok(ref payload) if payload.is_unknown() => {
+        Ok(decoded) if !decoded.is_complete() => {
+          return Some(TxInvalid::PayloadDecode(PayloadError {
+            tx_type: self.tx_type,
+            message: format!("trailing bytes: {} remaining", decoded.trailing()),
+          }));
+        }
+        Ok(decoded) if decoded.payload.is_unknown() => {
           return Some(TxInvalid::PayloadCheck(PayloadInvalid::UnknownType(self.tx_type)));
         }
-        Ok(payload) => {
-          if let Some(e) = payload.check() {
+        Ok(decoded) => {
+          if let Some(e) = decoded.payload.check() {
             return Some(TxInvalid::PayloadCheck(e));
           }
         }
@@ -338,29 +374,26 @@ impl Transaction {
     self.version >= 3 && self.tx_type != TxType::Spend
   }
 
-  /// Decodes the special transaction payload, if present.
+  /// Decodes the special transaction payload, if present, reporting how many
+  /// of its bytes the decoder read.
   ///
   /// Returns `None` for spend/coinbase transactions that carry no extra
-  /// payload.
+  /// payload. Unread bytes are not an error here, see [`PayloadDecode`].
   ///
   /// # Errors
   ///
   /// Returns `PayloadError` if the payload bytes cannot be decoded for the
   /// declared transaction type.
-  pub fn decode_payload(&self) -> Option<Result<crate::payload::SpecialPayload, crate::payload::PayloadError>> {
+  pub fn decode_payload(&self) -> Option<Result<PayloadDecode, PayloadError>> {
     if !self.has_extra_payload() {
       return None;
     }
     let mut cursor = &self.extra_payload[..];
-    let result = crate::payload::SpecialPayload::decode(self.tx_type, &mut cursor);
-    Some(result.and_then(|payload| {
-      if !cursor.is_empty() {
-        return Err(crate::payload::PayloadError {
-          tx_type: self.tx_type,
-          message: format!("trailing bytes: {} remaining", cursor.len()),
-        });
-      }
-      Ok(payload)
+    let result = SpecialPayload::decode(self.tx_type, &mut cursor);
+    Some(result.map(|payload| PayloadDecode {
+      payload,
+      consumed: self.extra_payload.len() - cursor.len(),
+      len: self.extra_payload.len(),
     }))
   }
 
@@ -384,11 +417,172 @@ impl fmt::Display for Transaction {
 }
 
 #[cfg(all(test, feature = "serde"))]
+#[expect(clippy::panic, clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
 
-  use dash_dev::{assert_serde_rt, check_tx, Corpus};
+  use dash_dev::{assert_serde_rt, check_tx, vec_from_hex, Corpus};
   use rstest::rstest;
+
+  #[derive(::serde::Deserialize)]
+  struct ValueVector {
+    name: String,
+    raw: String,
+    values: Vec<i64>,
+    core: String,
+  }
+
+  /// Core decodes any `CAmount` and leaves the range to `CheckTransaction`.
+  #[rstest]
+  fn out_of_range_values_decode() {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "decode_domain");
+    for v in corpus.vectors::<ValueVector>("tx_value_range") {
+      let raw = vec_from_hex(&v.raw);
+      let mut cursor = &raw[..];
+      let tx = Transaction::decode(&mut cursor).unwrap();
+      assert!(cursor.is_empty(), "{}: trailing bytes", v.name);
+      let values: Vec<i64> = tx.outputs.iter().map(|o| o.value).collect();
+      assert_eq!(values, v.values, "{}", v.name);
+      let mut buf = Vec::new();
+      tx.encode(&mut buf);
+      assert_eq!(buf, raw, "{}: re-encode", v.name);
+      let reason = tx.check().map(|e| e.to_string()).unwrap_or_default();
+      assert!(reason.starts_with(&v.core), "{}: {reason}", v.name);
+    }
+  }
+
+  #[derive(::serde::Deserialize)]
+  struct PayloadVector {
+    payload_len: usize,
+    core: String,
+  }
+
+  /// Core caps `vExtraPayload` only at `MAX_SIZE` while decoding.
+  #[rstest]
+  fn payload_decodes_up_to_max_size() {
+    let cbtx = Corpus::open(env!("CARGO_MANIFEST_DIR"), "cbtx");
+    let base = cbtx.into_value()["cbtx"]["ac9fc5d0c7229a1c9fb834d8c6f6be200ae5b55d1b731c38afd83adc0c54aa31"]["raw"]
+      .as_str()
+      .map(vec_from_hex)
+      .unwrap();
+    let base = Transaction::decode(&mut &base[..]).unwrap();
+
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "decode_domain");
+    for v in corpus.vectors::<PayloadVector>("tx_payload_size") {
+      let mut tx = base.clone();
+      tx.extra_payload.resize(v.payload_len, 0);
+      let mut raw = Vec::new();
+      tx.encode(&mut raw);
+      let decoded = Transaction::decode(&mut &raw[..]);
+      if v.core.starts_with("decode:") {
+        assert!(
+          matches!(decoded, Err(DecodeError::CompactSizeExceedsLimit { .. })),
+          "{}: {decoded:?}",
+          v.payload_len
+        );
+        continue;
+      }
+      let decoded = decoded.unwrap();
+      assert_eq!(decoded.extra_payload.len(), v.payload_len);
+      // Core's size rules, in Core's order. `check` also runs the payload
+      // rules Core leaves to `CheckSpecialTx`, which the padding breaks.
+      let reason = decoded.check().map(|e| e.to_string()).unwrap_or_default();
+      if v.core == "accept" {
+        assert!(!reason.contains("oversize"), "{}: {reason}", v.payload_len);
+      } else {
+        assert!(reason.starts_with(&v.core), "{}: {reason}", v.payload_len);
+      }
+    }
+  }
+
+  #[derive(::serde::Deserialize)]
+  struct TrailingVector {
+    corpus: String,
+    txid: String,
+    trailing: usize,
+  }
+
+  /// The decoder reports unread payload bytes; rejecting them is the caller's
+  /// `GetTxPayload` rule.
+  #[rstest]
+  fn payload_consumption_is_reported() {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "decode_domain");
+    for v in corpus.vectors::<TrailingVector>("payload_trailing") {
+      let source = Corpus::open(env!("CARGO_MANIFEST_DIR"), &v.corpus).into_value();
+      let raw = source[&v.corpus][&v.txid]["raw"].as_str().map(vec_from_hex).unwrap();
+      let mut tx = Transaction::decode(&mut &raw[..]).unwrap();
+      let len = tx.extra_payload.len();
+
+      let exact = tx.decode_payload().unwrap().unwrap();
+      assert!(exact.is_complete(), "{}", v.txid);
+
+      tx.extra_payload.resize(len + v.trailing, 0);
+      let padded = tx.decode_payload().unwrap().unwrap();
+      assert_eq!((padded.consumed, padded.len), (len, len + v.trailing), "{}", v.txid);
+      assert!(!padded.is_complete(), "{}", v.txid);
+      assert_eq!(padded.payload, exact.payload, "{}", v.txid);
+      assert!(matches!(tx.check(), Some(TxInvalid::PayloadDecode(_))), "{}", v.txid);
+    }
+  }
+
+  #[derive(::serde::Deserialize)]
+  struct NetInfoMapVector {
+    raw: String,
+    core: BTreeMap<String, Vec<String>>,
+  }
+
+  /// Core reads a ProTx's NetInfo groups into a `std::map`: the first group
+  /// of each purpose, in purpose order, as `decoderawtransaction` prints.
+  #[rstest]
+  fn net_info_groups_follow_cores_map() {
+    use crate::payload::SpecialPayload;
+    use crate::types::{NIPurpose, NetInfo, NetInfoV2};
+
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "decode_domain");
+    for v in corpus.vectors::<NetInfoMapVector>("netinfo_map") {
+      let raw = vec_from_hex(&v.raw);
+      let tx = Transaction::decode(&mut &raw[..]).unwrap();
+      let decoded = tx.decode_payload().unwrap().unwrap();
+      assert!(decoded.is_complete());
+      let SpecialPayload::ProviderUpdateService(pro) = decoded.payload else {
+        panic!("not a ProUpServTx");
+      };
+      let NetInfo::Extended(info) = pro.net_info else {
+        panic!("not an extended NetInfo");
+      };
+      let names = ["core_p2p", "platform_p2p", "platform_https"];
+      let groups: BTreeMap<String, Vec<String>> = info
+        .entries
+        .iter()
+        .map(|(purpose, group)| {
+          let name = names[usize::from(purpose.to_base())].to_string();
+          (name, group.iter().map(ToString::to_string).collect())
+        })
+        .collect();
+      assert_eq!(groups, v.core);
+      let purposes: Vec<NIPurpose> = info.entries.iter().map(|(p, _)| *p).collect();
+      assert!(purposes.windows(2).all(|w| w[0].to_base() < w[1].to_base()));
+      // Re-encoding writes the map, as Core re-serializes it.
+      let mut buf = Vec::new();
+      info.encode(&mut buf);
+      let mut again = &buf[..];
+      assert_eq!(NetInfoV2::decode(&mut again).unwrap(), info);
+      assert!(buf.len() < raw.len());
+    }
+  }
+
+  #[rstest]
+  #[case::negative(-1, None)]
+  #[case::zero(0, Some(0))]
+  #[case::max(2_100_000_000_000_000, Some(2_100_000_000_000_000))]
+  #[case::above_max(2_100_000_000_000_001, None)]
+  fn amount_is_soft(#[case] value: i64, #[case] expected: Option<u64>) {
+    let out = TxOut {
+      value,
+      script_pubkey: ScriptPubKeyBuf::from_bytes(Vec::new()),
+    };
+    assert_eq!(out.amount().map(Amount::to_sat), expected);
+  }
 
   #[rstest]
   #[case("spend")]
