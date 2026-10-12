@@ -8,6 +8,7 @@
 
 use crate::aes::sub_shift as aes_sub_shift;
 use crate::consts::groestl::{BLOCK, IV_ROWS, RC_P, RC_Q, ROUNDS, SUBSH_P, SUBSH_Q};
+use crate::util::memops::zero_extend;
 
 use wide::{i8x16, u8x16};
 
@@ -245,26 +246,17 @@ pub fn output_transform(chaining_value: &mut [Row; 8]) {
 }
 
 pub fn hash512(data: &[u8]) -> [u8; 64] {
-  let mut chaining_value = [Row::splat(0); 8];
-  let mut row = 0;
-  while row < 8 {
-    chaining_value[row] = Row::new(IV_ROWS[row]);
-    row += 1;
-  }
+  let mut chaining_value = IV_ROWS.map(Row::new);
 
   let mut block_count = 0u64;
-  let mut pos = 0;
-  while pos + BLOCK <= data.len() {
-    let mut block = [0u8; BLOCK];
-    block.copy_from_slice(&data[pos..pos + BLOCK]);
-    compress_block(&mut chaining_value, &block);
+  let (blocks, tail) = data.as_chunks::<BLOCK>();
+  for block in blocks {
+    compress_block(&mut chaining_value, block);
     block_count = block_count.wrapping_add(1);
-    pos += BLOCK;
   }
 
-  let used = data.len() - pos;
-  let mut pad = [0u8; 256];
-  pad[..used].copy_from_slice(&data[pos..]);
+  let used = tail.len();
+  let mut pad: [u8; 2 * BLOCK] = zero_extend(tail);
   pad[used] = 0x80;
 
   let pad_len = if used < 120 {
@@ -277,12 +269,8 @@ pub fn hash512(data: &[u8]) -> [u8; 64] {
 
   pad[pad_len - 8..pad_len].copy_from_slice(&block_count.to_be_bytes());
 
-  pos = 0;
-  while pos < pad_len {
-    let mut block = [0u8; BLOCK];
-    block.copy_from_slice(&pad[pos..pos + BLOCK]);
-    compress_block(&mut chaining_value, &block);
-    pos += BLOCK;
+  for block in pad[..pad_len].as_chunks::<BLOCK>().0 {
+    compress_block(&mut chaining_value, block);
   }
 
   output_transform(&mut chaining_value);

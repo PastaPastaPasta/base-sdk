@@ -7,7 +7,7 @@
 //! BMW-512 (Blue Midnight Wish) hash function.
 
 use crate::consts::bmw::*;
-use crate::util::memops::{digest_from_u64_le, load_u64_le, store_u64_le};
+use crate::util::memops::{digest_from_u64_le, load_u64_le, store_u64_le, zero_extend};
 
 const WORDS: usize = 16;
 const QWORDS: usize = 32;
@@ -191,16 +191,14 @@ fn hash_to_words(data: &[u8]) -> [u64; 8] {
   let mut next = &mut right;
   let bit_count = (data.len() as u64) << 3;
 
-  let mut pos = 0;
-  while pos + BLOCK <= data.len() {
-    compress(&load_block(&data[pos..pos + BLOCK]), current, next);
+  let (blocks, tail) = data.as_chunks::<BLOCK>();
+  for block in blocks {
+    compress(&load_block(block), current, next);
     core::mem::swap(&mut current, &mut next);
-    pos += BLOCK;
   }
 
-  let mut pad = [0u8; 2 * BLOCK];
-  let remaining = data.len() - pos;
-  pad[..remaining].copy_from_slice(&data[pos..]);
+  let remaining = tail.len();
+  let mut pad: [u8; 2 * BLOCK] = zero_extend(tail);
   pad[remaining] = 0x80;
 
   if remaining <= 119 {

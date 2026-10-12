@@ -7,7 +7,7 @@
 //! JH-512 hash function.
 
 use crate::consts::jh::{BLOCK, IV, ROUND_CONSTS};
-use crate::util::memops::{load_u64_le, store_u64_le};
+use crate::util::memops::{load_u64_le, store_u64_le, zero_extend};
 
 use wide::u32x4;
 
@@ -230,36 +230,21 @@ fn load_block_words(buf: &[u8]) -> [u64; 8] {
 
 pub fn hash512(data: &[u8]) -> [u8; 64] {
   let mut state = IV.map(row_from_u64_pair);
-  let mut block_count = 0u64;
-  let mut buf = [0u8; BLOCK];
-  let mut pos = 0usize;
-
-  for &byte in data {
-    buf[pos] = byte;
-    pos += 1;
-    if pos == BLOCK {
-      compress(&mut state, &load_block_words(&buf));
-      block_count += 1;
-      pos = 0;
-    }
+  let (blocks, tail) = data.as_chunks::<BLOCK>();
+  for block in blocks {
+    compress(&mut state, &load_block_words(block));
   }
 
-  if pos == 0 {
+  // A partial tail takes the padding bit and leaves the length to a block of
+  // its own. Without a tail, padding and length share one block.
+  let mut buf: [u8; BLOCK] = zero_extend(tail);
+  buf[tail.len()] = 0x80;
+  if !tail.is_empty() {
+    compress(&mut state, &load_block_words(&buf));
     buf = [0u8; BLOCK];
-    buf[0] = 0x80;
-    let bit_len = block_count << 9;
-    buf[56..].copy_from_slice(&bit_len.to_be_bytes());
-    compress(&mut state, &load_block_words(&buf));
-  } else {
-    let bit_len = (block_count << 9).wrapping_add((pos as u64) << 3);
-    buf[pos] = 0x80;
-    buf[pos + 1..].fill(0);
-    compress(&mut state, &load_block_words(&buf));
-
-    buf = [0u8; BLOCK];
-    buf[56..].copy_from_slice(&bit_len.to_be_bytes());
-    compress(&mut state, &load_block_words(&buf));
   }
+  buf[56..].copy_from_slice(&((data.len() as u64) << 3).to_be_bytes());
+  compress(&mut state, &load_block_words(&buf));
 
   let mut out = [0u8; 64];
   let mut row = 0;

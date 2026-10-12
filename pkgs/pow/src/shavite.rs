@@ -8,7 +8,7 @@
 
 use crate::aes::{block_from_words, round_nk, words_from_block, Block};
 use crate::consts::shavite::{BLOCK, IV};
-use crate::util::memops::{digest_from_u32_le, load_u32_le};
+use crate::util::memops::{digest_from_u32_le, load_u32_le, zero_extend};
 
 use wide::u32x4;
 
@@ -265,31 +265,24 @@ fn hash_to_words(data: &[u8]) -> State {
   let mut chaining_value = IV;
   let mut counter = [0u32; 4];
 
-  let mut pos = 0;
-  while pos + BLOCK <= data.len() {
+  let (blocks, tail) = data.as_chunks::<BLOCK>();
+  for block in blocks {
     increment_counter(&mut counter, 1024);
-    let mut block = [0u8; BLOCK];
-    block.copy_from_slice(&data[pos..pos + BLOCK]);
-    compress_block(&mut chaining_value, &block, &counter);
-    pos += BLOCK;
+    compress_block(&mut chaining_value, block, &counter);
   }
 
-  let used = data.len() - pos;
+  let used = tail.len();
   increment_counter(&mut counter, (used as u32) * 8);
   let saved_counter = counter;
 
-  let mut block = [0u8; BLOCK];
+  let mut block: [u8; BLOCK] = zero_extend(tail);
+  block[used] = 0x80;
   if used == 0 {
-    block[0] = 0x80;
     counter = [0; 4];
-  } else {
-    block[..used].copy_from_slice(&data[pos..]);
-    block[used] = 0x80;
-    if used >= 110 {
-      compress_block(&mut chaining_value, &block, &counter);
-      block = [0u8; BLOCK];
-      counter = [0; 4];
-    }
+  } else if used >= 110 {
+    compress_block(&mut chaining_value, &block, &counter);
+    block = [0u8; BLOCK];
+    counter = [0; 4];
   }
 
   block[110..114].copy_from_slice(&saved_counter[0].to_le_bytes());

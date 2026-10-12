@@ -108,6 +108,14 @@ pub(crate) fn digest_from_u64_le<const N: usize>(words: &[u64; N]) -> [u8; 64] {
   out
 }
 
+/// Copies `bytes` into the start of a zeroed `N`-byte buffer.
+#[inline]
+pub(crate) fn zero_extend<const N: usize>(bytes: &[u8]) -> [u8; N] {
+  let mut out = [0u8; N];
+  out[..bytes.len()].copy_from_slice(bytes);
+  out
+}
+
 /// Copies `N` bytes from `src` starting at `offset` into a fixed-size array,
 /// avoiding range-based slice indexing which is not yet const-stable.
 #[inline]

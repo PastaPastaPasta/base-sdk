@@ -8,7 +8,7 @@
 
 use crate::consts::luffa::{BLOCK, IV, RC, RC_FIRST4_HIGH, RC_FIRST4_LOW};
 use crate::util::arx::rotl_u32x4;
-use crate::util::memops::{load_u32_le, store_u32_le};
+use crate::util::memops::{load_u32_le, store_u32_le, zero_extend};
 
 use wide::u32x4;
 
@@ -276,17 +276,14 @@ fn permute_first_four_branches(state: &mut [[u32; 8]; 5]) {
 pub fn hash512(data: &[u8]) -> [u8; 64] {
   let mut state: [[u32; 8]; 5] = IV;
 
-  let mut pos = 0;
-  while pos + BLOCK <= data.len() {
-    inject_message(&mut state, &load_block_words(&data[pos..pos + BLOCK]));
+  let (blocks, tail) = data.as_chunks::<BLOCK>();
+  for block in blocks {
+    inject_message(&mut state, &load_block_words(block));
     permute_state(&mut state);
-    pos += BLOCK;
   }
 
-  let remaining = data.len() - pos;
-  let mut block = [0u8; BLOCK];
-  block[..remaining].copy_from_slice(&data[pos..]);
-  block[remaining] = 0x80;
+  let mut block: [u8; BLOCK] = zero_extend(tail);
+  block[tail.len()] = 0x80;
 
   let mut out = [0u8; 64];
   let mut final_round = 0;

@@ -7,7 +7,7 @@
 //! SIMD-512 hash function.
 
 use crate::consts::simd::{ALPHA_TAB, BLOCK, IV, PP8K, WBP, YOFF_B_F, YOFF_B_N};
-use crate::util::memops::{digest_from_u32_le, load_u32_le};
+use crate::util::memops::{digest_from_u32_le, load_u32_le, zero_extend};
 
 use wide::{i32x4, i32x8, u32x8};
 
@@ -421,23 +421,18 @@ pub(super) fn hash_to_words(data: &[u8]) -> [u32; 16] {
   let mut count_low = 0u32;
   let mut count_high = 0u32;
 
-  let mut pos = 0;
-  while pos + BLOCK <= data.len() {
-    let mut block = [0u8; BLOCK];
-    block.copy_from_slice(&data[pos..pos + BLOCK]);
-    compress(&mut h, &block, false);
+  let (blocks, tail) = data.as_chunks::<BLOCK>();
+  for block in blocks {
+    compress(&mut h, block, false);
     count_low = count_low.wrapping_add(1);
     if count_low == 0 {
       count_high = count_high.wrapping_add(1);
     }
-    pos += BLOCK;
   }
 
-  let ptr = data.len() - pos;
+  let ptr = tail.len();
   if ptr > 0 {
-    let mut block = [0u8; BLOCK];
-    block[..ptr].copy_from_slice(&data[pos..]);
-    compress(&mut h, &block, false);
+    compress(&mut h, &zero_extend(tail), false);
   }
 
   let mut block = [0u8; BLOCK];

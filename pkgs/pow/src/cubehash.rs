@@ -8,7 +8,7 @@
 
 use crate::consts::cubehash::{BLOCK, IV};
 use crate::util::arx::rotl_u32x4;
-use crate::util::memops::{digest_from_u32_le, load_u32_le};
+use crate::util::memops::{digest_from_u32_le, load_u32_le, zero_extend};
 
 use wide::u32x4;
 
@@ -142,18 +142,14 @@ pub fn hash512(data: &[u8]) -> [u8; 64] {
     load_vec(&words, 7),
   ];
 
-  // Absorb full blocks
-  let mut pos = 0;
-  while pos + BLOCK <= data.len() {
-    absorb_block(&mut state, &data[pos..(pos + BLOCK)]);
-    pos += BLOCK;
+  let (blocks, tail) = data.as_chunks::<BLOCK>();
+  for block in blocks {
+    absorb_block(&mut state, block);
   }
 
   // Pad the final block: append `0x80`, fill with zeros.
-  let mut last = [0u8; BLOCK];
-  let remaining = data.len() - pos;
-  last[..remaining].copy_from_slice(&data[pos..]);
-  last[remaining] = 0x80;
+  let mut last: [u8; BLOCK] = zero_extend(tail);
+  last[tail.len()] = 0x80;
   absorb_block(&mut state, &last);
 
   // Finalization: xor 1 into the last state word, then run ten more

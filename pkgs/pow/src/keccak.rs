@@ -113,30 +113,25 @@ pub fn keccak_f1600(state: &mut [u64; 25]) {
 /// Keccak-512 sponge parameterised over a permutation function.
 pub(crate) fn sponge(data: &[u8], perm: fn(&mut [u64; 25])) -> [u8; 64] {
   use crate::consts::keccak::RATE;
-  use crate::util::memops::{digest_from_u64_le, load_u64_le};
+  use crate::util::memops::{digest_from_u64_le, zero_extend};
 
   let mut state = [0u64; 25];
-  let mut pos = 0;
-  while pos + RATE <= data.len() {
-    let mut i = 0;
-    while i < 9 {
-      state[i] ^= load_u64_le(&data[pos..], i);
-      i += 1;
+  let absorb = |state: &mut [u64; 25], block: &[u8; RATE]| {
+    for (lane, word) in state.iter_mut().zip(block.as_chunks::<8>().0) {
+      *lane ^= u64::from_le_bytes(*word);
     }
+  };
+
+  let (blocks, tail) = data.as_chunks::<RATE>();
+  for block in blocks {
+    absorb(&mut state, block);
     perm(&mut state);
-    pos += RATE;
   }
 
-  let mut last = [0u8; RATE];
-  let remaining = data.len() - pos;
-  last[..remaining].copy_from_slice(&data[pos..]);
-  last[remaining] = 0x01;
+  let mut last: [u8; RATE] = zero_extend(tail);
+  last[tail.len()] = 0x01;
   last[RATE - 1] |= 0x80;
-  let mut i = 0;
-  while i < 9 {
-    state[i] ^= load_u64_le(&last, i);
-    i += 1;
-  }
+  absorb(&mut state, &last);
   perm(&mut state);
   digest_from_u64_le(&state)
 }

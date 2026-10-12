@@ -7,7 +7,7 @@
 //! Blake-512 hash function.
 
 use crate::consts::blake::{BLOCK, CB, IV, SIGMA};
-use crate::util::memops::{digest_from_u64_le, load_u64_le, store_u64_le};
+use crate::util::memops::{digest_from_u64_le, load_u64_le, store_u64_le, zero_extend};
 
 /// Compresses one 128-byte block into the chaining state.
 ///
@@ -79,14 +79,13 @@ pub fn hash_to_state(data: &[u8]) -> [u64; 8] {
   let mut t0: u64 = 0;
   let mut t1: u64 = 0;
 
-  let mut pos = 0;
-  while pos + BLOCK <= data.len() {
+  let (blocks, tail) = data.as_chunks::<BLOCK>();
+  for block in blocks {
     advance_counter(&mut t0, &mut t1);
-    compress(&mut h, &load_message(&data[pos..(pos + BLOCK)]), t0, t1);
-    pos += BLOCK;
+    compress(&mut h, &load_message(block), t0, t1);
   }
 
-  let remaining = data.len() - pos;
+  let remaining = tail.len();
   let bit_len = (remaining as u64) * 8;
   let tl = t0.wrapping_add(bit_len);
   let th = if bit_len > 0 && tl < t0 { t1.wrapping_add(1) } else { t1 };
@@ -101,8 +100,7 @@ pub fn hash_to_state(data: &[u8]) -> [u64; 8] {
     t0 = t0.wrapping_sub(1024 - bit_len);
   }
 
-  let mut pad = [0u8; 2 * BLOCK];
-  pad[..remaining].copy_from_slice(&data[pos..]);
+  let mut pad: [u8; 2 * BLOCK] = zero_extend(tail);
   pad[remaining] = 0x80;
 
   if remaining <= 111 {

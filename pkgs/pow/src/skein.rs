@@ -7,7 +7,7 @@
 //! Skein-512 hash function.
 
 use crate::consts::skein::{BLOCK, IV, NW};
-use crate::util::memops::{digest_from_u64_le, load_u64_le};
+use crate::util::memops::{digest_from_u64_le, load_u64_le, zero_extend};
 use crate::util::threefish::encrypt;
 
 /// UBI type code for message blocks.
@@ -79,26 +79,27 @@ pub fn ubi(state: &mut Chaining, plaintext: &BlockWords, tweak: UbiTweak) {
 
 /// Hashes the message stream as one UBI message stream.
 fn hash_message_blocks(state: &mut Chaining, data: &[u8]) {
-  let mut pos = 0usize;
   let mut blocks = 0u64;
+
+  // The last block carries the final flag even when it is full, so it is
+  // split off before the loop. An empty message still has one final block.
+  let (body, tail) = data.split_at(data.len().saturating_sub(1) / BLOCK * BLOCK);
 
   // UBI counts bytes, not blocks. The tweak position is the total number
   // of message bytes seen after each block.
-  while pos + BLOCK < data.len() {
+  for block in body.as_chunks::<BLOCK>().0 {
     let tweak = UbiTweak {
       position: (blocks + 1) << 6,
       kind: TYPE_MSG,
       first: blocks == 0,
       final_block: false,
     };
-    ubi(state, &load_block(&data[pos..pos + BLOCK]), tweak);
-    pos += BLOCK;
+    ubi(state, &load_block(block), tweak);
     blocks += 1;
   }
 
-  let remaining = data.len() - pos;
-  let mut last = [0u8; BLOCK];
-  last[..remaining].copy_from_slice(&data[pos..]);
+  let remaining = tail.len();
+  let last: [u8; BLOCK] = zero_extend(tail);
   let tweak = UbiTweak {
     position: (blocks << 6).wrapping_add(remaining as u64),
     kind: TYPE_MSG,

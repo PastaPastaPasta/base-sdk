@@ -8,7 +8,7 @@
 
 use crate::aes::{block_from_words, round, round_nk, words_from_block, Block};
 use crate::consts::echo::BLOCK;
-use crate::util::memops::{digest_from_u32_le, load_u32_le};
+use crate::util::memops::{digest_from_u32_le, load_u32_le, zero_extend};
 
 use wide::{i8x16, u32x4};
 
@@ -160,16 +160,13 @@ fn hash_to_cells(data: &[u8]) -> ChainingValue {
   let mut chaining_value = [[512, 0, 0, 0]; 8];
   let mut counter = [0u32; 4];
 
-  let mut pos = 0;
-  while pos + BLOCK <= data.len() {
+  let (blocks, tail) = data.as_chunks::<BLOCK>();
+  for block in blocks {
     increment_counter(&mut counter, 1024);
-    let mut block = [0u8; BLOCK];
-    block.copy_from_slice(&data[pos..pos + BLOCK]);
-    compress_block(&mut chaining_value, &block, &counter);
-    pos += BLOCK;
+    compress_block(&mut chaining_value, block, &counter);
   }
 
-  let used = data.len() - pos;
+  let used = tail.len();
   let used_bits = (used as u32) * 8;
   increment_counter(&mut counter, used_bits);
   let saved_counter = counter;
@@ -178,10 +175,7 @@ fn hash_to_cells(data: &[u8]) -> ChainingValue {
     counter = [0; 4];
   }
 
-  let mut block = [0u8; BLOCK];
-  if used > 0 {
-    block[..used].copy_from_slice(&data[pos..]);
-  }
+  let mut block: [u8; BLOCK] = zero_extend(tail);
   block[used] = 0x80;
 
   if used + 1 > BLOCK - 18 {
