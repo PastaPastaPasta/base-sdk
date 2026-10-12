@@ -80,16 +80,16 @@ const fn rotate_bundle_words(bundle: Bundle) -> Bundle {
 
 /// Reads one counter word according to the schedule descriptor.
 #[inline(always)]
-fn counter_word(counter: &[u32; 4], word: CounterWord) -> u32 {
+fn counter_word(counter: u128, word: CounterWord) -> u32 {
   match word {
-    CounterWord::Counter(index) => counter[index],
-    CounterWord::InvertedCounter(index) => !counter[index],
+    CounterWord::Counter(index) => (counter >> (32 * index)) as u32,
+    CounterWord::InvertedCounter(index) => !(counter >> (32 * index)) as u32,
   }
 }
 
 /// Expands one 128-byte block into 112 four-word schedule bundles.
 #[inline(always)]
-fn expand_round_keys_words(msg: &BlockWords, counter: &[u32; 4]) -> [Bundle; SCHEDULE_BUNDLES] {
+fn expand_round_keys_words(msg: &BlockWords, counter: u128) -> [Bundle; SCHEDULE_BUNDLES] {
   let mut schedule = [[0u32; 4]; SCHEDULE_BUNDLES];
   let mut bundle = 0;
   while bundle < 8 {
@@ -134,7 +134,7 @@ fn expand_round_keys_words(msg: &BlockWords, counter: &[u32; 4]) -> [Bundle; SCH
 }
 
 #[inline(always)]
-fn expand_round_keys(msg: &[u8; BLOCK], counter: &[u32; 4]) -> [Bundle; SCHEDULE_BUNDLES] {
+fn expand_round_keys(msg: &[u8; BLOCK], counter: u128) -> [Bundle; SCHEDULE_BUNDLES] {
   let words = core::array::from_fn(|word| load_u32_le(msg, word));
   expand_round_keys_words(&words, counter)
 }
@@ -164,7 +164,7 @@ fn expand_linear_step(schedule: &[Bundle; SCHEDULE_BUNDLES], bundle: usize) -> B
 
 /// Injects the HAIFA counter words at one schedule checkpoint.
 #[inline(always)]
-fn inject_counter_words(bundle_words: &mut Bundle, counter: &[u32; 4], injection: CounterInjection) {
+fn inject_counter_words(bundle_words: &mut Bundle, counter: u128, injection: CounterInjection) {
   let mut word = 0;
   while word < 4 {
     bundle_words[word] ^= counter_word(counter, injection.words[word]);
@@ -210,7 +210,7 @@ fn rotate_columns(state: &mut State) {
 
 /// Runs the SHAvite-3-512 compression function.
 #[inline(always)]
-pub fn compress_block(chaining_value: &mut State, msg: &[u8; BLOCK], counter: &[u32; 4]) {
+pub fn compress_block(chaining_value: &mut State, msg: &[u8; BLOCK], counter: u128) {
   let schedule = expand_round_keys(msg, counter);
   compress_schedule(chaining_value, &schedule);
 }
@@ -246,52 +246,33 @@ fn compress_schedule(chaining_value: &mut State, schedule: &[Bundle; SCHEDULE_BU
   }
 }
 
-/// Adds `bits` to the 128-bit message counter.
-#[inline(always)]
-fn increment_counter(counter: &mut [u32; 4], bits: u32) {
-  counter[0] = counter[0].wrapping_add(bits);
-  if counter[0] < bits {
-    counter[1] = counter[1].wrapping_add(1);
-    if counter[1] == 0 {
-      counter[2] = counter[2].wrapping_add(1);
-      if counter[2] == 0 {
-        counter[3] = counter[3].wrapping_add(1);
-      }
-    }
-  }
-}
-
 fn hash_to_words(data: &[u8]) -> State {
   let mut chaining_value = IV;
-  let mut counter = [0u32; 4];
+  let mut counter = 0u128;
 
   let (blocks, tail) = data.as_chunks::<BLOCK>();
   for block in blocks {
-    increment_counter(&mut counter, 1024);
-    compress_block(&mut chaining_value, block, &counter);
+    counter = counter.wrapping_add(1024);
+    compress_block(&mut chaining_value, block, counter);
   }
 
   let used = tail.len();
-  increment_counter(&mut counter, (used as u32) * 8);
+  counter = counter.wrapping_add(used as u128 * 8);
   let saved_counter = counter;
 
   let mut block: [u8; BLOCK] = zero_extend(tail);
   block[used] = 0x80;
   if used == 0 {
-    counter = [0; 4];
+    counter = 0;
   } else if used >= 110 {
-    compress_block(&mut chaining_value, &block, &counter);
+    compress_block(&mut chaining_value, &block, counter);
     block = [0u8; BLOCK];
-    counter = [0; 4];
+    counter = 0;
   }
 
-  block[110..114].copy_from_slice(&saved_counter[0].to_le_bytes());
-  block[114..118].copy_from_slice(&saved_counter[1].to_le_bytes());
-  block[118..122].copy_from_slice(&saved_counter[2].to_le_bytes());
-  block[122..126].copy_from_slice(&saved_counter[3].to_le_bytes());
-  block[126] = (16u32 << 5) as u8;
-  block[127] = (16u32 >> 3) as u8;
-  compress_block(&mut chaining_value, &block, &counter);
+  block[110..126].copy_from_slice(&saved_counter.to_le_bytes());
+  block[126..].copy_from_slice(&512u16.to_le_bytes());
+  compress_block(&mut chaining_value, &block, counter);
 
   chaining_value
 }
