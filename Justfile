@@ -5,7 +5,6 @@ python := if os() == "windows" { "python" } else { "python3" }
 # `[env]` attribute unavailable on just 1.40 packaged with Debian trixie
 # (see https://packages.debian.org/trixie/just)
 export RUSTDOCFLAGS := "-D warnings"
-export RUSTFLAGS := "-D warnings"
 
 nextest := "cargo nextest run --config-file maint/nextest.toml --profile=ci"
 
@@ -36,9 +35,9 @@ preview:
     {{ python }} docs/build_docs.py preview
 
 test:
-    cargo clippy --all-targets --no-default-features
-    cargo clippy --all-targets --features full
-    cargo clippy --all-targets --features full,portable
+    cargo clippy --all-targets --no-default-features -- -D warnings
+    cargo clippy --all-targets --features full -- -D warnings
+    cargo clippy --all-targets --features full,portable -- -D warnings
     {{ nextest }} --fail-fast --workspace --features full
     cargo test --doc --workspace --features full
     cargo doc --workspace --no-deps --features full

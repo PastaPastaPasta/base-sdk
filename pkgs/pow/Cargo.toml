@@ -53,3 +53,6 @@ required-features = ["simd"]
 
 [lints]
 workspace = true
+
+[package.metadata.docs.rs]
+features = ["portable"]

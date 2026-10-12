@@ -25,7 +25,6 @@ jobs:
     name: ubuntu-24.04-arm (nightly, ${{ matrix.config.name }})
     runs-on: ubuntu-24.04-arm
     env:
-      RUSTFLAGS: -D warnings
       HAS_CODECOV: ${{ secrets.CODECOV_TOKEN != '' }}
     strategy:
       fail-fast: false

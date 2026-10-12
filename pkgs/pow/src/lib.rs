@@ -17,6 +17,39 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+#[cfg(all(
+  not(any(doc, feature = "portable")),
+  target_arch = "x86_64",
+  not(all(
+    target_feature = "aes",
+    target_feature = "avx",
+    target_feature = "avx2",
+    target_feature = "bmi1",
+    target_feature = "bmi2",
+    target_feature = "f16c",
+    target_feature = "fma",
+    target_feature = "lzcnt",
+    target_feature = "movbe",
+    target_feature = "xsave",
+  ))
+))]
+compile_error!(concat!(
+  "dash-pow requires x86-64-v3 and AES, build with ",
+  "`-C target-cpu=x86-64-v3 -C target-feature=+aes` or enable `portable`",
+));
+#[cfg(all(
+  not(any(doc, feature = "portable")),
+  target_arch = "aarch64",
+  not(all(target_feature = "neon", target_feature = "aes"))
+))]
+compile_error!("dash-pow requires NEON and AES, build with `-C target-feature=+neon,+aes` or enable `portable`");
+#[cfg(all(
+  not(any(doc, feature = "portable")),
+  target_arch = "wasm32",
+  not(target_feature = "simd128")
+))]
+compile_error!("dash-pow requires 128-bit SIMD, build with `-C target-feature=+simd128` or enable `portable`");
+
 mod blake;
 mod bmw;
 mod cubehash;

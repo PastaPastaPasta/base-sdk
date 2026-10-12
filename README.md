@@ -28,6 +28,17 @@
 | [dash-script](./pkgs/script) | Script opcodes, classification, and address derivation | [![dash-script](https://img.shields.io/github/actions/workflow/status/dashpay/base-sdk/pkg_script.yml?style=flat&logo=github&logoColor=white&label=script)](https://github.com/dashpay/base-sdk/actions/workflows/pkg_script.yml) | [![dash-script](https://img.shields.io/codecov/c/github/dashpay/base-sdk/develop?flag=dash-script&style=flat&logo=codecov&logoColor=white&label=script)](https://app.codecov.io/github/dashpay/base-sdk/tree/develop/pkgs%2Fscript) | _Unreleased._ |
 | [dash-types](./pkgs/types) | Shared byte and integer newtypes, serde helpers | [![dash-types](https://img.shields.io/github/actions/workflow/status/dashpay/base-sdk/pkg_types.yml?style=flat&logo=github&logoColor=white&label=types)](https://github.com/dashpay/base-sdk/actions/workflows/pkg_types.yml) | [![dash-types](https://img.shields.io/codecov/c/github/dashpay/base-sdk/develop?flag=dash-types&style=flat&logo=codecov&logoColor=white&label=types)](https://app.codecov.io/github/dashpay/base-sdk/tree/develop/pkgs%2Ftypes) | [![dash-types](https://img.shields.io/crates/v/dash-types?style=flat&logo=hackthebox&logoColor=white&label=types&color=teal)](https://crates.io/crates/dash-types) |
 
+## System Requirements
+
+Some crates rely on instruction set extensions that set hardware minimums for the architectures listed below. Builds
+for these architectures fail unless the build flags for them are [defined](.cargo/config.toml) or the `portable` feature
+is enabled. Builds for other architectures run without hardware acceleration.
+
+* (x86_64) Intel Broadwell, AMD Zen, or newer with AES-NI and ADX enabled.
+* (AArch64) ARMv8-A or newer with
+  [cryptographic extensions](https://support.arm.com/documentation/109697/2026_06/Feature-descriptions/The-Armv8-0-architecture-extension?lang=en#md445-the-armv80-architecture-extension__feat_FEAT_Crypto).
+* (WebAssembly) Wasm 2.0-capable runtime with support for [vector instructions](https://www.w3.org/TR/2024/CR-wasm-core-2-20241217/#vector-instructions).
+
 <!-- [end:crate-info] -->
 
 ## Documentation
