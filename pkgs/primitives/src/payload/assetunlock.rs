@@ -6,12 +6,13 @@
 
 //! AssetUnlock (type 9): Platform to L1.
 
-use super::QuorumHash;
-use crate::codec::codec_payload;
+use super::{bls, QuorumHash};
+use crate::hash_impl;
 
-use dash_pkc::bls::{BlsScIetf, BlsSigBytes};
+use dash_pkc::bls::BlsGlobalSig;
+use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::Checkable;
+use dash_types::{impl_type, Checkable};
 
 use core::fmt;
 
@@ -30,18 +31,36 @@ pub struct AssetUnlock {
   pub requested_height: u32,
   /// Quorum hash.
   pub quorum_hash: QuorumHash,
-  /// Quorum BLS authorization signature.
-  pub quorum_sig: BlsSigBytes<BlsScIetf>,
+  /// Quorum BLS authorization signature, as its wire bytes. Its scheme is
+  /// Core's process-wide flag where the signature is used, given to
+  /// [`get`](dash_pkc::bls::BlsGlobal::get).
+  #[cfg_attr(feature = "serde", serde(with = "super::bls::serde::global"))]
+  pub quorum_sig: BlsGlobalSig,
 }
 
-codec_payload!(AssetUnlock {
-  version,
-  index,
-  fee,
-  requested_height,
-  quorum_hash,
-  quorum_sig,
-});
+impl_type!(AssetUnlock);
+
+impl BaseCodec for AssetUnlock {
+  fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
+    Ok(Self {
+      version: u8::decode(data)?,
+      index: u64::decode(data)?,
+      fee: u32::decode(data)?,
+      requested_height: u32::decode(data)?,
+      quorum_hash: QuorumHash::decode(data)?,
+      quorum_sig: bls::read_global(data)?,
+    })
+  }
+
+  fn encode(&self, buf: &mut impl EncodeBuf) {
+    self.version.encode(buf);
+    self.index.encode(buf);
+    self.fee.encode(buf);
+    self.requested_height.encode(buf);
+    self.quorum_hash.encode(buf);
+    self.quorum_sig.to_bytes().encode(buf);
+  }
+}
 
 /// Asset unlock validation failure.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, thiserror::Error, Unencodable)]
@@ -69,6 +88,8 @@ impl Checkable for AssetUnlock {
     None
   }
 }
+
+hash_impl!(AssetUnlock);
 
 impl fmt::Display for AssetUnlock {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

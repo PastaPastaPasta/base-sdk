@@ -7,35 +7,50 @@
 //! Special transaction payload decoders.
 //!
 //! Each payload type is decoded from the `extra_payload` field of a
-//! `Transaction` whose `tx_type` is not `Spend`.
+//! `Transaction` whose `tx_type` is not `Spend`. A BLS field takes its scheme
+//! from the payload's version or is always basic, and encodes under the
+//! scheme its payload gives when encoded. A field under Core's process-wide
+//! flag keeps its wire bytes ([`BlsGlobal`](dash_pkc::bls::BlsGlobal)), so
+//! no payload needs the flag to decode.
 
 mod assetlock;
 mod assetunlock;
+mod bls;
 mod cbtx;
 mod mnhftx;
+mod prodistx;
 mod proregtx;
 mod proupregtx;
 mod prouprevtx;
 mod proupservtx;
+mod proupsharedregtx;
+mod proupsharetx;
 mod quorum;
+mod shares;
 
 use crate::hash_impl;
 use crate::prelude::*;
-use crate::types::{NIError, NIPurpose, NITrait, NetInfoV2};
+use crate::types::{NIError, NIPurpose, NITrait, NetInfo, NetInfoV1, NetInfoV2};
 
 use dash_num::make_hash;
+use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{enum_map, impl_num, Checkable};
 
 pub use self::assetlock::{AssetLock, AssetLockInvalid};
 pub use self::assetunlock::{AssetUnlock, AssetUnlockInvalid};
+pub use self::bls::{commitment_bls_scheme, protx_bls_scheme};
 pub use self::cbtx::{CbTxInvalid, CoinbaseCommitment};
 pub use self::mnhftx::{MnHardFork, MnHardForkInvalid, VERSIONBITS_NUM_BITS};
+pub use self::prodistx::ProDisTx;
 pub use self::proregtx::ProRegTx;
 pub use self::proupregtx::ProUpRegTx;
 pub use self::prouprevtx::ProUpRevTx;
 pub use self::proupservtx::ProUpServTx;
+pub use self::proupsharedregtx::ProUpSharedRegTx;
+pub use self::proupsharetx::ProUpShareTx;
 pub use self::quorum::{Commitment, CommitmentInvalid, FinalCommitment, QuorumVvecHash};
+pub use self::shares::{CollateralShare, CompactSig, PayoutShare, COMPACT_SIG_LEN};
 
 pub use dash_pkc::__private::__EddsaPkHash as PlatformNodeId;
 
@@ -43,7 +58,6 @@ pub use dash_pkc::__private::__EddsaPkHash as PlatformNodeId;
 pub(crate) const MAX_OPERATOR_REWARD: u16 = 10_000;
 
 /// ProTx version: legacy BLS operator keys (v1).
-#[expect(unused, reason = "consensus constant")]
 pub(crate) const PROTX_VERSION_LEGACY_BLS: u16 = 1;
 
 /// ProTx version: basic (IETF) BLS operator keys (v2).
@@ -51,6 +65,90 @@ pub(crate) const PROTX_VERSION_BASIC_BLS: u16 = 2;
 
 /// ProTx version: extended network addresses (v3).
 pub(crate) const PROTX_VERSION_EXT_ADDR: u16 = 3;
+
+/// Checks that platform fields are consistent with mn_type and version.
+pub(super) fn check_platform_fields(
+  mn_type: MnType,
+  version: u16,
+  platform_node_id: &Option<PlatformNodeId>,
+  platform_p2p_port: Option<u16>,
+  platform_http_port: Option<u16>,
+) -> Option<ProTxInvalid> {
+  if mn_type == MnType::Evo {
+    if platform_node_id.is_none() {
+      return Some(ProTxInvalid::BadPlatformFields);
+    }
+    if version < PROTX_VERSION_EXT_ADDR {
+      if platform_p2p_port.is_none() || platform_http_port.is_none() {
+        return Some(ProTxInvalid::BadPlatformFields);
+      }
+    } else if platform_p2p_port.is_some() || platform_http_port.is_some() {
+      return Some(ProTxInvalid::BadPlatformFields);
+    }
+  } else if platform_node_id.is_some() || platform_p2p_port.is_some() || platform_http_port.is_some() {
+    return Some(ProTxInvalid::BadPlatformFields);
+  }
+  None
+}
+
+/// The platform node id, P2P port and HTTP port of an Evo node.
+pub(super) type PlatformFields = (Option<PlatformNodeId>, Option<u16>, Option<u16>);
+
+/// Reads the platform fields that follow the inputs hash for Evo nodes.
+pub(super) fn read_platform_fields(
+  data: &mut &[u8],
+  mn_type: MnType,
+  version: u16,
+) -> Result<PlatformFields, DecodeError> {
+  if mn_type != MnType::Evo {
+    return Ok((None, None, None));
+  }
+  let node_id = PlatformNodeId::decode(data)?;
+  if version < PROTX_VERSION_EXT_ADDR {
+    Ok((Some(node_id), Some(u16::decode(data)?), Some(u16::decode(data)?)))
+  } else {
+    Ok((Some(node_id), None, None))
+  }
+}
+
+/// Writes the platform fields as [`read_platform_fields`] reads them.
+pub(super) fn write_platform_fields(
+  buf: &mut impl EncodeBuf,
+  mn_type: MnType,
+  version: u16,
+  platform_node_id: &Option<PlatformNodeId>,
+  platform_p2p_port: Option<u16>,
+  platform_http_port: Option<u16>,
+) {
+  if mn_type == MnType::Evo {
+    platform_node_id.unwrap_or_default().encode(buf);
+    if version < PROTX_VERSION_EXT_ADDR {
+      platform_p2p_port.unwrap_or(0).encode(buf);
+      platform_http_port.unwrap_or(0).encode(buf);
+    }
+  }
+}
+
+/// Reads the network info a version carries, extended from v3.
+pub(super) fn read_net_info(data: &mut &[u8], version: u16) -> Result<NetInfo, DecodeError> {
+  if version >= PROTX_VERSION_EXT_ADDR {
+    Ok(NetInfo::Extended(NetInfoV2::decode(data)?))
+  } else {
+    Ok(NetInfo::Legacy(NetInfoV1::decode(data)?))
+  }
+}
+
+/// Writes the network info as [`read_net_info`] reads it. Validation
+/// guarantees the variant matches the version.
+pub(super) fn write_net_info(buf: &mut impl EncodeBuf, net_info: &NetInfo, version: u16) {
+  if version >= PROTX_VERSION_EXT_ADDR {
+    if let NetInfo::Extended(ext) = net_info {
+      ext.encode(buf);
+    }
+  } else if let NetInfo::Legacy(svc) = net_info {
+    svc.encode(buf);
+  }
+}
 
 make_hash! {
   /// LLMQ quorum identifier.
@@ -90,6 +188,12 @@ enum_map! {
     AssetLock = 8 => "asset_lock",
     /// Asset unlock: platform to L1 (type 9).
     AssetUnlock = 9 => "asset_unlock",
+    /// Shared masternode dissolution (type 10, v24).
+    ProviderDissolve = 10 => "provider_dissolve",
+    /// Shared masternode share update (type 11, v24).
+    ProviderUpdateShare = 11 => "provider_update_share",
+    /// Shared masternode registrar update (type 12, v24).
+    ProviderUpdateSharedRegistrar = 12 => "provider_update_shared_registrar",
   }
 }
 
@@ -190,8 +294,15 @@ pub(crate) fn check_sptx_netinfo(ext: &NetInfoV2, version: u16, mn_type: MnType)
 ///
 /// Provides a unified dispatch over all Dash special transaction types. Unknown
 /// or future types are stored as opaque bytes for forward compatibility.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Unencodable)]
+///
+/// A payload holding a lazy BLS field compares as Core's `operator==` does,
+/// which may decode the field, so it is neither `Eq` nor `Hash`.
+#[derive(Clone, Debug, PartialEq, Unencodable)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
+#[expect(
+  clippy::large_enum_variant,
+  reason = "decoded BLS fields hold their points; payloads are decoded one at a time"
+)]
 pub enum SpecialPayload {
   /// Masternode registration (type 1).
   ProviderRegister(ProRegTx),
@@ -211,6 +322,12 @@ pub enum SpecialPayload {
   AssetLock(AssetLock),
   /// Asset unlock: Platform to L1 (type 9).
   AssetUnlock(AssetUnlock),
+  /// Shared masternode dissolution (type 10).
+  ProviderDissolve(ProDisTx),
+  /// Shared masternode share update (type 11).
+  ProviderUpdateShare(ProUpShareTx),
+  /// Shared masternode registrar update (type 12).
+  ProviderUpdateSharedRegistrar(ProUpSharedRegTx),
   /// Unrecognized type, stored as raw bytes.
   Unknown {
     /// The transaction type code.
@@ -224,7 +341,7 @@ pub enum SpecialPayload {
 ///
 /// Core's `GetTxPayload` rejects a payload its decoder does not read to the
 /// end. That rule is the caller's, applied by comparing `consumed` with `len`.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Debug, PartialEq, Unencodable)]
 pub struct PayloadDecode {
   /// The decoded payload.
   pub payload: SpecialPayload,
@@ -297,6 +414,8 @@ impl Checkable for SpecialPayload {
       Self::MnhfSignal(p) => p.check().map(PayloadInvalid::MnHardFork),
       Self::AssetLock(p) => p.check().map(PayloadInvalid::AssetLock),
       Self::AssetUnlock(p) => p.check().map(PayloadInvalid::AssetUnlock),
+      // Core's trivial checks of the v24 shared-masternode types are not checked here.
+      Self::ProviderDissolve(_) | Self::ProviderUpdateShare(_) | Self::ProviderUpdateSharedRegistrar(_) => None,
       Self::Unknown { .. } => None,
     }
   }
@@ -317,38 +436,38 @@ impl SpecialPayload {
   ///
   /// Returns `PayloadError` if a recognized type fails to decode.
   pub fn decode(tx_type: TxType, data: &mut &[u8]) -> Result<Self, PayloadError> {
-    use dash_types::codec::{BaseCodec, DecodeError};
-
     let err = |e: DecodeError| PayloadError {
       tx_type,
       message: format!("{e}"),
     };
-    match tx_type {
-      TxType::Spend => Err(PayloadError {
-        tx_type,
-        message: String::from("spend transactions have no payload"),
-      }),
-      TxType::ProviderRegister => ProRegTx::decode(data).map(Self::ProviderRegister).map_err(err),
-      TxType::ProviderUpdateService => ProUpServTx::decode(data).map(Self::ProviderUpdateService).map_err(err),
-      TxType::ProviderUpdateRegistrar => ProUpRegTx::decode(data).map(Self::ProviderUpdateRegistrar).map_err(err),
-      TxType::ProviderUpdateRevoke => ProUpRevTx::decode(data).map(Self::ProviderUpdateRevoke).map_err(err),
-      TxType::CoinbaseCommitment => cbtx::CoinbaseCommitment::decode(data)
-        .map(Self::CoinbaseCommitment)
-        .map_err(err),
-      TxType::QuorumCommitment => FinalCommitment::decode(data).map(Self::QuorumCommitment).map_err(err),
-      TxType::MnhfSignal => MnHardFork::decode(data).map(Self::MnhfSignal).map_err(err),
-      TxType::AssetLock => assetlock::AssetLock::decode(data).map(Self::AssetLock).map_err(err),
-      TxType::AssetUnlock => assetunlock::AssetUnlock::decode(data)
-        .map(Self::AssetUnlock)
-        .map_err(err),
+    let decoded = match tx_type {
+      TxType::Spend => {
+        return Err(PayloadError {
+          tx_type,
+          message: String::from("spend transactions have no payload"),
+        })
+      }
+      TxType::ProviderRegister => ProRegTx::decode(data).map(Self::ProviderRegister),
+      TxType::ProviderUpdateService => ProUpServTx::decode(data).map(Self::ProviderUpdateService),
+      TxType::ProviderUpdateRegistrar => ProUpRegTx::decode(data).map(Self::ProviderUpdateRegistrar),
+      TxType::ProviderUpdateRevoke => ProUpRevTx::decode(data).map(Self::ProviderUpdateRevoke),
+      TxType::CoinbaseCommitment => CoinbaseCommitment::decode(data).map(Self::CoinbaseCommitment),
+      TxType::QuorumCommitment => FinalCommitment::decode(data).map(Self::QuorumCommitment),
+      TxType::MnhfSignal => MnHardFork::decode(data).map(Self::MnhfSignal),
+      TxType::AssetLock => AssetLock::decode(data).map(Self::AssetLock),
+      TxType::AssetUnlock => AssetUnlock::decode(data).map(Self::AssetUnlock),
+      TxType::ProviderDissolve => ProDisTx::decode(data).map(Self::ProviderDissolve),
+      TxType::ProviderUpdateShare => ProUpShareTx::decode(data).map(Self::ProviderUpdateShare),
+      TxType::ProviderUpdateSharedRegistrar => ProUpSharedRegTx::decode(data).map(Self::ProviderUpdateSharedRegistrar),
       unknown => {
         let bytes = data.to_vec();
         *data = &[];
-        Ok(Self::Unknown {
+        return Ok(Self::Unknown {
           tx_type: unknown,
           data: bytes,
-        })
+        });
       }
-    }
+    };
+    decoded.map_err(err)
   }
 }
