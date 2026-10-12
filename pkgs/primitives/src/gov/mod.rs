@@ -10,4 +10,4 @@ mod object;
 mod vote;
 
 pub use object::{GovData, GovObject, GovObjectType, Proposal, ProposalInvalid, Trigger};
-pub use vote::{GovVote, GovVoteBls, GovVoteEcdsa, VoteOutcome, VoteSignal};
+pub use vote::{GovVote, GovVoteBls, GovVoteEcdsa, GovVoteEcdsaSer, VoteOutcome, VoteSignal};
