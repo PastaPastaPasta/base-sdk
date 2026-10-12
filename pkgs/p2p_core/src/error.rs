@@ -6,25 +6,19 @@
 
 //! P2P-layer decoding errors.
 
+use crate::command::CommandString;
+use crate::msg::Version;
 use crate::prelude::*;
 
 use dash_types::codec::DecodeError;
 use dash_types::type_id::Unencodable;
 
-use core::fmt;
-
 /// An error encountered during P2P message decoding.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, thiserror::Error, Unencodable)]
 pub enum P2pDecodeError {
-  /// Underlying consensus decoding error.
+  /// A field failed to decode, as a Core read throws.
   #[error("{0}")]
-  Consensus(String),
-  /// Unrecognised 12-byte command string.
-  #[error(fmt = fmt_unknown_command)]
-  UnknownCommand {
-    /// The raw command bytes.
-    bytes: [u8; 12],
-  },
+  Consensus(DecodeError),
   /// V2 short ID does not map to a known message.
   #[error("unknown v2 short id: {id}")]
   UnknownShortId {
@@ -34,20 +28,62 @@ pub enum P2pDecodeError {
   /// Message payload exceeds the allowed size.
   #[error("{command} payload too large: {size} bytes, max {max}")]
   PayloadTooLarge {
-    /// Wire command name.
-    command: &'static str,
+    /// The message's command.
+    command: CommandString,
     /// Size of the raw payload, in bytes.
     size: usize,
     /// Maximum allowed size, in bytes.
     max: usize,
   },
-  /// Message carries a payload where none is permitted.
-  #[error("{command} must have an empty payload, got {size} bytes")]
-  PayloadNotEmpty {
+  /// V2 packet contents exceed the transport limit.
+  ///
+  /// Core disconnects on the decrypted length, before reading the type.
+  #[error("v2 contents too large: {size} bytes, max {max}")]
+  ContentsTooLarge {
+    /// Size of the contents, type included, in bytes.
+    size: usize,
+    /// Maximum allowed size, in bytes.
+    max: usize,
+  },
+  /// A command or long-form type Core's transport refuses, which it drops.
+  ///
+  /// Core keeps the peer and never hands the message to its handlers.
+  #[error("invalid command {:x?}", command.as_bytes())]
+  InvalidCommand {
+    /// The command as received.
+    command: CommandString,
+  },
+  /// V2 packet contents without a type byte, which Core drops.
+  #[error("empty v2 contents")]
+  EmptyV2Contents,
+  /// A V2 long-form type cut short, which Core drops.
+  #[error("v2 long-form type cut short: {remaining} of 12 bytes")]
+  TruncatedV2Type {
+    /// Type bytes present, of 12.
+    remaining: usize,
+  },
+  /// A message lists more entries than its handler accepts.
+  ///
+  /// Core checks the count before reading any entry and penalises the peer.
+  #[error("{command} lists {count} entries, max {max}")]
+  TooManyEntries {
     /// Wire command name.
     command: &'static str,
-    /// Size of the raw payload, in bytes.
-    size: usize,
+    /// The decoded entry count.
+    count: u64,
+    /// The handler's limit.
+    max: u64,
+  },
+  /// A `version` whose fields after `addr_recv` fail to decode.
+  ///
+  /// Core checks the peer's version and services in `head` before it reads
+  /// the later fields, and throws only after those checks pass.
+  #[error("version after addr_recv: {error}")]
+  VersionTail {
+    /// The fields decoded before the failure, the optional ones absent.
+    head: Box<Version>,
+    /// The decode failure in the optional fields.
+    error: String,
   },
   /// A field value is outside the valid range.
   #[error("invalid value for {field}")]
@@ -59,19 +95,6 @@ pub enum P2pDecodeError {
 
 impl From<DecodeError> for P2pDecodeError {
   fn from(e: DecodeError) -> Self {
-    Self::Consensus(format!("{e}"))
+    Self::Consensus(e)
   }
-}
-
-/// Formats `P2pDecodeError::UnknownCommand`, escaping non-printable bytes.
-fn fmt_unknown_command(bytes: &[u8; 12], f: &mut fmt::Formatter<'_>) -> fmt::Result {
-  f.write_str("unknown command: ")?;
-  for &b in bytes.iter().take_while(|&&b| b != 0) {
-    if b.is_ascii_graphic() || b == b' ' {
-      write!(f, "{}", b as char)?;
-    } else {
-      write!(f, "\\x{b:02x}")?;
-    }
-  }
-  Ok(())
 }

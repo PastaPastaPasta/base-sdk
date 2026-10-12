@@ -7,6 +7,7 @@
 //! P2P message types and dispatch.
 
 mod addr;
+mod bloom;
 mod gov;
 mod headers;
 mod headers2;
@@ -15,18 +16,19 @@ mod mn_list;
 mod ping;
 mod version;
 
+use crate::codec::MsgDecode;
 use crate::command::CommandString;
 use crate::prelude::*;
 use crate::short_id::ShortId;
 
-use bitcoin_consensus_encoding as encoding;
 use dash_primitives::{GovObject, GovVote};
 use dash_types::type_id::Unencodable;
 
 pub use addr::{Addr, AddrV2Entry, AddrV2Msg, TimestampedAddr};
+pub use bloom::{FilterAdd, FilterLoad, MerkleBlock, PartialMerkleTree};
 pub use gov::GovSync;
 pub use headers::{GetHeaders, Headers};
-pub use headers2::{CompressionState, GetHeaders2, Headers2};
+pub use headers2::{CompressedHeader, GetHeaders2, Headers2};
 pub use inv::{GetData, Inv, InvType, Inventory, NotFound};
 pub use mn_list::{DeletedQuorum, GetMnListDiff, MnListDiff, MnListDiffPayload, QuorumClSig, SimplifiedMnListEntry};
 pub use ping::{Ping, Pong};
@@ -68,6 +70,12 @@ define_p2p! {
     GetMnListDiff(GetMnListDiff) => GETMNLISTD "getmnlistd" @ 143,
     /// MN list diff.
     MnListDiff(MnListDiff) => MNLISTDIFF "mnlistdiff" @ 144,
+    /// BIP37: load bloom filter.
+    FilterLoad(FilterLoad) => FILTERLOAD "filterload" @ 8,
+    /// BIP37: add data to bloom filter.
+    FilterAdd(FilterAdd) => FILTERADD "filteradd" @ 6,
+    /// BIP37: filtered block. Core has no handler for it and ignores it.
+    MerkleBlock(MerkleBlock) => MERKLEBLOCK "merkleblock" @ 16,
   }
 
   parsed_empty {
@@ -81,6 +89,8 @@ define_p2p! {
     SendHeaders => SENDHEADERS "sendheaders",
     /// Prefer compressed header announcements.
     SendHeaders2 => SENDHEADERS2 "sendheaders2" @ 164,
+    /// BIP37: clear bloom filter.
+    FilterClear => FILTERCLEAR "filterclear" @ 7,
   }
 
   stub {
@@ -90,16 +100,10 @@ define_p2p! {
     BlockTxn => BLOCKTXN "blocktxn" @ 3,
     /// BIP152: compact block.
     CmpctBlock => CMPCTBLOCK "cmpctblock" @ 4,
-    /// BIP37: add data to bloom filter.
-    FilterAdd => FILTERADD "filteradd" @ 6,
-    /// BIP37: load bloom filter.
-    FilterLoad => FILTERLOAD "filterload" @ 8,
     /// Request block hashes.
     GetBlocks => GETBLOCKS "getblocks" @ 9,
     /// BIP152: request compact block transactions.
     GetBlockTxn => GETBLOCKTXN "getblocktxn" @ 10,
-    /// BIP37: filtered block.
-    MerkleBlock => MERKLEBLOCK "merkleblock" @ 16,
     /// BIP152: signal compact block support.
     SendCmpct => SENDCMPCT "sendcmpct" @ 20,
     /// Transaction.
@@ -179,8 +183,6 @@ define_p2p! {
   }
 
   stub_empty {
-    /// BIP37: clear bloom filter.
-    FilterClear => FILTERCLEAR "filterclear" @ 7,
     /// Request mempool contents.
     Mempool => MEMPOOL "mempool" @ 15,
     /// Request active sporks.
@@ -193,3 +195,21 @@ define_p2p! {
     QWatch => QWATCH "qwatch" @ 151,
   }
 }
+
+impl MsgDecode for Ping {}
+impl MsgDecode for Pong {}
+impl MsgDecode for Addr {}
+impl MsgDecode for AddrV2Msg {}
+impl MsgDecode for Inv {}
+impl MsgDecode for GetData {}
+impl MsgDecode for NotFound {}
+impl MsgDecode for GetHeaders {}
+impl MsgDecode for GetHeaders2 {}
+impl MsgDecode for GovSync {}
+impl MsgDecode for GovObject {}
+impl MsgDecode for GovVote {}
+impl MsgDecode for GetMnListDiff {}
+impl MsgDecode for MnListDiff {}
+impl MsgDecode for FilterLoad {}
+impl MsgDecode for FilterAdd {}
+impl MsgDecode for MerkleBlock {}
