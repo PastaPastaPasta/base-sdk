@@ -42,8 +42,6 @@ name = "luffa"
 name = "shavite"
 [[test]]
 name = "simd_hash"
-[[test]]
-name = "skein"
 [[bench]]
 name = "pow"
 path = "bench/main.rs"

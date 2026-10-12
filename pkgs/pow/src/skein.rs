@@ -4,9 +4,9 @@
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
 
-//! SIMD Skein-512 implementation.
+//! Skein-512 hash function.
 
-use super::consts::{BLOCK, IV, NW};
+use crate::consts::skein::{BLOCK, IV, NW};
 use crate::util::memops::{load_u64_le, store_u64_le};
 use crate::util::threefish::encrypt;
 
@@ -136,4 +136,15 @@ pub fn hash512(data: &[u8]) -> [u8; 64] {
     index += 1;
   }
   out
+}
+
+#[cfg(test)]
+mod tests {
+  use super::hash512;
+  use crate::tests::run_nist_kat;
+
+  #[test]
+  fn nist_kat() {
+    run_nist_kat("skein", hash512);
+  }
 }
