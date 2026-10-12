@@ -7,7 +7,7 @@
 //! Skein-512 hash function.
 
 use crate::consts::skein::{BLOCK, IV, NW};
-use crate::util::memops::{load_u64_le, store_u64_le};
+use crate::util::memops::{digest_from_u64_le, load_u64_le};
 use crate::util::threefish::encrypt;
 
 /// UBI type code for message blocks.
@@ -128,14 +128,7 @@ pub fn hash512(data: &[u8]) -> [u8; 64] {
   let mut state = IV;
   hash_message_blocks(&mut state, data);
   output_block(&mut state);
-
-  let mut out = [0u8; 64];
-  let mut index = 0;
-  while index < NW {
-    store_u64_le(&mut out, index, state[index]);
-    index += 1;
-  }
-  out
+  digest_from_u64_le(&state)
 }
 
 #[cfg(test)]

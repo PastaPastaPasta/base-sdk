@@ -8,7 +8,7 @@
 
 use crate::aes::{block_from_words, round, round_nk, words_from_block, Block};
 use crate::consts::echo::BLOCK;
-use crate::util::memops::{load_u32_le, store_u32_le};
+use crate::util::memops::{digest_from_u32_le, load_u32_le};
 
 use wide::{i8x16, u32x4};
 
@@ -204,17 +204,8 @@ fn hash_to_cells(data: &[u8]) -> ChainingValue {
 
 pub fn hash512(data: &[u8]) -> [u8; 64] {
   let cells = hash_to_cells(data);
-  let mut out = [0u8; 64];
-  let mut cell = 0;
-  while cell < 4 {
-    let mut word = 0;
-    while word < 4 {
-      store_u32_le(&mut out, cell * 4 + word, cells[cell][word]);
-      word += 1;
-    }
-    cell += 1;
-  }
-  out
+  let words: [u32; 16] = core::array::from_fn(|word| cells[word / 4][word % 4]);
+  digest_from_u32_le(&words)
 }
 
 #[cfg(test)]

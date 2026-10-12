@@ -7,7 +7,7 @@
 //! Blake-512 hash function.
 
 use crate::consts::blake::{BLOCK, CB, IV, SIGMA};
-use crate::util::memops::{load_u64_le, store_u64_le};
+use crate::util::memops::{digest_from_u64_le, load_u64_le, store_u64_le};
 
 /// Compresses one 128-byte block into the chaining state.
 ///
@@ -129,14 +129,7 @@ pub fn hash_to_state(data: &[u8]) -> [u64; 8] {
 }
 
 pub fn hash512(data: &[u8]) -> [u8; 64] {
-  let h = hash_to_state(data);
-  let mut out = [0u8; 64];
-  let mut i = 0;
-  while i < 8 {
-    store_u64_le(&mut out, i, h[i].swap_bytes());
-    i += 1;
-  }
-  out
+  digest_from_u64_le(&hash_to_state(data).map(u64::swap_bytes))
 }
 
 #[cfg(test)]

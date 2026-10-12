@@ -7,7 +7,7 @@
 //! SIMD-512 hash function.
 
 use crate::consts::simd::{ALPHA_TAB, BLOCK, IV, PP8K, WBP, YOFF_B_F, YOFF_B_N};
-use crate::util::memops::{load_u32_le, store_u32_le};
+use crate::util::memops::{digest_from_u32_le, load_u32_le};
 
 use wide::{i32x4, i32x8, u32x8};
 
@@ -450,14 +450,7 @@ pub(super) fn hash_to_words(data: &[u8]) -> [u32; 16] {
 }
 
 pub fn hash512(data: &[u8]) -> [u8; 64] {
-  let result = hash_to_words(data);
-  let mut out = [0u8; 64];
-  let mut i = 0;
-  while i < 16 {
-    store_u32_le(&mut out, i, result[i]);
-    i += 1;
-  }
-  out
+  digest_from_u32_le(&hash_to_words(data))
 }
 
 #[cfg(test)]

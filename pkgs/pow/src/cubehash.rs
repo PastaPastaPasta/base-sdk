@@ -8,7 +8,7 @@
 
 use crate::consts::cubehash::{BLOCK, IV};
 use crate::util::arx::rotl_u32x4;
-use crate::util::memops::{load_u32_le, store_u32_le};
+use crate::util::memops::{digest_from_u32_le, load_u32_le};
 
 use wide::u32x4;
 
@@ -169,15 +169,7 @@ pub fn hash512(data: &[u8]) -> [u8; 64] {
   store_vec(&mut words, 1, state[1]);
   store_vec(&mut words, 2, state[2]);
   store_vec(&mut words, 3, state[3]);
-
-  // Output the first sixteen state words.
-  let mut out = [0u8; 64];
-  i = 0;
-  while i < 16 {
-    store_u32_le(&mut out, i, words[i]);
-    i += 1;
-  }
-  out
+  digest_from_u32_le(&words)
 }
 
 #[cfg(test)]

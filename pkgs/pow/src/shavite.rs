@@ -8,7 +8,7 @@
 
 use crate::aes::{block_from_words, round_nk, words_from_block, Block};
 use crate::consts::shavite::{BLOCK, IV};
-use crate::util::memops::{load_u32_le, store_u32_le};
+use crate::util::memops::{digest_from_u32_le, load_u32_le};
 
 use wide::u32x4;
 
@@ -304,14 +304,7 @@ fn hash_to_words(data: &[u8]) -> State {
 }
 
 pub fn hash512(data: &[u8]) -> [u8; 64] {
-  let result = hash_to_words(data);
-  let mut out = [0u8; 64];
-  let mut word = 0;
-  while word < 16 {
-    store_u32_le(&mut out, word, result[word]);
-    word += 1;
-  }
-  out
+  digest_from_u32_le(&hash_to_words(data))
 }
 
 #[cfg(test)]
