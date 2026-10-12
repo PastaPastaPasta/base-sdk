@@ -17,6 +17,8 @@ use dash_types::{impl_type, Checkable};
 use core::fmt;
 
 /// AssetUnlock: Platform-to-L1 (type 9).
+///
+/// Versions 1 and 2 share a layout; version 2 (v24) changes the txid only.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
@@ -77,7 +79,7 @@ impl Checkable for AssetUnlock {
   type Error = AssetUnlockInvalid;
 
   fn check(&self) -> Option<Self::Error> {
-    if self.version == 0 || self.version > 1 {
+    if self.version == 0 || self.version > 2 {
       return Some(AssetUnlockInvalid::BadVersion { version: self.version });
     }
 

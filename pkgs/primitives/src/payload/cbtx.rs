@@ -21,11 +21,12 @@ use core::fmt;
 /// - v1: base fields (version, height, merkle_root_mn_list)
 /// - v2: adds merkle_root_quorums
 /// - v3: adds ChainLock proof and credit pool balance
+/// - v4: adds the asset-unlock merkle root (v24)
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct CoinbaseCommitment {
-  /// Payload version (1, 2, or 3).
+  /// Payload version (1 to 4).
   pub version: u16,
   /// Block height (Core's `int32_t`).
   pub height: i32,
@@ -42,6 +43,10 @@ pub struct CoinbaseCommitment {
   pub best_cl_signature: Option<BlsGlobalSig>,
   /// Credit pool balance in duffs (v3+).
   pub credit_pool_balance: Option<i64>,
+  /// Merkle root over the instance hashes of the block's v2+ asset unlocks,
+  /// in block order (v4+).
+  #[cfg_attr(feature = "serde", serde(default, skip_serializing_if = "Option::is_none"))]
+  pub merkle_root_asset_unlocks: Option<MerkleRoot>,
 }
 
 impl_type!(CoinbaseCommitment);
@@ -59,6 +64,7 @@ impl BaseCodec for CoinbaseCommitment {
       best_cl_height_diff: None,
       best_cl_signature: None,
       credit_pool_balance: None,
+      merkle_root_asset_unlocks: None,
     };
     if version < 2 {
       return Ok(cbtx);
@@ -70,6 +76,9 @@ impl BaseCodec for CoinbaseCommitment {
     cbtx.best_cl_height_diff = Some(CompactSize::decode_size(data)?.to_base());
     cbtx.best_cl_signature = Some(bls::read_global(data)?);
     cbtx.credit_pool_balance = Some(i64::decode(data)?);
+    if version >= 4 {
+      cbtx.merkle_root_asset_unlocks = Some(MerkleRoot::decode(data)?);
+    }
     Ok(cbtx)
   }
 
@@ -88,6 +97,9 @@ impl BaseCodec for CoinbaseCommitment {
     let sig = self.best_cl_signature.as_ref().map(BlsGlobalSig::to_bytes);
     sig.unwrap_or([0u8; dash_pkc::bls::BLS_SIG_LEN]).encode(buf);
     self.credit_pool_balance.unwrap_or(0).encode(buf);
+    if self.version >= 4 {
+      self.merkle_root_asset_unlocks.unwrap_or_default().encode(buf);
+    }
   }
 }
 
@@ -109,7 +121,7 @@ impl Checkable for CoinbaseCommitment {
   type Error = CbTxInvalid;
 
   fn check(&self) -> Option<Self::Error> {
-    if self.version == 0 || self.version >= 4 {
+    if self.version == 0 || self.version > 4 {
       return Some(CbTxInvalid::BadVersion { version: self.version });
     }
 
@@ -130,6 +142,14 @@ impl Checkable for CoinbaseCommitment {
       || self.credit_pool_balance.is_some()
     {
       return Some(CbTxInvalid::UnexpectedField);
+    }
+
+    if (self.version >= 4) != self.merkle_root_asset_unlocks.is_some() {
+      return Some(if self.version >= 4 {
+        CbTxInvalid::MissingField
+      } else {
+        CbTxInvalid::UnexpectedField
+      });
     }
 
     None
