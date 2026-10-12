@@ -28,6 +28,7 @@ use hex_conservative::DisplayHex;
 
 use core::fmt;
 use core::hash::{Hash, Hasher};
+use core::marker::PhantomData;
 
 /// Byte length of the seed a BLS-IES message derives its IVs from.
 pub const IV_SEED_LEN: usize = 32;
@@ -38,7 +39,8 @@ pub const MAX_IES_RECIPIENTS: usize = 2048;
 /// A BLS-IES encrypted blob under an ephemeral key.
 #[cfg_attr(feature = "codec", derive(TypeId))]
 pub struct BlsIesBlobBytes<S: BlsSchemeId> {
-  ephemeral_pk: BlsPkBytes<S>,
+  ephemeral_pk: BlsPkBytes,
+  _scheme: PhantomData<fn() -> S>,
   iv_seed: [u8; IV_SEED_LEN],
   data: Vec<u8>,
 }
@@ -46,11 +48,12 @@ pub struct BlsIesBlobBytes<S: BlsSchemeId> {
 #[cfg(feature = "codec")]
 impl<S: BlsSchemeId> BaseCodec for BlsIesBlobBytes<S> {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let ephemeral_pk = BlsPkBytes::<S>::decode(data)?;
+    let ephemeral_pk = BlsPkBytes::decode(data)?;
     let iv_seed = <[u8; IV_SEED_LEN]>::decode(data)?;
     let len = CompactSize::decode_len(data)?;
     Ok(Self {
       ephemeral_pk,
+      _scheme: PhantomData,
       iv_seed,
       data: read_bytes(data, len)?.to_vec(),
     })
@@ -96,9 +99,10 @@ impl<S: BlsSchemeId> Hashable for BlsIesBlobBytes<S> {
 
 impl<S: BlsSchemeId> BlsIesBlobBytes<S> {
   /// Constructs from raw components.
-  pub fn new(ephemeral_pk: BlsPkBytes<S>, iv_seed: [u8; IV_SEED_LEN], data: Vec<u8>) -> Self {
+  pub fn new(ephemeral_pk: BlsPkBytes, iv_seed: [u8; IV_SEED_LEN], data: Vec<u8>) -> Self {
     Self {
       ephemeral_pk,
+      _scheme: PhantomData,
       iv_seed,
       data,
     }
@@ -110,7 +114,7 @@ impl<S: BlsSchemeId> BlsIesBlobBytes<S> {
   }
 
   /// The ephemeral public key the sender encrypted under.
-  pub fn ephemeral_pk(&self) -> &BlsPkBytes<S> {
+  pub fn ephemeral_pk(&self) -> &BlsPkBytes {
     &self.ephemeral_pk
   }
 
@@ -134,6 +138,7 @@ impl<S: BlsSchemeId> Clone for BlsIesBlobBytes<S> {
   fn clone(&self) -> Self {
     Self {
       ephemeral_pk: self.ephemeral_pk,
+      _scheme: PhantomData,
       iv_seed: self.iv_seed,
       data: self.data.clone(),
     }
@@ -169,7 +174,8 @@ impl<S: BlsSchemeId> PartialEq for BlsIesBlobBytes<S> {
 /// One ciphertext per recipient under an ephemeral key.
 #[cfg_attr(feature = "codec", derive(TypeId))]
 pub struct BlsIesMultiBytes<S: BlsSchemeId> {
-  ephemeral_pk: BlsPkBytes<S>,
+  ephemeral_pk: BlsPkBytes,
+  _scheme: PhantomData<fn() -> S>,
   iv_seed: [u8; IV_SEED_LEN],
   blobs: Vec<Vec<u8>>,
 }
@@ -177,7 +183,7 @@ pub struct BlsIesMultiBytes<S: BlsSchemeId> {
 #[cfg(feature = "codec")]
 impl<S: BlsSchemeId> BaseCodec for BlsIesMultiBytes<S> {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let ephemeral_pk = BlsPkBytes::<S>::decode(data)?;
+    let ephemeral_pk = BlsPkBytes::decode(data)?;
     let iv_seed = <[u8; IV_SEED_LEN]>::decode(data)?;
 
     // Each element is a `Vec` far wider than the length prefix that admitted it
@@ -191,6 +197,7 @@ impl<S: BlsSchemeId> BaseCodec for BlsIesMultiBytes<S> {
 
     Ok(Self {
       ephemeral_pk,
+      _scheme: PhantomData,
       iv_seed,
       blobs,
     })
@@ -221,9 +228,10 @@ impl<S: BlsSchemeId> Hashable for BlsIesMultiBytes<S> {
 
 impl<S: BlsSchemeId> BlsIesMultiBytes<S> {
   /// Constructs from raw components.
-  pub fn new(ephemeral_pk: BlsPkBytes<S>, iv_seed: [u8; IV_SEED_LEN], blobs: Vec<Vec<u8>>) -> Self {
+  pub fn new(ephemeral_pk: BlsPkBytes, iv_seed: [u8; IV_SEED_LEN], blobs: Vec<Vec<u8>>) -> Self {
     Self {
       ephemeral_pk,
+      _scheme: PhantomData,
       iv_seed,
       blobs,
     }
@@ -235,7 +243,7 @@ impl<S: BlsSchemeId> BlsIesMultiBytes<S> {
   }
 
   /// The ephemeral public key the sender encrypted under.
-  pub fn ephemeral_pk(&self) -> &BlsPkBytes<S> {
+  pub fn ephemeral_pk(&self) -> &BlsPkBytes {
     &self.ephemeral_pk
   }
 
@@ -259,6 +267,7 @@ impl<S: BlsSchemeId> Clone for BlsIesMultiBytes<S> {
   fn clone(&self) -> Self {
     Self {
       ephemeral_pk: self.ephemeral_pk,
+      _scheme: PhantomData,
       iv_seed: self.iv_seed,
       blobs: self.blobs.clone(),
     }

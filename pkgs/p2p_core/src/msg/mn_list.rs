@@ -148,7 +148,7 @@ pub struct SimplifiedMnListEntry {
   /// Network service address.
   pub service: ServiceV1,
   /// BLS operator public key.
-  pub operator_key: BlsPkBytes<BlsScIetf>,
+  pub operator_key: BlsPkBytes,
   /// Voting key hash (HASH160).
   pub voting_key_id: PubKeyHash,
   /// Whether this masternode is currently valid.
@@ -170,7 +170,7 @@ impl BaseCodec for SimplifiedMnListEntry {
     let pro_reg_tx_hash = TxHash::decode(data)?;
     let confirmed_hash = BlockHash::decode(data)?;
     let service = ServiceV1::decode(data)?;
-    let operator_key = BlsPkBytes::<BlsScIetf>::decode(data)?;
+    let operator_key = BlsPkBytes::decode(data)?;
     let voting_key_id = PubKeyHash::decode(data)?;
     let is_valid = bool::decode(data)?;
 
