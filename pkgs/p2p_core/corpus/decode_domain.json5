@@ -59,6 +59,29 @@
     {"name": "verack_with_payload", "command": "verack", "raw": "deadbeef", "core": "accept"},
     {"name": "sendheaders2_with_payload", "command": "sendheaders2", "raw": "0707", "core": "accept"},
   ],
+  // Messages carrying one bool. "captured" is senddsq as each release sent
+  // it to the other (-capturemessages); the rest were sent after a full
+  // handshake.
+  "control": [
+    {"name": "captured", "command": "senddsq", "raw": "01", "core": "accept"},
+    {"name": "senddsq_empty", "command": "senddsq", "raw": "", "core": "throw"},
+    {"name": "senddsq_02", "command": "senddsq", "raw": "02", "core": "accept"},
+    {"name": "qsendrecsigs_empty", "command": "qsendrecsigs", "raw": "", "core": "throw"},
+    {"name": "qsendrecsigs_02", "command": "qsendrecsigs", "raw": "02", "core": "accept"},
+  ],
+  // pong sent while Core's own ping was outstanding, then
+  // getpeerinfo: "ping cancelled" means pingwait went away without a
+  // pingtime, "ping pending" that pingwait stayed, "ping measured" that
+  // pingtime appeared. The two entries built from Core's random nonce show
+  // 0102030405060708 in its place (its first byte flipped for the mismatch).
+  "pong": [
+    {"name": "empty", "raw": "", "core": "ping cancelled"},
+    {"name": "len_1", "raw": "2a", "core": "ping cancelled"},
+    {"name": "len_7", "raw": "2a000000000000", "core": "ping cancelled"},
+    {"name": "zero_nonce", "raw": "0000000000000000", "core": "ping cancelled"},
+    {"name": "mismatched_nonce", "raw": "fe02030405060708", "core": "ping pending"},
+    {"name": "matching_nonce_trailing", "raw": "010203040506070899", "core": "ping measured"},
+  ],
   // V2 (BIP324) packets over an encrypted connection (the V2 transport of
   // Core's functional test framework): the contents are a ping type, short ID 18 or the
   // 13-byte long form, then the nonce 0x01245678 and zeros up to

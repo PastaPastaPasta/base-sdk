@@ -8,6 +8,7 @@
 
 mod addr;
 mod bloom;
+mod control;
 mod gov;
 mod headers;
 mod headers2;
@@ -26,8 +27,9 @@ use dash_types::type_id::Unencodable;
 
 pub use addr::{Addr, AddrV2Entry, AddrV2Msg, TimestampedAddr};
 pub use bloom::{FilterAdd, FilterLoad, MerkleBlock, PartialMerkleTree};
+pub use control::{QSendRecSigs, SendDsq, SendTxRcncl, Ssc};
 pub use gov::GovSync;
-pub use headers::{GetHeaders, Headers};
+pub use headers::{GetBlocks, GetHeaders, Headers};
 pub use headers2::{CompressedHeader, GetHeaders2, Headers2};
 pub use inv::{GetData, Inv, InvType, Inventory, NotFound};
 pub use mn_list::{DeletedQuorum, GetMnListDiff, MnListDiff, MnListDiffPayload, QuorumClSig, SimplifiedMnListEntry};
@@ -70,12 +72,22 @@ define_p2p! {
     GetMnListDiff(GetMnListDiff) => GETMNLISTD "getmnlistd" @ 143,
     /// MN list diff.
     MnListDiff(MnListDiff) => MNLISTDIFF "mnlistdiff" @ 144,
+    /// Signal CoinJoin queue relay.
+    SendDsq(SendDsq) => SENDDSQ "senddsq" @ 130,
+    /// LLMQ: send recovered signatures.
+    QSendRecSigs(QSendRecSigs) => QSENDRECSIGS "qsendrecsigs" @ 145,
+    /// Request block hashes.
+    GetBlocks(GetBlocks) => GETBLOCKS "getblocks" @ 9,
     /// BIP37: load bloom filter.
     FilterLoad(FilterLoad) => FILTERLOAD "filterload" @ 8,
     /// BIP37: add data to bloom filter.
     FilterAdd(FilterAdd) => FILTERADD "filteradd" @ 6,
     /// BIP37: filtered block. Core has no handler for it and ignores it.
     MerkleBlock(MerkleBlock) => MERKLEBLOCK "merkleblock" @ 16,
+    /// BIP330: transaction reconciliation.
+    SendTxRcncl(SendTxRcncl) => SENDTXRCNCL "sendtxrcncl",
+    /// Masternode sync status count.
+    Ssc(Ssc) => SSC "ssc" @ 139,
   }
 
   parsed_empty {
@@ -91,6 +103,10 @@ define_p2p! {
     SendHeaders2 => SENDHEADERS2 "sendheaders2" @ 164,
     /// BIP37: clear bloom filter.
     FilterClear => FILTERCLEAR "filterclear" @ 7,
+    /// Request mempool contents.
+    Mempool => MEMPOOL "mempool" @ 15,
+    /// LLMQ: watch quorums.
+    QWatch => QWATCH "qwatch" @ 151,
   }
 
   stub {
@@ -100,8 +116,6 @@ define_p2p! {
     BlockTxn => BLOCKTXN "blocktxn" @ 3,
     /// BIP152: compact block.
     CmpctBlock => CMPCTBLOCK "cmpctblock" @ 4,
-    /// Request block hashes.
-    GetBlocks => GETBLOCKS "getblocks" @ 9,
     /// BIP152: request compact block transactions.
     GetBlockTxn => GETBLOCKTXN "getblocktxn" @ 10,
     /// BIP152: signal compact block support.
@@ -120,8 +134,6 @@ define_p2p! {
     GetCFCheckpt => GETCFCHECKPT "getcfcheckpt" @ 26,
     /// Compact filter checkpoints.
     CFCheckpt => CFCHECKPT "cfcheckpt" @ 27,
-    /// BIP330: transaction reconciliation.
-    SendTxRcncl => SENDTXRCNCL "sendtxrcncl",
     /// Spork broadcast/request.
     Spork => SPORK "spork" @ 128,
     /// CoinJoin: accept denomination.
@@ -140,8 +152,6 @@ define_p2p! {
     Dstx => DSTX "dstx" @ 137,
     /// CoinJoin: queue entry.
     Dsq => DSQ "dsq" @ 138,
-    /// Sync status count.
-    Ssc => SSC "ssc" @ 139,
     /// LLMQ: final commitment.
     QfCommit => QFCOMMIT "qfcommit" @ 146,
     /// LLMQ: contribution.
@@ -183,16 +193,8 @@ define_p2p! {
   }
 
   stub_empty {
-    /// Request mempool contents.
-    Mempool => MEMPOOL "mempool" @ 15,
     /// Request active sporks.
     GetSporks => GETSPORKS "getsporks" @ 129,
-    /// Signal CoinJoin queue relay.
-    SendDsq => SENDDSQ "senddsq" @ 130,
-    /// LLMQ: send recovered signatures.
-    QSendRecSigs => QSENDRECSIGS "qsendrecsigs" @ 145,
-    /// LLMQ: watch quorums.
-    QWatch => QWATCH "qwatch" @ 151,
   }
 }
 
@@ -210,6 +212,11 @@ impl MsgDecode for GovObject {}
 impl MsgDecode for GovVote {}
 impl MsgDecode for GetMnListDiff {}
 impl MsgDecode for MnListDiff {}
+impl MsgDecode for SendDsq {}
+impl MsgDecode for QSendRecSigs {}
+impl MsgDecode for GetBlocks {}
 impl MsgDecode for FilterLoad {}
 impl MsgDecode for FilterAdd {}
 impl MsgDecode for MerkleBlock {}
+impl MsgDecode for SendTxRcncl {}
+impl MsgDecode for Ssc {}

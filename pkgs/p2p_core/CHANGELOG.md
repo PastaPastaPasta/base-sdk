@@ -36,6 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The `headers2` encoders compress as Core's `Compress`: the previous block hash always, and a time delta only when
   the time does not step backwards.
 - `encode_v2` takes the peer's common version.
+- `filterclear`, `mempool` and `qwatch` are no longer stubs.
 - `P2pDecodeError::Consensus` carries the `DecodeError` instead of its text.
 - A V2 short ID with no message, including the slots Core reserves (5, 29 to 32), fails with `UnknownShortId`: drop
   the message and keep the peer. Core types those slots as the empty command and ignores them.

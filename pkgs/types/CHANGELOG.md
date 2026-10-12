@@ -50,6 +50,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Removed
 
 - The `codec::Checkable` and `codec::Hashable` compatibility aliases in favour of exports from the crate root.
+- `BaseCodec` for `bool`, which rejected bytes other than `0x00` and `0x01` that Dash Core accepts. Wire types use
+  `CoreBool` instead.
 
 ### Fixed
 
