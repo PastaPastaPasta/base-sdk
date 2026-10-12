@@ -31,8 +31,6 @@ rstest = { workspace = true }
 [[test]]
 name = "echo"
 [[test]]
-name = "shavite"
-[[test]]
 name = "simd_hash"
 [[bench]]
 name = "pow"

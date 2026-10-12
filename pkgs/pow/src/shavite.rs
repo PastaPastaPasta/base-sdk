@@ -4,10 +4,10 @@
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
 
-//! SIMD SHAvite-3-512 implementation.
+//! SHAvite-3-512 hash function.
 
-use super::consts::{BLOCK, IV};
 use crate::aes::{block_from_words, round_nk, words_from_block, Block};
+use crate::consts::shavite::{BLOCK, IV};
 use crate::util::memops::{load_u32_le, store_u32_le};
 
 use wide::u32x4;
@@ -312,4 +312,15 @@ pub fn hash512(data: &[u8]) -> [u8; 64] {
     word += 1;
   }
   out
+}
+
+#[cfg(test)]
+mod tests {
+  use super::hash512;
+  use crate::tests::run_nist_kat;
+
+  #[test]
+  fn nist_kat() {
+    run_nist_kat("shavite", hash512);
+  }
 }

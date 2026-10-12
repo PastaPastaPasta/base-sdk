@@ -55,10 +55,6 @@ compile_error!("dash-pow requires NEON and AES, build with `-C target-feature=+n
 ))]
 compile_error!("dash-pow requires 128-bit SIMD, build with `-C target-feature=+simd128` or enable `portable`");
 
-#[cfg_attr(
-  not(any(test, feature = "simd")),
-  expect(dead_code, reason = "only the SIMD backends use the block interface")
-)]
 mod aes;
 mod blake;
 mod bmw;
