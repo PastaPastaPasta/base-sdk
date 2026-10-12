@@ -4,9 +4,9 @@
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
 
-//! SIMD Keccak-f\[1600\] permutation and sponge.
+//! Keccak-512 hash function.
 
-use super::consts::RC;
+use crate::consts::keccak::{RC, ROTC};
 
 /// Applies one round of the permutation, reading from `src` and writing to
 /// `dst`.
@@ -34,10 +34,10 @@ fn round_to(src: &[u64; 25], dst: &mut [u64; 25], rc: u64) {
   // rotations, then chi directly into dst. Only 5 B-values live at once.
   {
     let b0 = src[0] ^ d0;
-    let b1 = (src[6] ^ d1).rotate_left(44);
-    let b2 = (src[12] ^ d2).rotate_left(43);
-    let b3 = (src[18] ^ d3).rotate_left(21);
-    let b4 = (src[24] ^ d4).rotate_left(14);
+    let b1 = (src[6] ^ d1).rotate_left(ROTC[6]);
+    let b2 = (src[12] ^ d2).rotate_left(ROTC[12]);
+    let b3 = (src[18] ^ d3).rotate_left(ROTC[18]);
+    let b4 = (src[24] ^ d4).rotate_left(ROTC[24]);
     dst[0] = b0 ^ (!b1 & b2) ^ rc;
     dst[1] = b1 ^ (!b2 & b3);
     dst[2] = b2 ^ (!b3 & b4);
@@ -45,11 +45,11 @@ fn round_to(src: &[u64; 25], dst: &mut [u64; 25], rc: u64) {
     dst[4] = b4 ^ (!b0 & b1);
   }
   {
-    let b0 = (src[3] ^ d3).rotate_left(28);
-    let b1 = (src[9] ^ d4).rotate_left(20);
-    let b2 = (src[10] ^ d0).rotate_left(3);
-    let b3 = (src[16] ^ d1).rotate_left(45);
-    let b4 = (src[22] ^ d2).rotate_left(61);
+    let b0 = (src[3] ^ d3).rotate_left(ROTC[3]);
+    let b1 = (src[9] ^ d4).rotate_left(ROTC[9]);
+    let b2 = (src[10] ^ d0).rotate_left(ROTC[10]);
+    let b3 = (src[16] ^ d1).rotate_left(ROTC[16]);
+    let b4 = (src[22] ^ d2).rotate_left(ROTC[22]);
     dst[5] = b0 ^ (!b1 & b2);
     dst[6] = b1 ^ (!b2 & b3);
     dst[7] = b2 ^ (!b3 & b4);
@@ -57,11 +57,11 @@ fn round_to(src: &[u64; 25], dst: &mut [u64; 25], rc: u64) {
     dst[9] = b4 ^ (!b0 & b1);
   }
   {
-    let b0 = (src[1] ^ d1).rotate_left(1);
-    let b1 = (src[7] ^ d2).rotate_left(6);
-    let b2 = (src[13] ^ d3).rotate_left(25);
-    let b3 = (src[19] ^ d4).rotate_left(8);
-    let b4 = (src[20] ^ d0).rotate_left(18);
+    let b0 = (src[1] ^ d1).rotate_left(ROTC[1]);
+    let b1 = (src[7] ^ d2).rotate_left(ROTC[7]);
+    let b2 = (src[13] ^ d3).rotate_left(ROTC[13]);
+    let b3 = (src[19] ^ d4).rotate_left(ROTC[19]);
+    let b4 = (src[20] ^ d0).rotate_left(ROTC[20]);
     dst[10] = b0 ^ (!b1 & b2);
     dst[11] = b1 ^ (!b2 & b3);
     dst[12] = b2 ^ (!b3 & b4);
@@ -69,11 +69,11 @@ fn round_to(src: &[u64; 25], dst: &mut [u64; 25], rc: u64) {
     dst[14] = b4 ^ (!b0 & b1);
   }
   {
-    let b0 = (src[4] ^ d4).rotate_left(27);
-    let b1 = (src[5] ^ d0).rotate_left(36);
-    let b2 = (src[11] ^ d1).rotate_left(10);
-    let b3 = (src[17] ^ d2).rotate_left(15);
-    let b4 = (src[23] ^ d3).rotate_left(56);
+    let b0 = (src[4] ^ d4).rotate_left(ROTC[4]);
+    let b1 = (src[5] ^ d0).rotate_left(ROTC[5]);
+    let b2 = (src[11] ^ d1).rotate_left(ROTC[11]);
+    let b3 = (src[17] ^ d2).rotate_left(ROTC[17]);
+    let b4 = (src[23] ^ d3).rotate_left(ROTC[23]);
     dst[15] = b0 ^ (!b1 & b2);
     dst[16] = b1 ^ (!b2 & b3);
     dst[17] = b2 ^ (!b3 & b4);
@@ -81,11 +81,11 @@ fn round_to(src: &[u64; 25], dst: &mut [u64; 25], rc: u64) {
     dst[19] = b4 ^ (!b0 & b1);
   }
   {
-    let b0 = (src[2] ^ d2).rotate_left(62);
-    let b1 = (src[8] ^ d3).rotate_left(55);
-    let b2 = (src[14] ^ d4).rotate_left(39);
-    let b3 = (src[15] ^ d0).rotate_left(41);
-    let b4 = (src[21] ^ d1).rotate_left(2);
+    let b0 = (src[2] ^ d2).rotate_left(ROTC[2]);
+    let b1 = (src[8] ^ d3).rotate_left(ROTC[8]);
+    let b2 = (src[14] ^ d4).rotate_left(ROTC[14]);
+    let b3 = (src[15] ^ d0).rotate_left(ROTC[15]);
+    let b4 = (src[21] ^ d1).rotate_left(ROTC[21]);
     dst[20] = b0 ^ (!b1 & b2);
     dst[21] = b1 ^ (!b2 & b3);
     dst[22] = b2 ^ (!b3 & b4);
@@ -110,6 +110,55 @@ pub fn keccak_f1600(state: &mut [u64; 25]) {
   }
 }
 
+/// Keccak-512 sponge parameterised over a permutation function.
+pub(crate) fn sponge(data: &[u8], perm: fn(&mut [u64; 25])) -> [u8; 64] {
+  use crate::consts::keccak::RATE;
+  use crate::util::memops::{load_u64_le, store_u64_le};
+
+  let mut state = [0u64; 25];
+  let mut pos = 0;
+  while pos + RATE <= data.len() {
+    let mut i = 0;
+    while i < 9 {
+      state[i] ^= load_u64_le(&data[pos..], i);
+      i += 1;
+    }
+    perm(&mut state);
+    pos += RATE;
+  }
+
+  let mut last = [0u8; RATE];
+  let remaining = data.len() - pos;
+  last[..remaining].copy_from_slice(&data[pos..]);
+  last[remaining] = 0x01;
+  last[RATE - 1] |= 0x80;
+  let mut i = 0;
+  while i < 9 {
+    state[i] ^= load_u64_le(&last, i);
+    i += 1;
+  }
+  perm(&mut state);
+
+  let mut out = [0u8; 64];
+  let mut i = 0;
+  while i < 8 {
+    store_u64_le(&mut out, i, state[i]);
+    i += 1;
+  }
+  out
+}
+
 pub fn hash512(data: &[u8]) -> [u8; 64] {
-  super::sponge(data, keccak_f1600)
+  sponge(data, keccak_f1600)
+}
+
+#[cfg(test)]
+mod tests {
+  use super::hash512;
+  use crate::tests::run_nist_kat;
+
+  #[test]
+  fn nist_kat() {
+    run_nist_kat("keccak", hash512);
+  }
 }
