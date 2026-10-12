@@ -107,7 +107,7 @@ mod tests {
     assert_eq!(round(block(STATE), block(KEY)), round_block(block(STATE), block(KEY)));
     assert_eq!(
       words_from_block(round_nk(block(STATE))).to_array(),
-      scalar::round_nk(&STATE)
+      scalar::round(&STATE, &[0; 4])
     );
   }
 

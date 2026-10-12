@@ -28,8 +28,6 @@ divan = { workspace = true }
 hex-conservative = { workspace = true }
 rstest = { workspace = true }
 
-[[test]]
-name = "echo"
 [[bench]]
 name = "pow"
 path = "bench/main.rs"

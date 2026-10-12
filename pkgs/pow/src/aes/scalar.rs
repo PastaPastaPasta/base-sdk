@@ -50,11 +50,6 @@ pub(crate) const fn round(state: &[u32; 4], key: &[u32; 4]) -> [u32; 4] {
   ]
 }
 
-/// AES round without AddRoundKey (key = 0).
-pub(crate) const fn round_nk(state: &[u32; 4]) -> [u32; 4] {
-  round(state, &[0; 4])
-}
-
 /// Runs [`round`] on a block.
 #[cfg_attr(
   all(

@@ -4,10 +4,10 @@
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
 
-//! SIMD Echo-512 implementation.
+//! Echo-512 hash function.
 
-use super::consts::BLOCK;
 use crate::aes::{block_from_words, round, round_nk, words_from_block, Block};
+use crate::consts::echo::BLOCK;
 use crate::util::memops::{load_u32_le, store_u32_le};
 
 use wide::{i8x16, u32x4};
@@ -215,4 +215,15 @@ pub fn hash512(data: &[u8]) -> [u8; 64] {
     cell += 1;
   }
   out
+}
+
+#[cfg(test)]
+mod tests {
+  use super::hash512;
+  use crate::tests::run_nist_kat;
+
+  #[test]
+  fn nist_kat() {
+    run_nist_kat("echo", hash512);
+  }
 }
