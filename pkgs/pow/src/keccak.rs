@@ -6,7 +6,8 @@
 
 //! Keccak-512 hash function.
 
-use crate::consts::keccak::{RC, ROTC};
+use crate::consts::keccak::{RATE, RC, ROTC};
+use crate::util::memops::{digest_from_u64_le, zero_extend};
 
 /// Applies one round of the permutation, reading from `src` and writing to
 /// `dst`.
@@ -110,34 +111,28 @@ pub fn keccak_f1600(state: &mut [u64; 25]) {
   }
 }
 
-/// Keccak-512 sponge parameterised over a permutation function.
-pub(crate) fn sponge(data: &[u8], perm: fn(&mut [u64; 25])) -> [u8; 64] {
-  use crate::consts::keccak::RATE;
-  use crate::util::memops::{digest_from_u64_le, zero_extend};
+/// Absorbs one rate-sized block into the first lanes of the state.
+#[inline(always)]
+fn absorb(state: &mut [u64; 25], block: &[u8; RATE]) {
+  for (lane, word) in state.iter_mut().zip(block.as_chunks::<8>().0) {
+    *lane ^= u64::from_le_bytes(*word);
+  }
+}
 
+pub fn hash512(data: &[u8]) -> [u8; 64] {
   let mut state = [0u64; 25];
-  let absorb = |state: &mut [u64; 25], block: &[u8; RATE]| {
-    for (lane, word) in state.iter_mut().zip(block.as_chunks::<8>().0) {
-      *lane ^= u64::from_le_bytes(*word);
-    }
-  };
-
   let (blocks, tail) = data.as_chunks::<RATE>();
   for block in blocks {
     absorb(&mut state, block);
-    perm(&mut state);
+    keccak_f1600(&mut state);
   }
 
   let mut last: [u8; RATE] = zero_extend(tail);
   last[tail.len()] = 0x01;
   last[RATE - 1] |= 0x80;
   absorb(&mut state, &last);
-  perm(&mut state);
+  keccak_f1600(&mut state);
   digest_from_u64_le(&state)
-}
-
-pub fn hash512(data: &[u8]) -> [u8; 64] {
-  sponge(data, keccak_f1600)
 }
 
 #[cfg(test)]
