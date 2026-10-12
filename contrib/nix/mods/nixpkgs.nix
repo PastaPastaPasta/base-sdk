@@ -26,6 +26,7 @@ in
   packages = [
     pkgs.cargo-deny
     pkgs.cargo-llvm-cov
+    pkgs.cargo-mutants
     pkgs.cargo-nextest
     pkgs.git
     pkgs.just

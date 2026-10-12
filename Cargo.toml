@@ -65,6 +65,14 @@ opt-level = 3
 panic = "abort"
 strip = "symbols"
 
+[profile.mutants]
+inherits = "release"
+codegen-units = 16
+debug-assertions = true
+incremental = true
+lto = false
+overflow-checks = true
+
 [profile.dev]
 codegen-units = 1
 overflow-checks = true

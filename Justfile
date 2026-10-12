@@ -28,6 +28,15 @@ lint:
     {{ python }} maint/lint/lint_codeql.py check
     {{ python }} maint/lint/lint_codeql.py run --lang=rust --with-suite=rust-security-and-quality
 
+[positional-arguments]
+[unix]
+mutants *args:
+    cargo mutants "$@"
+
+[windows]
+mutants *args:
+    cargo mutants {{ args }}
+
 sh:
     nix develop ./contrib/nix#dev
 
