@@ -546,6 +546,7 @@ dependencies = [
  "libm",
  "rstest",
  "serde",
+ "thiserror",
 ]
 
 [[package]]

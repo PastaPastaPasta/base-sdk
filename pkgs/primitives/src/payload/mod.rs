@@ -27,8 +27,6 @@ use dash_num::make_hash;
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{enum_map, impl_num, Checkable};
 
-use core::fmt;
-
 pub use self::assetlock::{AssetLock, AssetLockInvalid};
 pub use self::assetunlock::{AssetUnlock, AssetUnlockInvalid};
 pub use self::cbtx::{CbTxInvalid, CoinbaseCommitment};
@@ -115,60 +113,53 @@ impl_num!(MnType, u16);
 hash_impl!(MnType);
 
 /// Provider transaction validation failure.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Unencodable)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, thiserror::Error, Unencodable)]
 pub enum ProTxInvalid {
   /// `bad-protx-version`
+  #[error("bad-protx-version: {version}")]
   BadVersion { version: u16 },
   /// `bad-protx-evo-version`
+  #[error("bad-protx-evo-version: {version}")]
   EvoVersionTooLow { version: u16 },
   /// `bad-protx-type`
+  #[error("bad-protx-type: {mn_type}")]
   BadMnType { mn_type: MnType },
   /// `bad-protx-mode`
+  #[error("bad-protx-mode: {mode}")]
   BadMode { mode: u16 },
   /// `bad-protx-key-null`
+  #[error("bad-protx-key-null")]
   NullKey,
   /// `bad-protx-operator-pubkey`
+  #[error("bad-protx-operator-pubkey")]
   OperatorKeyMismatch,
   /// `bad-protx-payee`
+  #[error("bad-protx-payee")]
   BadPayoutScript,
   /// `bad-protx-netinfo-version`
+  #[error("bad-protx-netinfo-version")]
   NetInfoVersionMismatch,
   /// `bad-protx-netinfo-empty`
+  #[error("bad-protx-netinfo-empty")]
   NetInfoEmpty,
   /// `bad-protx-netinfo-bad`
+  #[error("bad-protx-netinfo-bad: {error}")]
   NetInfoInvalid {
     /// The underlying error.
     error: NIError,
   },
   /// `bad-protx-payee-reuse`
+  #[error("bad-protx-payee-reuse")]
   PayoutKeyReuse,
   /// `bad-protx-operator-reward`
+  #[error("bad-protx-operator-reward: {reward}")]
   OperatorRewardTooHigh { reward: u16 },
   /// `bad-protx-reason`
+  #[error("bad-protx-reason: {reason}")]
   BadReason { reason: crate::support::RevocationReason },
   /// `bad-protx-platform-fields`
+  #[error("bad-protx-platform-fields")]
   BadPlatformFields,
-}
-
-impl fmt::Display for ProTxInvalid {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      Self::BadVersion { version } => write!(f, "bad-protx-version: {version}"),
-      Self::EvoVersionTooLow { version } => write!(f, "bad-protx-evo-version: {version}"),
-      Self::BadMnType { mn_type } => write!(f, "bad-protx-type: {mn_type}"),
-      Self::BadMode { mode } => write!(f, "bad-protx-mode: {mode}"),
-      Self::NullKey => write!(f, "bad-protx-key-null"),
-      Self::OperatorKeyMismatch => write!(f, "bad-protx-operator-pubkey"),
-      Self::BadPayoutScript => write!(f, "bad-protx-payee"),
-      Self::NetInfoVersionMismatch => write!(f, "bad-protx-netinfo-version"),
-      Self::NetInfoEmpty => write!(f, "bad-protx-netinfo-empty"),
-      Self::NetInfoInvalid { error } => write!(f, "bad-protx-netinfo-bad: {error}"),
-      Self::PayoutKeyReuse => write!(f, "bad-protx-payee-reuse"),
-      Self::OperatorRewardTooHigh { reward } => write!(f, "bad-protx-operator-reward: {reward}"),
-      Self::BadReason { reason } => write!(f, "bad-protx-reason: {reason}"),
-      Self::BadPlatformFields => write!(f, "bad-protx-platform-fields"),
-    }
-  }
 }
 
 /// Checks that an extended net info payload is trivially valid.
@@ -230,7 +221,8 @@ pub enum SpecialPayload {
 }
 
 /// Error decoding a special payload.
-#[derive(Clone, Debug, Eq, PartialEq, Hash, Unencodable)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, thiserror::Error, Unencodable)]
+#[error("{tx_type} payload: {message}")]
 pub struct PayloadError {
   /// Which transaction type was being decoded.
   pub tx_type: TxType,
@@ -238,43 +230,30 @@ pub struct PayloadError {
   pub message: String,
 }
 
-impl fmt::Display for PayloadError {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "{} payload: {}", self.tx_type, self.message)
-  }
-}
-
 /// Structural check failure for a special payload.
-#[derive(Clone, Debug, Eq, PartialEq, Hash, Unencodable)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, thiserror::Error, Unencodable)]
 pub enum PayloadInvalid {
   /// Provider transaction check failed.
+  #[error(transparent)]
   ProTx(ProTxInvalid),
   /// Coinbase commitment check failed.
+  #[error(transparent)]
   CbTx(CbTxInvalid),
   /// Hard-fork signal check failed.
+  #[error(transparent)]
   MnHardFork(MnHardForkInvalid),
   /// Asset lock check failed.
+  #[error(transparent)]
   AssetLock(AssetLockInvalid),
   /// Asset unlock check failed.
+  #[error(transparent)]
   AssetUnlock(AssetUnlockInvalid),
   /// Quorum commitment check failed.
+  #[error(transparent)]
   Commitment(CommitmentInvalid),
   /// Unrecognized special transaction.
+  #[error("bad-txns-type: {0}")]
   UnknownType(TxType),
-}
-
-impl fmt::Display for PayloadInvalid {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      Self::ProTx(e) => e.fmt(f),
-      Self::CbTx(e) => e.fmt(f),
-      Self::MnHardFork(e) => e.fmt(f),
-      Self::AssetLock(e) => e.fmt(f),
-      Self::AssetUnlock(e) => e.fmt(f),
-      Self::Commitment(e) => e.fmt(f),
-      Self::UnknownType(t) => write!(f, "bad-txns-type: {t}"),
-    }
-  }
 }
 
 impl Checkable for SpecialPayload {

@@ -149,18 +149,11 @@ impl BaseCodec for FinalCommitment {
 }
 
 /// Final commitment validation failure.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Unencodable)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, thiserror::Error, Unencodable)]
 pub enum CommitmentInvalid {
   /// `bad-qc-quorum-index`
+  #[error("bad-qc-quorum-index")]
   BadQuorumIndex,
-}
-
-impl fmt::Display for CommitmentInvalid {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      Self::BadQuorumIndex => write!(f, "bad-qc-quorum-index"),
-    }
-  }
 }
 
 impl Checkable for FinalCommitment {

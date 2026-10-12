@@ -128,51 +128,44 @@ impl fmt::Display for TxOut {
 }
 
 /// Transaction validation failure.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Unencodable)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, thiserror::Error, Unencodable)]
 pub enum TxInvalid {
   /// `bad-txns-vin-empty`
+  #[error("bad-txns-vin-empty")]
   EmptyInputs,
   /// `bad-txns-vout-empty`
+  #[error("bad-txns-vout-empty")]
   EmptyOutputs,
   /// `bad-txns-oversize`
+  #[error("bad-txns-oversize: {size} bytes")]
   Oversize { size: usize },
   /// `bad-txns-payload-oversize`
+  #[error("bad-txns-payload-oversize: {size} bytes")]
   PayloadOversize { size: usize },
   /// `bad-txns-vout-toolarge`
+  #[error("bad-txns-vout-toolarge: output {index} value {value}")]
   OutputTooLarge { index: usize, value: u64 },
   /// `bad-txns-txouttotal-toolarge`
+  #[error("bad-txns-txouttotal-toolarge: {total}")]
   OutputTotalTooLarge { total: u64 },
   /// `bad-txns-inputs-duplicate`
+  #[error("bad-txns-inputs-duplicate: {outpoint}")]
   DuplicateInputs { outpoint: OutPoint },
   /// `bad-cb-length`
+  #[error("bad-cb-length: {len}")]
   BadCoinbaseScriptLength { len: usize },
   /// `bad-txns-prevout-null`
+  #[error("bad-txns-prevout-null: input {index}")]
   NullPrevout { index: usize },
   /// `bad-txns-payload-not-allowed`
+  #[error("bad-txns-payload-not-allowed")]
   PayloadNotAllowed,
   /// `bad-txns-payload-decode`
+  #[error("bad-txns-payload-decode: {0}")]
   PayloadDecode(PayloadError),
   /// `bad-txns-payload-check`
+  #[error("bad-txns-payload-check: {0}")]
   PayloadCheck(PayloadInvalid),
-}
-
-impl fmt::Display for TxInvalid {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      Self::EmptyInputs => write!(f, "bad-txns-vin-empty"),
-      Self::EmptyOutputs => write!(f, "bad-txns-vout-empty"),
-      Self::Oversize { size } => write!(f, "bad-txns-oversize: {size} bytes"),
-      Self::PayloadOversize { size } => write!(f, "bad-txns-payload-oversize: {size} bytes"),
-      Self::OutputTooLarge { index, value } => write!(f, "bad-txns-vout-toolarge: output {index} value {value}"),
-      Self::OutputTotalTooLarge { total } => write!(f, "bad-txns-txouttotal-toolarge: {total}"),
-      Self::DuplicateInputs { outpoint } => write!(f, "bad-txns-inputs-duplicate: {outpoint}"),
-      Self::BadCoinbaseScriptLength { len } => write!(f, "bad-cb-length: {len}"),
-      Self::NullPrevout { index } => write!(f, "bad-txns-prevout-null: input {index}"),
-      Self::PayloadNotAllowed => write!(f, "bad-txns-payload-not-allowed"),
-      Self::PayloadDecode(e) => write!(f, "bad-txns-payload-decode: {e}"),
-      Self::PayloadCheck(e) => write!(f, "bad-txns-payload-check: {e}"),
-    }
-  }
 }
 
 /// A Dash transaction.
