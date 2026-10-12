@@ -9,7 +9,7 @@
 use super::QuorumHash;
 use crate::codec::codec_payload;
 
-use dash_pkc::bls::{BlsScIetf, BlsSigBytes};
+use dash_pkc::bls::BlsSigBytes;
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::Checkable;
 
@@ -30,7 +30,7 @@ pub struct MnHardFork {
   /// Quorum hash.
   pub quorum_hash: QuorumHash,
   /// Quorum BLS signature.
-  pub sig: BlsSigBytes<BlsScIetf>,
+  pub sig: BlsSigBytes,
 }
 
 codec_payload!(MnHardFork {

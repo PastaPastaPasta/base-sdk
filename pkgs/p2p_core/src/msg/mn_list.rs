@@ -9,7 +9,7 @@
 use crate::codec::{codec_p2p, impl_p2p};
 use crate::prelude::*;
 
-use dash_pkc::bls::{BlsPkBytes, BlsScIetf, BlsSigBytes};
+use dash_pkc::bls::{BlsPkBytes, BlsSigBytes};
 use dash_primitives::{
   hash_impl, BlockHash, Commitment, LlmqType, MnType, PlatformNodeId, ServiceV1, Transaction, TxHash,
 };
@@ -127,7 +127,7 @@ impl fmt::Display for MnListDiffPayload {
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct QuorumClSig {
   /// BLS signature.
-  pub sig: BlsSigBytes<BlsScIetf>,
+  pub sig: BlsSigBytes,
   /// Indices into the `new_quorums` vector.
   pub index_set: Vec<u16>,
 }

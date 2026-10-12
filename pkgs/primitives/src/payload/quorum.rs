@@ -12,7 +12,7 @@ use crate::hash_impl;
 use crate::support::{DynBitset, LlmqType};
 
 use dash_num::make_hash;
-use dash_pkc::bls::{BlsPkBytes, BlsScIetf, BlsSigBytes};
+use dash_pkc::bls::{BlsPkBytes, BlsSigBytes};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{Checkable, Numeric};
@@ -53,9 +53,9 @@ pub struct Commitment {
   /// Quorum verification vector hash (32 bytes).
   pub quorum_vvec_hash: QuorumVvecHash,
   /// Threshold signature over commitment.
-  pub quorum_sig: BlsSigBytes<BlsScIetf>,
+  pub quorum_sig: BlsSigBytes,
   /// Aggregated per-member signature.
-  pub members_sig: BlsSigBytes<BlsScIetf>,
+  pub members_sig: BlsSigBytes,
 }
 
 impl_payload!(Commitment);
@@ -80,8 +80,8 @@ impl BaseCodec for Commitment {
       valid_members: DynBitset::decode(data)?,
       quorum_public_key: BlsPkBytes::decode(data)?,
       quorum_vvec_hash: QuorumVvecHash::decode(data)?,
-      quorum_sig: BlsSigBytes::<BlsScIetf>::decode(data)?,
-      members_sig: BlsSigBytes::<BlsScIetf>::decode(data)?,
+      quorum_sig: BlsSigBytes::decode(data)?,
+      members_sig: BlsSigBytes::decode(data)?,
     })
   }
 

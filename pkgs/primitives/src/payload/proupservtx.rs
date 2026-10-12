@@ -14,7 +14,7 @@ use crate::types::{NITrait, NetInfo, NetInfoV1, NetInfoV2, ServiceV1};
 use crate::{hash_impl, TxHash};
 
 use bitcoin_primitives::script::ScriptPubKeyBuf;
-use dash_pkc::bls::{BlsScIetf, BlsSigBytes};
+use dash_pkc::bls::BlsSigBytes;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::{type_id::TypeId, Checkable, Numeric};
 
@@ -50,7 +50,7 @@ pub struct ProUpServTx {
   #[cfg_attr(feature = "serde", serde(rename = "platformHTTPPort"))]
   pub platform_http_port: Option<u16>,
   /// Operator BLS signature.
-  pub sig: BlsSigBytes<BlsScIetf>,
+  pub sig: BlsSigBytes,
 }
 
 impl_payload!(ProUpServTx);
@@ -94,7 +94,7 @@ impl BaseCodec for ProUpServTx {
       platform_node_id,
       platform_p2p_port,
       platform_http_port,
-      sig: BlsSigBytes::<BlsScIetf>::decode(data)?,
+      sig: BlsSigBytes::decode(data)?,
     })
   }
 

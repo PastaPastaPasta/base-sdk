@@ -11,7 +11,7 @@ use crate::codec::codec_payload;
 use crate::support::RevocationReason;
 use crate::TxHash;
 
-use dash_pkc::bls::{BlsScIetf, BlsSigBytes};
+use dash_pkc::bls::BlsSigBytes;
 use dash_types::type_id::TypeId;
 use dash_types::Checkable;
 
@@ -34,7 +34,7 @@ pub struct ProUpRevTx {
   /// Hash of all inputs.
   pub inputs_hash: InputsHash,
   /// Operator BLS signature.
-  pub sig: BlsSigBytes<BlsScIetf>,
+  pub sig: BlsSigBytes,
 }
 
 codec_payload!(ProUpRevTx {
