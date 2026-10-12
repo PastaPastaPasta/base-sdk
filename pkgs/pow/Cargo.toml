@@ -13,7 +13,7 @@ rust-version.workspace = true
 default = []
 std = []
 full = ["std", "aes_hw", "simd"]
-aes_hw = []
+aes_hw = ["simd"]
 simd = []
 
 [dev-dependencies]

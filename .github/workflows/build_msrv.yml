@@ -143,11 +143,11 @@ jobs:
           export RUSTC="$TOOLCHAIN_MSRV/bin/rustc"
           export RUSTDOC="$TOOLCHAIN_MSRV/bin/rustdoc"
           "$TOOLCHAIN_MSRV/bin/cargo" build --workspace --exclude dash-pow --features full
-          "$TOOLCHAIN_MSRV/bin/cargo" build -p dash-pow --features std,aes_hw
+          "$TOOLCHAIN_MSRV/bin/cargo" build -p dash-pow --features std
 
       - name: Test workspace
         run: |
           export RUSTC="$TOOLCHAIN_MSRV/bin/rustc"
           export RUSTDOC="$TOOLCHAIN_MSRV/bin/rustdoc"
           "$TOOLCHAIN_MSRV/bin/cargo" test --workspace --exclude dash-pow --features full
-          "$TOOLCHAIN_MSRV/bin/cargo" test -p dash-pow --features std,aes_hw
+          "$TOOLCHAIN_MSRV/bin/cargo" test -p dash-pow --features std
