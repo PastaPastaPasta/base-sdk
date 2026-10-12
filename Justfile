@@ -47,6 +47,7 @@ test:
     cargo clippy --all-targets --no-default-features -- -D warnings
     cargo clippy --all-targets --features full -- -D warnings
     cargo clippy --all-targets --features full,portable -- -D warnings
+    cargo hack clippy --ignore-private --feature-powerset --exclude-features default -- -D warnings
     {{ nextest }} --workspace --features full
     cargo test --doc --workspace --features full
     cargo doc --workspace --no-deps --features full

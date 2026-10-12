@@ -33,6 +33,7 @@ jobs:
           - { name: full, args: "--features full" }
           - { name: min, args: "--no-default-features" }
           - { name: std, args: "--features std" }
+          - { name: powerset, args: "" }
 
     defaults:
       run:
@@ -89,13 +90,19 @@ jobs:
             cargo-build-nightly-${{ runner.os }}-${{ runner.arch }}-${{ inputs.package }}-${{ matrix.config.name }}-
 
       - name: Lint package
+        if: matrix.config.name == 'full' || matrix.config.name == 'min'
         run: cargo clippy -p ${{ inputs.package }} ${{ matrix.config.args }} --tests --benches -- -D warnings
 
+      - name: Lint every feature combination
+        if: matrix.config.name == 'powerset'
+        run: cargo hack clippy -p ${{ inputs.package }} --feature-powerset --exclude-features default -- -D warnings
+
       - name: Build package
+        if: matrix.config.name == 'full' || matrix.config.name == 'min'
         run: cargo build -p ${{ inputs.package }} ${{ matrix.config.args }}
 
       - name: Test package
-        if: matrix.config.name != 'full'
+        if: matrix.config.name == 'min' || matrix.config.name == 'std'
         run: |
           cargo nextest run --config-file .cargo/nextest.toml -p ${{ inputs.package }} ${{ matrix.config.args }}
           cargo test --doc -p ${{ inputs.package }} ${{ matrix.config.args }}
@@ -130,4 +137,5 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Sanity check benchmarks
+        if: matrix.config.name != 'powerset'
         run: cargo test ${{ matrix.config.args }} --package ${{ inputs.package }} --benches
