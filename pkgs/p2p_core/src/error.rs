@@ -62,6 +62,21 @@ pub enum P2pDecodeError {
     /// Type bytes present, of 12.
     remaining: usize,
   },
+  /// A payload longer than its handler accepts, below the transport's limit.
+  ///
+  /// Core's handler checks the length before reading and scores the peer's
+  /// misbehaviour at the discouragement threshold: it disconnects and
+  /// discourages the peer, except one it may not ban. `PayloadTooLarge`
+  /// disconnects at the transport without discouraging.
+  #[error("{command} payload over its handler's limit: {size} bytes, max {max}")]
+  HandlerPayloadTooLarge {
+    /// Wire command name.
+    command: &'static str,
+    /// Size of the payload, in bytes.
+    size: usize,
+    /// The handler's limit, in bytes.
+    max: usize,
+  },
   /// A message lists more entries than its handler accepts.
   ///
   /// Core checks the count before reading any entry and penalises the peer.

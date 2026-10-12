@@ -288,7 +288,7 @@ fn handler_verdicts_are_cores() {
       // reads it, the probe's garbage included.
       "unread" => assert!(IGNORED_BY_CORE.contains(&c.command.as_str()), "{label}"),
       "read" if STRICT.contains(&c.name.as_str()) => assert!(
-        matches!(r, Err(P2pDecodeError::Consensus(DecodeError::InvalidValue { .. }))),
+        matches!(r, Err(P2pDecodeError::Consensus(DecodeError::NonCanonicalBool { .. }))),
         "{label}: {r:?}"
       ),
       "read" => {

@@ -29,6 +29,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `decode_v2_payload`, which decodes a V2 payload kept apart from its type under V2 rules (the contents limit after the
   shortest type that carries the command, 0x7f in a long-form type).
 - `CommandString::EMPTY`, the all-zero type.
+- `P2pDecodeError::HandlerPayloadTooLarge`, a payload over its handler's own length limit.
+- Typed overlay messages: `clsig` (`ClSig`), `isdlock` (`IsdLock`), `qsigrec` (`RecoveredSig`), `qfcommit` (the
+  final commitment, versions 1 to 4), `mnauth` (`MnAuth`), `spork` (`Spork`), `platformban` (`PlatformBan`, whose
+  hash is Core's `GetHash()`, without the signature), `qgetdata` (`QuorumDataRequest`), `qdata` (`QData`),
+  `getqrinfo` (`GetQrInfo`) and `qrinfo` (`QrInfo`, with `QuorumSnapshot` and `CycleInfo`). BLS keys and signatures
+  are bytes, except a commitment's, which go through the BLS wire-form classifier as before.
+- `MnListFormat`, the `mnlistdiff` layouts by protocol version (no version, version after the cbTx, versioned
+  entries, version first, ChainLock signatures), with `MnListDiff::decode_as`; `qrinfo` and `mnlistdiff` decode in the
+  layout of the context's version.
+- `QData::read_data`, which reads the verification vector and the contributions against the quorum's threshold and
+  valid member count, as Core's `UnserializeVectorWithMaxSize` does, failing with `TooManyEntries` before the entries;
+  `QData::read_vvec` and `QData::read_contributions` read the two apart, as Core's handler does, with
+  `VerificationVector`.
+- `MAX_SPORK_SIG_LEN` and `MAX_QRINFO_BASE_HASHES`, the read limits of `spork` and `getqrinfo`. Core checks them only
+  when reading, so both encode any length.
 
 ### Changed
 
@@ -43,13 +58,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   the time does not step backwards.
 - `encode_v2` takes the peer's common version.
 - `filterclear`, `mempool` and `qwatch` are no longer stubs.
+- A `qgetdata` over 67 bytes fails with `HandlerPayloadTooLarge`, as Core's handler refuses it before reading; Core
+  disconnects and discourages the peer, where for `PayloadTooLarge` it disconnects without discouraging.
+- `SimplifiedMnListEntry`'s hash is Core's `CalcHash()`, its leaf in `merkleRootMNList`: the entry without its
+  version.
 - `P2pDecodeError::Consensus` carries the `DecodeError` instead of its text.
 - `GetBlockTxn`'s fields are private and deserialization checks their order; an index past 65,535 fails, as in Core.
 - `SendCmpct::high_bandwidth` is a `bool` read as 0 or 1, the bytes Core writes; another byte, which Core reads as
-  `true`, is an error.
+  `true`, fails with `DecodeError::NonCanonicalBool`.
 - A `cmpctblock` listing more than 65,535 transactions fails with `DecodeError::BadLen`.
 - A V2 short ID with no message, including the slots Core reserves (5, 29 to 32), fails with `UnknownShortId`: drop
   the message and keep the peer. Core types those slots as the empty command and ignores them.
+- `spork`, `qfcommit`, `qsigrec`, `qgetdata`, `qdata`, `clsig`, `isdlock`, `mnauth`, `getqrinfo`, `qrinfo` and
+  `platformban` are no longer stubs. `P2pMsg::QfCommit` and `P2pMsg::QrInfo` box their message.
+- `MnListDiff` holds its fields directly, replacing `MnListDiffPayload`, and records its `format`: the cbTx's
+  `PartialMerkleTree`, the cbTx, and `quorum_cl_sigs` in wire order.
+- `QuorumClSig::index_set` is a `BTreeSet<u16>`: Core reads the indexes into a set, dropping repeats.
+- `SimplifiedMnListEntry` carries its `version` and the entry's `NetInfo` (the address list from version 3, as
+  `protx` payloads read it), replacing `service`; `decode_as` and `encode_as` read and write it with or without the
+  version.
+- `SimplifiedMnListEntry::is_valid` and `GetQrInfo::extra_share`, like the `qrinfo` extra share flag, are a `bool` read
+  as 0 or 1, the bytes Core writes; another byte, which Core reads as `true`, fails with
+  `DecodeError::NonCanonicalBool`. Core serves a `getqrinfo` with such a byte.
 
 ### Removed
 

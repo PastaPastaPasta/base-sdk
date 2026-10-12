@@ -6,7 +6,8 @@
 
 //! Compressed header messages.
 
-use super::headers::{read_entry_count, read_header_count};
+use super::headers::read_entry_count;
+use crate::codec::read_count_at_most;
 use crate::codec::{codec_p2p, impl_p2p, MsgDecode};
 use crate::ctx::ProtoCtx;
 use crate::limits::{MAX_HEADERS_COMPRESSED_RESULT, MAX_HEADERS_UNCOMPRESSED_RESULT};
@@ -393,7 +394,7 @@ impl Headers2 {
     } else {
       MAX_HEADERS_UNCOMPRESSED_RESULT
     };
-    let count = read_header_count(data, "headers2", max)?;
+    let count = read_count_at_most(data, "headers2", max)?;
     Ok(Self::read(data, count, &mut hash)?)
   }
 
