@@ -88,36 +88,29 @@ impl fmt::Display for BlockHeader {
 }
 
 /// Block validation failure.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Unencodable)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, thiserror::Error, Unencodable)]
 pub enum BlockInvalid {
   /// Decoded target is negative, zero, overflows, or the hash exceeds it.
+  #[error("bad-proof-of-work")]
   BadProofOfWork,
   /// Computed merkle root does not match the header.
+  #[error("bad-merkle-root")]
   BadMerkleRoot,
   /// `bad-blk-length`
+  #[error("bad-blk-length: {size} bytes")]
   BadBlockLength { size: usize },
   /// `bad-cb-missing`
+  #[error("bad-cb-missing")]
   MissingCoinbase,
   /// `bad-cb-multiple`
+  #[error("bad-cb-multiple: tx {index}")]
   MultipleCoinbases { index: usize },
   /// `bad-blk-sigops`
+  #[error("bad-blk-sigops: {count} > {limit}")]
   TooManySigops { count: usize, limit: usize },
   /// A contained transaction failed validation.
+  #[error("tx {index}: {error}")]
   Transaction { index: usize, error: TxInvalid },
-}
-
-impl fmt::Display for BlockInvalid {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      Self::BadProofOfWork => write!(f, "bad-proof-of-work"),
-      Self::BadMerkleRoot => write!(f, "bad-merkle-root"),
-      Self::BadBlockLength { size } => write!(f, "bad-blk-length: {size} bytes"),
-      Self::MissingCoinbase => write!(f, "bad-cb-missing"),
-      Self::MultipleCoinbases { index } => write!(f, "bad-cb-multiple: tx {index}"),
-      Self::TooManySigops { count, limit } => write!(f, "bad-blk-sigops: {count} > {limit}"),
-      Self::Transaction { index, error } => write!(f, "tx {index}: {error}"),
-    }
-  }
 }
 
 /// A Dash block: header followed by a vector of transactions.

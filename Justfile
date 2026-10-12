@@ -5,9 +5,8 @@ python := if os() == "windows" { "python" } else { "python3" }
 # `[env]` attribute unavailable on just 1.40 packaged with Debian trixie
 # (see https://packages.debian.org/trixie/just)
 export RUSTDOCFLAGS := "-D warnings"
-export RUSTFLAGS := "-D warnings"
 
-nextest := "cargo nextest run --config-file maint/nextest.toml --profile=ci"
+nextest := "cargo nextest run --config-file .cargo/nextest.toml"
 
 [private]
 default:
@@ -21,13 +20,22 @@ build:
     cargo build --workspace --no-default-features
 
 comb:
-    {{ python }} contrib/git_filter.py --fast-fail develop HEAD -- just test lint
+    {{ python }} contrib/git_filter.py --fast-fail --env NEXTEST_PROFILE=fail-fast develop HEAD -- just test lint
 
 lint:
     @just --fmt --check
     {{ python }} maint/lint_all.py --exclude lint_codeql
     {{ python }} maint/lint/lint_codeql.py check
     {{ python }} maint/lint/lint_codeql.py run --lang=rust --with-suite=rust-security-and-quality
+
+[positional-arguments]
+[unix]
+mutants *args:
+    cargo mutants "$@"
+
+[windows]
+mutants *args:
+    cargo mutants {{ args }}
 
 sh:
     nix develop ./contrib/nix#dev
@@ -36,9 +44,11 @@ preview:
     {{ python }} docs/build_docs.py preview
 
 test:
-    cargo clippy --all-targets --no-default-features
-    cargo clippy --all-targets --features full
-    {{ nextest }} --fail-fast --workspace --features full
+    cargo clippy --all-targets --no-default-features -- -D warnings
+    cargo clippy --all-targets --features full -- -D warnings
+    cargo clippy --all-targets --features full,portable -- -D warnings
+    cargo hack clippy --ignore-private --feature-powerset --exclude-features default -- -D warnings
+    {{ nextest }} --workspace --features full
     cargo test --doc --workspace --features full
     cargo doc --workspace --no-deps --features full
-    cargo bench --workspace --features full --no-run
+    cargo test --workspace --features full --benches

@@ -14,21 +14,25 @@ use dash_types::type_id::Unencodable;
 use core::fmt;
 
 /// An error encountered during P2P message decoding.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, thiserror::Error, Unencodable)]
 pub enum P2pDecodeError {
   /// Underlying consensus decoding error.
+  #[error("{0}")]
   Consensus(String),
   /// Unrecognised 12-byte command string.
+  #[error(fmt = fmt_unknown_command)]
   UnknownCommand {
     /// The raw command bytes.
     bytes: [u8; 12],
   },
   /// V2 short ID does not map to a known message.
+  #[error("unknown v2 short id: {id}")]
   UnknownShortId {
     /// The short ID byte.
     id: u8,
   },
   /// Message payload exceeds the allowed size.
+  #[error("{command} payload too large: {size} bytes, max {max}")]
   PayloadTooLarge {
     /// Wire command name.
     command: &'static str,
@@ -38,6 +42,7 @@ pub enum P2pDecodeError {
     max: usize,
   },
   /// Message carries a payload where none is permitted.
+  #[error("{command} must have an empty payload, got {size} bytes")]
   PayloadNotEmpty {
     /// Wire command name.
     command: &'static str,
@@ -45,6 +50,7 @@ pub enum P2pDecodeError {
     size: usize,
   },
   /// A field value is outside the valid range.
+  #[error("invalid value for {field}")]
   InvalidValue {
     /// Brief description of what was invalid.
     field: &'static str,
@@ -57,39 +63,15 @@ impl From<DecodeError> for P2pDecodeError {
   }
 }
 
-impl fmt::Display for P2pDecodeError {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      Self::Consensus(e) => write!(f, "{e}"),
-      Self::UnknownCommand { bytes } => {
-        write!(f, "unknown command: ")?;
-        for &b in bytes {
-          if b == 0 {
-            break;
-          }
-          if b.is_ascii_graphic() || b == b' ' {
-            write!(f, "{}", b as char)?;
-          } else {
-            write!(f, "\\x{b:02x}")?;
-          }
-        }
-        Ok(())
-      }
-      Self::UnknownShortId { id } => {
-        write!(f, "unknown v2 short id: {id}")
-      }
-      Self::PayloadTooLarge { command, size, max } => {
-        write!(f, "{command} payload too large: {size} bytes, max {max}")
-      }
-      Self::PayloadNotEmpty { command, size } => {
-        write!(f, "{command} must have an empty payload, got {size} bytes")
-      }
-      Self::InvalidValue { field } => {
-        write!(f, "invalid value for {field}")
-      }
+/// Formats `P2pDecodeError::UnknownCommand`, escaping non-printable bytes.
+fn fmt_unknown_command(bytes: &[u8; 12], f: &mut fmt::Formatter<'_>) -> fmt::Result {
+  f.write_str("unknown command: ")?;
+  for &b in bytes.iter().take_while(|&&b| b != 0) {
+    if b.is_ascii_graphic() || b == b' ' {
+      write!(f, "{}", b as char)?;
+    } else {
+      write!(f, "\\x{b:02x}")?;
     }
   }
+  Ok(())
 }
-
-#[cfg(feature = "std")]
-impl std::error::Error for P2pDecodeError {}

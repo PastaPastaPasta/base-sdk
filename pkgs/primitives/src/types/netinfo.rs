@@ -84,26 +84,31 @@ impl_num!(NIEntryCode, u8);
 hash_impl!(NIEntryCode);
 
 /// Network info validation error.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, thiserror::Error)]
 pub enum NIError {
   /// Address failed validation.
+  #[error("invalid address: {error}")]
   BadAddr {
     /// The underlying address error.
     error: NetAddrError,
   },
   /// Port is zero or invalid for context.
+  #[error("invalid port {port}")]
   BadPort {
     /// The invalid port value.
     port: u16,
   },
   /// Entry or address type not valid for this purpose.
+  #[error("unsupported entry type {entry_type}")]
   BadType {
     /// The offending entry type byte.
     entry_type: u8,
   },
   /// Duplicate address:port within the structure.
+  #[error("duplicate entry")]
   Duplicate,
   /// Too many entries or purpose groups.
+  #[error("too many entries: {count} exceeds limit {max}")]
   MaxLimit {
     /// Actual count.
     count: usize,
@@ -111,28 +116,9 @@ pub enum NIError {
     max: usize,
   },
   /// Structural integrity violation.
+  #[error("malformed structure")]
   Malformed,
 }
-
-impl fmt::Display for NIError {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      Self::BadAddr { error } => write!(f, "invalid address: {error}"),
-      Self::BadPort { port } => write!(f, "invalid port {port}"),
-      Self::BadType { entry_type } => {
-        write!(f, "unsupported entry type {entry_type}")
-      }
-      Self::Duplicate => f.write_str("duplicate entry"),
-      Self::MaxLimit { count, max } => {
-        write!(f, "too many entries: {count} exceeds limit {max}")
-      }
-      Self::Malformed => f.write_str("malformed structure"),
-    }
-  }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for NIError {}
 
 /// A single network info entry within a purpose group.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]

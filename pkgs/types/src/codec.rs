@@ -11,15 +11,15 @@ use crate::type_id::TypeId;
 use crate::{CompactSize, Hashable};
 
 use core::convert::Infallible;
-use core::fmt;
 
 /// Maximum bytes to pre-allocate per batch when deserializing vectors.
 const MAX_VECTOR_ALLOCATE: usize = 5_000_000;
 
 /// An error encountered during consensus decoding.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, thiserror::Error)]
 pub enum DecodeError<E = Infallible> {
   /// A decoded field has an invalid byte length.
+  #[error("invalid length: expected one of {expected:?}, got {actual}")]
   BadLen {
     /// Acceptable lengths.
     expected: Vec<usize>,
@@ -27,8 +27,10 @@ pub enum DecodeError<E = Infallible> {
     actual: usize,
   },
   /// Decode validation error.
-  DecError(E),
+  #[error("decode validation: {0}")]
+  DecError(#[source] E),
   /// CompactSize value exceeds the allowed limit.
+  #[error("compact size value {value} exceeds limit {limit}")]
   CompactSizeExceedsLimit {
     /// The configured limit.
     limit: usize,
@@ -36,6 +38,7 @@ pub enum DecodeError<E = Infallible> {
     value: u64,
   },
   /// Not enough bytes remaining in the cursor.
+  #[error("unexpected eof: needed {needed} bytes, {remaining} remaining")]
   Eof {
     /// Bytes needed for the read.
     needed: usize,
@@ -43,8 +46,10 @@ pub enum DecodeError<E = Infallible> {
     remaining: usize,
   },
   /// Decoded bytes are not valid UTF-8.
+  #[error("invalid utf-8 in string")]
   InvalidUtf8,
   /// A decoded value does not match any expected value.
+  #[error("invalid value: expected one of {expected:?}, got {actual}")]
   InvalidValue {
     /// Acceptable values.
     expected: Vec<u64>,
@@ -52,11 +57,13 @@ pub enum DecodeError<E = Infallible> {
     actual: u64,
   },
   /// CompactSize encoding is not minimal.
+  #[error("non-minimal compact size encoding for value {value}")]
   NonMinimalCompactSize {
     /// The decoded value that was not minimally encoded.
     value: u64,
   },
   /// Unconsumed bytes remain after decoding.
+  #[error("{remaining} trailing bytes after decode")]
   TrailingBytes {
     /// Number of bytes left over.
     remaining: usize,
@@ -75,43 +82,6 @@ impl DecodeError {
       Self::InvalidValue { expected, actual } => DecodeError::InvalidValue { expected, actual },
       Self::NonMinimalCompactSize { value } => DecodeError::NonMinimalCompactSize { value },
       Self::TrailingBytes { remaining } => DecodeError::TrailingBytes { remaining },
-    }
-  }
-}
-
-impl<E: fmt::Display> fmt::Display for DecodeError<E> {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      Self::BadLen { expected, actual } => {
-        write!(f, "invalid length: expected one of {expected:?}, got {actual}")
-      }
-      Self::DecError(e) => write!(f, "decode validation: {e}"),
-      Self::CompactSizeExceedsLimit { limit, value } => {
-        write!(f, "compact size value {value} exceeds limit {limit}",)
-      }
-      Self::Eof { needed, remaining } => {
-        write!(f, "unexpected eof: needed {needed} bytes, {remaining} remaining",)
-      }
-      Self::InvalidUtf8 => write!(f, "invalid utf-8 in string"),
-      Self::InvalidValue { expected, actual } => {
-        write!(f, "invalid value: expected one of {expected:?}, got {actual}")
-      }
-      Self::NonMinimalCompactSize { value } => {
-        write!(f, "non-minimal compact size encoding for value {value}",)
-      }
-      Self::TrailingBytes { remaining } => {
-        write!(f, "{remaining} trailing bytes after decode")
-      }
-    }
-  }
-}
-
-#[cfg(feature = "std")]
-impl<E: std::error::Error + 'static> std::error::Error for DecodeError<E> {
-  fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-    match self {
-      Self::DecError(e) => Some(e),
-      _ => None,
     }
   }
 }
@@ -382,16 +352,9 @@ mod tests {
 
   use rstest::*;
 
-  use core::fmt;
-
-  #[derive(Clone, Debug, Eq, PartialEq)]
+  #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
+  #[error("sample text")]
   struct SampleError;
-
-  impl fmt::Display for SampleError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-      write!(f, "sample text")
-    }
-  }
 
   #[rstest]
   fn dec_error_displays_the_inner_error() {

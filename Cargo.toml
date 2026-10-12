@@ -28,6 +28,7 @@ rand_core = { version = "0.10.1", default-features = false }
 rstest = "0.25"
 serde = { version = "1", default-features = false }
 subtle = { version = "2.6.1", default-features = false }
+thiserror = { version = "2", default-features = false }
 zeroize = { version = "1.9.0", default-features = false }
 
 [workspace.lints.clippy]
@@ -53,14 +54,25 @@ edition = "2021"
 homepage = "https://dashpay.github.io/base-sdk"
 license = "MIT"
 repository = "https://github.com/dashpay/base-sdk"
-rust-version = "1.85.0"
+rust-version = "1.89.0"
 
 [profile.release]
-lto = true
+codegen-units = 1
+debug = false
+incremental = false
+lto = "fat"
 opt-level = 3
 panic = "abort"
-strip = true
+strip = "symbols"
+
+[profile.mutants]
+inherits = "release"
+codegen-units = 16
+debug-assertions = true
+incremental = true
+lto = false
+overflow-checks = true
 
 [profile.dev]
-codegen-units = 1
+codegen-units = 256
 overflow-checks = true

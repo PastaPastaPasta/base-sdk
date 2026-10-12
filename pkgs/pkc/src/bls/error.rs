@@ -6,76 +6,64 @@
 
 //! Error type for BLS operations.
 
-use core::fmt;
-
 /// Errors produced by BLS operations.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, thiserror::Error)]
 pub enum BlsError {
   /// paired input counts do not match
+  #[error("paired input counts differ")]
   CountMismatch,
   /// repeated message in a distinct-message aggregate
+  #[error("repeated message in a distinct-message aggregate")]
   DuplicateMessage,
   /// duplicate share id in recovery set
+  #[error("duplicate share id in recovery set")]
   DuplicateShareId,
   /// no items provided for aggregation
+  #[error("no items provided for aggregation")]
   EmptyAggregation,
   /// recipient index past the end of the message
+  #[error("recipient index past the end of the message")]
   IndexOutOfRange,
   /// recipient index above the supported maximum
+  #[error("recipient index above the supported maximum")]
   IndexTooLarge,
   /// fewer than two master keys to evaluate a share
+  #[error("fewer than two master keys to evaluate a share")]
   InsufficientCoefficients,
   /// not enough shares to recover
+  #[error("not enough shares to recover")]
   InsufficientShares,
   /// ciphertext is empty or not a whole number of cipher blocks
+  #[error("ciphertext is empty or not a whole number of cipher blocks")]
   InvalidCiphertextLength,
   /// initialisation vector seed is all zeroes
+  #[error("initialisation vector seed is all zeroes")]
   InvalidIvSeed,
   /// input keying material is too short (need >= 32 bytes)
+  #[error("input keying material too short")]
   InvalidKeyMaterial,
   /// plaintext is empty or not a whole number of cipher blocks
+  #[error("plaintext is empty or not a whole number of cipher blocks")]
   InvalidPlaintextLength,
   /// public key bytes are not a valid G1 point
+  #[error("invalid public key bytes")]
   InvalidPublicKey,
   /// secret key bytes are not a valid scalar
+  #[error("invalid secret key bytes")]
   InvalidSecretKey,
   /// signature bytes are not a valid G2 point
+  #[error("invalid signature bytes")]
   InvalidSignature,
   /// threshold is below 2, exceeds id count or no ids supplied
+  #[error("threshold is below 2, exceeds id count or no ids supplied")]
   InvalidThreshold,
   /// tweak is not below the group order, or the result is the identity
+  #[error("tweak is not below the group order, or the result is the identity")]
   InvalidTweak,
   /// signature verification failed
+  #[error("signature verification failed")]
   VerifyFailed,
   /// input reduces to zero in the scalar field
+  #[error("input reduces to zero in the scalar field")]
   ZeroScalar,
 }
-
-impl fmt::Display for BlsError {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      Self::CountMismatch => write!(f, "paired input counts differ"),
-      Self::DuplicateMessage => write!(f, "repeated message in a distinct-message aggregate"),
-      Self::DuplicateShareId => write!(f, "duplicate share id in recovery set"),
-      Self::EmptyAggregation => write!(f, "no items provided for aggregation"),
-      Self::IndexOutOfRange => write!(f, "recipient index past the end of the message"),
-      Self::IndexTooLarge => write!(f, "recipient index above the supported maximum"),
-      Self::InsufficientCoefficients => write!(f, "fewer than two master keys to evaluate a share"),
-      Self::InsufficientShares => write!(f, "not enough shares to recover"),
-      Self::InvalidCiphertextLength => write!(f, "ciphertext is empty or not a whole number of cipher blocks"),
-      Self::InvalidIvSeed => write!(f, "initialisation vector seed is all zeroes"),
-      Self::InvalidKeyMaterial => write!(f, "input keying material too short"),
-      Self::InvalidPlaintextLength => write!(f, "plaintext is empty or not a whole number of cipher blocks"),
-      Self::InvalidPublicKey => write!(f, "invalid public key bytes"),
-      Self::InvalidSecretKey => write!(f, "invalid secret key bytes"),
-      Self::InvalidSignature => write!(f, "invalid signature bytes"),
-      Self::InvalidThreshold => write!(f, "threshold is below 2, exceeds id count or no ids supplied"),
-      Self::InvalidTweak => write!(f, "tweak is not below the group order, or the result is the identity"),
-      Self::VerifyFailed => write!(f, "signature verification failed"),
-      Self::ZeroScalar => write!(f, "input reduces to zero in the scalar field"),
-    }
-  }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for BlsError {}

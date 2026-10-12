@@ -1,6 +1,5 @@
-![GitHub License](https://img.shields.io/github/license/dashpay/base-sdk)
-![Minimum Supported Rust Version](https://img.shields.io/badge/v1.85.0-msrv?style=flat&logo=rust&label=MSRV&color=orange)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/dashpay/base-sdk)
+[![GitHub License](https://img.shields.io/github/license/dashpay/base-sdk?style=flat&logo=readme&logoColor=white)](./LICENSE)
+![Minimum Supported Rust Version](https://img.shields.io/badge/v1.89.0-msrv?style=flat&logo=rust&label=MSRV&color=orange)
 
 > [!WARNING]
 >
@@ -16,79 +15,46 @@
 
 `base-sdk` is a parsing and stateless verification SDK for Dash's layer 1 blockchain.
 
-## Crates
+<!-- [start:crate-info] -->
 
-| Crate | Description | CI (`develop`) | Coverage |
-|-------|-------------|--------------|----------|
-| [dash-num](./pkgs/num) | Hash blobs, 256-bit arithmetic, compact target encoding | [![dash-num](https://img.shields.io/github/actions/workflow/status/dashpay/base-sdk/pkg_num.yml?style=flat&logo=github&logoColor=white&label=num)](https://github.com/dashpay/base-sdk/actions/workflows/pkg_num.yml) | [![dash-num](https://img.shields.io/codecov/c/github/dashpay/base-sdk/develop?flag=dash-num&style=flat&logo=codecov&logoColor=white&label=num)](https://app.codecov.io/github/dashpay/base-sdk/tree/develop/pkgs%2Fnum) |
-| [dash-p2p-core](./pkgs/p2p_core) | P2P message types and wire format | [![dash-p2p-core](https://img.shields.io/github/actions/workflow/status/dashpay/base-sdk/pkg_p2p_core.yml?style=flat&logo=github&logoColor=white&label=p2p-core)](https://github.com/dashpay/base-sdk/actions/workflows/pkg_p2p_core.yml) | [![dash-p2p-core](https://img.shields.io/codecov/c/github/dashpay/base-sdk/develop?flag=dash-p2p-core&style=flat&logo=codecov&logoColor=white&label=p2p-core)](https://app.codecov.io/github/dashpay/base-sdk/tree/develop/pkgs%2Fp2p_core) |
-| [dash-params](./pkgs/params) | Chain parameters for `mainnet`, `testnet3`, and `regtest` | [![dash-params](https://img.shields.io/github/actions/workflow/status/dashpay/base-sdk/pkg_params.yml?style=flat&logo=github&logoColor=white&label=params)](https://github.com/dashpay/base-sdk/actions/workflows/pkg_params.yml) | [![dash-params](https://img.shields.io/codecov/c/github/dashpay/base-sdk/develop?flag=dash-params&style=flat&logo=codecov&logoColor=white&label=params)](https://app.codecov.io/github/dashpay/base-sdk/tree/develop/pkgs%2Fparams) |
-| [dash-pkc](./pkgs/pkc) | BLS (legacy + IETF) and secp256k1 operations | [![dash-pkc](https://img.shields.io/github/actions/workflow/status/dashpay/base-sdk/pkg_pkc.yml?style=flat&logo=github&logoColor=white&label=pkc)](https://github.com/dashpay/base-sdk/actions/workflows/pkg_pkc.yml) | [![dash-pkc](https://img.shields.io/codecov/c/github/dashpay/base-sdk/develop?flag=dash-pkc&style=flat&logo=codecov&logoColor=white&label=pkc)](https://app.codecov.io/github/dashpay/base-sdk/tree/develop/pkgs%2Fpkc) |
-| [dash-pow](./pkgs/pow) | Proof of work scheme | [![dash-pow](https://img.shields.io/github/actions/workflow/status/dashpay/base-sdk/pkg_pow.yml?style=flat&logo=github&logoColor=white&label=pow)](https://github.com/dashpay/base-sdk/actions/workflows/pkg_pow.yml) | [![dash-pow](https://img.shields.io/codecov/c/github/dashpay/base-sdk/develop?flag=dash-pow&style=flat&logo=codecov&logoColor=white&label=pow)](https://app.codecov.io/github/dashpay/base-sdk/tree/develop/pkgs%2Fpow) |
-| [dash-primitives](./pkgs/primitives) | Blocks, transactions, payloads, governance objects | [![dash-primitives](https://img.shields.io/github/actions/workflow/status/dashpay/base-sdk/pkg_primitives.yml?style=flat&logo=github&logoColor=white&label=primitives)](https://github.com/dashpay/base-sdk/actions/workflows/pkg_primitives.yml) | [![dash-primitives](https://img.shields.io/codecov/c/github/dashpay/base-sdk/develop?flag=dash-primitives&style=flat&logo=codecov&logoColor=white&label=primitives)](https://app.codecov.io/github/dashpay/base-sdk/tree/develop/pkgs%2Fprimitives) |
-| [dash-script](./pkgs/script) | Script opcodes, classification, and address derivation | [![dash-script](https://img.shields.io/github/actions/workflow/status/dashpay/base-sdk/pkg_script.yml?style=flat&logo=github&logoColor=white&label=script)](https://github.com/dashpay/base-sdk/actions/workflows/pkg_script.yml) | [![dash-script](https://img.shields.io/codecov/c/github/dashpay/base-sdk/develop?flag=dash-script&style=flat&logo=codecov&logoColor=white&label=script)](https://app.codecov.io/github/dashpay/base-sdk/tree/develop/pkgs%2Fscript) |
-| [dash-types](./pkgs/types) | Shared byte and integer newtypes, serde helpers | [![dash-types](https://img.shields.io/github/actions/workflow/status/dashpay/base-sdk/pkg_types.yml?style=flat&logo=github&logoColor=white&label=types)](https://github.com/dashpay/base-sdk/actions/workflows/pkg_types.yml) | [![dash-types](https://img.shields.io/codecov/c/github/dashpay/base-sdk/develop?flag=dash-types&style=flat&logo=codecov&logoColor=white&label=types)](https://app.codecov.io/github/dashpay/base-sdk/tree/develop/pkgs%2Ftypes) |
+| Crate | Description | CI | Coverage | Version |
+| ----- | ----------- | -------------- | -------- | ------- |
+| [dash-num](./pkgs/num) | Hash blobs, 256-bit arithmetic, compact target encoding | [![dash-num](https://img.shields.io/github/actions/workflow/status/dashpay/base-sdk/pkg_num.yml?style=flat&logo=github&logoColor=white&label=num)](https://github.com/dashpay/base-sdk/actions/workflows/pkg_num.yml) | [![dash-num](https://img.shields.io/codecov/c/github/dashpay/base-sdk/develop?flag=dash-num&style=flat&logo=codecov&logoColor=white&label=num)](https://app.codecov.io/github/dashpay/base-sdk/tree/develop/pkgs%2Fnum) | [![dash-num](https://img.shields.io/crates/v/dash-num?style=flat&logo=hackthebox&logoColor=white&label=num&color=teal)](https://crates.io/crates/dash-num) |
+| [dash-p2p-core](./pkgs/p2p_core) | P2P message types and wire format | [![dash-p2p-core](https://img.shields.io/github/actions/workflow/status/dashpay/base-sdk/pkg_p2p_core.yml?style=flat&logo=github&logoColor=white&label=p2p-core)](https://github.com/dashpay/base-sdk/actions/workflows/pkg_p2p_core.yml) | [![dash-p2p-core](https://img.shields.io/codecov/c/github/dashpay/base-sdk/develop?flag=dash-p2p-core&style=flat&logo=codecov&logoColor=white&label=p2p-core)](https://app.codecov.io/github/dashpay/base-sdk/tree/develop/pkgs%2Fp2p_core) | _Unreleased._ |
+| [dash-params](./pkgs/params) | Chain parameters for `mainnet`, `testnet3`, and `regtest` | [![dash-params](https://img.shields.io/github/actions/workflow/status/dashpay/base-sdk/pkg_params.yml?style=flat&logo=github&logoColor=white&label=params)](https://github.com/dashpay/base-sdk/actions/workflows/pkg_params.yml) | [![dash-params](https://img.shields.io/codecov/c/github/dashpay/base-sdk/develop?flag=dash-params&style=flat&logo=codecov&logoColor=white&label=params)](https://app.codecov.io/github/dashpay/base-sdk/tree/develop/pkgs%2Fparams) | _Unreleased._ |
+| [dash-pkc](./pkgs/pkc) | BLS (legacy + IETF) and secp256k1 operations | [![dash-pkc](https://img.shields.io/github/actions/workflow/status/dashpay/base-sdk/pkg_pkc.yml?style=flat&logo=github&logoColor=white&label=pkc)](https://github.com/dashpay/base-sdk/actions/workflows/pkg_pkc.yml) | [![dash-pkc](https://img.shields.io/codecov/c/github/dashpay/base-sdk/develop?flag=dash-pkc&style=flat&logo=codecov&logoColor=white&label=pkc)](https://app.codecov.io/github/dashpay/base-sdk/tree/develop/pkgs%2Fpkc) | [![dash-pkc](https://img.shields.io/crates/v/dash-pkc?style=flat&logo=hackthebox&logoColor=white&label=pkc&color=teal)](https://crates.io/crates/dash-pkc) |
+| [dash-pow](./pkgs/pow) | Proof of work scheme | [![dash-pow](https://img.shields.io/github/actions/workflow/status/dashpay/base-sdk/pkg_pow.yml?style=flat&logo=github&logoColor=white&label=pow)](https://github.com/dashpay/base-sdk/actions/workflows/pkg_pow.yml) | [![dash-pow](https://img.shields.io/codecov/c/github/dashpay/base-sdk/develop?flag=dash-pow&style=flat&logo=codecov&logoColor=white&label=pow)](https://app.codecov.io/github/dashpay/base-sdk/tree/develop/pkgs%2Fpow) | _Unreleased._ |
+| [dash-primitives](./pkgs/primitives) | Blocks, transactions, payloads, governance objects | [![dash-primitives](https://img.shields.io/github/actions/workflow/status/dashpay/base-sdk/pkg_primitives.yml?style=flat&logo=github&logoColor=white&label=primitives)](https://github.com/dashpay/base-sdk/actions/workflows/pkg_primitives.yml) | [![dash-primitives](https://img.shields.io/codecov/c/github/dashpay/base-sdk/develop?flag=dash-primitives&style=flat&logo=codecov&logoColor=white&label=primitives)](https://app.codecov.io/github/dashpay/base-sdk/tree/develop/pkgs%2Fprimitives) | _Unreleased._ |
+| [dash-script](./pkgs/script) | Script opcodes, classification, and address derivation | [![dash-script](https://img.shields.io/github/actions/workflow/status/dashpay/base-sdk/pkg_script.yml?style=flat&logo=github&logoColor=white&label=script)](https://github.com/dashpay/base-sdk/actions/workflows/pkg_script.yml) | [![dash-script](https://img.shields.io/codecov/c/github/dashpay/base-sdk/develop?flag=dash-script&style=flat&logo=codecov&logoColor=white&label=script)](https://app.codecov.io/github/dashpay/base-sdk/tree/develop/pkgs%2Fscript) | _Unreleased._ |
+| [dash-types](./pkgs/types) | Shared byte and integer newtypes, serde helpers | [![dash-types](https://img.shields.io/github/actions/workflow/status/dashpay/base-sdk/pkg_types.yml?style=flat&logo=github&logoColor=white&label=types)](https://github.com/dashpay/base-sdk/actions/workflows/pkg_types.yml) | [![dash-types](https://img.shields.io/codecov/c/github/dashpay/base-sdk/develop?flag=dash-types&style=flat&logo=codecov&logoColor=white&label=types)](https://app.codecov.io/github/dashpay/base-sdk/tree/develop/pkgs%2Ftypes) | [![dash-types](https://img.shields.io/crates/v/dash-types?style=flat&logo=hackthebox&logoColor=white&label=types&color=teal)](https://crates.io/crates/dash-types) |
 
-## Dependencies
+## System Requirements
 
-> [!NOTE]
-> Solid lines are build dependencies. Dotted lines are test dependencies.
+Some crates rely on instruction set extensions that set hardware minimums for the architectures listed below. Builds
+for these architectures fail unless the build flags for them are [defined](.cargo/config.toml) or the `portable` feature
+is enabled. Builds for other architectures run without hardware acceleration.
 
-<!-- [start:crate-graph] -->
+* (x86_64) Intel Broadwell, AMD Zen, or newer with AES-NI and ADX enabled.
+* (AArch64) ARMv8-A or newer with
+  [cryptographic extensions](https://support.arm.com/documentation/109697/2026_06/Feature-descriptions/The-Armv8-0-architecture-extension?lang=en#md445-the-armv80-architecture-extension__feat_FEAT_Crypto).
+* (WebAssembly) Wasm 2.0-capable runtime with support for [vector instructions](https://www.w3.org/TR/2024/CR-wasm-core-2-20241217/#vector-instructions).
 
-```mermaid
-%%{init: { "flowchart": { "curve": "basis" } } }%%
-graph LR
-  subgraph " "
-    types[dash-types]
-    num[dash-num]
-    pow[dash-pow]
-  end
-  subgraph "  "
-    script[dash-script]
-    pkc[dash-pkc]
-  end
-  subgraph "   "
-    primitives[dash-primitives]
-    params[dash-params]
-    p2p_core[dash-p2p-core]
-  end
+<!-- [end:crate-info] -->
 
-  types --> num
-  types --> script
-  num --> pkc
-  num --> primitives
-  script --> primitives
-  pkc --> p2p_core
-  pow --> primitives
-  primitives --> params
-  params --> p2p_core
-```
+## Documentation
 
-<!-- [end:crate-graph] -->
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/dashpay/base-sdk)
 
-## Features
+<!-- pyml disable-next-line no-bare-urls -->
+Documentation is hosted at https://dashpay.github.io/base-sdk. To render it locally or learn its syntax, see
+[getting started](https://dashpay.github.io/base-sdk/dev/about_docs). Release notes for published crates are listed
+below.
 
-All crates support these standard features:
+* [`dash-num`](./pkgs/num/CHANGELOG.md)
+* [`dash-pkc`](./pkgs/pkc/CHANGELOG.md)
+* [`dash-types`](./pkgs/types/CHANGELOG.md)
 
-| Feature | Description | Crates |
-|---------|-------------|--------|
-| _(baseline)_ | `no_std` + `alloc`, always available | _All_ |
-| `std` | Enable standard library support | _All_ |
-| `serde` | Enable serde serialization (where applicable) | [num](./pkgs/num), [p2p-core](./pkgs/p2p_core), [pkc](./pkgs/pkc), [primitives](./pkgs/primitives), [script](./pkgs/script), [types](./pkgs/types) |
-| `full` | Enables all non-conflicting features | _All_ |
-
-Specific crates define additional features:
-
-| Feature | Description | Crates |
-|---------|-------------|--------|
-| `aes_hw` | Enable hardware-accelerated AES on supported platforms | [pow](./pkgs/pow) |
-| `bls` | Enable standard and legacy BLS support | [pkc](./pkgs/pkc) |
-| `codec` | Enable Bitcoin-compatible wire support | [types](./pkgs/types), [pkc](./pkgs/pkc) |
-| `ecdsa` | Enable secp256k1 support | [pkc](./pkgs/pkc) |
-| `simd` | Use SIMD backends (requires nightly) | [pow](./pkgs/pow) |
-
-## License
+## Licensing
 
 Copyright &copy; 2026-present, The Dash Core developers. See the accompanying file [LICENSE](./LICENSE) or
 <!-- pyml disable-next-line no-bare-urls -->

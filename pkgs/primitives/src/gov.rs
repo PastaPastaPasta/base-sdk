@@ -18,8 +18,6 @@ use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{enum_map, impl_num, ArrayBuf, Checkable, Hashable, Numeric};
 use hex_conservative::DisplayHex;
 
-use core::fmt;
-
 /// Maximum allowed name length for governance proposals.
 const MAX_PROPOSAL_NAME_LEN: usize = 40;
 
@@ -292,36 +290,29 @@ impl Hashable for GovVote {
 }
 
 /// Governance proposal validation failure.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Unencodable)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, thiserror::Error, Unencodable)]
 pub enum ProposalInvalid {
   /// Name is empty.
+  #[error("invalid name: empty")]
   NameEmpty,
   /// Name exceeds maximum length.
+  #[error("invalid name: {len} chars exceeds {}", MAX_PROPOSAL_NAME_LEN)]
   NameTooLong { len: usize },
   /// Name contains invalid characters.
+  #[error("invalid name: disallowed characters")]
   NameInvalidChars,
   /// `end_epoch` is not after `start_epoch`.
+  #[error("invalid start:end range")]
   BadEpochRange,
   /// Payment amount is not positive.
+  #[error("invalid payment amount")]
   BadPaymentAmount,
   /// URL is too short.
+  #[error("url too short: {len} chars")]
   UrlTooShort { len: usize },
   /// URL contains whitespace.
+  #[error("url has whitespace")]
   UrlWhitespace,
-}
-
-impl fmt::Display for ProposalInvalid {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      Self::NameEmpty => write!(f, "invalid name: empty"),
-      Self::NameTooLong { len } => write!(f, "invalid name: {len} chars exceeds {MAX_PROPOSAL_NAME_LEN}"),
-      Self::NameInvalidChars => write!(f, "invalid name: disallowed characters"),
-      Self::BadEpochRange => write!(f, "invalid start:end range"),
-      Self::BadPaymentAmount => write!(f, "invalid payment amount"),
-      Self::UrlTooShort { len } => write!(f, "url too short: {len} chars"),
-      Self::UrlWhitespace => write!(f, "url has whitespace"),
-    }
-  }
 }
 
 impl Checkable for Proposal {

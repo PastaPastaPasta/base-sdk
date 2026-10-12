@@ -55,7 +55,8 @@ This crate is `#![no_std]` + `alloc` by default.
 | `ecdsa` | | Enables secp256k1 operations backed by [`rust-secp256k1`](https://docs.rs/secp256k1). Byte types are available without enabling this feature. |
 | `eddsa` | | Enables ed25519 operations backed by [`ed25519-dalek`](https://docs.rs/ed25519-dalek). Byte types are available without enabling this feature. |
 | `full` | | Enables all features and `std` support. |
-| `serde` | | Enables support for encoding and decoding `codec`-backed types using [`serde`](https://github.com/serde-rs/serde). _Implies `codec`._ |
+| `portable` | | Disables optimizations that constrain CPU support for the target architecture. |
+| `serde` | | Enables support for encoding and decoding types using [`serde`](https://github.com/serde-rs/serde). Types serialized as their wire image also need `codec`. |
 
 ## Documentation
 

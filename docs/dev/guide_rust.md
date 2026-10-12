@@ -129,8 +129,8 @@ impl core::fmt::Debug for SecretKey {
 > Propagate errors with `?` or handle them explicitly with `match`. Both `clippy::unwrap_used` and
 > `clippy::expect_used` are denied at the workspace level.
 
-- Define domain-specific error enums with a manual `Display` implementation; gate `std::error::Error`
-  behind the `std` feature so the error type remains usable in `no_std` contexts
+- Define domain-specific error enums and derive `thiserror::Error`, which generates `Display` from `#[error]`
+  attributes
 - Error messages are lowercase and carry no trailing punctuation; they may be embedded in larger messages by
   callers, so capitalization and periods would read awkwardly in the middle of a sentence
 - Keep `?` chains short; if a function contains more than a few `?` calls on unrelated operations, each
@@ -145,38 +145,19 @@ impl core::fmt::Debug for SecretKey {
 <summary>Example code:</summary>
 
 ```rust
-use core::fmt;
-
 /// Errors produced by BLS operations.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
   /// secret key bytes are not a valid scalar
+  #[error("invalid secret key bytes")]
   InvalidSecretKey,
   /// public key bytes are not a valid G1 point
+  #[error("invalid public key bytes")]
   InvalidPublicKey,
   /// signature verification failed
+  #[error("signature verification failed")]
   VerifyFailed,
 }
-
-impl fmt::Display for Error {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      Self::InvalidSecretKey => {
-        write!(f, "invalid secret key bytes")
-      }
-      Self::InvalidPublicKey => {
-        write!(f, "invalid public key bytes")
-      }
-      Self::VerifyFailed => {
-        write!(f, "signature verification failed")
-      }
-    }
-  }
-}
-
-// Only available when the downstream crate enables `std`.
-#[cfg(feature = "std")]
-impl std::error::Error for Error {}
 ```
 
 ```rust

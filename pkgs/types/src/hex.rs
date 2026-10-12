@@ -11,12 +11,14 @@ use hex_conservative::{BytesToHexIter, Case, HexSliceToBytesIter};
 use core::fmt::{self, Write as _};
 
 /// Error returned when parsing a hex string fails.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
 pub enum ParseHexError {
   /// The hex string has an odd number of characters.
+  #[error("hex string has odd length")]
   OddLength,
   /// The hex character count does not match the expected length.
+  #[error("expected {expected} hex chars, got {got}")]
   InvalidLength {
     /// Hex characters the target type accepts, twice its byte width.
     expected: usize,
@@ -24,24 +26,9 @@ pub enum ParseHexError {
     got: usize,
   },
   /// A non-hex character was encountered.
+  #[error("invalid hex character: {0:#04x}")]
   InvalidChar(u8),
 }
-
-impl fmt::Display for ParseHexError {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      Self::OddLength => write!(f, "hex string has odd length"),
-      Self::InvalidLength { expected, got } => {
-        write!(f, "expected {expected} hex chars, got {got}")
-      }
-      Self::InvalidChar(c) => {
-        write!(f, "invalid hex character: {:#04x}", c)
-      }
-    }
-  }
-}
-
-impl core::error::Error for ParseHexError {}
 
 /// Decodes `2 * N` hex digits, reversing the byte order with `rev` enabled.
 ///

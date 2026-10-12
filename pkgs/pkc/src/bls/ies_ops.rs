@@ -79,7 +79,7 @@ fn ephemeral<S: BlsScheme>(rng: &mut impl CryptoRng) -> Result<(BlsSecretKey<S>,
 
 /// A BLS-IES encrypted blob under an ephemeral key.
 #[cfg_attr(
-  feature = "serde",
+  all(feature = "codec", feature = "serde"),
   derive(::serde::Serialize, ::serde::Deserialize),
   serde(into = "BlsIesBlobBytes<S>", try_from = "BlsIesBlobBytes<S>"),
   serde(bound(serialize = "", deserialize = ""))
@@ -185,7 +185,7 @@ type_cvrt!(for[S: BlsScheme] TryFrom<BlsIesBlobBytes<S>> for BlsIesBlob<S>, BlsE
 
 /// One ciphertext per recipient under an ephemeral key.
 #[cfg_attr(
-  feature = "serde",
+  all(feature = "codec", feature = "serde"),
   derive(::serde::Serialize, ::serde::Deserialize),
   serde(into = "BlsIesMultiBytes<S>", try_from = "BlsIesMultiBytes<S>"),
   serde(bound(serialize = "", deserialize = ""))

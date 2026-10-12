@@ -101,7 +101,7 @@ fn hex_nibble(b: u8) -> Result<u8, NetAddrError> {
 /// input.
 pub(super) fn base16_dec(s: &str) -> Result<Vec<u8>, NetAddrError> {
   let bytes = s.as_bytes();
-  if bytes.len() % 2 != 0 {
+  if !bytes.len().is_multiple_of(2) {
     return Err(NetAddrError::BadLen {
       expected: bytes.len() + 1,
       actual: bytes.len(),

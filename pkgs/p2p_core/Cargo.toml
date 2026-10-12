@@ -9,6 +9,9 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[lib]
+bench = false
+
 [features]
 default = []
 std = [
@@ -26,6 +29,12 @@ serde = [
   "dash-types/serde",
 ]
 full = ["std", "serde"]
+portable = [
+  "dash-params/portable",
+  "dash-pkc/portable",
+  "dash-primitives/portable",
+  "dash-script/portable",
+]
 
 [dependencies]
 bitcoin-consensus-encoding = { workspace = true, features = ["alloc"] }
@@ -42,6 +51,7 @@ serde = { workspace = true, features = [
   "alloc",
   "derive",
 ], optional = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 dash-dev = { version = "0.0.0", path = "../dev", features = ["full"] }
@@ -50,3 +60,6 @@ rstest = { workspace = true }
 
 [lints]
 workspace = true
+
+[package.metadata.docs.rs]
+features = ["portable"]

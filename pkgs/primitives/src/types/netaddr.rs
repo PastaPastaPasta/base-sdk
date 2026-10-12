@@ -11,8 +11,6 @@ use crate::hash_impl;
 use dash_types::type_id::TypeId;
 use dash_types::{enum_map, impl_num};
 
-use core::fmt;
-
 enum_map! {
   /// Network address type (BIP155).
   #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
@@ -50,19 +48,25 @@ impl NetworkType {
 }
 
 /// Network address validation error.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, thiserror::Error)]
 pub enum NetAddrError {
   /// Numeric value outside structural bounds.
+  #[error("value 0x{value:02x} out of range")]
   BadRange {
     /// The out-of-range value.
     value: u8,
   },
   /// Invalid character in encoded address.
+  #[error("invalid character 0x{byte:02x}")]
   BadChar {
     /// The offending byte.
     byte: u8,
   },
   /// Checksum mismatch.
+  #[error(
+    "checksum mismatch: expected {:02x}{:02x}, got {:02x}{:02x}",
+    .expected[0], .expected[1], .actual[0], .actual[1]
+  )]
   BadChecksum {
     /// Expected checksum bytes.
     expected: [u8; 2],
@@ -70,11 +74,13 @@ pub enum NetAddrError {
     actual: [u8; 2],
   },
   /// Encoding error at a byte position.
+  #[error("encoding error at position {pos}")]
   BadEncode {
     /// Byte offset of the error.
     pos: usize,
   },
   /// Unexpected address length.
+  #[error("expected {expected} bytes, got {actual}")]
   BadLen {
     /// Expected byte count.
     expected: usize,
@@ -82,59 +88,24 @@ pub enum NetAddrError {
     actual: usize,
   },
   /// Unsupported address version byte.
+  #[error("unsupported version {version}")]
   BadVersion {
     /// The version byte.
     version: u8,
   },
   /// Port outside u16 range or zero.
+  #[error("invalid port {port}")]
   BadPort {
     /// The invalid port value.
     port: u16,
   },
   /// Address type not representable in target format.
+  #[error("{network} address type not supported")]
   AddrTooNew {
     /// The incompatible network type.
     network: NetworkType,
   },
 }
-
-impl fmt::Display for NetAddrError {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      Self::BadRange { value } => {
-        write!(f, "value 0x{value:02x} out of range")
-      }
-      Self::BadChar { byte } => {
-        write!(f, "invalid character 0x{byte:02x}")
-      }
-      Self::BadChecksum { expected, actual } => {
-        write!(
-          f,
-          "checksum mismatch: expected {:02x}{:02x}, got {:02x}{:02x}",
-          expected[0], expected[1], actual[0], actual[1]
-        )
-      }
-      Self::BadEncode { pos } => {
-        write!(f, "encoding error at position {pos}")
-      }
-      Self::BadLen { expected, actual } => {
-        write!(f, "expected {expected} bytes, got {actual}")
-      }
-      Self::BadVersion { version } => {
-        write!(f, "unsupported version {version}")
-      }
-      Self::BadPort { port } => {
-        write!(f, "invalid port {port}")
-      }
-      Self::AddrTooNew { network } => {
-        write!(f, "{network} address type not supported")
-      }
-    }
-  }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for NetAddrError {}
 
 /// Returns `true` when the port is on the blocklist.
 pub fn is_bad_port(port: u16) -> bool {

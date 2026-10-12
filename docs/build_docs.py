@@ -106,9 +106,8 @@ def _build_wasm_samples(root: Path, wasm_pack: str, cfg: Config) -> None:
   env = {
     **os.environ,
     "CARGO_TARGET_DIR": str(root / "target" / "samples"),
-    "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS":
-      "-C target-feature=+simd128",
   }
+  env.pop("RUSTFLAGS", None)
   env.setdefault("RUSTUP_TOOLCHAIN", channel)
 
   for cargo_toml in samples:
@@ -138,7 +137,7 @@ def _build_site(root: Path, zensical: str) -> None:
   reach = [str(DOCS_DIR), *([inherited] if inherited else [])]
   env = {**os.environ, "PYTHONPATH": os.pathsep.join(reach)}
   subprocess.run(  # noqa: S603
-    [zensical, "build", "--strict", "-f", str(CONFIG_FILE)],
+    [zensical, "build", "--clean", "--strict", "-f", str(CONFIG_FILE)],
     check=True,
     cwd=str(root),
     env=env,

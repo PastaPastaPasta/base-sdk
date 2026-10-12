@@ -24,14 +24,13 @@ from common import (
   root_dir,
 )
 
-# File in the repository root the accepted vocabulary is read from.
-CONFIG_FILENAME = "unconv.toml"
+# Vocabulary file, read from the nearest directory above this script.
+CONFIG_FILENAME = "commit.toml"
 
-# Maximum line width for a commit.
-MAX_WIDTH = 73
-
-# Maximum number of lines for a commit, subject inclusive.
-MAX_HEIGHT = 5
+# Matches the address in a 'Co-authored-by' trailer.
+_CO_AUTHOR = re.compile(
+  r"^co-authored-by:.*<(?P<email>[^>]+)>\s*$", re.IGNORECASE | re.MULTILINE
+)
 
 # Matches a commit subject, 'namespace%type[(scope)][!]: description'.
 _PATTERN = re.compile(
@@ -42,20 +41,27 @@ _PATTERN = re.compile(
   r": (?P<description>.+)$"
 )
 
-# Config keys that name a setting rather than a namespace.
-_RESERVED: frozenset[str] = frozenset({"global"})
+
+@dataclass(frozen=True)
+class Commit:
+  message: str
+  author: str | None = None
+  committer: str | None = None
 
 
 @dataclass(frozen=True)
 class NamespaceConfig:
-  ignore_global: bool = False
-  types: frozenset[str] = field(default_factory=frozenset)
+  ignore_default: bool = False
+  nouns: frozenset[str] = field(default_factory=frozenset)
   scopes: frozenset[str] = field(default_factory=frozenset)
 
 
 @dataclass(frozen=True)
 class Config:
-  global_types: frozenset[str] = field(default_factory=frozenset)
+  max_width: int
+  max_height: int
+  block_authors: frozenset[str] = field(default_factory=frozenset)
+  default_nouns: frozenset[str] = field(default_factory=frozenset)
   namespaces: dict[str, NamespaceConfig] = field(default_factory=dict)
 
   @classmethod
@@ -63,52 +69,75 @@ class Config:
     with path.open("rb") as f:
       raw = tomllib.load(f)
 
-    global_types = frozenset(raw.get("global", {}).get("types", []))
-    namespaces: dict[str, NamespaceConfig] = {}
-
-    for key, value in raw.items():
-      if key == "global" or not isinstance(value, dict):
-        continue
-      namespaces[key] = NamespaceConfig(
-        ignore_global=value.get("ignore_global", False),
-        types=frozenset(value.get("types", [])),
+    for key in ("max_width", "max_height"):
+      if not isinstance(raw.get(key), int):
+        raise ValueError(f"{path}: {key} must be an integer")
+    default_nouns = frozenset(raw.get("default", {}).get("nouns", []))
+    namespaces = {
+      key: NamespaceConfig(
+        ignore_default=value.get("ignore_default", False),
+        nouns=frozenset(value.get("nouns", [])),
         scopes=frozenset(value.get("scopes", [])),
       )
+      for key, value in raw.get("namespace", {}).items()
+    }
 
-    return cls(global_types=global_types, namespaces=namespaces)
+    return cls(
+      max_width=raw["max_width"],
+      max_height=raw["max_height"],
+      block_authors=frozenset(a.lower() for a in raw.get("block_authors", [])),
+      default_nouns=default_nouns,
+      namespaces=namespaces,
+    )
 
 
-def _allowed_types(namespace: str, config: Config) -> frozenset[str]:
+def _allowed_nouns(namespace: str, config: Config) -> frozenset[str]:
   ns = config.namespaces.get(namespace)
   if ns is None:
-    return config.global_types
-  base = frozenset() if ns.ignore_global else config.global_types
-  return base | ns.types
+    return config.default_nouns
+  base = frozenset() if ns.ignore_default else config.default_nouns
+  return base | ns.nouns
 
 
-def _lint_shape(lines: list[str]) -> list[str]:
+def _lint_shape(lines: list[str], config: Config) -> list[str]:
   """Return error strings for the width and height of a commit message."""
   errors: list[str] = []
-  if len(lines) > MAX_HEIGHT:
-    errors.append(f"{len(lines)} lines tall, over {MAX_HEIGHT}")
-  wide = [n for n, line in enumerate(lines, 1) if len(line) > MAX_WIDTH]
+  if len(lines) > config.max_height:
+    errors.append(f"{len(lines)} lines tall, over {config.max_height}")
+  wide = [n for n, line in enumerate(lines, 1) if len(line) > config.max_width]
   if wide:
     where = ", ".join(str(n) for n in wide)
-    errors.append(f"line {where} wider than {MAX_WIDTH} characters")
+    errors.append(f"line {where} wider than {config.max_width} characters")
+  return errors
+
+
+def _lint_authors(commit: Commit, config: Config) -> list[str]:
+  """Return error strings for a blocked author, committer or co-author."""
+  errors: list[str] = []
+  blocked = config.block_authors
+  roles = (("author", commit.author), ("committer", commit.committer))
+  for role, email in roles:
+    if email is not None and email.lower() in blocked:
+      errors.append(f"{role} {email!r} is blocked")
+  for m in _CO_AUTHOR.finditer(commit.message):
+    email = m.group("email").strip()
+    if email.lower() in blocked:
+      errors.append(f"co-author {email!r} is blocked")
   return errors
 
 
 def _lint_message(
-  message: str, config: Config, *, title: bool = False
+  commit: Commit, config: Config, *, title: bool = False
 ) -> list[str]:
   """Return error strings for a commit message or, if *title*, a PR title"""
-  lines = message.strip().splitlines()
+  lines = commit.message.strip().splitlines()
   subject = lines[0].strip() if lines else ""
   if title:
     return _lint_subject(subject, config)
+  errors = _lint_authors(commit, config)
   if not subject or subject.startswith("#") or subject.startswith("Merge "):
-    return []
-  return _lint_subject(subject, config) + _lint_shape(lines)
+    return errors
+  return errors + _lint_subject(subject, config) + _lint_shape(lines, config)
 
 
 def _lint_subject(subject: str, config: Config) -> list[str]:
@@ -126,12 +155,10 @@ def _lint_subject(subject: str, config: Config) -> list[str]:
   if not namespace.isascii():
     errors.append(f"namespace {namespace!r} contains non-ASCII characters")
 
-  if namespace in _RESERVED:
-    errors.append(f"namespace {namespace!r} is reserved")
-  elif namespace not in config.namespaces:
+  if namespace not in config.namespaces:
     errors.append(f"unknown namespace {namespace!r}")
 
-  allowed = _allowed_types(namespace, config)
+  allowed = _allowed_nouns(namespace, config)
   if allowed and commit_type.lower() not in allowed:
     errors.append(
       f"unknown type {commit_type!r} for namespace {namespace!r}"
@@ -171,19 +198,27 @@ def _default_range() -> str:
   return "HEAD~1..HEAD"
 
 
-def _messages(*args: str) -> list[str]:
-  out = git_out(root_dir(), "log", "--no-merges", "--format=%B%x00", *args)
-  return [m.strip() for m in out.split("\0") if m.strip()]
+def _messages(*args: str) -> list[Commit]:
+  out = git_out(
+    root_dir(), "log", "--no-merges", "--format=%ae%x00%ce%x00%B%x1e", *args
+  )
+  commits: list[Commit] = []
+  for record in out.split("\x1e"):
+    author, _, rest = record.lstrip("\n").partition("\0")
+    committer, _, message = rest.partition("\0")
+    if message.strip():
+      commits.append(Commit(message.strip(), author, committer))
+  return commits
 
 
-def _messages_from_commit(ref: str) -> list[str]:
+def _messages_from_commit(ref: str) -> list[Commit]:
   parents = git_out(root_dir(), "rev-list", "--parents", "-n", "1", ref)
   if len(parents.split()) > 2:
     return []
   return _messages("-1", ref)
 
 
-def _messages_from_range(git_range: str) -> list[str]:
+def _messages_from_range(git_range: str) -> list[Commit]:
   return _messages(git_range)
 
 
@@ -231,10 +266,14 @@ def main() -> int:
     print(f"error: {config_path} is not a file", file=sys.stderr)
     return 2
 
-  config = Config.load(config_path)
+  try:
+    config = Config.load(config_path)
+  except ValueError as exc:
+    print(f"error: {exc}", file=sys.stderr)
+    return 2
 
   if args.m is not None:
-    messages = [args.m]
+    messages = [Commit(args.m)]
   elif args.r is not None:
     messages = _messages_from_range(args.r)
   elif args.c is not None:
@@ -246,8 +285,9 @@ def main() -> int:
   results = [(m, _lint_message(m, config, title=title)) for m in messages]
   failed = False
 
-  for message, errors in results:
-    subject = message.strip().splitlines()[0] if message.strip() else ""
+  for commit, errors in results:
+    lines = commit.message.strip().splitlines()
+    subject = lines[0] if lines else ""
     if errors:
       print(f"[FAIL] {subject} (reason: {'; '.join(errors)})")
       failed = True

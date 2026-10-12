@@ -14,8 +14,8 @@ use [`lint_all.py`](./lint_all.py).
 
 | Name | Purpose | Verbs | Depends on |
 | ---- | ------- | ---------- | ---------- |
-| [`lint_commit.py`](./lint/lint_commit.py) | Lint commit names against [`unconv.toml`](./unconv.toml) | `run` | `git` |
-| [`lint_cargo.py`](./lint/lint_cargo.py) | Deny dependencies per [`deny.toml`](../deny.toml), check/format TOML files against [`taplo.toml`](./taplo.toml) | `check` , `apply`, `apply-all` | `cargo-deny` (deny dependencies), `taplo` (TOML formatting) |
+| [`lint_commit.py`](./lint/lint_commit.py) | Lint commit names against [`commit.toml`](./commit.toml) | `run` | `git` |
+| [`lint_cargo.py`](./lint/lint_cargo.py) | Deny dependencies per [`deny.toml`](../.cargo/deny.toml), check/format TOML files against [`taplo.toml`](./taplo.toml) | `check` , `apply`, `apply-all` | `cargo-deny` (deny dependencies), `taplo` (TOML formatting) |
 | [`lint_codeql.py`](./lint/lint_codeql.py) | Query Rust sources against [`maint/codeql/rust/*.ql`](./codeql/rust) | `check`, `apply`, `apply-all`, `run`, `run-all` | `codeql`, `rustc` |
 | [`lint_javascript.py`](./lint/lint_javascript.py) | Lint Javascript sources against [`eslint.config.mjs`](js/eslint.config.mjs) | *None* | `npx` (part of Node.js), `eslint` (auto-retrieved by script) |
 | [`lint_markdown.py`](./lint/lint_markdown.py) | Lint Markdown [documentation](../docs/dev/about_docs.md) | *None* | `pymarkdownlnt` |

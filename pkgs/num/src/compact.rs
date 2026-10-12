@@ -9,7 +9,6 @@
 use crate::Arith256;
 
 use dash_types::__private::__read_hex as read_hex;
-#[cfg(feature = "codec")]
 use dash_types::impl_num;
 use dash_types::{Numeric, ParseHexError};
 
@@ -64,7 +63,6 @@ impl Numeric for CompactTarget {
   }
 }
 
-#[cfg(feature = "codec")]
 impl_num!(CompactTarget, u32);
 
 impl CompactTarget {

@@ -10,9 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - `Bls{Public,Secret}Key::negate`, `BlsSecretKey::mul_tweak`, `EcdsaPublicKey::negate` and `EcdsaSecretKey::mul_tweak`.
+- `portable` feature, forwarding `blst/portable`, for binaries that run on any CPU of the target architecture.
 
 ### Changed
 
+- **The minimum supported Rust version is raised from 1.85 to 1.89.**
+- **`bls` requires ADX on x86_64 unless `portable` is enabled.**
 - `BlsScheme::sk_to_bytes` returns `Zeroizing<[u8; 32]>` instead of a bare array. Code that binds the result as
   `[u8; 32]` must dereference it.
 - `EcdsaSecretKey::negate` takes `&self` and returns the negated key as `Result<Self, EcdsaError>` instead of negating
@@ -25,6 +28,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `Bls{Pk,Sig}Share`, `BlsIes{Blob,Multi}`, `EcdsaPkBytes`, `EcdsaSigBytes`, `EcdsaRecSigBytes`, `EcdsaPkHash`,
   `EcdsaPublicKey`, `EcdsaSignature`, `EcdsaRecSignature`, `EddsaPkBytes`, `EddsaSigBytes`, `EddsaPkHash`,
   `EddsaPublicKey`, `EddsaSignature`.
+- The `serde` feature no longer implies `codec`. `BlsIes{Blob,Multi}` and `BlsIes{Blob,Multi}Bytes` serialize as
+  their wire image and implement `Serialize` and `Deserialize` only with both features. Callers that relied on `serde`
+  to enable `codec` must enable it explicitly.
 
 ## [0.1.0-beta] - 2026-09-15
 
