@@ -37,7 +37,7 @@ The full guide is at [`docs/dev/guide_rust.md`](./docs/dev/guide_rust.md). Key p
 ### Environment
 
 - `no_std` + `alloc` is mandatory for all crates. Every crate uses `#![no_std]` with `extern crate alloc`.
-- `std` is an optional feature that downstream consumers enable when they need stdlib I/O, `Error` impls, etc.
+- `std` is an optional feature that downstream consumers enable when they need standard library I/O, primitives, etc.
 - No networking code in any crate. The SDK provides encoding, decoding, and data types only.
 
 ### Feature flags

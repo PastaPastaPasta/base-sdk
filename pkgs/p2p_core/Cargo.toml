@@ -48,6 +48,7 @@ serde = { workspace = true, features = [
   "alloc",
   "derive",
 ], optional = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 dash-dev = { version = "0.0.0", path = "../dev", features = ["full"] }
