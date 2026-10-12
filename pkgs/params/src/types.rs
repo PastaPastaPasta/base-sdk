@@ -561,3 +561,14 @@ impl ChainParams {
     self.addr_params.bip44_idx
   }
 }
+
+/// Core's `vecPeriods`: the masternode share of the block value, in permille,
+/// for each block reward reallocation period of three superblock cycles, in
+/// the classic reward era. The first period starts with the first superblock
+/// cycle after [`ConsensusParams::brr_height`]; the last share then holds.
+///
+/// The same at both releases and on every network. Core: `GetMasternodePayment`
+/// (v23.1.8 validation.cpp:1606, v24.0.0-rc.3 masternode/payments.cpp:103).
+pub const BRR_PERIODS_PERMILLE: [u16; 19] = [
+  513, 526, 533, 540, 546, 552, 557, 562, 567, 572, 577, 582, 585, 588, 591, 594, 597, 599, 600,
+];
