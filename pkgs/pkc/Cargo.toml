@@ -103,6 +103,7 @@ full = [
   "serde",
   "std",
 ]
+portable = ["blst?/portable"]
 serde = [
   "codec",
   "dash-num/serde",

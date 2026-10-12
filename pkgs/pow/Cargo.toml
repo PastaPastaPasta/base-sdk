@@ -14,6 +14,7 @@ default = []
 std = []
 full = ["std", "aes_hw", "simd"]
 aes_hw = ["simd"]
+portable = []
 simd = []
 
 [dev-dependencies]

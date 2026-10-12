@@ -18,6 +18,7 @@ std = [
   "dash-types/std",
 ]
 full = ["std", "serde"]
+portable = ["dash-pkc/portable"]
 serde = ["dep:serde", "dash-pkc/serde", "dash-types/serde"]
 
 [dependencies]

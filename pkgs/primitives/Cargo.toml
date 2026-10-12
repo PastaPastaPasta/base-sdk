@@ -32,6 +32,7 @@ serde = [
   "dash-types/serde",
 ]
 full = ["std", "serde"]
+portable = ["dash-pkc/portable", "dash-pow/portable", "dash-script/portable"]
 
 [dependencies]
 bitcoin-consensus-encoding = { workspace = true, features = ["alloc"] }

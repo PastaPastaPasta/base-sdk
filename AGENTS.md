@@ -48,12 +48,10 @@ Every crate must follow this feature layout:
 [features]
 default = []
 std = [...]
-full = ["std"]            # add "serde" here only if the crate implements Serialize/Deserialize
+full = ["std"]            # add "serde" here if the crate implements Serialize/Deserialize, do not include "portable"
+portable = [...]          # only if the crate or a dependency defines platform acceleration
 serde = ["dep:serde"]     # only if the crate has serde impls
 ```
-
-No other features should exist unless there is a pressing justification. The `serde` feature is only added to crates
-that actually derive or implement `Serialize`/`Deserialize` on public types.
 
 ### Module conventions
 

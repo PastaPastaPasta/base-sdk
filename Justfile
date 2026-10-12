@@ -38,6 +38,7 @@ preview:
 test:
     cargo clippy --all-targets --no-default-features
     cargo clippy --all-targets --features full
+    cargo clippy --all-targets --features full,portable
     {{ nextest }} --fail-fast --workspace --features full
     cargo test --doc --workspace --features full
     cargo doc --workspace --no-deps --features full
