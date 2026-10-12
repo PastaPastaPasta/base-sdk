@@ -29,8 +29,6 @@ hex-conservative = { workspace = true }
 rstest = { workspace = true }
 
 [[test]]
-name = "blake"
-[[test]]
 name = "bmw"
 [[test]]
 name = "cubehash"

@@ -62,6 +62,7 @@ compile_error!("dash-pow requires 128-bit SIMD, build with `-C target-feature=+s
 mod aes;
 mod blake;
 mod bmw;
+mod consts;
 mod cubehash;
 mod echo;
 mod groestl;
@@ -71,6 +72,8 @@ mod luffa;
 mod shavite;
 mod simd_hash;
 mod skein;
+#[cfg(test)]
+mod tests;
 mod util;
 
 #[doc(hidden)]
