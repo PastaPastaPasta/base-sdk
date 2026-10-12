@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `ParseHexError` is moved from `dash-num`, superseding `dash_num::ParseHexError`.
 - `serialize::hex::serialize_as` and `serialize::hex::deserialize_as`, to permit caller-defined handling of
   human-readable encoding while sharing common machine-readable encoding.
+- `CompactSize::decode_size`, which applies Dash Core's `MAX_SIZE` range check to a size, as `ReadCompactSize` does by
+  default.
 
 ### Changed
 
@@ -35,6 +37,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `Vec<u8>` as the fixed return type must now mention it explicitly.
 - `serialize::str_u64` writes a native `u64` to machine-readable formats. `str_u64` is a workaround for number-precision
   limitations in JSON and is now contained only for human-readable formats.
+- Decoding `Vec<T>`, `String` and script buffers rejects a length prefix above `MAX_SER_SIZE` even when enough bytes
+  remain, matching Dash Core's `ReadCompactSize`.
+- Decoding `Vec<T>` reserves each batch exactly, as Core's `reserve(allocated)` does, rather than growing its capacity
+  geometrically past the batch.
 
 ### Removed
 
