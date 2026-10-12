@@ -182,6 +182,20 @@ impl EcdsaRecSigBytes {
     })
   }
 
+  /// Construct from a 65-byte buffer with any header byte.
+  ///
+  /// The header less 27 gives the recovery id in its low two bits and the
+  /// compression flag in bit 2. Encoding writes the canonical header.
+  pub fn from_bytes_mask(bytes: [u8; ECDSA_REC_SIG_LEN]) -> Self {
+    let h = bytes[0].wrapping_sub(CompactFlags::Uncompressed0.to_base());
+    let mut arr = [0u8; ECDSA_SIG_LEN];
+    arr.copy_from_slice(&bytes[1..]);
+    Self {
+      flags: CompactFlags::from_parts(h & 3, Compression::from(h & 4 != 0)),
+      sig: EcdsaSigBytes::from(arr),
+    }
+  }
+
   /// Whether the signing key was compressed.
   pub fn is_compressed(&self) -> bool {
     self.flags.is_compressed()
@@ -315,6 +329,27 @@ mod tests {
 
     buf[0] = CompactFlags::Compressed3.to_base() + 1;
     assert!(EcdsaRecSigBytes::from_bytes(buf).is_none());
+  }
+
+  #[rstest]
+  #[case::zero(0, 1, Compression::Compressed)]
+  #[case::below_range(26, 3, Compression::Compressed)]
+  #[case::first(27, 0, Compression::Uncompressed)]
+  #[case::last_uncompressed(30, 3, Compression::Uncompressed)]
+  #[case::first_compressed(31, 0, Compression::Compressed)]
+  #[case::last(34, 3, Compression::Compressed)]
+  #[case::above_range(35, 0, Compression::Uncompressed)]
+  #[case::above_range_compressed(39, 0, Compression::Compressed)]
+  #[case::max(255, 0, Compression::Compressed)]
+  fn from_bytes_mask_masks_header(#[case] header: u8, #[case] rid: u8, #[case] compressed: Compression) {
+    let mut buf = [0xab; ECDSA_REC_SIG_LEN];
+    buf[0] = header;
+    let mut canonical = buf;
+    canonical[0] = CompactFlags::from_parts(rid, compressed).to_base();
+    assert_eq!(
+      EcdsaRecSigBytes::from_bytes_mask(buf),
+      EcdsaRecSigBytes::from_bytes(canonical).unwrap()
+    );
   }
 
   #[rstest]
