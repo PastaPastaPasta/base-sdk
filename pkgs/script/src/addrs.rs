@@ -166,18 +166,10 @@ type_cvrt!(
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
+  use crate::params::MAINNET;
 
   use hex_conservative::hex;
   use rstest::rstest;
-
-  const MAINNET: AddrParams = AddrParams {
-    pubkey_addr: 76,
-    script_addr: 16,
-    secret_key: 204,
-    ext_pubkey: [0x04, 0x88, 0xB2, 0x1E],
-    ext_secret: [0x04, 0x88, 0xAD, 0xE4],
-    bip44_idx: 5,
-  };
 
   // The generator point's coordinates shared across P2PK vectors
   macro_rules! gen_x {
