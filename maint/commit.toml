@@ -1,0 +1,61 @@
+block_authors = [
+  # https://github.com/commit-check/commit-check/pull/606
+  "138933559+factory-droid[bot]@users.noreply.github.com",
+  # https://github.com/PrefectHQ/prefect/releases/tag/prefect-github-0.4.3
+  "158243242+devin-ai-integration[bot]@users.noreply.github.com",
+  # https://github.com/arran4/goa4web/pull/3146
+  "161369871+google-labs-jules[bot]@users.noreply.github.com",
+  # https://github.com/github/docs/pull/38568
+  "175728472+Copilot@users.noreply.github.com",
+  # https://github.com/github/docs/pull/38568
+  "198982749+Copilot@users.noreply.github.com",
+  # https://github.com/microsoft/mssql-rs/commit/b758050e
+  "223556219+Copilot@users.noreply.github.com",
+  # https://github.com/Aider-AI/aider/blob/5dc9490b/aider/repo.py#L252
+  "aider@aider.chat",
+  # https://ampcode.com/docs/cli/settings
+  "amp@ampcode.com",
+  # https://github.com/openai/codex/issues/18095
+  "codex@example.com",
+  # https://github.com/openai/codex/discussions/2807
+  "codex@openai.com",
+  # https://github.com/microsoft/vscode/blob/ff00e788/extensions/git/src/repository.ts#L1505
+  "copilot@github.com",
+  # https://forum.cursor.com/t/co-author-added-without-consent-and-cant-be-turned-off/150096
+  "cursoragent@cursor.com",
+  # https://github.com/Aider-AI/aider/issues/4226
+  "noreply@aider.chat",
+  # https://code.claude.com/docs/en/settings-reference.md
+  "noreply@anthropic.com",
+  # https://github.com/openai/codex/blob/a9b08151/codex-rs/ext/git-attribution/src/world_state.rs#L19
+  "noreply@openai.com",
+  # https://docs.openhands.dev/openhands/usage/settings/application-settings
+  "openhands@all-hands.dev",
+]
+max_height = 5
+max_width = 73
+
+[default]
+nouns = [
+  "build",
+  "chore",
+  "ci",
+  "doc",
+  "feat",
+  "fix",
+  "lint",
+  "misc",
+  "perf",
+  "refac",
+  "test",
+]
+
+[namespace.num]
+[namespace.p2p_core]
+[namespace.params]
+[namespace.pkc]
+[namespace.pow]
+[namespace.primitives]
+[namespace.script]
+[namespace.sdk]
+[namespace.types]
