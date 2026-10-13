@@ -7,7 +7,7 @@
 //! Scalar SHAvite-3-512 implementation.
 
 use super::consts::{BLOCK, IV};
-use crate::util::aes::round_nk;
+use crate::aes::round_nk;
 use crate::util::memops::{extract, load_u32_le, store_u32_le};
 
 /// Expands 128-byte message block into 448 round keys.

@@ -7,7 +7,7 @@
 //! SIMD SHAvite-3-512 implementation.
 
 use super::consts::{BLOCK, IV};
-use crate::util::aes::cpu::round_nk;
+use crate::aes::cpu::round_nk;
 use crate::util::memops::{load_u32_le, store_u32_le};
 
 const SCHEDULE_BUNDLES: usize = 112;
@@ -174,7 +174,7 @@ fn inject_counter_words(bundle_words: &mut Bundle, counter: &[u32; 4], injection
 #[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
 #[inline(always)]
 fn apply_round_bundle(state: &mut State, left: [usize; 4], right: [usize; 4], keys: &[Bundle]) {
-  use crate::util::aes::aarch64::{load_state, round_nk_block, store_state, xor_block};
+  use crate::aes::aarch64::{load_state, round_nk_block, store_state, xor_block};
 
   // The bundle always stays in one 128-bit lane. Keeping it packed across the
   // four rounds avoids rebuilding the lane after every round.

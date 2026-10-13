@@ -8,9 +8,9 @@
 
 use super::consts::BLOCK;
 #[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
-use crate::util::aes::cpu::{round, round_nk};
+use crate::aes::cpu::{round, round_nk};
 #[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
-use crate::util::aes::simd::xtime_packed_u32;
+use crate::aes::simd::xtime_packed_u32;
 use crate::util::memops::{load_u32_le, store_u32_le};
 
 #[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
@@ -77,7 +77,7 @@ fn build_sub_word_keys(counter: &Counter) -> ([AesState; 16], Counter) {
 #[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
 #[inline(always)]
 fn apply_big_sub_words(grid: &mut [CellVec; 16], round_keys: &[CellVec; 16]) {
-  use crate::util::aes::aarch64::{block_from_vec, round_block, round_nk_block, vec_from_block};
+  use crate::aes::aarch64::{block_from_vec, round_block, round_nk_block, vec_from_block};
 
   let mut cell = 0;
   while cell < 16 {

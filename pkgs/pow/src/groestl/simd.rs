@@ -10,7 +10,7 @@ use super::consts::{BLOCK, IV_ROWS, RC_P, RC_Q, ROUNDS};
 #[cfg(all(target_arch = "aarch64", not(feature = "portable")))]
 use super::consts::{SUBSH_P, SUBSH_Q};
 #[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
-use crate::util::aes::consts::SBOX;
+use crate::aes::consts::SBOX;
 
 use core::simd::num::{SimdInt, SimdUint};
 #[cfg(any(feature = "portable", not(target_arch = "aarch64")))]
@@ -202,7 +202,7 @@ fn add_rc_q(rows: &mut [Row; 8], round: usize) {
 #[expect(unsafe_code, reason = "direct vector intrinsics produce the right codegen")]
 #[inline(always)]
 fn sub_shift(rows: &mut [Row; 8], masks: &[[u8; 16]; 8]) {
-  use crate::util::aes::aarch64::sub_shift as hw_sub_shift;
+  use crate::aes::aarch64::sub_shift as hw_sub_shift;
 
   use core::arch::aarch64::uint8x16_t;
 

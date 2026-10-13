@@ -6,7 +6,6 @@
 
 //! Shared utilities.
 
-pub(crate) mod aes;
 pub(crate) mod arx;
 pub(crate) mod math;
 #[allow(dead_code, reason = "contains unopinionated general helpers that may never see use")]

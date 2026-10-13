@@ -50,6 +50,7 @@ compile_error!("dash-pow requires NEON and AES, build with `-C target-feature=+n
 ))]
 compile_error!("dash-pow requires 128-bit SIMD, build with `-C target-feature=+simd128` or enable `portable`");
 
+mod aes;
 mod blake;
 mod bmw;
 mod cubehash;

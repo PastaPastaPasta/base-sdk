@@ -6,7 +6,7 @@
 
 //! Groestl-512 constants.
 
-use crate::util::aes::consts::SBOX;
+use crate::aes::consts::SBOX;
 use crate::util::math::gf2_mul;
 
 pub(crate) const BLOCK: usize = 128;
