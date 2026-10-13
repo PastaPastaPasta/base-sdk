@@ -216,8 +216,8 @@ mod tests {
 
   #[rstest]
   fn verifies_without_downcast(alice_pk: EcdsaPublicKey, alice_rec_sig: EcdsaRecSignature) {
-    assert!(alice_pk.verify(&MSG, alice_rec_sig).is_ok());
-    assert!(alice_pk.verify(&MSG, alice_rec_sig.signature()).is_ok());
+    assert!(alice_pk.verify_digest(&MSG, alice_rec_sig).is_ok());
+    assert!(alice_pk.verify_digest(&MSG, alice_rec_sig.signature()).is_ok());
   }
 
   #[cfg(feature = "serde")]

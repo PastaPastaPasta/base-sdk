@@ -5,9 +5,6 @@ extensions:
       extensible: armOnly
     data:
       # BLS
-      # Signing
-      - ["Bls", "SecretKey", "sign_digest"]               # Sign a 32-byte hashed message
-      - ["Bls", "PublicKey", "verify_digest"]             # Verify a 32-byte hashed message
       # Aggregation
       - ["Bls", "SecretKey", "aggregate"]                 # Add secret keys
       - ["Bls", "PublicKey", "aggregate"]                 # Add
@@ -65,15 +62,18 @@ extensions:
       # Recoverable signatures
       - ["Ecdsa", "SecretKey", "sign_recoverable"]        # Sign
       - ["Ecdsa", "PublicKey", "recover"]                 # Get public key from a signature
+      # Ed25519
+      # Signing
+      - ["Eddsa", "SecretKey", "sign"]                    # Sign a message of any length
+      - ["Eddsa", "PublicKey", "verify"]                  # Verify a message of any length
   - addsTo:
       pack: base-sdk/codeql-rust
       extensible: armLacks
     data:
-      # BLS
-      # Signing
-      - ["Bls", "SecretKey", "sign"]                      # Split by message form, see `sign_digest`
-      - ["Bls", "PublicKey", "verify"]                    # Split by message form, see `verify_digest`
       # Ed25519
+      # Signing
+      - ["Eddsa", "SecretKey", "sign_digest"]             # Hashes the message itself, see RFC 8032
+      - ["Eddsa", "PublicKey", "verify_digest"]           # Hashes the message itself, see RFC 8032
       # Tweaking
       - ["Eddsa", "SecretKey", "add_tweak"]               # Curve properties prevent this, see SLIP-0010
       - ["Eddsa", "SecretKey", "mul_tweak"]               # Curve properties prevent this, see SLIP-0010

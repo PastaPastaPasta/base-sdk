@@ -309,7 +309,7 @@ impl EcdsaSecretKey {
   ///
   /// [`sign_recoverable`](Self::sign_recoverable) is not ground; its form is
   /// a fixed 64 bytes, with no prefix to save.
-  pub fn sign(&self, msg_hash: &[u8; 32]) -> EcdsaSignature {
+  pub fn sign_digest(&self, msg_hash: &[u8; 32]) -> EcdsaSignature {
     EcdsaSignature::from_inner(sign_low_r(Message::from_digest(*msg_hash), &self.inner))
   }
 
@@ -603,7 +603,7 @@ mod tests {
 
     assert_eq!(tweaked_sk.public_key(), tweaked_pk);
     assert!(tweaked_sk.verify_pubkey(&tweaked_pk));
-    assert_eq!(tweaked_pk.verify(&MSG, tweaked_sk.sign(&MSG)), Ok(()));
+    assert_eq!(tweaked_pk.verify_digest(&MSG, tweaked_sk.sign_digest(&MSG)), Ok(()));
     assert_eq!(tweaked_sk.is_compressed(), sk.is_compressed());
 
     // The stored point has to match the one rederived from the new scalar.
@@ -684,8 +684,8 @@ mod tests {
 
   #[rstest]
   fn sign_is_deterministic(alice_sk: EcdsaSecretKey) {
-    let sig1 = alice_sk.sign(&MSG);
-    let sig2 = alice_sk.sign(&MSG);
+    let sig1 = alice_sk.sign_digest(&MSG);
+    let sig2 = alice_sk.sign_digest(&MSG);
     assert_eq!(sig1, sig2);
   }
 
@@ -693,7 +693,7 @@ mod tests {
   fn sign_grinds_r_low(alice_sk: EcdsaSecretKey) {
     // R lands low half the time on its own, so one signature proves nothing.
     for i in 0..20 {
-      let sig = alice_sk.sign(&message_hash(i));
+      let sig = alice_sk.sign_digest(&message_hash(i));
 
       assert!(sig.to_bytes()[0] < 0x80, "R is not low for message {i}");
       assert!(
@@ -713,8 +713,8 @@ mod tests {
 
   #[rstest]
   fn sign_verify_roundtrip(alice_sk: EcdsaSecretKey) {
-    let sig = alice_sk.sign(&MSG);
-    assert!(alice_sk.public_key().verify(&MSG, sig).is_ok());
+    let sig = alice_sk.sign_digest(&MSG);
+    assert!(alice_sk.public_key().verify_digest(&MSG, sig).is_ok());
   }
 
   #[rstest]
@@ -732,8 +732,8 @@ mod tests {
   #[rstest]
   fn verify_rejects_wrong_key(alice_sk: EcdsaSecretKey, bob_sk: EcdsaSecretKey) {
     assert!(!alice_sk.verify_pubkey(&bob_sk.public_key()));
-    let sig = alice_sk.sign(&MSG);
-    assert!(bob_sk.public_key().verify(&MSG, sig).is_err());
+    let sig = alice_sk.sign_digest(&MSG);
+    assert!(bob_sk.public_key().verify_digest(&MSG, sig).is_err());
   }
 
   #[rstest]

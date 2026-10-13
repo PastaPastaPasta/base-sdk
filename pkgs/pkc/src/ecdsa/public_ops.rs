@@ -257,7 +257,7 @@ impl EcdsaPublicKey {
   ///
   /// Returns [`EcdsaError::VerifyFailed`] when the signature does not verify
   /// against this key and message.
-  pub fn verify(&self, msg_hash: &[u8; 32], sig: impl AsRef<EcdsaSignature>) -> Result<(), EcdsaError> {
+  pub fn verify_digest(&self, msg_hash: &[u8; 32], sig: impl AsRef<EcdsaSignature>) -> Result<(), EcdsaError> {
     self
       .inner
       .verify(Message::from_digest(*msg_hash), sig.as_ref().as_inner())
@@ -503,6 +503,6 @@ mod tests {
   fn verify_rejects_wrong_message(alice_pk: EcdsaPublicKey, alice_sig: EcdsaSignature) {
     let mut bad = MSG;
     bad[0] ^= 0xff;
-    assert!(alice_pk.verify(&bad, alice_sig).is_err());
+    assert!(alice_pk.verify_digest(&bad, alice_sig).is_err());
   }
 }
