@@ -7,6 +7,7 @@ mkdir -p "${out}"
 printf '#include <stdio.h>\nint main(void) { puts("Hello, world!"); return 0; }\n' > "${out}/hello.c"
 printf '#include <iostream>\nint main() { std::cout << "Hello, world!\\n"; }\n' > "${out}/hello.cpp"
 printf 'fn main() { println!("Hello, world!"); }\n' > "${out}/hello.rs"
+printf 'int add(int a, int b) { return a + b; }\n' > "${out}/free.c"
 
 status=0
 
@@ -23,14 +24,15 @@ produced() {
 }
 
 try() {
-  local name="$1" lang="$2" bin="${out}/${1}.${2}" want="${MACOSX_DEPLOYMENT_TARGET:-}" got kind
+  local name="$1" lang="$2" bin="${out}/${1}.${2}" src="${out}/${SRC:-hello}.${2}"
+  local want="${MACOSX_DEPLOYMENT_TARGET:-}" got kind
   shift 2
   if [[ -z "$1" ]]; then
     say "${name}" "${lang}" skipped
     return
   fi
   rm -f -- "${bin}"*
-  if ! "$@" "${out}/hello.${lang}" -o "${bin}" || ! produced "${bin}"; then
+  if ! "$@" "${src}" -o "${bin}" || ! produced "${bin}"; then
     say "${name}" "${lang}" FAILED
     status=1
     return
@@ -65,10 +67,17 @@ do
   cxx="CXX_${target//-/_}"
   driver="${!cc:-}"
   rust="${driver:+rustc}"
-  [[ "${target}" != wasm32-* ]] || rust=rustc
-  try "${target}" c "${driver}"
+  linker="${driver}"
+  if [[ "${target}" == wasm32-* ]]; then
+    # rustc links wasm32 with its own rust-lld.
+    rust=rustc
+    linker=
+    SRC=free try "${target}" c "${driver}" -c
+  else
+    try "${target}" c "${driver}"
+  fi
   try "${target}" cpp "${!cxx:-}"
-  try "${target}" rs "${rust}" "--target=${target}" ${driver:+"-Clinker=${driver}"}
+  try "${target}" rs "${rust}" "--target=${target}" ${linker:+"-Clinker=${linker}"}
 done
 
 exit "${status}"

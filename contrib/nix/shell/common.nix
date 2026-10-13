@@ -79,6 +79,7 @@ in
   inherit
     pkgs
     lib
+    commonTargets
     compose
     crossTargets
     cxx

@@ -1,6 +1,7 @@
 # Development shell for continuous integration
 
 {
+  commonTargets,
   compose,
   crossTargets,
   cxx,
@@ -10,6 +11,7 @@
 
 compose [
   (cxx.forTargets crossTargets)
+  (cxx.forWasm commonTargets)
   mods.codeql
   mods.cxx
   mods.nixpkgs

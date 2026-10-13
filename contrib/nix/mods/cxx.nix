@@ -143,6 +143,7 @@ let
       mingw = mingwFlags;
       glibc = glibcFlags;
       darwin = darwinFlags;
+      wasm = _: [ ];
     }
     .${d.kind}
       d;
@@ -165,6 +166,16 @@ let
         ${lib.concatStringsSep " \\\n        " (extra ++ flagsFor d)} \
         "$@"
     '';
+
+  # wasm32 has no libc or sysroot, and rustc links it with its own rust-lld,
+  # so a C driver is all it needs. The cc-wrapper is bypassed because its
+  # hardening flags are not supported on wasm32.
+  wasmDriver =
+    t:
+    driver "${t}-cc" "clang" {
+      clangTarget = t;
+      kind = "wasm";
+    } [ ];
 
   # `cc-rs` and `cargo` spell the same target differently.
   ccKey = t: builtins.replaceStrings [ "-" ] [ "_" ] t;
@@ -221,5 +232,20 @@ in
     {
       packages = lib.concatMap (w: w.packages) wired;
       env = lib.foldl' (a: w: a // w.env) darwin wired;
+    };
+
+  forWasm =
+    targets:
+    let
+      cc = map wasmDriver targets;
+    in
+    {
+      packages = cc;
+      env = lib.foldl' (a: b: a // b) { } (
+        lib.zipListsWith (t: c: {
+          "CC_${ccKey t}" = "${c}/bin/${t}-cc";
+          "AR_${ccKey t}" = "${llvm.bintools-unwrapped}/bin/llvm-ar";
+        }) targets cc
+      );
     };
 }
