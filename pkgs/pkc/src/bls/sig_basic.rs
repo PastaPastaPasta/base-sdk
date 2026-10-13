@@ -157,13 +157,13 @@ mod tests {
   fn assert_sign_verify<S: BlsScheme>() {
     let sk = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap();
     let pk = sk.public_key();
-    let sig = sk.sign(S::msg_ref(&MSG_DEADBEEF));
+    let sig = sk.sign_digest(&MSG_DEADBEEF);
 
-    assert!(pk.verify(S::msg_ref(&MSG_DEADBEEF), &sig).is_ok());
-    assert!(pk.verify(S::msg_ref(&MSG_8BADFOOD), &sig).is_err());
+    assert!(pk.verify_digest(&MSG_DEADBEEF, &sig).is_ok());
+    assert!(pk.verify_digest(&MSG_8BADFOOD, &sig).is_err());
 
     let other_pk = BlsSecretKey::<S>::from_ikm(&RSEED[1]).unwrap().public_key();
-    assert!(other_pk.verify(S::msg_ref(&MSG_DEADBEEF), &sig).is_err());
+    assert!(other_pk.verify_digest(&MSG_DEADBEEF, &sig).is_err());
   }
 
   #[rstest]
@@ -209,8 +209,8 @@ mod tests {
   /// yields the same signature every time.
   fn assert_sign_is_deterministic<S: BlsScheme>() {
     let sk = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap();
-    let msg = S::msg_ref(&MSG_DEADBEEF);
-    assert_eq!(sk.sign(msg), sk.sign(msg));
+    let msg = &MSG_DEADBEEF;
+    assert_eq!(sk.sign_digest(msg), sk.sign_digest(msg));
   }
 
   #[rstest]
@@ -222,7 +222,7 @@ mod tests {
 
   fn assert_sig_roundtrip<S: BlsScheme>() {
     let sk = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap();
-    let bytes = sk.sign(S::msg_ref(&MSG_DEADBEEF)).to_bytes();
+    let bytes = sk.sign_digest(&MSG_DEADBEEF).to_bytes();
     assert_eq!(BlsSignature::<S>::from_bytes(&bytes).unwrap().to_bytes(), bytes);
   }
 
@@ -243,7 +243,7 @@ mod tests {
     for i in 0..64 {
       let sk = BlsSecretKey::<S>::from_ikm(&test_ikm(i)).unwrap();
       let pk = sk.public_key();
-      let sig = sk.sign(S::msg_ref(&test_msg(i)));
+      let sig = sk.sign_digest(&test_msg(i));
 
       let pk_bytes = pk.to_bytes();
       let sig_bytes = sig.to_bytes();
@@ -295,7 +295,7 @@ mod tests {
   fn chia_rejects_stray_signature_bits(#[case] index: usize, #[case] mask: u8) {
     let clean = BlsSecretKey::<BlsScChia>::from_ikm(&RSEED[0])
       .unwrap()
-      .sign(MSG_DEADBEEF)
+      .sign_digest(&MSG_DEADBEEF)
       .to_bytes();
 
     let mut mutated = clean;
@@ -366,7 +366,7 @@ mod tests {
 
     for v in &vecs {
       let sk = BlsSecretKey::<S>::from_bytes(&arr_from_hex(&v.sk)).unwrap();
-      let sig = sk.sign(S::msg_ref(&arr_from_hex(&v.msg)));
+      let sig = sk.sign_digest(&arr_from_hex(&v.msg));
       assert_eq!(sig.to_bytes().to_lower_hex_string(), v.sig);
     }
   }
@@ -384,13 +384,16 @@ mod tests {
   fn signatures_differ_across_schemes() {
     let chia = BlsSecretKey::<BlsScChia>::from_ikm(&RSEED[0]).unwrap();
     let ietf = BlsSecretKey::<BlsScIetf>::from_bytes(&chia.to_bytes()).unwrap();
-    assert_ne!(chia.sign(MSG_DEADBEEF).to_bytes(), ietf.sign(&MSG_DEADBEEF).to_bytes());
+    assert_ne!(
+      chia.sign_digest(&MSG_DEADBEEF).to_bytes(),
+      ietf.sign_digest(&MSG_DEADBEEF).to_bytes()
+    );
   }
 
   /// Conversion re-encodes one point, so a round trip returns the original.
   fn assert_sig_scheme_conversion_round_trips<S: BlsScheme, T: BlsScheme>() {
     let sk = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap();
-    let sig = sk.sign(S::msg_ref(&MSG_DEADBEEF));
+    let sig = sk.sign_digest(&MSG_DEADBEEF);
     let there = sig.to_scheme::<T>().unwrap();
 
     assert_eq!(there.to_scheme::<S>().unwrap().to_bytes(), sig.to_bytes());
@@ -411,11 +414,11 @@ mod tests {
   #[rstest]
   fn sig_scheme_conversion_does_not_move_the_augmentation() {
     let sk = BlsSecretKey::<BlsScChia>::from_ikm(&RSEED[0]).unwrap();
-    let sig = sk.sign(MSG_DEADBEEF);
+    let sig = sk.sign_digest(&MSG_DEADBEEF);
 
     let converted = sig.to_scheme::<BlsScIetf>().unwrap();
     let pk_ietf = sk.public_key().to_scheme::<BlsScIetf>().unwrap();
-    assert!(pk_ietf.verify(&MSG_DEADBEEF, &converted).is_err());
+    assert!(pk_ietf.verify_digest(&MSG_DEADBEEF, &converted).is_err());
   }
 
   /// A signature Chia admits and IETF does not must not become an IETF one by
@@ -437,19 +440,19 @@ mod tests {
       #[rstest]
       fn serde_roundtrip() {
         let chia = BlsSecretKey::<BlsScChia>::from_ikm(&RSEED[0]).unwrap();
-        assert_json_rt(&chia.sign(MSG_DEADBEEF));
+        assert_json_rt(&chia.sign_digest(&MSG_DEADBEEF));
         let ietf = BlsSecretKey::<BlsScIetf>::from_ikm(&RSEED[0]).unwrap();
-        assert_json_rt(&ietf.sign(&MSG_DEADBEEF));
+        assert_json_rt(&ietf.sign_digest(&MSG_DEADBEEF));
       }
 
       #[rstest]
       fn serde_emits_hex_string() {
         let chia = BlsSecretKey::<BlsScChia>::from_ikm(&RSEED[0])
           .unwrap()
-          .sign(MSG_DEADBEEF);
+          .sign_digest(&MSG_DEADBEEF);
         let ietf = BlsSecretKey::<BlsScIetf>::from_ikm(&RSEED[0])
           .unwrap()
-          .sign(&MSG_DEADBEEF);
+          .sign_digest(&MSG_DEADBEEF);
 
         assert_eq!(to_json(&chia), format!("\"{}\"", chia.to_bytes().to_lower_hex_string()));
         assert_eq!(to_json(&ietf), format!("\"{}\"", ietf.to_bytes().to_lower_hex_string()));
@@ -460,7 +463,7 @@ mod tests {
   fn assert_to_matches_from_bytes<S: BlsScheme>() {
     let valid = BlsSecretKey::<S>::from_ikm(&RSEED[0])
       .unwrap()
-      .sign(S::msg_ref(&MSG_DEADBEEF))
+      .sign_digest(&MSG_DEADBEEF)
       .to_bytes();
     for encoded in [valid, G2_OFF_SUBGROUP_CHIA, G2_OFF_SUBGROUP_IETF, [0; 96]] {
       assert_eq!(

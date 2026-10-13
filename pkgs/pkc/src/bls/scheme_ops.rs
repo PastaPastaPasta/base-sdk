@@ -52,7 +52,7 @@ pub trait BlsScheme: BlsSchemeId + sealed::Sealed + Sized {
   type InnerPk: Copy + Debug + PartialEq + Eq + Send + Sync;
   /// Inner signature representation.
   type InnerSig: Copy + Debug + PartialEq + Eq + Send + Sync;
-  /// Message type accepted by signing and verification.
+  /// Hash-to-curve input accepted by signing and verification.
   type Msg<'a>: Copy + Send + Sync;
 
   /// Derive a secret key from input keying material.
@@ -137,8 +137,8 @@ pub trait BlsScheme: BlsSchemeId + sealed::Sealed + Sized {
   /// Returns `VerifyFailed` when the pairing check does not hold.
   fn verify(sig: &Self::InnerSig, msg: Self::Msg<'_>, pk: &Self::InnerPk) -> Result<(), BlsError>;
 
-  /// Convert a fixed 32-byte message to the scheme's message type.
-  fn msg_ref(m: &[u8; 32]) -> Self::Msg<'_>;
+  /// Convert a 32-byte digest to the hash-to-curve input.
+  fn digest_msg(digest: &[u8; 32]) -> Self::Msg<'_>;
 
   /// Compute the Diffie-Hellman shared key `sk * peer_pk`.
   ///

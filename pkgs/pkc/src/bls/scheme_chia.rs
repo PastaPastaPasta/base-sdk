@@ -227,9 +227,9 @@ impl BlsScheme for BlsScChia {
     }
   }
 
-  /// The Chia message type is the fixed 32-byte array itself.
-  fn msg_ref(m: &[u8; 32]) -> Self::Msg<'_> {
-    *m
+  /// The legacy message is the 32-byte digest itself.
+  fn digest_msg(digest: &[u8; 32]) -> Self::Msg<'_> {
+    *digest
   }
 
   /// Sum the public keys in G1.

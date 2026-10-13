@@ -5,6 +5,9 @@ extensions:
       extensible: armOnly
     data:
       # BLS
+      # Signing
+      - ["Bls", "SecretKey", "sign_digest"]               # Sign a 32-byte hashed message
+      - ["Bls", "PublicKey", "verify_digest"]             # Verify a 32-byte hashed message
       # Aggregation
       - ["Bls", "SecretKey", "aggregate"]                 # Add secret keys
       - ["Bls", "PublicKey", "aggregate"]                 # Add
@@ -12,9 +15,9 @@ extensions:
       - ["Bls", "Signature", "aggregate"]                 # Add
       - ["Bls", "Signature", "secure_aggregate"]          # Add w/ binding against rogue keys
       - ["Bls", "Signature", "sub_insecure"]              # Subtract
-      - ["Bls", "Signature", "verify_aggregates"]         # Verify multi-message, multiple signers
-      - ["Bls", "Signature", "fast_verify_aggregates"]    # Verify single-message, multiple signers
-      - ["Bls", "Signature", "secure_verify_aggregates"]  # Verify w/ binding against rogue keys
+      - ["Bls", "Signature", "verify_aggregates_digests"]         # Verify multi-message, multiple signers
+      - ["Bls", "Signature", "fast_verify_aggregates_digest"]     # Verify single-message, multiple signers
+      - ["Bls", "Signature", "secure_verify_aggregates_digest"]   # Verify w/ binding against rogue keys
       # Integrated Encryption Scheme
       - ["Bls", "SecretKey", "dh_exchange"]               # Derive shared secret
       - ["Bls", "SecretKey", "ies_decrypt"]               # Decrypt blob
@@ -66,6 +69,10 @@ extensions:
       pack: base-sdk/codeql-rust
       extensible: armLacks
     data:
+      # BLS
+      # Signing
+      - ["Bls", "SecretKey", "sign"]                      # Split by message form, see `sign_digest`
+      - ["Bls", "PublicKey", "verify"]                    # Split by message form, see `verify_digest`
       # Ed25519
       # Tweaking
       - ["Eddsa", "SecretKey", "add_tweak"]               # Curve properties prevent this, see SLIP-0010

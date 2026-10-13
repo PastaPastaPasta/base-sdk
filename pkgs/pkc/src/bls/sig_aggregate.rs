@@ -42,21 +42,21 @@ impl<S: BlsScheme> BlsSignature<S> {
   /// can cancel it out. Every key must already be bound to its holder, by a
   /// proof of possession or by provenance.
   ///
-  /// Without such a binding, use [`Self::secure_verify_aggregates`], which
-  /// weights each key.
+  /// Without such a binding, use [`Self::secure_verify_aggregates_digest`],
+  /// which weights each key.
   ///
   /// # Errors
   ///
   /// Returns `EmptyAggregation` when no keys are given, or `VerifyFailed` on
   /// mismatch.
-  pub fn fast_verify_aggregates(&self, msg: S::Msg<'_>, pks: &[&BlsPublicKey<S>]) -> Result<(), BlsError> {
+  pub fn fast_verify_aggregates_digest(&self, digest: &[u8; 32], pks: &[&BlsPublicKey<S>]) -> Result<(), BlsError> {
     let inner_pks: Vec<&S::InnerPk> = pks.iter().map(|k| &k.0).collect();
-    S::fast_verify_aggregates(&self.0, msg, &inner_pks)
+    S::fast_verify_aggregates(&self.0, S::digest_msg(digest), &inner_pks)
   }
 
   /// Aggregate signatures under public-key weighting, the counterpart to
-  /// [`Self::secure_verify_aggregates`]: each signature is raised to its own
-  /// key's weight, so a rogue key cannot cancel an honest one.
+  /// [`Self::secure_verify_aggregates_digest`]. Each signature is raised to
+  /// its own key's weight, so a rogue key cannot cancel an honest one.
   ///
   /// # Errors
   ///
@@ -69,30 +69,30 @@ impl<S: BlsScheme> BlsSignature<S> {
     S::secure_aggregate_sig(&inner_sigs, &inner_pks).map(Self::from_inner)
   }
 
-  /// Securely aggregate and verify signatures with public-key
-  /// weighting.
+  /// Verify a weighted aggregate over a 32-byte hashed message.
   ///
   /// # Errors
   ///
   /// Returns `EmptyAggregation` when no keys are given, `InvalidPublicKey`
   /// when a key fails to decode, or `VerifyFailed` on mismatch.
-  pub fn secure_verify_aggregates(&self, msg: S::Msg<'_>, pks: &[&BlsPublicKey<S>]) -> Result<(), BlsError> {
+  pub fn secure_verify_aggregates_digest(&self, digest: &[u8; 32], pks: &[&BlsPublicKey<S>]) -> Result<(), BlsError> {
     let inner_pks: Vec<&S::InnerPk> = pks.iter().map(|k| &k.0).collect();
-    S::secure_verify_aggregates(&self.0, msg, &inner_pks)
+    S::secure_verify_aggregates(&self.0, S::digest_msg(digest), &inner_pks)
   }
 }
 
 impl<S: BlsScheme> BlsSignature<S> {
-  /// Verify an aggregate carrying one message per signer.
+  /// Verify an aggregate carrying one 32-byte hashed message per signer.
   ///
   /// # Errors
   ///
-  /// Returns `CountMismatch` when the message and key counts differ,
+  /// Returns `CountMismatch` when the digest and key counts differ,
   /// `EmptyAggregation` when no keys are given, `DuplicateMessage` where the
   /// scheme refuses a repeat, or `VerifyFailed` on mismatch.
-  pub fn verify_aggregates(&self, msgs: &[S::Msg<'_>], pks: &[&BlsPublicKey<S>]) -> Result<(), BlsError> {
+  pub fn verify_aggregates_digests(&self, digests: &[[u8; 32]], pks: &[&BlsPublicKey<S>]) -> Result<(), BlsError> {
+    let msgs: Vec<S::Msg<'_>> = digests.iter().map(S::digest_msg).collect();
     let inner_pks: Vec<_> = pks.iter().map(|k| &k.0).collect();
-    S::verify_aggregates(&self.0, msgs, &inner_pks)
+    S::verify_aggregates(&self.0, &msgs, &inner_pks)
   }
 }
 
@@ -134,20 +134,20 @@ mod tests {
   fn assert_aggregate_same_message<S: BlsScheme>() {
     let sk1 = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap();
     let sk2 = BlsSecretKey::<S>::from_ikm(&RSEED[1]).unwrap();
-    let sig1 = sk1.sign(S::msg_ref(&MSG_DEADBEEF));
-    let sig2 = sk2.sign(S::msg_ref(&MSG_DEADBEEF));
+    let sig1 = sk1.sign_digest(&MSG_DEADBEEF);
+    let sig2 = sk2.sign_digest(&MSG_DEADBEEF);
 
     let agg = BlsSignature::<S>::aggregate(&[&sig1, &sig2]).unwrap();
     let pk1 = sk1.public_key();
     let pk2 = sk2.public_key();
 
-    let msg = S::msg_ref(&MSG_DEADBEEF);
-    assert!(agg.fast_verify_aggregates(msg, &[&pk1, &pk2]).is_ok());
+    let msg = &MSG_DEADBEEF;
+    assert!(agg.fast_verify_aggregates_digest(msg, &[&pk1, &pk2]).is_ok());
     // A key not in the set must make verification fail.
     let pk3 = BlsSecretKey::<S>::from_ikm(&RSEED[2]).unwrap().public_key();
-    assert!(agg.fast_verify_aggregates(msg, &[&pk1, &pk3]).is_err());
+    assert!(agg.fast_verify_aggregates_digest(msg, &[&pk1, &pk3]).is_err());
     // Rogue-key resistance: a naive aggregate must not pass weighted verify.
-    assert!(agg.secure_verify_aggregates(msg, &[&pk1, &pk2]).is_err());
+    assert!(agg.secure_verify_aggregates_digest(msg, &[&pk1, &pk2]).is_err());
   }
 
   #[rstest]
@@ -162,15 +162,18 @@ mod tests {
   fn assert_sub_insecure_undoes_aggregation<S: BlsScheme>() {
     let sk1 = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap();
     let sk2 = BlsSecretKey::<S>::from_ikm(&RSEED[1]).unwrap();
-    let msg = S::msg_ref(&MSG_DEADBEEF);
+    let msg = &MSG_DEADBEEF;
 
-    let sig1 = sk1.sign(msg);
-    let sig2 = sk2.sign(msg);
+    let sig1 = sk1.sign_digest(msg);
+    let sig2 = sk2.sign_digest(msg);
     let agg = BlsSignature::<S>::aggregate(&[&sig1, &sig2]).unwrap();
 
     assert_eq!(agg.sub_insecure(&sig1).unwrap(), sig2);
     assert_eq!(agg.sub_insecure(&sig2).unwrap(), sig1);
-    assert!(sk2.public_key().verify(msg, &agg.sub_insecure(&sig1).unwrap()).is_ok());
+    assert!(sk2
+      .public_key()
+      .verify_digest(msg, &agg.sub_insecure(&sig1).unwrap())
+      .is_ok());
   }
 
   #[rstest]
@@ -185,7 +188,7 @@ mod tests {
   /// rejection under both schemes.
   fn assert_sub_insecure_rejects_the_identity<S: BlsScheme>() {
     let sk = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap();
-    let sig = sk.sign(S::msg_ref(&MSG_DEADBEEF));
+    let sig = sk.sign_digest(&MSG_DEADBEEF);
 
     assert_eq!(sig.sub_insecure(&sig), Err(BlsError::InvalidSignature));
   }
@@ -209,7 +212,7 @@ mod tests {
       let pk_refs: Vec<&BlsPublicKey<S>> = pks.iter().collect();
       let agg = BlsSignature::<S>::from_bytes(&arr_from_hex(&v.agg_sig_secure)).unwrap();
       let msg: [u8; 32] = arr_from_hex(&v.msg);
-      assert!(agg.secure_verify_aggregates(S::msg_ref(&msg), &pk_refs).is_ok());
+      assert!(agg.secure_verify_aggregates_digest(&msg, &pk_refs).is_ok());
     }
   }
 
@@ -227,22 +230,22 @@ mod tests {
     let sk1 = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap();
     let sk2 = BlsSecretKey::<S>::from_ikm(&RSEED[1]).unwrap();
 
-    let msg1 = S::msg_ref(&MSG_8BADFOOD);
-    let msg2 = S::msg_ref(&MSG_DEADBEEF);
-    let sig1 = sk1.sign(msg1);
-    let sig2 = sk2.sign(msg2);
+    let msg1 = &MSG_8BADFOOD;
+    let msg2 = &MSG_DEADBEEF;
+    let sig1 = sk1.sign_digest(msg1);
+    let sig2 = sk2.sign_digest(msg2);
     let agg = BlsSignature::<S>::aggregate(&[&sig1, &sig2]).unwrap();
 
     let pk1 = sk1.public_key();
     let pk2 = sk2.public_key();
-    assert!(agg.verify_aggregates(&[msg1, msg2], &[&pk1, &pk2]).is_ok());
-    assert!(agg.verify_aggregates(&[msg2, msg1], &[&pk1, &pk2]).is_err());
+    assert!(agg.verify_aggregates_digests(&[*msg1, *msg2], &[&pk1, &pk2]).is_ok());
+    assert!(agg.verify_aggregates_digests(&[*msg2, *msg1], &[&pk1, &pk2]).is_err());
 
     assert_eq!(
-      agg.verify_aggregates(&[msg1], &[&pk1, &pk2]),
+      agg.verify_aggregates_digests(&[*msg1], &[&pk1, &pk2]),
       Err(BlsError::CountMismatch)
     );
-    assert_eq!(agg.verify_aggregates(&[], &[]), Err(BlsError::EmptyAggregation));
+    assert_eq!(agg.verify_aggregates_digests(&[], &[]), Err(BlsError::EmptyAggregation));
   }
 
   #[rstest]
@@ -259,14 +262,14 @@ mod tests {
     let sk1 = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap();
     let sk2 = BlsSecretKey::<S>::from_ikm(&RSEED[1]).unwrap();
 
-    let msg = S::msg_ref(&MSG_DEADBEEF);
-    let sig1 = sk1.sign(msg);
-    let sig2 = sk2.sign(msg);
+    let msg = &MSG_DEADBEEF;
+    let sig1 = sk1.sign_digest(msg);
+    let sig2 = sk2.sign_digest(msg);
     let agg = BlsSignature::<S>::aggregate(&[&sig1, &sig2]).unwrap();
 
     let pk1 = sk1.public_key();
     let pk2 = sk2.public_key();
-    let res = agg.verify_aggregates(&[msg, msg], &[&pk1, &pk2]);
+    let res = agg.verify_aggregates_digests(&[*msg, *msg], &[&pk1, &pk2]);
     assert_eq!(res.is_ok(), accepted, "duplicate-message policy");
     if !accepted {
       assert_eq!(res, Err(BlsError::DuplicateMessage));
@@ -274,7 +277,7 @@ mod tests {
 
     // Sound results either way through the shared-message entry point, so the
     // refusal above is a matter of policy and not a bad aggregate.
-    assert!(agg.fast_verify_aggregates(msg, &[&pk1, &pk2]).is_ok());
+    assert!(agg.fast_verify_aggregates_digest(msg, &[&pk1, &pk2]).is_ok());
   }
 
   #[rstest]
@@ -297,12 +300,11 @@ mod tests {
         .collect();
       let pk_refs: Vec<&BlsPublicKey<S>> = pks.iter().collect();
       let msgs: Vec<[u8; 32]> = v.msgs.iter().map(|m| arr_from_hex(m)).collect();
-      let msg_refs: Vec<S::Msg<'_>> = msgs.iter().map(|m| S::msg_ref(m)).collect();
       let agg = BlsSignature::<S>::from_bytes(&arr_from_hex(&v.agg_sig)).unwrap();
       assert_eq!(agg.to_bytes().to_lower_hex_string(), v.agg_sig);
 
       assert_eq!(
-        agg.verify_aggregates(&msg_refs, &pk_refs).is_ok(),
+        agg.verify_aggregates_digests(&msgs, &pk_refs).is_ok(),
         v.accepted,
         "reference verdict for {} signers",
         v.pks.len()
@@ -323,22 +325,22 @@ mod tests {
   fn assert_secure_aggregate_round_trips<S: BlsScheme>() {
     let sk1 = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap();
     let sk2 = BlsSecretKey::<S>::from_ikm(&RSEED[1]).unwrap();
-    let msg = S::msg_ref(&MSG_DEADBEEF);
+    let msg = &MSG_DEADBEEF;
 
-    let sig1 = sk1.sign(msg);
-    let sig2 = sk2.sign(msg);
+    let sig1 = sk1.sign_digest(msg);
+    let sig2 = sk2.sign_digest(msg);
     let pk1 = sk1.public_key();
     let pk2 = sk2.public_key();
 
     let agg = BlsSignature::<S>::secure_aggregate(&[&sig1, &sig2], &[&pk1, &pk2]).unwrap();
-    assert!(agg.secure_verify_aggregates(msg, &[&pk1, &pk2]).is_ok());
+    assert!(agg.secure_verify_aggregates_digest(msg, &[&pk1, &pk2]).is_ok());
 
     let swapped = BlsSignature::<S>::secure_aggregate(&[&sig2, &sig1], &[&pk2, &pk1]).unwrap();
     assert_eq!(agg, swapped, "weights follow the keys, not the argument order");
 
     // A plain aggregate carries no weights, so the weighted check rejects it.
     let plain = BlsSignature::<S>::aggregate(&[&sig1, &sig2]).unwrap();
-    assert!(plain.secure_verify_aggregates(msg, &[&pk1, &pk2]).is_err());
+    assert!(plain.secure_verify_aggregates_digest(msg, &[&pk1, &pk2]).is_err());
 
     assert_eq!(
       BlsSignature::<S>::secure_aggregate(&[&sig1], &[&pk1, &pk2]),
@@ -402,8 +404,8 @@ mod tests {
     let sk = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap();
     let pk = sk.public_key();
 
-    let sig_a = sk.sign(S::msg_ref(&MSG_8BADFOOD));
-    let sig_b = sk.sign(S::msg_ref(&MSG_DEADBEEF));
+    let sig_a = sk.sign_digest(&MSG_8BADFOOD);
+    let sig_b = sk.sign_digest(&MSG_DEADBEEF);
 
     let ab = BlsSignature::<S>::secure_aggregate(&[&sig_a, &sig_b], &[&pk, &pk]).unwrap();
     let ba = BlsSignature::<S>::secure_aggregate(&[&sig_b, &sig_a], &[&pk, &pk]).unwrap();
@@ -440,19 +442,19 @@ mod tests {
       .iter()
       .map(|seed| BlsSecretKey::<S>::from_ikm(seed).unwrap())
       .collect();
-    let sigs: Vec<BlsSignature<S>> = sks.iter().map(|sk| sk.sign(S::msg_ref(&MSG_DEADBEEF))).collect();
+    let sigs: Vec<BlsSignature<S>> = sks.iter().map(|sk| sk.sign_digest(&MSG_DEADBEEF)).collect();
     let pks: Vec<BlsPublicKey<S>> = sks.iter().map(BlsSecretKey::public_key).collect();
 
     let straight = BlsSignature::<S>::aggregate(&[&sigs[0], &sigs[1], &sigs[2]]).unwrap();
     let rotated = BlsSignature::<S>::aggregate(&[&sigs[2], &sigs[0], &sigs[1]]).unwrap();
     assert_eq!(straight, rotated);
 
-    let msg = S::msg_ref(&MSG_DEADBEEF);
+    let msg = &MSG_DEADBEEF;
     assert!(straight
-      .fast_verify_aggregates(msg, &[&pks[0], &pks[1], &pks[2]])
+      .fast_verify_aggregates_digest(msg, &[&pks[0], &pks[1], &pks[2]])
       .is_ok());
     assert!(straight
-      .fast_verify_aggregates(msg, &[&pks[2], &pks[0], &pks[1]])
+      .fast_verify_aggregates_digest(msg, &[&pks[2], &pks[0], &pks[1]])
       .is_ok());
   }
 
@@ -493,7 +495,7 @@ mod tests {
   fn assert_identity_cancellation<S: BlsScheme>(sign_bit: u8, accepted: bool) {
     let sk = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap();
     let signed = MSG_8BADFOOD;
-    let sig = sk.sign(S::msg_ref(&signed));
+    let sig = sk.sign_digest(&signed);
     let pk = sk.public_key();
 
     let mut neg_sig_bytes = sig.to_bytes();
@@ -507,7 +509,7 @@ mod tests {
     let identity = BlsSignature::<S>::aggregate(&[&sig, &neg_sig]).unwrap();
     // The outcome must not depend on the message, signed or otherwise.
     for msg in [signed, MSG_DEADBEEF] {
-      let res = identity.fast_verify_aggregates(S::msg_ref(&msg), &[&pk, &neg_pk]);
+      let res = identity.fast_verify_aggregates_digest(&msg, &[&pk, &neg_pk]);
       assert_eq!(res.is_ok(), accepted, "identity aggregate over {msg:?}");
     }
   }
@@ -518,7 +520,7 @@ mod tests {
   #[rstest]
   fn chia_identity_encodes_canonically() {
     let sk = BlsSecretKey::<BlsScChia>::from_ikm(&RSEED[0]).unwrap();
-    let sig = sk.sign(MSG_8BADFOOD);
+    let sig = sk.sign_digest(&MSG_8BADFOOD);
 
     let mut neg_bytes = sig.to_bytes();
     neg_bytes[0] ^= 0x80;

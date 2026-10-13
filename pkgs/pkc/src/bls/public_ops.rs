@@ -108,10 +108,9 @@ impl<S: BlsScheme> BlsPublicKey<S> {
 
   /// Aggregate public keys under secure-verification weighting.
   ///
-  /// The weights are those applied by
-  /// [`secure_verify_aggregates`](super::BlsSignature::secure_verify_aggregates)
-  /// to keys sorted by encoding, so the result is order-independent and a
-  /// signature passing that check verifies plainly against this key.
+  /// Keys are weighted in [`BlsSignature::secure_verify_aggregates_digest`],
+  /// sorted by encoding, so the result is order-independent and a signature
+  /// passing that check verifies plainly against this key.
   ///
   /// # Errors
   ///
@@ -122,13 +121,13 @@ impl<S: BlsScheme> BlsPublicKey<S> {
     S::secure_aggregate_pk(&inner_refs).map(Self::from_inner)
   }
 
-  /// Verify `sig` over a message of the scheme's message type.
+  /// Verify `sig` over a 32-byte hashed message.
   ///
   /// # Errors
   ///
   /// Returns `VerifyFailed` when the pairing check does not hold.
-  pub fn verify(&self, msg: S::Msg<'_>, sig: &BlsSignature<S>) -> Result<(), BlsError> {
-    S::verify(sig.as_inner(), msg, &self.0)
+  pub fn verify_digest(&self, digest: &[u8; 32], sig: &BlsSignature<S>) -> Result<(), BlsError> {
+    S::verify(sig.as_inner(), S::digest_msg(digest), &self.0)
   }
 
   pub(crate) fn from_inner(inner: S::InnerPk) -> Self {
@@ -523,8 +522,8 @@ mod tests {
 
       let sig = BlsSignature::<S>::from_bytes(&arr_from_hex(&v.agg_sig_secure)).unwrap();
       let msg: [u8; 32] = arr_from_hex(&v.msg);
-      assert!(agg_pk.verify(S::msg_ref(&msg), &sig).is_ok());
-      assert!(sig.secure_verify_aggregates(S::msg_ref(&msg), &refs).is_ok());
+      assert!(agg_pk.verify_digest(&msg, &sig).is_ok());
+      assert!(sig.secure_verify_aggregates_digest(&msg, &refs).is_ok());
     }
   }
 
@@ -569,9 +568,9 @@ mod tests {
     let alone = BlsPublicKey::<S>::secure_aggregate(&[&pk]).unwrap();
     assert_ne!(alone, pk, "a single key went through unweighted");
 
-    let sig = sk.sign(S::msg_ref(&MSG_8BADFOOD));
+    let sig = sk.sign_digest(&MSG_8BADFOOD);
     let weighted = BlsSignature::<S>::secure_aggregate(&[&sig], &[&pk]).unwrap();
-    assert!(alone.verify(S::msg_ref(&MSG_8BADFOOD), &weighted).is_ok());
+    assert!(alone.verify_digest(&MSG_8BADFOOD, &weighted).is_ok());
 
     let none: [&BlsPublicKey<S>; 0] = [];
     assert_eq!(

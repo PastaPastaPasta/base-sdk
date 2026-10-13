@@ -127,9 +127,9 @@ impl BlsScheme for BlsScIetf {
     verify_ok(sig.verify(true, msg, DST_BASIC, &[], pk, true))
   }
 
-  /// IETF messages are unsized slices; a fixed array reborrows as one.
-  fn msg_ref(m: &[u8; 32]) -> Self::Msg<'_> {
-    m
+  /// A digest is hashed to the curve like any other message.
+  fn digest_msg(digest: &[u8; 32]) -> Self::Msg<'_> {
+    digest
   }
 
   /// Aggregate the public keys via blst.

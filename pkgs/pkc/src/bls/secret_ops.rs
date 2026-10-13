@@ -129,9 +129,9 @@ impl<S: BlsScheme> BlsSecretKey<S> {
     self.public_key() == *pubkey
   }
 
-  /// Sign a message of the scheme's message type.
-  pub fn sign(&self, msg: S::Msg<'_>) -> BlsSignature<S> {
-    BlsSignature::from_inner(S::sign(&self.0, msg))
+  /// Sign a 32-byte hashed message.
+  pub fn sign_digest(&self, digest: &[u8; 32]) -> BlsSignature<S> {
+    BlsSignature::from_inner(S::sign(&self.0, S::digest_msg(digest)))
   }
 
   /// Compute a DH shared key: `self * peer_pk`.
@@ -279,8 +279,8 @@ mod tests {
     assert_eq!(tweaked_sk.public_key(), tweaked_pk);
     assert!(tweaked_sk.verify_pubkey(&tweaked_pk));
 
-    let msg = S::msg_ref(&[0x5a; 32]);
-    assert_eq!(tweaked_pk.verify(msg, &tweaked_sk.sign(msg)), Ok(()));
+    let msg = &[0x5a; 32];
+    assert_eq!(tweaked_pk.verify_digest(msg, &tweaked_sk.sign_digest(msg)), Ok(()));
   }
 
   #[rstest]
