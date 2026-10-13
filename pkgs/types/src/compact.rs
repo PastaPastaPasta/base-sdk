@@ -7,7 +7,7 @@
 //! CompactSize-encoded integers.
 
 use crate::codec::{BaseCodec, DecodeError, EncodeBuf};
-use crate::Numeric;
+use crate::{Numeric, MAX_SER_SIZE};
 
 /// An unsigned integer encoded in variable-width CompactSize.
 #[repr(transparent)]
@@ -49,7 +49,58 @@ impl Numeric for CompactSize {
 }
 
 impl BaseCodec for CompactSize {
+  /// Decodes a size range-checked against [`MAX_SER_SIZE`].
+  ///
+  /// # Errors
+  ///
+  /// Returns [`DecodeError::Eof`] for truncated input,
+  /// [`DecodeError::NonMinimalCompactSize`] for a non-canonical encoding and
+  /// [`DecodeError::CompactSizeExceedsLimit`] for a value above
+  /// [`MAX_SER_SIZE`].
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
+    let size = Self::decode_unbounded(data)?;
+    if size.0 > MAX_SER_SIZE as u64 {
+      return Err(DecodeError::CompactSizeExceedsLimit {
+        limit: MAX_SER_SIZE,
+        value: size.0,
+      });
+    }
+    Ok(size)
+  }
+
+  fn encode(&self, buf: &mut impl EncodeBuf) {
+    match self.0 {
+      0..=0xFC => buf.push(self.0 as u8),
+      0xFD..=0xFFFF => {
+        buf.push(0xFD);
+        buf.extend_from_slice(&(self.0 as u16).to_le_bytes());
+      }
+      0x1_0000..=0xFFFF_FFFF => {
+        buf.push(0xFE);
+        buf.extend_from_slice(&(self.0 as u32).to_le_bytes());
+      }
+      _ => {
+        buf.push(0xFF);
+        buf.extend_from_slice(&self.0.to_le_bytes());
+      }
+    }
+  }
+}
+
+impl CompactSize {
+  /// Wraps an integer for CompactSize encoding.
+  pub const fn new(value: u64) -> Self {
+    Self(value)
+  }
+
+  /// Decodes a value read as a number rather than a size, such as service
+  /// flags, without the [`MAX_SER_SIZE`] range check.
+  ///
+  /// # Errors
+  ///
+  /// Returns [`DecodeError::Eof`] for truncated input and
+  /// [`DecodeError::NonMinimalCompactSize`] for a non-canonical encoding.
+  pub fn decode_unbounded(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let first = u8::decode(data)?;
     let value = match first {
       0..=0xFC => u64::from(first),
@@ -80,31 +131,6 @@ impl BaseCodec for CompactSize {
       }
     };
     Ok(Self(value))
-  }
-
-  fn encode(&self, buf: &mut impl EncodeBuf) {
-    match self.0 {
-      0..=0xFC => buf.push(self.0 as u8),
-      0xFD..=0xFFFF => {
-        buf.push(0xFD);
-        buf.extend_from_slice(&(self.0 as u16).to_le_bytes());
-      }
-      0x1_0000..=0xFFFF_FFFF => {
-        buf.push(0xFE);
-        buf.extend_from_slice(&(self.0 as u32).to_le_bytes());
-      }
-      _ => {
-        buf.push(0xFF);
-        buf.extend_from_slice(&self.0.to_le_bytes());
-      }
-    }
-  }
-}
-
-impl CompactSize {
-  /// Wraps an integer for CompactSize encoding.
-  pub const fn new(value: u64) -> Self {
-    Self(value)
   }
 
   /// Converts the value to a length no greater than `limit`.
@@ -165,7 +191,10 @@ mod tests {
     assert_eq!(buf, wire, "encoding {value:#x}");
 
     let mut cursor = wire;
-    assert_eq!(CompactSize::decode(&mut cursor).map(|v| v.to_base()), Ok(value));
+    assert_eq!(
+      CompactSize::decode_unbounded(&mut cursor).map(|v| v.to_base()),
+      Ok(value)
+    );
     assert!(cursor.is_empty(), "decode left {} bytes", cursor.len());
   }
 
@@ -186,6 +215,23 @@ mod tests {
   #[case::short_u64(&[0xFF, 0x00, 0x00, 0x00, 0x00])]
   fn rejects_truncated_input(#[case] wire: &[u8]) {
     assert!(matches!(CompactSize::decode(&mut &*wire), Err(DecodeError::Eof { .. })));
+  }
+
+  /// A size above `MAX_SER_SIZE` fails, whatever its encoded width.
+  #[rstest]
+  #[case::at_max(&[0xFE, 0x00, 0x00, 0x00, 0x02], Ok(0x0200_0000))]
+  #[case::above_max(&[0xFE, 0x01, 0x00, 0x00, 0x02], Err(0x0200_0001))]
+  #[case::u32_max(&[0xFE, 0xFF, 0xFF, 0xFF, 0xFF], Err(0xFFFF_FFFF))]
+  #[case::u64(&[0xFF, 0, 0, 0, 0, 0x01, 0, 0, 0], Err(0x1_0000_0000))]
+  fn decode_applies_the_max_size_range_check(#[case] wire: &[u8], #[case] expected: Result<u64, u64>) {
+    let decoded = CompactSize::decode(&mut &*wire).map(|v| v.to_base());
+    let expected = expected.map_err(|value| DecodeError::CompactSizeExceedsLimit {
+      limit: crate::MAX_SER_SIZE,
+      value,
+    });
+    assert_eq!(decoded, expected);
+    // Values read as numbers skip the range check.
+    assert!(CompactSize::decode_unbounded(&mut &*wire).is_ok());
   }
 
   #[rstest]
