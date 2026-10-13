@@ -29,7 +29,7 @@ impl BlsScheme for BlsScIetf {
   type InnerSk = SecretKey;
   type InnerPk = PublicKey;
   type InnerSig = Signature;
-  type Msg = [u8];
+  type Msg<'a> = &'a [u8];
 
   /// Derive via draft-03 keygen.
   fn sk_from_ikm(ikm: &[u8]) -> Result<Self::InnerSk, BlsError> {
@@ -118,17 +118,17 @@ impl BlsScheme for BlsScIetf {
   }
 
   /// Sign with the basic-scheme DST.
-  fn sign(sk: &Self::InnerSk, msg: &Self::Msg) -> Self::InnerSig {
+  fn sign(sk: &Self::InnerSk, msg: Self::Msg<'_>) -> Self::InnerSig {
     sk.sign(msg, DST_BASIC, &[])
   }
 
   /// Verify against the basic-scheme DST.
-  fn verify(sig: &Self::InnerSig, msg: &Self::Msg, pk: &Self::InnerPk) -> Result<(), BlsError> {
+  fn verify(sig: &Self::InnerSig, msg: Self::Msg<'_>, pk: &Self::InnerPk) -> Result<(), BlsError> {
     verify_ok(sig.verify(true, msg, DST_BASIC, &[], pk, true))
   }
 
   /// IETF messages are unsized slices; a fixed array reborrows as one.
-  fn msg_ref(m: &[u8; 32]) -> &Self::Msg {
+  fn msg_ref(m: &[u8; 32]) -> Self::Msg<'_> {
     m
   }
 
@@ -151,14 +151,14 @@ impl BlsScheme for BlsScIetf {
   }
 
   /// Aggregate-verify one shared message against many keys.
-  fn fast_verify_aggregates(sig: &Self::InnerSig, msg: &Self::Msg, pks: &[&Self::InnerPk]) -> Result<(), BlsError> {
+  fn fast_verify_aggregates(sig: &Self::InnerSig, msg: Self::Msg<'_>, pks: &[&Self::InnerPk]) -> Result<(), BlsError> {
     if pks.is_empty() {
       return Err(BlsError::EmptyAggregation);
     }
     verify_ok(sig.fast_aggregate_verify(true, msg, DST_BASIC, pks))
   }
 
-  fn verify_aggregates(sig: &Self::InnerSig, msgs: &[&Self::Msg], pks: &[&Self::InnerPk]) -> Result<(), BlsError> {
+  fn verify_aggregates(sig: &Self::InnerSig, msgs: &[Self::Msg<'_>], pks: &[&Self::InnerPk]) -> Result<(), BlsError> {
     if pks.len() != msgs.len() {
       return Err(BlsError::CountMismatch);
     }

@@ -165,10 +165,7 @@ fn recover_threshold<S: BlsScheme>(bencher: Bencher, threshold: usize) {
 
 /// Aggregate signatures over distinct messages, then verify.
 #[divan::bench(types = [BlsScChia, BlsScIetf], args = [10, 100, 1000])]
-fn verify_aggregated_block<S: BlsScheme>(bencher: Bencher, n: usize)
-where
-  S::Msg: Sync,
-{
+fn verify_aggregated_block<S: BlsScheme>(bencher: Bencher, n: usize) {
   let keys: Vec<_> = (0..n)
     .map(|i| BlsSecretKey::<S>::from_ikm(&test_ikm(i)).unwrap())
     .collect();
@@ -182,7 +179,7 @@ where
   let sig_refs: Vec<&BlsSignature<S>> = sigs.iter().collect();
   let aggregate = BlsSignature::<S>::aggregate(&sig_refs).unwrap();
   let pk_refs: Vec<_> = pks.iter().collect();
-  let msg_refs: Vec<&S::Msg> = msgs.iter().map(|msg| S::msg_ref(msg)).collect();
+  let msg_refs: Vec<S::Msg<'_>> = msgs.iter().map(|msg| S::msg_ref(msg)).collect();
 
   bencher
     .counter(ItemsCount::new(n))

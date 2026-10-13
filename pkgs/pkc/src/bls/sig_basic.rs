@@ -295,7 +295,7 @@ mod tests {
   fn chia_rejects_stray_signature_bits(#[case] index: usize, #[case] mask: u8) {
     let clean = BlsSecretKey::<BlsScChia>::from_ikm(&RSEED[0])
       .unwrap()
-      .sign(&MSG_DEADBEEF)
+      .sign(MSG_DEADBEEF)
       .to_bytes();
 
     let mut mutated = clean;
@@ -384,7 +384,7 @@ mod tests {
   fn signatures_differ_across_schemes() {
     let chia = BlsSecretKey::<BlsScChia>::from_ikm(&RSEED[0]).unwrap();
     let ietf = BlsSecretKey::<BlsScIetf>::from_bytes(&chia.to_bytes()).unwrap();
-    assert_ne!(chia.sign(&MSG_DEADBEEF).to_bytes(), ietf.sign(&MSG_DEADBEEF).to_bytes());
+    assert_ne!(chia.sign(MSG_DEADBEEF).to_bytes(), ietf.sign(&MSG_DEADBEEF).to_bytes());
   }
 
   /// Conversion re-encodes one point, so a round trip returns the original.
@@ -411,7 +411,7 @@ mod tests {
   #[rstest]
   fn sig_scheme_conversion_does_not_move_the_augmentation() {
     let sk = BlsSecretKey::<BlsScChia>::from_ikm(&RSEED[0]).unwrap();
-    let sig = sk.sign(&MSG_DEADBEEF);
+    let sig = sk.sign(MSG_DEADBEEF);
 
     let converted = sig.to_scheme::<BlsScIetf>().unwrap();
     let pk_ietf = sk.public_key().to_scheme::<BlsScIetf>().unwrap();
@@ -437,7 +437,7 @@ mod tests {
       #[rstest]
       fn serde_roundtrip() {
         let chia = BlsSecretKey::<BlsScChia>::from_ikm(&RSEED[0]).unwrap();
-        assert_json_rt(&chia.sign(&MSG_DEADBEEF));
+        assert_json_rt(&chia.sign(MSG_DEADBEEF));
         let ietf = BlsSecretKey::<BlsScIetf>::from_ikm(&RSEED[0]).unwrap();
         assert_json_rt(&ietf.sign(&MSG_DEADBEEF));
       }
@@ -446,7 +446,7 @@ mod tests {
       fn serde_emits_hex_string() {
         let chia = BlsSecretKey::<BlsScChia>::from_ikm(&RSEED[0])
           .unwrap()
-          .sign(&MSG_DEADBEEF);
+          .sign(MSG_DEADBEEF);
         let ietf = BlsSecretKey::<BlsScIetf>::from_ikm(&RSEED[0])
           .unwrap()
           .sign(&MSG_DEADBEEF);

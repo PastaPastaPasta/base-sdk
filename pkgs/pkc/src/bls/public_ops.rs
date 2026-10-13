@@ -127,7 +127,7 @@ impl<S: BlsScheme> BlsPublicKey<S> {
   /// # Errors
   ///
   /// Returns `VerifyFailed` when the pairing check does not hold.
-  pub fn verify(&self, msg: &S::Msg, sig: &BlsSignature<S>) -> Result<(), BlsError> {
+  pub fn verify(&self, msg: S::Msg<'_>, sig: &BlsSignature<S>) -> Result<(), BlsError> {
     S::verify(sig.as_inner(), msg, &self.0)
   }
 

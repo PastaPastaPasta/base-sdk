@@ -53,7 +53,7 @@ pub trait BlsScheme: BlsSchemeId + sealed::Sealed + Sized {
   /// Inner signature representation.
   type InnerSig: Copy + Debug + PartialEq + Eq + Send + Sync;
   /// Message type accepted by signing and verification.
-  type Msg: ?Sized;
+  type Msg<'a>: Copy + Send + Sync;
 
   /// Derive a secret key from input keying material.
   ///
@@ -128,17 +128,17 @@ pub trait BlsScheme: BlsSchemeId + sealed::Sealed + Sized {
   fn g2_to_sig(point: G2) -> Result<Self::InnerSig, BlsError>;
 
   /// Sign a message with the scheme's default augmentation.
-  fn sign(sk: &Self::InnerSk, msg: &Self::Msg) -> Self::InnerSig;
+  fn sign(sk: &Self::InnerSk, msg: Self::Msg<'_>) -> Self::InnerSig;
 
   /// Verify a signature over a message against a public key.
   ///
   /// # Errors
   ///
   /// Returns `VerifyFailed` when the pairing check does not hold.
-  fn verify(sig: &Self::InnerSig, msg: &Self::Msg, pk: &Self::InnerPk) -> Result<(), BlsError>;
+  fn verify(sig: &Self::InnerSig, msg: Self::Msg<'_>, pk: &Self::InnerPk) -> Result<(), BlsError>;
 
-  /// Reborrow a fixed 32-byte message as the scheme's message type.
-  fn msg_ref(m: &[u8; 32]) -> &Self::Msg;
+  /// Convert a fixed 32-byte message to the scheme's message type.
+  fn msg_ref(m: &[u8; 32]) -> Self::Msg<'_>;
 
   /// Compute the Diffie-Hellman shared key `sk * peer_pk`.
   ///
@@ -376,7 +376,7 @@ pub trait BlsScheme: BlsSchemeId + sealed::Sealed + Sized {
   ///
   /// Returns `EmptyAggregation` when no keys are given, or `VerifyFailed`
   /// when the aggregate does not verify.
-  fn fast_verify_aggregates(sig: &Self::InnerSig, msg: &Self::Msg, pks: &[&Self::InnerPk]) -> Result<(), BlsError>;
+  fn fast_verify_aggregates(sig: &Self::InnerSig, msg: Self::Msg<'_>, pks: &[&Self::InnerPk]) -> Result<(), BlsError>;
 
   /// Verify an aggregate carrying one message per signer.
   ///
@@ -385,7 +385,7 @@ pub trait BlsScheme: BlsSchemeId + sealed::Sealed + Sized {
   /// Returns `CountMismatch` when the message and key counts differ,
   /// `EmptyAggregation` when no keys are given, `DuplicateMessage` where the
   /// scheme refuses a repeat, or `VerifyFailed` on mismatch.
-  fn verify_aggregates(sig: &Self::InnerSig, msgs: &[&Self::Msg], pks: &[&Self::InnerPk]) -> Result<(), BlsError>;
+  fn verify_aggregates(sig: &Self::InnerSig, msgs: &[Self::Msg<'_>], pks: &[&Self::InnerPk]) -> Result<(), BlsError>;
 
   /// Decode a sorted input public key from its 48-byte encoding to a G1 point
   /// for secure aggregation.
@@ -430,7 +430,11 @@ pub trait BlsScheme: BlsSchemeId + sealed::Sealed + Sized {
   ///
   /// Returns `EmptyAggregation` when no keys are given, `InvalidPublicKey`
   /// when a key fails to decode, or `VerifyFailed` on mismatch.
-  fn secure_verify_aggregates(sig: &Self::InnerSig, msg: &Self::Msg, pks: &[&Self::InnerPk]) -> Result<(), BlsError> {
+  fn secure_verify_aggregates(
+    sig: &Self::InnerSig,
+    msg: Self::Msg<'_>,
+    pks: &[&Self::InnerPk],
+  ) -> Result<(), BlsError> {
     Self::verify(sig, msg, &Self::secure_aggregate_pk(pks)?)
   }
 

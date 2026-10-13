@@ -130,7 +130,7 @@ impl<S: BlsScheme> BlsSecretKey<S> {
   }
 
   /// Sign a message of the scheme's message type.
-  pub fn sign(&self, msg: &S::Msg) -> BlsSignature<S> {
+  pub fn sign(&self, msg: S::Msg<'_>) -> BlsSignature<S> {
     BlsSignature::from_inner(S::sign(&self.0, msg))
   }
 

@@ -41,7 +41,7 @@ impl<S: BlsScheme> BlsSkShare<S> {
   }
 
   /// Sign a message of the scheme's message type, producing a signature share.
-  pub fn sign(&self, msg: &S::Msg) -> BlsSigShare<S> {
+  pub fn sign(&self, msg: S::Msg<'_>) -> BlsSigShare<S> {
     BlsSigShare {
       id: self.id,
       sig: self.sk.sign(msg),

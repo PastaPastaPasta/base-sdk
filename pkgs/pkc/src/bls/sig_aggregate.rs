@@ -49,7 +49,7 @@ impl<S: BlsScheme> BlsSignature<S> {
   ///
   /// Returns `EmptyAggregation` when no keys are given, or `VerifyFailed` on
   /// mismatch.
-  pub fn fast_verify_aggregates(&self, msg: &S::Msg, pks: &[&BlsPublicKey<S>]) -> Result<(), BlsError> {
+  pub fn fast_verify_aggregates(&self, msg: S::Msg<'_>, pks: &[&BlsPublicKey<S>]) -> Result<(), BlsError> {
     let inner_pks: Vec<&S::InnerPk> = pks.iter().map(|k| &k.0).collect();
     S::fast_verify_aggregates(&self.0, msg, &inner_pks)
   }
@@ -76,7 +76,7 @@ impl<S: BlsScheme> BlsSignature<S> {
   ///
   /// Returns `EmptyAggregation` when no keys are given, `InvalidPublicKey`
   /// when a key fails to decode, or `VerifyFailed` on mismatch.
-  pub fn secure_verify_aggregates(&self, msg: &S::Msg, pks: &[&BlsPublicKey<S>]) -> Result<(), BlsError> {
+  pub fn secure_verify_aggregates(&self, msg: S::Msg<'_>, pks: &[&BlsPublicKey<S>]) -> Result<(), BlsError> {
     let inner_pks: Vec<&S::InnerPk> = pks.iter().map(|k| &k.0).collect();
     S::secure_verify_aggregates(&self.0, msg, &inner_pks)
   }
@@ -90,7 +90,7 @@ impl<S: BlsScheme> BlsSignature<S> {
   /// Returns `CountMismatch` when the message and key counts differ,
   /// `EmptyAggregation` when no keys are given, `DuplicateMessage` where the
   /// scheme refuses a repeat, or `VerifyFailed` on mismatch.
-  pub fn verify_aggregates(&self, msgs: &[&S::Msg], pks: &[&BlsPublicKey<S>]) -> Result<(), BlsError> {
+  pub fn verify_aggregates(&self, msgs: &[S::Msg<'_>], pks: &[&BlsPublicKey<S>]) -> Result<(), BlsError> {
     let inner_pks: Vec<_> = pks.iter().map(|k| &k.0).collect();
     S::verify_aggregates(&self.0, msgs, &inner_pks)
   }
@@ -297,7 +297,7 @@ mod tests {
         .collect();
       let pk_refs: Vec<&BlsPublicKey<S>> = pks.iter().collect();
       let msgs: Vec<[u8; 32]> = v.msgs.iter().map(|m| arr_from_hex(m)).collect();
-      let msg_refs: Vec<&S::Msg> = msgs.iter().map(|m| S::msg_ref(m)).collect();
+      let msg_refs: Vec<S::Msg<'_>> = msgs.iter().map(|m| S::msg_ref(m)).collect();
       let agg = BlsSignature::<S>::from_bytes(&arr_from_hex(&v.agg_sig)).unwrap();
       assert_eq!(agg.to_bytes().to_lower_hex_string(), v.agg_sig);
 
@@ -518,7 +518,7 @@ mod tests {
   #[rstest]
   fn chia_identity_encodes_canonically() {
     let sk = BlsSecretKey::<BlsScChia>::from_ikm(&RSEED[0]).unwrap();
-    let sig = sk.sign(&MSG_8BADFOOD);
+    let sig = sk.sign(MSG_8BADFOOD);
 
     let mut neg_bytes = sig.to_bytes();
     neg_bytes[0] ^= 0x80;
