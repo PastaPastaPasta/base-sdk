@@ -133,6 +133,21 @@ impl CompactSize {
     Ok(Self(value))
   }
 
+  /// Decodes a length or count prefix, range-checked as by
+  /// [`CompactSize::decode`] and bounded by the bytes left after it.
+  ///
+  /// The input bound assumes each element takes at least one byte.
+  ///
+  /// # Errors
+  ///
+  /// Returns [`DecodeError::Eof`] for a value past the remaining input, and
+  /// the errors of [`CompactSize::decode`].
+  pub fn decode_len(data: &mut &[u8]) -> Result<usize, DecodeError> {
+    let len = Self::decode(data)?.into_len(MAX_SER_SIZE)?;
+    crate::codec::ensure(data, len)?;
+    Ok(len)
+  }
+
   /// Converts the value to a length no greater than `limit`.
   ///
   /// # Errors
@@ -232,6 +247,54 @@ mod tests {
     assert_eq!(decoded, expected);
     // Values read as numbers skip the range check.
     assert!(CompactSize::decode_unbounded(&mut &*wire).is_ok());
+  }
+
+  fn prefixed(value: u64, remaining: usize) -> Vec<u8> {
+    let mut buf = Vec::new();
+    CompactSize::new(value).encode(&mut buf);
+    buf.resize(buf.len() + remaining, 0);
+    buf
+  }
+
+  #[rstest]
+  #[case::empty(0, 0)]
+  #[case::exact(4, 4)]
+  #[case::spare(3, 4)]
+  fn decode_len_admits_lengths_within_the_input(#[case] value: u64, #[case] remaining: usize) {
+    let wire = prefixed(value, remaining);
+    let mut cursor = wire.as_slice();
+    assert_eq!(CompactSize::decode_len(&mut cursor), Ok(value as usize));
+    assert_eq!(cursor.len(), remaining, "decode_len consumes only the prefix");
+  }
+
+  #[rstest]
+  #[case::one_past(5, 4)]
+  #[case::empty_input(1, 0)]
+  #[case::max_size(0x0200_0000, 4)]
+  fn decode_len_reports_eof_past_the_input(#[case] value: u64, #[case] remaining: usize) {
+    let wire = prefixed(value, remaining);
+    assert_eq!(
+      CompactSize::decode_len(&mut wire.as_slice()),
+      Err(DecodeError::Eof {
+        needed: value as usize,
+        remaining
+      })
+    );
+  }
+
+  /// The range check runs first, so a prefix above `MAX_SER_SIZE` reports the
+  /// limit even when the input is short.
+  #[rstest]
+  #[case::past_max_size(0x0200_0001)]
+  #[case::u64_max(u64::MAX)]
+  fn decode_len_range_checks_before_the_input_bound(#[case] value: u64) {
+    assert_eq!(
+      CompactSize::decode_len(&mut prefixed(value, 1).as_slice()),
+      Err(DecodeError::CompactSizeExceedsLimit {
+        limit: crate::MAX_SER_SIZE,
+        value,
+      })
+    );
   }
 
   #[rstest]
