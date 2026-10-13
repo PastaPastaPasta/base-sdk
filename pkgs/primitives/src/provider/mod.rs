@@ -13,6 +13,9 @@ mod proupservtx;
 mod sig;
 mod version;
 
+#[cfg(feature = "serde")]
+pub(crate) use self::sig::compact_hex;
+
 pub use self::proregtx::ProRegTx;
 pub use self::proupregtx::ProUpRegTx;
 pub use self::prouprevtx::ProUpRevTx;

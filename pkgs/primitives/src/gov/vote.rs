@@ -12,15 +12,11 @@ use crate::{hash_impl, TxHash};
 
 use bitcoin_hashes::sha256d;
 use dash_num::Hash256;
-use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
-use dash_types::type_id::TypeId;
+use dash_pkc::bls::{BlsSigBytes, BLS_SIG_LEN};
+use dash_pkc::ecdsa::ECDSA_REC_SIG_LEN;
+use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
+use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{enum_map, impl_num, impl_type, ArrayBuf, CompactSize, Hashable, Numeric};
-
-/// Length of a compact ECDSA vote signature.
-const VOTE_COMPACT_SIG_SIZE: usize = 65;
-
-/// Length of a BLS vote signature.
-const VOTE_BLS_SIG_SIZE: usize = 96;
 
 enum_map! {
   /// Governance vote outcome.
@@ -62,17 +58,12 @@ impl_num!(VoteSignal, u32);
 
 hash_impl!(VoteSignal);
 
-/// A governance vote.
-///
-/// ```text
-/// masternode_outpoint(36) || parent_hash(32)
-/// || outcome(u32) || signal(u32) || time(i64)
-/// || sig(CompactSize + bytes)
-/// ```
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+/// A governance vote signed with a masternode's BLS operator key.
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Unencodable)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
-pub struct GovVote {
+// TODO(kwvg): Unify common fields of GovVoteBls and GovVoteEcdsa.
+pub struct GovVoteBls {
   /// Voting masternode outpoint.
   pub masternode_outpoint: OutPoint,
   /// Hash of the governance object being voted on.
@@ -83,9 +74,39 @@ pub struct GovVote {
   pub signal: VoteSignal,
   /// Vote timestamp.
   pub time: i64,
-  /// Signature bytes. Decoding accepts only 65 or 96 bytes.
-  #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::hex"))]
-  pub sig: Vec<u8>,
+  /// Signature bytes, `None` when unsigned.
+  pub sig: Option<BlsSigBytes>,
+}
+
+/// A governance vote signed with a masternode's ECDSA voting key.
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+pub struct GovVoteEcdsa {
+  /// Voting masternode outpoint.
+  pub masternode_outpoint: OutPoint,
+  /// Hash of the governance object being voted on.
+  pub parent_hash: TxHash,
+  /// Vote outcome.
+  pub outcome: VoteOutcome,
+  /// Vote signal type.
+  pub signal: VoteSignal,
+  /// Vote timestamp.
+  pub time: i64,
+  /// Compact recoverable signature, `None` when unsigned.
+  #[cfg_attr(feature = "serde", serde(with = "crate::provider::compact_hex"))]
+  pub sig: Option<[u8; ECDSA_REC_SIG_LEN]>,
+}
+
+/// A governance vote.
+#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(untagged))]
+pub enum GovVote {
+  /// Signed with the BLS operator key.
+  Bls(GovVoteBls),
+  /// Signed with the ECDSA voting key.
+  Ecdsa(GovVoteEcdsa),
 }
 
 impl BaseCodec for GovVote {
@@ -95,31 +116,51 @@ impl BaseCodec for GovVote {
     let outcome = VoteOutcome::decode(data)?;
     let signal = VoteSignal::decode(data)?;
     let time = i64::decode(data)?;
-    let len = CompactSize::decode(data)?.into_len(VOTE_BLS_SIG_SIZE)?;
-    let sig = codec::read_bytes(data, len)?.to_vec();
-    if len != VOTE_COMPACT_SIG_SIZE && len != VOTE_BLS_SIG_SIZE {
-      return Err(DecodeError::BadLen {
-        expected: vec![VOTE_COMPACT_SIG_SIZE, VOTE_BLS_SIG_SIZE],
-        actual: len,
-      });
+    match CompactSize::decode(data)?.into_len(BLS_SIG_LEN)? {
+      BLS_SIG_LEN => Ok(Self::Bls(GovVoteBls {
+        masternode_outpoint,
+        parent_hash,
+        outcome,
+        signal,
+        time,
+        sig: Some(BlsSigBytes::decode(data)?),
+      })),
+      ECDSA_REC_SIG_LEN => Ok(Self::Ecdsa(GovVoteEcdsa {
+        masternode_outpoint,
+        parent_hash,
+        outcome,
+        signal,
+        time,
+        sig: Some(<[u8; ECDSA_REC_SIG_LEN]>::decode(data)?),
+      })),
+      actual => Err(DecodeError::BadLen {
+        expected: vec![ECDSA_REC_SIG_LEN, BLS_SIG_LEN],
+        actual,
+      }),
     }
-    Ok(Self {
-      masternode_outpoint,
-      parent_hash,
-      outcome,
-      signal,
-      time,
-      sig,
-    })
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
-    self.masternode_outpoint.encode(buf);
-    self.parent_hash.encode(buf);
-    self.outcome.encode(buf);
-    self.signal.encode(buf);
-    self.time.encode(buf);
-    self.sig.encode(buf);
+    let (masternode_outpoint, parent_hash, outcome, signal, time) = self.parts();
+    masternode_outpoint.encode(buf);
+    parent_hash.encode(buf);
+    outcome.encode(buf);
+    signal.encode(buf);
+    time.encode(buf);
+    match self {
+      Self::Bls(GovVoteBls { sig: Some(sig), .. }) => {
+        CompactSize::from(BLS_SIG_LEN).encode(buf);
+        sig.encode(buf);
+      }
+      Self::Ecdsa(GovVoteEcdsa { sig: Some(sig), .. }) => {
+        CompactSize::from(ECDSA_REC_SIG_LEN).encode(buf);
+        sig.encode(buf);
+      }
+      // An unsigned vote carries an empty signature.
+      Self::Bls(GovVoteBls { sig: None, .. }) | Self::Ecdsa(GovVoteEcdsa { sig: None, .. }) => {
+        CompactSize::from(0usize).encode(buf);
+      }
+    }
   }
 }
 
@@ -128,29 +169,39 @@ impl_type!(GovVote);
 impl Hashable for GovVote {
   type Hash = Hash256;
 
-  /// Computes the canonical vote hash, including dummy padding after the
-  /// outpoint for legacy compatibility.
+  /// Computes the canonical vote hash.
   fn hash(&self) -> Hash256 {
+    let (masternode_outpoint, parent_hash, outcome, signal, time) = self.parts();
     let mut buf = ArrayBuf::<89>::new();
-    // outpoint + dummy padding for legacy hash compat
-    self.masternode_outpoint.hash.encode(&mut buf);
-    self.masternode_outpoint.index.encode(&mut buf);
+    masternode_outpoint.hash.encode(&mut buf);
+    masternode_outpoint.index.encode(&mut buf);
     0u8.encode(&mut buf);
     0xFFFF_FFFFu32.encode(&mut buf);
-    self.parent_hash.encode(&mut buf);
-    self.signal.encode(&mut buf);
-    self.outcome.encode(&mut buf);
-    self.time.encode(&mut buf);
+    parent_hash.encode(&mut buf);
+    signal.encode(&mut buf);
+    outcome.encode(&mut buf);
+    time.encode(&mut buf);
 
     Hash256::from_lendian(sha256d::Hash::hash(&buf.into_array()).to_byte_array())
   }
 }
 
+impl GovVote {
+  fn parts(&self) -> (&OutPoint, &TxHash, VoteOutcome, VoteSignal, i64) {
+    match self {
+      Self::Bls(v) => (&v.masternode_outpoint, &v.parent_hash, v.outcome, v.signal, v.time),
+      Self::Ecdsa(v) => (&v.masternode_outpoint, &v.parent_hash, v.outcome, v.signal, v.time),
+    }
+  }
+}
+
 #[cfg(all(test, feature = "serde"))]
+#[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
 
   use dash_dev::{assert_serde_rt, check_wire, Corpus};
+  use dash_pkc::ecdsa::EcdsaRecSigBytes;
   use rstest::rstest;
 
   #[rstest]
@@ -175,8 +226,8 @@ mod tests {
     })
   }
 
-  /// The signature length is capped at 96 before the read, and only 65 or 96
-  /// bytes are accepted after it.
+  /// The signature length is capped at 96 and checked for 65 or 96 before the
+  /// bytes are read.
   #[rstest]
   #[case::empty(0, bad_len(0))]
   #[case::short_compact(64, bad_len(64))]
@@ -194,5 +245,28 @@ mod tests {
       vote.encode(&mut buf);
       assert_eq!(buf, wire);
     }
+  }
+
+  #[rstest]
+  #[case::ecdsa(65, true)]
+  #[case::bls(96, false)]
+  fn vote_variant_follows_signature_length(#[case] sig_len: usize, #[case] ecdsa: bool) {
+    let vote = GovVote::decode(&mut vote_wire(sig_len).as_slice()).unwrap();
+    assert_eq!(matches!(vote, GovVote::Ecdsa(_)), ecdsa);
+  }
+
+  #[rstest]
+  fn ecdsa_vote_masks_the_header() {
+    let mut wire = vote_wire(65);
+    wire[85] = 0;
+    let vote = GovVote::decode(&mut wire.as_slice()).unwrap();
+    let flags = match &vote {
+      GovVote::Ecdsa(GovVoteEcdsa { sig: Some(sig), .. }) => {
+        let rec = EcdsaRecSigBytes::from_bytes_mask(*sig);
+        Some((rec.recovery_id(), rec.is_compressed()))
+      }
+      GovVote::Ecdsa(_) | GovVote::Bls(_) => None,
+    };
+    assert_eq!(flags, Some((1, true)));
   }
 }
