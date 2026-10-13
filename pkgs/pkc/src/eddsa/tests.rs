@@ -50,5 +50,5 @@ pub fn bob_sk() -> EddsaSecretKey {
 
 #[fixture]
 pub fn alice_sig() -> EddsaSignature {
-  alice_sk().sign(MSG)
+  alice_sk().sign_message(MSG)
 }

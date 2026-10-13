@@ -64,8 +64,8 @@ extensions:
       - ["Ecdsa", "PublicKey", "recover"]                 # Get public key from a signature
       # Ed25519
       # Signing
-      - ["Eddsa", "SecretKey", "sign"]                    # Sign a message of any length
-      - ["Eddsa", "PublicKey", "verify"]                  # Verify a message of any length
+      - ["Eddsa", "SecretKey", "sign_message"]            # Sign a message of any length
+      - ["Eddsa", "PublicKey", "verify_message"]          # Verify a message of any length
   - addsTo:
       pack: base-sdk/codeql-rust
       extensible: armLacks
