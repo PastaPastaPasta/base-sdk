@@ -8,7 +8,7 @@
 
 use super::proregtx::check_platform_fields;
 use crate::codec::impl_payload;
-use crate::payload::PlatformNodeId;
+use crate::provider::PlatformNodeId;
 use crate::sptx::{
   check_sptx_netinfo, InputsHash, MnType, ProTxInvalid, PROTX_VERSION_BASIC_BLS, PROTX_VERSION_EXT_ADDR,
 };

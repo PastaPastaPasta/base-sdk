@@ -10,20 +10,10 @@ mod assetlock;
 mod assetunlock;
 mod cbtx;
 mod mnhftx;
-mod proregtx;
-mod proupregtx;
-mod prouprevtx;
-mod proupservtx;
 mod quorum;
 
-pub use self::assetlock::{AssetLock, AssetLockInvalid};
-pub use self::assetunlock::{AssetUnlock, AssetUnlockInvalid};
-pub use self::cbtx::{CbTxInvalid, CoinbaseCommitment};
-pub use self::mnhftx::{MnHardFork, MnHardForkInvalid, VERSIONBITS_NUM_BITS};
-pub use self::proregtx::ProRegTx;
-pub use self::proupregtx::ProUpRegTx;
-pub use self::prouprevtx::ProUpRevTx;
-pub use self::proupservtx::ProUpServTx;
-pub use self::quorum::{Commitment, CommitmentInvalid, FinalCommitment, QuorumVvecHash};
-
-pub use dash_pkc::__private::__EddsaPkHash as PlatformNodeId;
+pub use assetlock::{AssetLock, AssetLockInvalid};
+pub use assetunlock::{AssetUnlock, AssetUnlockInvalid};
+pub use cbtx::{CbTxInvalid, CoinbaseCommitment};
+pub use mnhftx::{MnHardFork, MnHardForkInvalid, VERSIONBITS_NUM_BITS};
+pub use quorum::{Commitment, CommitmentInvalid, FinalCommitment, QuorumVvecHash};

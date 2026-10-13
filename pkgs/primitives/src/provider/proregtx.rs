@@ -7,8 +7,8 @@
 //! ProRegTx registration payload (type 1).
 
 use crate::codec::impl_payload;
-use crate::payload::PlatformNodeId;
 use crate::prelude::*;
+use crate::provider::PlatformNodeId;
 use crate::sptx::{
   check_sptx_netinfo, InputsHash, MnType, ProTxInvalid, MAX_OPERATOR_REWARD, PROTX_VERSION_BASIC_BLS,
   PROTX_VERSION_EXT_ADDR,

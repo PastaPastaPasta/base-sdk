@@ -9,9 +9,10 @@
 use crate::hash_impl;
 use crate::payload::{
   AssetLock, AssetLockInvalid, AssetUnlock, AssetUnlockInvalid, CbTxInvalid, CoinbaseCommitment, CommitmentInvalid,
-  FinalCommitment, MnHardFork, MnHardForkInvalid, ProRegTx, ProUpRegTx, ProUpRevTx, ProUpServTx,
+  FinalCommitment, MnHardFork, MnHardForkInvalid,
 };
 use crate::prelude::*;
+use crate::provider::{ProRegTx, ProUpRegTx, ProUpRevTx, ProUpServTx};
 use crate::types::{NIError, NIPurpose, NITrait, NetInfoV2};
 
 use dash_num::make_hash;
