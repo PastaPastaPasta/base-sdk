@@ -282,8 +282,9 @@ impl<T: BaseCodec> BaseCodec for Vec<T> {
     let mut allocated = 0usize;
     for _ in 0..count {
       if items.len() == allocated {
+        // `reserve` may grow the capacity past the batch.
         allocated = count.min(allocated + batch);
-        items.reserve(allocated - items.len());
+        items.reserve_exact(allocated - items.len());
       }
       items.push(T::decode(data)?);
     }
