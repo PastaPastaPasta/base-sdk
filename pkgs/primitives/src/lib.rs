@@ -19,6 +19,7 @@ mod payload;
 #[allow(unused_imports, reason = "ergonomic shim, exports may be unused")]
 mod prelude;
 mod provider;
+mod sign;
 mod sptx;
 mod support;
 mod transaction;
@@ -40,6 +41,7 @@ pub use codec::MAX_SPTX_PAYLOAD_SIZE;
 pub use gov::*;
 pub use payload::*;
 pub use provider::*;
+pub use sign::MESSAGE_MAGIC;
 pub use sptx::*;
 pub use support::{DynBitset, DynBitsetIterator, LlmqType, RevocationReason};
 pub use transaction::{

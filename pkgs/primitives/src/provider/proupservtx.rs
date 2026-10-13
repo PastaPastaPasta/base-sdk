@@ -7,16 +7,20 @@
 //! ProUpServTx service-update payload (type 2).
 
 use super::proregtx::check_platform_fields;
+use super::sig::verify_operator;
 use super::{OperatorSig, ProTxVersion};
 use crate::codec::impl_payload;
+use crate::prelude::*;
 use crate::provider::PlatformNodeId;
+use crate::sign::unsigned_digest;
 use crate::sptx::{check_sptx_netinfo, InputsHash, MnType, ProTxInvalid};
 use crate::types::{NITrait, NetInfo, NetInfoV1, NetInfoV2, ServiceV1};
 use crate::{hash_impl, TxHash};
 
 use bitcoin_primitives::script::ScriptPubKeyBuf;
+use dash_pkc::bls::{BlsError, BlsPkBytes, BlsSigBytes, BLS_SIG_LEN};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
-use dash_types::{type_id::TypeId, Checkable, Numeric};
+use dash_types::{type_id::TypeId, Checkable, Numeric, Signable};
 
 use core::fmt;
 
@@ -123,6 +127,32 @@ impl BaseCodec for ProUpServTx {
       }
     }
     self.sig.encode(buf);
+  }
+}
+
+impl Signable for ProUpServTx {
+  type Key = BlsPkBytes;
+  type Context = ();
+  type Error = BlsError;
+
+  fn payload(&self, _ctx: &()) -> Vec<u8> {
+    unsigned_digest(self, &self.sig).to_vec()
+  }
+
+  fn set_signature(&mut self, sig: &[u8], key: &BlsPkBytes, _ctx: &()) -> Result<(), BlsError> {
+    let sig = <[u8; BLS_SIG_LEN]>::try_from(sig).map_err(|_| BlsError::InvalidSignature)?;
+    let sig = OperatorSig::new(BlsSigBytes::from_bytes(sig));
+    verify_operator(self.version, &self.payload(&()), &sig, key)?;
+    self.sig = sig;
+    Ok(())
+  }
+
+  fn reset_signature(&mut self) {
+    self.sig = OperatorSig::default();
+  }
+
+  fn verify(&self, key: &BlsPkBytes, _ctx: &()) -> Option<BlsError> {
+    verify_operator(self.version, &self.payload(&()), &self.sig, key).err()
   }
 }
 

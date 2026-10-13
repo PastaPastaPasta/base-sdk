@@ -6,11 +6,13 @@
 
 //! Provider transaction signatures.
 
+use super::ProTxVersion;
 use crate::prelude::*;
+use crate::sign::verify_bls;
 
 use bitcoin_hashes::sha256d;
 use dash_num::Hash256;
-use dash_pkc::bls::{BlsSigBytes, BLS_SIG_LEN};
+use dash_pkc::bls::{BlsError, BlsPkBytes, BlsScChia, BlsScIetf, BlsSigBytes, BLS_SIG_LEN};
 use dash_pkc::ecdsa::ECDSA_REC_SIG_LEN;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 #[cfg(feature = "serde")]
@@ -64,6 +66,20 @@ pub(crate) mod compact_hex {
   }
 }
 
+/// Checks an operator signature over `digest` under the scheme `version` sets.
+pub(crate) fn verify_operator(
+  version: ProTxVersion,
+  digest: &[u8],
+  sig: &OperatorSig,
+  key: &BlsPkBytes,
+) -> Result<(), BlsError> {
+  if version == ProTxVersion::LegacyBls {
+    verify_bls::<BlsScChia>(digest, sig.as_bytes(), key)
+  } else {
+    verify_bls::<BlsScIetf>(digest, sig.as_bytes(), key)
+  }
+}
+
 /// Collateral owner signature, empty when the collateral is spent.
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(
@@ -92,6 +108,10 @@ impl Hashable for CollateralSig {
 }
 
 impl CollateralSig {
+  pub(crate) fn new(sig: [u8; ECDSA_REC_SIG_LEN]) -> Self {
+    Self(Some(sig))
+  }
+
   /// Borrows the signature, `None` when unsigned.
   pub fn as_bytes(&self) -> Option<&[u8; ECDSA_REC_SIG_LEN]> {
     self.0.as_ref()
@@ -126,6 +146,10 @@ impl Hashable for OwnerSig {
 }
 
 impl OwnerSig {
+  pub(crate) fn new(sig: [u8; ECDSA_REC_SIG_LEN]) -> Self {
+    Self(Some(sig))
+  }
+
   /// Borrows the signature, `None` when unsigned.
   pub fn as_bytes(&self) -> Option<&[u8; ECDSA_REC_SIG_LEN]> {
     self.0.as_ref()
@@ -160,6 +184,10 @@ impl Hashable for OperatorSig {
 }
 
 impl OperatorSig {
+  pub(crate) fn new(bytes: BlsSigBytes) -> Self {
+    Self(bytes)
+  }
+
   /// Borrows the signature bytes.
   pub fn as_bytes(&self) -> &BlsSigBytes {
     &self.0
@@ -169,5 +197,48 @@ impl OperatorSig {
 impl Default for OperatorSig {
   fn default() -> Self {
     Self(BlsSigBytes::from_bytes([0; BLS_SIG_LEN]))
+  }
+}
+
+#[cfg(test)]
+#[expect(clippy::unwrap_used, reason = "test code")]
+mod tests {
+  use super::*;
+  use crate::sign::tests::bls_sign;
+
+  use rstest::rstest;
+
+  /// Any header byte survives a decode and encode round trip.
+  #[rstest]
+  #[case::canonical(0x1F)]
+  #[case::below_range(0x00)]
+  #[case::above_range(0xAB)]
+  fn compact_keeps_the_header(#[case] header: u8) {
+    let mut wire = vec![65; 66];
+    wire[1] = header;
+    let sig = OwnerSig::decode(&mut wire.as_slice()).unwrap();
+    let mut buf = Vec::new();
+    sig.encode(&mut buf);
+    assert_eq!(buf, wire);
+  }
+
+  #[rstest]
+  #[case::legacy_bls(ProTxVersion::LegacyBls, true)]
+  #[case::basic_bls(ProTxVersion::BasicBls, false)]
+  #[case::ext_addr(ProTxVersion::ExtAddr, false)]
+  fn operator_scheme_follows_the_version(#[case] version: ProTxVersion, #[case] legacy: bool) {
+    let (legacy_key, legacy_sig) = bls_sign::<BlsScChia>(1, &[7; 32]);
+    let (basic_key, basic_sig) = bls_sign::<BlsScIetf>(1, &[7; 32]);
+    let legacy_sig = OperatorSig::new(BlsSigBytes::from_bytes(legacy_sig));
+    let basic_sig = OperatorSig::new(BlsSigBytes::from_bytes(basic_sig));
+
+    assert_eq!(
+      verify_operator(version, &[7; 32], &legacy_sig, &legacy_key).is_ok(),
+      legacy
+    );
+    assert_eq!(
+      verify_operator(version, &[7; 32], &basic_sig, &basic_key).is_ok(),
+      !legacy
+    );
   }
 }

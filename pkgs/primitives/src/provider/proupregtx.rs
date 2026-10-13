@@ -8,14 +8,17 @@
 
 use super::{OwnerSig, ProTxVersion};
 use crate::codec::codec_payload;
+use crate::prelude::*;
+use crate::sign::{unsigned_digest, verify_compact};
 use crate::sptx::{InputsHash, ProTxInvalid};
 use crate::TxHash;
 
 use bitcoin_primitives::script::ScriptPubKeyBuf;
 use dash_pkc::bls::BlsPkBytes;
+use dash_pkc::ecdsa::{EcdsaError, ECDSA_REC_SIG_LEN};
 use dash_script::{PubKeyHash, Recipient};
 use dash_types::type_id::TypeId;
-use dash_types::Checkable;
+use dash_types::{Checkable, Signable};
 
 use core::fmt;
 
@@ -55,6 +58,32 @@ codec_payload!(ProUpRegTx {
   inputs_hash,
   vch_sig,
 });
+
+impl Signable for ProUpRegTx {
+  type Key = PubKeyHash;
+  type Context = ();
+  type Error = EcdsaError;
+
+  fn payload(&self, _ctx: &()) -> Vec<u8> {
+    unsigned_digest(self, &self.vch_sig).to_vec()
+  }
+
+  fn set_signature(&mut self, sig: &[u8], key: &PubKeyHash, _ctx: &()) -> Result<(), EcdsaError> {
+    let sig = <[u8; ECDSA_REC_SIG_LEN]>::try_from(sig).map_err(|_| EcdsaError::InvalidSignature)?;
+    verify_compact(&self.payload(&()), &sig, key)?;
+    self.vch_sig = OwnerSig::new(sig);
+    Ok(())
+  }
+
+  fn reset_signature(&mut self) {
+    self.vch_sig = OwnerSig::default();
+  }
+
+  fn verify(&self, key: &PubKeyHash, _ctx: &()) -> Option<EcdsaError> {
+    let sig = self.vch_sig.as_bytes().ok_or(EcdsaError::InvalidSignature);
+    sig.and_then(|sig| verify_compact(&self.payload(&()), sig, key)).err()
+  }
+}
 
 impl Checkable for ProUpRegTx {
   type Error = ProTxInvalid;

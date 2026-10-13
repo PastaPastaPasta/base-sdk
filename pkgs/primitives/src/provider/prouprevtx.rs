@@ -6,14 +6,18 @@
 
 //! ProUpRevTx revocation payload (type 4).
 
+use super::sig::verify_operator;
 use super::{OperatorSig, ProTxVersion};
 use crate::codec::codec_payload;
+use crate::prelude::*;
+use crate::sign::unsigned_digest;
 use crate::sptx::{InputsHash, ProTxInvalid};
 use crate::support::RevocationReason;
 use crate::TxHash;
 
+use dash_pkc::bls::{BlsError, BlsPkBytes, BlsSigBytes, BLS_SIG_LEN};
 use dash_types::type_id::TypeId;
-use dash_types::Checkable;
+use dash_types::{Checkable, Signable};
 
 use core::fmt;
 
@@ -44,6 +48,32 @@ codec_payload!(ProUpRevTx {
   inputs_hash,
   sig,
 });
+
+impl Signable for ProUpRevTx {
+  type Key = BlsPkBytes;
+  type Context = ();
+  type Error = BlsError;
+
+  fn payload(&self, _ctx: &()) -> Vec<u8> {
+    unsigned_digest(self, &self.sig).to_vec()
+  }
+
+  fn set_signature(&mut self, sig: &[u8], key: &BlsPkBytes, _ctx: &()) -> Result<(), BlsError> {
+    let sig = <[u8; BLS_SIG_LEN]>::try_from(sig).map_err(|_| BlsError::InvalidSignature)?;
+    let sig = OperatorSig::new(BlsSigBytes::from_bytes(sig));
+    verify_operator(self.version, &self.payload(&()), &sig, key)?;
+    self.sig = sig;
+    Ok(())
+  }
+
+  fn reset_signature(&mut self) {
+    self.sig = OperatorSig::default();
+  }
+
+  fn verify(&self, key: &BlsPkBytes, _ctx: &()) -> Option<BlsError> {
+    verify_operator(self.version, &self.payload(&()), &self.sig, key).err()
+  }
+}
 
 impl Checkable for ProUpRevTx {
   type Error = ProTxInvalid;

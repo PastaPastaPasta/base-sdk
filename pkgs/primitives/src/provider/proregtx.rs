@@ -8,17 +8,22 @@
 
 use super::{CollateralSig, ProTxVersion};
 use crate::codec::impl_payload;
+use crate::prelude::*;
 use crate::provider::PlatformNodeId;
+use crate::sign::{message_digest, unsigned_digest, verify_compact};
 use crate::sptx::{check_sptx_netinfo, InputsHash, MnType, ProTxInvalid, MAX_OPERATOR_REWARD};
 use crate::types::{NITrait, NetInfo, NetInfoV1, NetInfoV2, ServiceV1};
 use crate::{hash_impl, TxHash};
 
 use bitcoin_primitives::script::ScriptPubKeyBuf;
+use dash_num::Hash256;
 use dash_pkc::bls::BlsPkBytes;
-use dash_script::{PubKeyHash, Recipient};
+use dash_pkc::ecdsa::{EcdsaError, ECDSA_REC_SIG_LEN};
+use dash_script::{AddrParams, PubKeyHash, Recipient};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
-use dash_types::{Checkable, Numeric};
+use dash_types::{Checkable, Numeric, Signable};
+use hex_conservative::DisplayHex;
 
 use core::fmt;
 
@@ -172,6 +177,43 @@ impl BaseCodec for ProRegTx {
       }
     }
     self.vch_sig.encode(buf);
+  }
+}
+
+impl Signable for ProRegTx {
+  type Key = PubKeyHash;
+  type Context = AddrParams;
+  type Error = EcdsaError;
+
+  fn payload(&self, ctx: &AddrParams) -> Vec<u8> {
+    let payout = self.script_payout.as_bytes();
+    let payout = Recipient::from_script(payout)
+      .and_then(|r| r.to_base58c(ctx))
+      .unwrap_or_else(|| payout.to_lower_hex_string());
+    let msg = format!(
+      "{payout}|{}|{}|{}|{}",
+      self.operator_reward,
+      self.key_id_owner.to_base58c(ctx.pubkey_addr),
+      self.key_id_voting.to_base58c(ctx.pubkey_addr),
+      Hash256::from_lendian(unsigned_digest(self, &self.vch_sig)),
+    );
+    message_digest(msg.as_bytes()).to_vec()
+  }
+
+  fn set_signature(&mut self, sig: &[u8], key: &PubKeyHash, ctx: &AddrParams) -> Result<(), EcdsaError> {
+    let sig = <[u8; ECDSA_REC_SIG_LEN]>::try_from(sig).map_err(|_| EcdsaError::InvalidSignature)?;
+    verify_compact(&self.payload(ctx), &sig, key)?;
+    self.vch_sig = CollateralSig::new(sig);
+    Ok(())
+  }
+
+  fn reset_signature(&mut self) {
+    self.vch_sig = CollateralSig::default();
+  }
+
+  fn verify(&self, key: &PubKeyHash, ctx: &AddrParams) -> Option<EcdsaError> {
+    let sig = self.vch_sig.as_bytes().ok_or(EcdsaError::InvalidSignature);
+    sig.and_then(|sig| verify_compact(&self.payload(ctx), sig, key)).err()
   }
 }
 
