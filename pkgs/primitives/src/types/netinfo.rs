@@ -142,7 +142,7 @@ impl BaseCodec for NIEntry {
     match NIEntryCode::from_base(u8::decode(data)?) {
       NIEntryCode::Service => Ok(Self::Service(ServiceV2::decode(data)?)),
       NIEntryCode::Domain => {
-        let name_len = CompactSize::decode_len(data)?;
+        let name_len = CompactSize::decode(data)?.into_len(DOMAIN_MAX)?;
         let name = codec::read_bytes(data, name_len)?.to_vec();
         let port = codec::read_u16_be(data)?;
         Ok(Self::Domain { name, port })
@@ -776,6 +776,23 @@ mod tests {
       port,
     };
     assert_eq!(entry.check(), expected);
+  }
+
+  fn domain_wire(len: usize) -> Vec<u8> {
+    let mut wire = Vec::new();
+    NIEntry::Domain {
+      name: vec![b'a'; len],
+      port: 443,
+    }
+    .encode(&mut wire);
+    wire
+  }
+
+  #[rstest]
+  #[case::at_limit(DOMAIN_MAX, Ok(NIEntry::Domain { name: vec![b'a'; DOMAIN_MAX], port: 443 }))]
+  #[case::past_limit(DOMAIN_MAX + 1, Err(DecodeError::CompactSizeExceedsLimit { limit: DOMAIN_MAX, value: 254 }))]
+  fn nientry_domain_decodes_at_most_253_bytes(#[case] len: usize, #[case] expected: Result<NIEntry, DecodeError>) {
+    assert_eq!(NIEntry::decode(&mut domain_wire(len).as_slice()), expected);
   }
 
   #[rstest]
