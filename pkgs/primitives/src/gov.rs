@@ -13,9 +13,9 @@ use crate::{codec_base, hash_impl, TxHash};
 use bitcoin_hashes::sha256d;
 use bitcoin_units::Amount;
 use dash_num::Hash256;
-use dash_types::codec::BaseCodec;
+use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{enum_map, impl_num, ArrayBuf, Checkable, Hashable, Numeric};
+use dash_types::{enum_map, impl_num, impl_type, ArrayBuf, Checkable, CompactSize, Hashable, Numeric};
 use hex_conservative::DisplayHex;
 
 /// Maximum allowed name length for governance proposals.
@@ -26,6 +26,12 @@ const MIN_URL_LEN: usize = 4;
 
 /// Allowed characters in governance proposal names.
 const PROPOSAL_NAME_CHARS: &[u8] = b"-_abcdefghijklmnopqrstuvwxyz0123456789";
+
+/// Length of a compact ECDSA vote signature.
+const VOTE_COMPACT_SIG_SIZE: usize = 65;
+
+/// Length of a BLS vote signature.
+const VOTE_BLS_SIG_SIZE: usize = 96;
 
 enum_map! {
   /// Governance object type codes.
@@ -254,19 +260,47 @@ pub struct GovVote {
   pub signal: VoteSignal,
   /// Vote timestamp.
   pub time: i64,
-  /// Signature bytes.
+  /// Signature bytes. Decoding accepts only 65 or 96 bytes.
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::hex"))]
   pub sig: Vec<u8>,
 }
 
-codec_base!(GovVote {
-  masternode_outpoint,
-  parent_hash,
-  outcome,
-  signal,
-  time,
-  sig,
-});
+impl BaseCodec for GovVote {
+  fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
+    let masternode_outpoint = OutPoint::decode(data)?;
+    let parent_hash = TxHash::decode(data)?;
+    let outcome = VoteOutcome::decode(data)?;
+    let signal = VoteSignal::decode(data)?;
+    let time = i64::decode(data)?;
+    let len = CompactSize::decode(data)?.into_len(VOTE_BLS_SIG_SIZE)?;
+    let sig = codec::read_bytes(data, len)?.to_vec();
+    if len != VOTE_COMPACT_SIG_SIZE && len != VOTE_BLS_SIG_SIZE {
+      return Err(DecodeError::BadLen {
+        expected: vec![VOTE_COMPACT_SIG_SIZE, VOTE_BLS_SIG_SIZE],
+        actual: len,
+      });
+    }
+    Ok(Self {
+      masternode_outpoint,
+      parent_hash,
+      outcome,
+      signal,
+      time,
+      sig,
+    })
+  }
+
+  fn encode(&self, buf: &mut impl EncodeBuf) {
+    self.masternode_outpoint.encode(buf);
+    self.parent_hash.encode(buf);
+    self.outcome.encode(buf);
+    self.signal.encode(buf);
+    self.time.encode(buf);
+    self.sig.encode(buf);
+  }
+}
+
+impl_type!(GovVote);
 
 impl Hashable for GovVote {
   type Hash = Hash256;
@@ -366,6 +400,42 @@ mod tests {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "govobjvote");
     let items = corpus.entries::<GovVote>("govobjvote", check_wire);
     assert_serde_rt("govobjvote", &items);
+  }
+
+  /// A vote of 84 zero bytes before the signature, then `sig_len` bytes.
+  fn vote_wire(sig_len: usize) -> Vec<u8> {
+    let mut wire = vec![0; 84];
+    CompactSize::from(sig_len).encode(&mut wire);
+    wire.resize(wire.len() + sig_len, 0xAB);
+    wire
+  }
+
+  fn bad_len(actual: usize) -> Result<(), DecodeError> {
+    Err(DecodeError::BadLen {
+      expected: vec![65, 96],
+      actual,
+    })
+  }
+
+  /// The signature length is capped at 96 before the read, and only 65 or 96
+  /// bytes are accepted after it.
+  #[rstest]
+  #[case::empty(0, bad_len(0))]
+  #[case::short_compact(64, bad_len(64))]
+  #[case::compact(65, Ok(()))]
+  #[case::long_compact(66, bad_len(66))]
+  #[case::short_bls(95, bad_len(95))]
+  #[case::bls(96, Ok(()))]
+  #[case::past_bls(97, Err(DecodeError::CompactSizeExceedsLimit { limit: 96, value: 97 }))]
+  fn vote_signatures_decode_at_65_or_96_bytes(#[case] len: usize, #[case] expected: Result<(), DecodeError>) {
+    let wire = vote_wire(len);
+    let decoded = GovVote::decode(&mut wire.as_slice());
+    assert_eq!(decoded.clone().map(|_| ()), expected);
+    if let Ok(vote) = decoded {
+      let mut buf = Vec::new();
+      vote.encode(&mut buf);
+      assert_eq!(buf, wire);
+    }
   }
 
   #[rstest]

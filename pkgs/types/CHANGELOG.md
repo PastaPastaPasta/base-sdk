@@ -14,10 +14,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `ParseHexError` is moved from `dash-num`, superseding `dash_num::ParseHexError`.
 - `serialize::hex::serialize_as` and `serialize::hex::deserialize_as`, to permit caller-defined handling of
   human-readable encoding while sharing common machine-readable encoding.
+- `CompactSize::decode_unbounded`, which decodes a value read as a number rather than a size, such as service flags,
+  without the `MAX_SER_SIZE` range check.
+- `CompactSize::decode_len`, which decodes a length or count prefix range-checked as by `CompactSize::decode` and
+  bounded by the remaining input.
 
 ### Changed
 
 - **The minimum supported Rust version is raised from 1.85 to 1.89.**
+- **Decoding a `CompactSize` rejects a value above `MAX_SER_SIZE`.** Callers reading a value as a number rather than a
+  size must switch to `CompactSize::decode_unbounded`.
 - `{derive,make}_bytes!`-defined types serialize as their raw storage bytes for machine-readable formats. JSON and
   other human-readable formats retain hex in storage order for `fwd` and in reverse storage order for `rev`.
 - `derive_bytes!` emits `From<[u8; N]>` in place of `impl_bytes!`, and `make_sbytes!` emits the implementation itself.
@@ -35,6 +41,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `Vec<u8>` as the fixed return type must now mention it explicitly.
 - `serialize::str_u64` writes a native `u64` to machine-readable formats. `str_u64` is a workaround for number-precision
   limitations in JSON and is now contained only for human-readable formats.
+- Decoding `Vec<T>`, `String` and script buffers reports a length prefix past the remaining input as
+  `DecodeError::Eof` rather than as `CompactSizeExceedsLimit`.
+- Decoding `Vec<T>` reserves each batch exactly rather than growing its capacity geometrically past the batch.
 
 ### Removed
 
@@ -42,6 +51,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Decoding `Vec<T>`, `String` and script buffers rejects a length prefix above `MAX_SER_SIZE` even when enough bytes
+  remain.
 - `serialize::utf8_lossy`'s serializer and deserializer arms were not in sync, writing valid UTF-8 as a string for
   machine-readable formats but expecting byte buffers when reading, failing round trips. This has since been resolved.
 

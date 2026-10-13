@@ -276,14 +276,15 @@ impl<const N: usize> BaseCodec for [u8; N] {
 
 impl<T: BaseCodec> BaseCodec for Vec<T> {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let count = CompactSize::decode(data)?.into_len(data.len())?;
+    let count = CompactSize::decode_len(data)?;
     let batch = MAX_VECTOR_ALLOCATE / core::mem::size_of::<T>().max(1);
     let mut items = Vec::new();
     let mut allocated = 0usize;
     for _ in 0..count {
       if items.len() == allocated {
+        // `reserve` may grow the capacity past the batch.
         allocated = count.min(allocated + batch);
-        items.reserve(allocated - items.len());
+        items.reserve_exact(allocated - items.len());
       }
       items.push(T::decode(data)?);
     }

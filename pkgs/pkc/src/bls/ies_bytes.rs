@@ -48,7 +48,7 @@ impl<S: BlsSchemeId> BaseCodec for BlsIesBlobBytes<S> {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let ephemeral_pk = BlsPkBytes::<S>::decode(data)?;
     let iv_seed = <[u8; IV_SEED_LEN]>::decode(data)?;
-    let len = CompactSize::decode(data)?.into_len(data.len())?;
+    let len = CompactSize::decode_len(data)?;
     Ok(Self {
       ephemeral_pk,
       iv_seed,
@@ -182,10 +182,10 @@ impl<S: BlsSchemeId> BaseCodec for BlsIesMultiBytes<S> {
 
     // Each element is a `Vec` far wider than the length prefix that admitted it
     // so capacity is grown against content, not reserved.
-    let count = CompactSize::decode(data)?.into_len(data.len())?;
+    let count = CompactSize::decode_len(data)?;
     let mut blobs = Vec::new();
     for _ in 0..count {
-      let len = CompactSize::decode(data)?.into_len(data.len())?;
+      let len = CompactSize::decode_len(data)?;
       blobs.push(read_bytes(data, len)?.to_vec());
     }
 

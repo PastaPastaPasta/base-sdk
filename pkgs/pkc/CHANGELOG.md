@@ -32,6 +32,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   their wire image and implement `Serialize` and `Deserialize` only with both features. Callers that relied on `serde`
   to enable `codec` must enable it explicitly.
 
+### Fixed
+
+- Decoding `BlsIes{Blob,Multi}Bytes`, and so `BlsIes{Blob,Multi}`, rejects a ciphertext length, blob count or blob
+  length above `MAX_SER_SIZE` even when enough bytes remain, and reports one past the remaining input as
+  `DecodeError::Eof`.
+
 ## [0.1.0-beta] - 2026-09-15
 
 - Initial release.
