@@ -33,6 +33,22 @@
         ],
         "agg_sig_secure": "997f0a7f76ac7f09e1eb40e3483823214f2af15d76881be732b29faa95d3f6b92d143ff9ed11225d09a2b9b3d36f058201ed6ea66c8dc2a4f1a3e557c850f5a9441500bf78bd4f06bbfe3301fa1cac1bd0dbc37b10e828f17ce6bf8113ca3496"
       }
+    ],
+    // Sourced from the pre-1.0 Chia bls-signatures "Test vectors 1"
+    // https://github.com/Chia-Network/bls-signatures/blob/0.1.15/src/test.cpp#L31-L70
+    "verify_message": [
+      {
+        "msg": "070809",
+        "pks": [
+          "02a8d2aaa6a5e2e08d4b8d406aaf0121a2fc2088ed12431e6b0663028da9ac5922c9ea91cde7dd74b7d795580acc7a61",
+          "83fbcbbfa6b7a5a0e707efaa9e6de258a79a59116dd889ce74f1ab7f54c9b7ba15439dcb4acfbdd8bcffdd8825795b90"
+        ],
+        "sigs": [
+          "93eb2e1cb5efcfb31f2c08b235e8203a67265bc6a13d9f0ab77727293b74a357ff0459ac210dc851fcb8a60cb7d393a419915cfcf83908ddbeac32039aaa3e8fea82efcb3ba4f740f20c76df5e97109b57370ae32d9b70d256a98942e5806065",
+          "975b5daa64b915be19b5ac6d47bc1c2fc832d2fb8ca3e95c4805d8216f95cf2bdbb36cc23645f52040e381550727db420b523b57d494959e0e8c0c6060c46cf173872897f14d43b2ac2aec52fc7b46c02c5699ff7a10beba24d3ced4e89c821e"
+        ],
+        "agg_sig_secure": "0a638495c1403b25be391ed44c0ab013390026b5892c796a85ede46310ff7d0e0671f86ebe0e8f56bee80f28eb6d999c0a418c5fc52debac8fc338784cd32b76338d629dc2b4045a5833a357809795ef55ee3e9bee532edfc1d9c443bf5bc658"
+      }
     ]
   },
   "ietf": {

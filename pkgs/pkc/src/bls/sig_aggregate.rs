@@ -143,7 +143,7 @@ mod tests {
   use crate::bls::tests::{MSG_8BADFOOD, MSG_DEADBEEF, RSEED};
   use crate::bls::{BlsScChia, BlsScIetf};
 
-  use dash_dev::{arr_from_hex, Corpus};
+  use dash_dev::{arr_from_hex, vec_from_hex, Corpus};
   use hex_conservative::DisplayHex;
   use rstest::rstest;
   use serde::Deserialize;
@@ -356,6 +356,57 @@ mod tests {
   #[case::ietf(assert_aggregate_verify_matches_vectors::<BlsScIetf>, "ietf")]
   fn aggregate_verify_matches_vectors(#[case] assertion: fn(&str), #[case] scheme: &str) {
     assertion(scheme);
+  }
+
+  fn assert_aggregate_verify_messages_matches_vectors<S: BlsScheme>(scheme: &str) {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "bls_aggregate").scope(scheme);
+    let vecs: Vec<AggVerifyVec> = corpus.vectors("verify_message");
+    assert!(!vecs.is_empty(), "corpus section is empty");
+
+    for v in &vecs {
+      let pks: Vec<BlsPublicKey<S>> = v
+        .pks
+        .iter()
+        .map(|pk| BlsPublicKey::from_bytes(&arr_from_hex(pk)).unwrap())
+        .collect();
+      let pk_refs: Vec<&BlsPublicKey<S>> = pks.iter().collect();
+      let msgs: Vec<Vec<u8>> = v.msgs.iter().map(|m| vec_from_hex(m)).collect();
+      let msg_refs: Vec<&[u8]> = msgs.iter().map(Vec::as_slice).collect();
+      let agg = BlsSignature::<S>::from_bytes(&arr_from_hex(&v.agg_sig)).unwrap();
+
+      assert_eq!(
+        agg.verify_aggregates_messages(&msg_refs, &pk_refs).is_ok(),
+        v.accepted,
+        "reference verdict for {} signers",
+        v.pks.len()
+      );
+    }
+  }
+
+  #[rstest]
+  #[case::chia(assert_aggregate_verify_messages_matches_vectors::<BlsScChia>, "chia")]
+  #[case::ietf(assert_aggregate_verify_messages_matches_vectors::<BlsScIetf>, "ietf")]
+  fn aggregate_verify_messages_matches_vectors(#[case] assertion: fn(&str), #[case] scheme: &str) {
+    assertion(scheme);
+  }
+
+  #[rstest]
+  fn chia_secure_verify_message_matches_vectors() {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "bls_secure_aggregate").scope("chia");
+    let vecs: Vec<SecureVec> = corpus.vectors("verify_message");
+    assert!(!vecs.is_empty(), "corpus section is empty");
+
+    for v in &vecs {
+      let pks: Vec<BlsPublicKey<BlsScChia>> = v
+        .pks
+        .iter()
+        .map(|pk| BlsPublicKey::from_bytes(&arr_from_hex(pk)).unwrap())
+        .collect();
+      let pk_refs: Vec<&BlsPublicKey<BlsScChia>> = pks.iter().collect();
+      let agg = BlsSignature::<BlsScChia>::from_bytes(&arr_from_hex(&v.agg_sig_secure)).unwrap();
+      let msg = vec_from_hex(&v.msg);
+      assert!(agg.secure_verify_aggregates_message(&msg, &pk_refs).is_ok());
+    }
   }
 
   /// The weighted aggregate is what the weighted verify accepts, and the

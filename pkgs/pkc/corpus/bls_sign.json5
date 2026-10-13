@@ -76,6 +76,20 @@
         "msg": "89da2bd31a5d008c84323c9693f12f09e62a75a688a55f2a6fd24660afba5660",
         "sig": "19be390038905c59e0f077543c533b48f10acdd108d3ce465814c4769bb5e9e8e14bf17cc0c4b166ffaff118d0bfca9c15051c7ad6899bd6a8caee92ebf3dec66cc14b23cc711731d6724a1632b1b59634ef093555319473c0a571d345aa7222"
       }
+    ],
+    // Sourced from the pre-1.0 Chia bls-signatures "Test vectors 1"
+    // https://github.com/Chia-Network/bls-signatures/blob/0.1.15/src/test.cpp#L31-L62
+    "sign_message": [
+      {
+        "sk": "022fb42c08c12de3a6af053880199806532e79515f94e83461612101f9412f9e",
+        "msg": "070809",
+        "sig": "93eb2e1cb5efcfb31f2c08b235e8203a67265bc6a13d9f0ab77727293b74a357ff0459ac210dc851fcb8a60cb7d393a419915cfcf83908ddbeac32039aaa3e8fea82efcb3ba4f740f20c76df5e97109b57370ae32d9b70d256a98942e5806065"
+      },
+      {
+        "sk": "502c5661f5af46ed48ddc3b5332e21b93cc7d0a84df46c4b9c7fe8f25ef48d66",
+        "msg": "070809",
+        "sig": "975b5daa64b915be19b5ac6d47bc1c2fc832d2fb8ca3e95c4805d8216f95cf2bdbb36cc23645f52040e381550727db420b523b57d494959e0e8c0c6060c46cf173872897f14d43b2ac2aec52fc7b46c02c5699ff7a10beba24d3ced4e89c821e"
+      }
     ]
   },
   "ietf": {
@@ -154,6 +168,27 @@
         "sk": "0505050505050505050505050505050505050505050505050505050505050505",
         "msg": "89da2bd31a5d008c84323c9693f12f09e62a75a688a55f2a6fd24660afba5660",
         "sig": "8f5a40343477eb971a927dfa0030275f4e5be43a2ed0c14d3151b5f1d17a06bc85ef4b4ac282fe5e24ab645d6fff987e0d9e0df61712f25b18dac293ebee960f622dd4267b95f42fe17052a5e4f6349295adf4ad49aa27e05fd62ee414a94be1"
+      }
+    ],
+    // Sourced from dashbls "Pyecc vector", a py_ecc basic scheme signature.
+    // https://github.com/dashpay/bls-signatures/blob/1.3.5/src/test.cpp#L320-L331
+    "sign_message": [
+      {
+        "sk": "0101010101010101010101010101010101010101010101010101010101010101",
+        "msg": "030104010509",
+        "sig": "96ba34fac33c7f129d602a0bc8a3d43f9abc014eceaab7359146b4b150e57b808645738f35671e9e10e0d862a30cab70074eb5831d13e6a5b162d01eebe687d0164adbd0a864370a7c222a2768d7704da254f1bf1823665bc2361f9dd8c00e99"
+      },
+      // Sourced from the dashbls basic scheme KAT, whose second key derives from 32 bytes of 0x01 and is pinned upstream only by fingerprint b839add1.
+      // https://github.com/dashpay/bls-signatures/blob/1.3.5/src/test.cpp#L336-L402
+      {
+        "sk": "4a353be3dac091a0a7e640620372f5e1e2e4401717c1e79cac6ffba8f6905604",
+        "msg": "070809",
+        "sig": "b8faa6d6a3881c9fdbad803b170d70ca5cbf1e6ba5a586262df368c75acd1d1ffa3ab6ee21c71f844494659878f5eb230c958dd576b08b8564aad2ee0992e85a1e565f299cd53a285de729937f70dc176a1f01432129bb2b94d3d5031f8065a1"
+      },
+      {
+        "sk": "6fc9d9a2b05fd1f0e51bc91041a03be8657081f272ec281aff731624f0d1c220",
+        "msg": "0a0b0c",
+        "sig": "a9c4d3e689b82c7ec7e838dac2380cb014f9a08f6cd6ba044c263746e39a8f7a60ffee4afb78f146c2e421360784d58f0029491e3bd8ab84f0011d258471ba4e87059de295d9aba845c044ee83f6cf2411efd379ef38bf4cf41d5f3c0ae1205d"
       }
     ]
   }

@@ -142,7 +142,7 @@ mod tests {
   use crate::prelude::*;
 
   use cfg_if::cfg_if;
-  use dash_dev::{arr_from_hex, Corpus};
+  use dash_dev::{arr_from_hex, vec_from_hex, Corpus};
   use hex_conservative::DisplayHex;
   use rstest::rstest;
   use serde::Deserialize;
@@ -375,6 +375,27 @@ mod tests {
   #[case::chia(assert_signing_matches_vectors::<BlsScChia>, "chia")]
   #[case::ietf(assert_signing_matches_vectors::<BlsScIetf>, "ietf")]
   fn signing_matches_vectors(#[case] assertion: fn(&str), #[case] scheme: &str) {
+    assertion(scheme);
+  }
+
+  fn assert_message_signing_matches_vectors<S: BlsScheme>(scheme: &str) {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "bls_sign").scope(scheme);
+    let vecs: Vec<SignVec> = corpus.vectors("sign_message");
+    assert!(!vecs.is_empty(), "corpus section is empty");
+
+    for v in &vecs {
+      let sk = BlsSecretKey::<S>::from_bytes(&arr_from_hex(&v.sk)).unwrap();
+      let msg = vec_from_hex(&v.msg);
+      let sig = sk.sign_message(&msg);
+      assert_eq!(sig.to_bytes().to_lower_hex_string(), v.sig);
+      assert!(sk.public_key().verify_message(&msg, &sig).is_ok());
+    }
+  }
+
+  #[rstest]
+  #[case::chia(assert_message_signing_matches_vectors::<BlsScChia>, "chia")]
+  #[case::ietf(assert_message_signing_matches_vectors::<BlsScIetf>, "ietf")]
+  fn message_signing_matches_vectors(#[case] assertion: fn(&str), #[case] scheme: &str) {
     assertion(scheme);
   }
 
