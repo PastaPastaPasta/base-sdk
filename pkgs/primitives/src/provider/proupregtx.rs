@@ -6,9 +6,8 @@
 
 //! ProUpRegTx registrar-update payload (type 3).
 
-use super::ProTxVersion;
+use super::{OwnerSig, ProTxVersion};
 use crate::codec::codec_payload;
-use crate::prelude::*;
 use crate::sptx::{InputsHash, ProTxInvalid};
 use crate::TxHash;
 
@@ -42,9 +41,8 @@ pub struct ProUpRegTx {
   pub script_payout: ScriptPubKeyBuf,
   /// Hash of all inputs.
   pub inputs_hash: InputsHash,
-  /// Owner ECDSA signature (variable-length).
-  #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::hex"))]
-  pub vch_sig: Vec<u8>,
+  /// Owner ECDSA signature.
+  pub vch_sig: OwnerSig,
 }
 
 codec_payload!(ProUpRegTx {

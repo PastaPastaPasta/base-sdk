@@ -6,13 +6,12 @@
 
 //! ProUpRevTx revocation payload (type 4).
 
-use super::ProTxVersion;
+use super::{OperatorSig, ProTxVersion};
 use crate::codec::codec_payload;
 use crate::sptx::{InputsHash, ProTxInvalid};
 use crate::support::RevocationReason;
 use crate::TxHash;
 
-use dash_pkc::bls::BlsSigBytes;
 use dash_types::type_id::TypeId;
 use dash_types::Checkable;
 
@@ -35,7 +34,7 @@ pub struct ProUpRevTx {
   /// Hash of all inputs.
   pub inputs_hash: InputsHash,
   /// Operator BLS signature.
-  pub sig: BlsSigBytes,
+  pub sig: OperatorSig,
 }
 
 codec_payload!(ProUpRevTx {

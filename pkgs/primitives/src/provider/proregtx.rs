@@ -6,9 +6,8 @@
 
 //! ProRegTx registration payload (type 1).
 
-use super::ProTxVersion;
+use super::{CollateralSig, ProTxVersion};
 use crate::codec::impl_payload;
-use crate::prelude::*;
 use crate::provider::PlatformNodeId;
 use crate::sptx::{check_sptx_netinfo, InputsHash, MnType, ProTxInvalid, MAX_OPERATOR_REWARD};
 use crate::types::{NITrait, NetInfo, NetInfoV1, NetInfoV2, ServiceV1};
@@ -64,9 +63,8 @@ pub struct ProRegTx {
   /// Platform HTTP port (Evo + version < 3 only).
   #[cfg_attr(feature = "serde", serde(rename = "platformHTTPPort"))]
   pub platform_http_port: Option<u16>,
-  /// Owner ECDSA signature (variable-length).
-  #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::hex"))]
-  pub vch_sig: Vec<u8>,
+  /// Collateral owner ECDSA signature.
+  pub vch_sig: CollateralSig,
 }
 
 impl_payload!(ProRegTx);
@@ -141,7 +139,7 @@ impl BaseCodec for ProRegTx {
       platform_node_id,
       platform_p2p_port,
       platform_http_port,
-      vch_sig: Vec::decode(data)?,
+      vch_sig: CollateralSig::decode(data)?,
     })
   }
 
