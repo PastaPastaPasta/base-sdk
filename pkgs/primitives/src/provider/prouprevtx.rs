@@ -6,6 +6,7 @@
 
 //! ProUpRevTx revocation payload (type 4).
 
+use super::ProTxVersion;
 use crate::codec::codec_payload;
 use crate::sptx::{InputsHash, ProTxInvalid};
 use crate::support::RevocationReason;
@@ -25,8 +26,8 @@ use core::fmt;
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ProUpRevTx {
-  /// 1=LegacyBLS, 2=BasicBLS.
-  pub version: u16,
+  /// Payload version.
+  pub version: ProTxVersion,
   /// ProTx hash identifying the masternode.
   pub pro_tx_hash: TxHash,
   /// Revocation reason.
@@ -49,10 +50,6 @@ impl Checkable for ProUpRevTx {
   type Error = ProTxInvalid;
 
   fn check(&self) -> Option<Self::Error> {
-    if self.version == 0 {
-      return Some(ProTxInvalid::BadVersion { version: self.version });
-    }
-
     if matches!(self.reason, RevocationReason::Unknown(_)) {
       return Some(ProTxInvalid::BadReason { reason: self.reason });
     }
@@ -63,7 +60,7 @@ impl Checkable for ProUpRevTx {
 
 impl fmt::Display for ProUpRevTx {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "ProUpRevTx {{ v{} }}", self.version)
+    write!(f, "ProUpRevTx {{ v{} }}", self.version.to_base())
   }
 }
 

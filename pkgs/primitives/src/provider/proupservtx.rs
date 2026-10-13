@@ -7,11 +7,10 @@
 //! ProUpServTx service-update payload (type 2).
 
 use super::proregtx::check_platform_fields;
+use super::ProTxVersion;
 use crate::codec::impl_payload;
 use crate::provider::PlatformNodeId;
-use crate::sptx::{
-  check_sptx_netinfo, InputsHash, MnType, ProTxInvalid, PROTX_VERSION_BASIC_BLS, PROTX_VERSION_EXT_ADDR,
-};
+use crate::sptx::{check_sptx_netinfo, InputsHash, MnType, ProTxInvalid};
 use crate::types::{NITrait, NetInfo, NetInfoV1, NetInfoV2, ServiceV1};
 use crate::{hash_impl, TxHash};
 
@@ -31,8 +30,8 @@ use core::fmt;
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ProUpServTx {
-  /// 1=LegacyBLS, 2=BasicBLS, 3=ExtAddr.
-  pub version: u16,
+  /// Payload version.
+  pub version: ProTxVersion,
   /// v2+ only; defaults to Regular for v1.
   pub mn_type: MnType,
   /// ProTx hash identifying the masternode.
@@ -59,16 +58,16 @@ impl_payload!(ProUpServTx);
 
 impl BaseCodec for ProUpServTx {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let version = u16::decode(data)?;
+    let version = ProTxVersion::decode(data)?;
 
-    let mn_type = if version >= 2 {
+    let mn_type = if version >= ProTxVersion::BasicBls {
       MnType::from_base(u16::decode(data)?)
     } else {
       MnType::Regular
     };
 
     let pro_tx_hash = TxHash::decode(data)?;
-    let net_info = if version >= 3 {
+    let net_info = if version >= ProTxVersion::ExtAddr {
       NetInfo::Extended(NetInfoV2::decode(data)?)
     } else {
       NetInfo::Legacy(NetInfoV1(ServiceV1::decode(data)?))
@@ -77,7 +76,7 @@ impl BaseCodec for ProUpServTx {
     let inputs_hash = InputsHash::decode(data)?;
     let (platform_node_id, platform_p2p_port, platform_http_port) = if mn_type == MnType::Evo {
       let node_id = PlatformNodeId::decode(data)?;
-      if version < 3 {
+      if version < ProTxVersion::ExtAddr {
         (Some(node_id), Some(u16::decode(data)?), Some(u16::decode(data)?))
       } else {
         (Some(node_id), None, None)
@@ -102,13 +101,13 @@ impl BaseCodec for ProUpServTx {
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
     self.version.encode(buf);
-    if self.version >= 2 {
+    if self.version >= ProTxVersion::BasicBls {
       self.mn_type.to_base().encode(buf);
     }
     self.pro_tx_hash.encode(buf);
     // Branch on version to match the decode path. Validation
     // guarantees the variant matches the version.
-    if self.version >= 3 {
+    if self.version >= ProTxVersion::ExtAddr {
       if let NetInfo::Extended(ext) = &self.net_info {
         ext.encode(buf);
       }
@@ -119,7 +118,7 @@ impl BaseCodec for ProUpServTx {
     self.inputs_hash.encode(buf);
     if self.mn_type == MnType::Evo {
       self.platform_node_id.unwrap_or_default().encode(buf);
-      if self.version < 3 {
+      if self.version < ProTxVersion::ExtAddr {
         self.platform_p2p_port.unwrap_or(0).encode(buf);
         self.platform_http_port.unwrap_or(0).encode(buf);
       }
@@ -132,20 +131,16 @@ impl Checkable for ProUpServTx {
   type Error = ProTxInvalid;
 
   fn check(&self) -> Option<Self::Error> {
-    if self.version == 0 {
-      return Some(ProTxInvalid::BadVersion { version: self.version });
-    }
-
     if matches!(self.mn_type, MnType::Unknown(_)) {
       return Some(ProTxInvalid::BadMnType { mn_type: self.mn_type });
     }
 
-    if self.mn_type == MnType::Evo && self.version < PROTX_VERSION_BASIC_BLS {
+    if self.mn_type == MnType::Evo && self.version < ProTxVersion::BasicBls {
       return Some(ProTxInvalid::EvoVersionTooLow { version: self.version });
     }
 
     let is_extended = matches!(self.net_info, NetInfo::Extended(_));
-    if is_extended != (self.version >= PROTX_VERSION_EXT_ADDR) {
+    if is_extended != (self.version >= ProTxVersion::ExtAddr) {
       return Some(ProTxInvalid::NetInfoVersionMismatch);
     }
 
@@ -183,7 +178,12 @@ hash_impl!(ProUpServTx);
 
 impl fmt::Display for ProUpServTx {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "ProUpServTx {{ v{}, mn_type: {} }}", self.version, self.mn_type,)
+    write!(
+      f,
+      "ProUpServTx {{ v{}, mn_type: {} }}",
+      self.version.to_base(),
+      self.mn_type,
+    )
   }
 }
 

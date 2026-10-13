@@ -6,6 +6,7 @@
 
 //! ProUpRegTx registrar-update payload (type 3).
 
+use super::ProTxVersion;
 use crate::codec::codec_payload;
 use crate::prelude::*;
 use crate::sptx::{InputsHash, ProTxInvalid};
@@ -27,8 +28,8 @@ use core::fmt;
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ProUpRegTx {
-  /// 1=LegacyBLS, 2=BasicBLS.
-  pub version: u16,
+  /// Payload version.
+  pub version: ProTxVersion,
   /// ProTx hash identifying the masternode.
   pub pro_tx_hash: TxHash,
   /// Reserved, always 0.
@@ -61,10 +62,6 @@ impl Checkable for ProUpRegTx {
   type Error = ProTxInvalid;
 
   fn check(&self) -> Option<Self::Error> {
-    if self.version == 0 {
-      return Some(ProTxInvalid::BadVersion { version: self.version });
-    }
-
     if self.mode != 0 {
       return Some(ProTxInvalid::BadMode { mode: self.mode });
     }
@@ -90,7 +87,7 @@ impl Checkable for ProUpRegTx {
 
 impl fmt::Display for ProUpRegTx {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "ProUpRegTx {{ v{} }}", self.version)
+    write!(f, "ProUpRegTx {{ v{} }}", self.version.to_base())
   }
 }
 

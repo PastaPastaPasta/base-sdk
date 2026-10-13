@@ -6,13 +6,11 @@
 
 //! ProRegTx registration payload (type 1).
 
+use super::ProTxVersion;
 use crate::codec::impl_payload;
 use crate::prelude::*;
 use crate::provider::PlatformNodeId;
-use crate::sptx::{
-  check_sptx_netinfo, InputsHash, MnType, ProTxInvalid, MAX_OPERATOR_REWARD, PROTX_VERSION_BASIC_BLS,
-  PROTX_VERSION_EXT_ADDR,
-};
+use crate::sptx::{check_sptx_netinfo, InputsHash, MnType, ProTxInvalid, MAX_OPERATOR_REWARD};
 use crate::types::{NITrait, NetInfo, NetInfoV1, NetInfoV2, ServiceV1};
 use crate::{hash_impl, TxHash};
 
@@ -34,8 +32,8 @@ use core::fmt;
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ProRegTx {
-  /// 1=LegacyBLS, 2=BasicBLS, 3=ExtAddr.
-  pub version: u16,
+  /// Payload version.
+  pub version: ProTxVersion,
   /// Masternode type (Regular or Evo).
   pub mn_type: MnType,
   /// Reserved, always 0.
@@ -76,7 +74,7 @@ impl_payload!(ProRegTx);
 /// Checks that platform fields are consistent with mn_type and version.
 pub(super) fn check_platform_fields(
   mn_type: MnType,
-  version: u16,
+  version: ProTxVersion,
   platform_node_id: &Option<PlatformNodeId>,
   platform_p2p_port: Option<u16>,
   platform_http_port: Option<u16>,
@@ -85,7 +83,7 @@ pub(super) fn check_platform_fields(
     if platform_node_id.is_none() {
       return Some(ProTxInvalid::BadPlatformFields);
     }
-    if version < PROTX_VERSION_EXT_ADDR {
+    if version < ProTxVersion::ExtAddr {
       if platform_p2p_port.is_none() || platform_http_port.is_none() {
         return Some(ProTxInvalid::BadPlatformFields);
       }
@@ -100,12 +98,12 @@ pub(super) fn check_platform_fields(
 
 impl BaseCodec for ProRegTx {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let version = u16::decode(data)?;
+    let version = ProTxVersion::decode(data)?;
     let mn_type = MnType::from_base(u16::decode(data)?);
     let mode = u16::decode(data)?;
     let collateral_hash = TxHash::decode(data)?;
     let collateral_index = u32::decode(data)?;
-    let net_info = if version >= 3 {
+    let net_info = if version >= ProTxVersion::ExtAddr {
       NetInfo::Extended(NetInfoV2::decode(data)?)
     } else {
       NetInfo::Legacy(NetInfoV1(ServiceV1::decode(data)?))
@@ -118,7 +116,7 @@ impl BaseCodec for ProRegTx {
     let inputs_hash = InputsHash::decode(data)?;
     let (platform_node_id, platform_p2p_port, platform_http_port) = if mn_type == MnType::Evo {
       let node_id = PlatformNodeId::decode(data)?;
-      if version < 3 {
+      if version < ProTxVersion::ExtAddr {
         (Some(node_id), Some(u16::decode(data)?), Some(u16::decode(data)?))
       } else {
         (Some(node_id), None, None)
@@ -155,7 +153,7 @@ impl BaseCodec for ProRegTx {
     self.collateral_index.encode(buf);
     // Branch on version to match the decode path. Validation
     // guarantees the variant matches the version.
-    if self.version >= 3 {
+    if self.version >= ProTxVersion::ExtAddr {
       if let NetInfo::Extended(ext) = &self.net_info {
         ext.encode(buf);
       }
@@ -170,7 +168,7 @@ impl BaseCodec for ProRegTx {
     self.inputs_hash.encode(buf);
     if self.mn_type == MnType::Evo {
       self.platform_node_id.unwrap_or_default().encode(buf);
-      if self.version < 3 {
+      if self.version < ProTxVersion::ExtAddr {
         self.platform_p2p_port.unwrap_or(0).encode(buf);
         self.platform_http_port.unwrap_or(0).encode(buf);
       }
@@ -183,11 +181,7 @@ impl Checkable for ProRegTx {
   type Error = ProTxInvalid;
 
   fn check(&self) -> Option<Self::Error> {
-    if self.version == 0 {
-      return Some(ProTxInvalid::BadVersion { version: self.version });
-    }
-
-    if self.mn_type == MnType::Evo && self.version < PROTX_VERSION_BASIC_BLS {
+    if self.mn_type == MnType::Evo && self.version < ProTxVersion::BasicBls {
       return Some(ProTxInvalid::EvoVersionTooLow { version: self.version });
     }
     if matches!(self.mn_type, MnType::Unknown(_)) {
@@ -212,7 +206,7 @@ impl Checkable for ProRegTx {
     }
 
     let is_extended = matches!(self.net_info, NetInfo::Extended(_));
-    if is_extended != (self.version >= PROTX_VERSION_EXT_ADDR) {
+    if is_extended != (self.version >= ProTxVersion::ExtAddr) {
       return Some(ProTxInvalid::NetInfoVersionMismatch);
     }
 
@@ -261,7 +255,12 @@ hash_impl!(ProRegTx);
 
 impl fmt::Display for ProRegTx {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "ProRegTx {{ v{}, mn_type: {} }}", self.version, self.mn_type)
+    write!(
+      f,
+      "ProRegTx {{ v{}, mn_type: {} }}",
+      self.version.to_base(),
+      self.mn_type
+    )
   }
 }
 

@@ -12,7 +12,7 @@ use crate::payload::{
   FinalCommitment, MnHardFork, MnHardForkInvalid,
 };
 use crate::prelude::*;
-use crate::provider::{ProRegTx, ProUpRegTx, ProUpRevTx, ProUpServTx};
+use crate::provider::{ProRegTx, ProTxVersion, ProUpRegTx, ProUpRevTx, ProUpServTx};
 use crate::types::{NIError, NIPurpose, NITrait, NetInfoV2};
 
 use dash_num::make_hash;
@@ -21,16 +21,6 @@ use dash_types::{enum_map, impl_num, Checkable};
 
 /// Maximum operator reward in basis points.
 pub(crate) const MAX_OPERATOR_REWARD: u16 = 10_000;
-
-/// ProTx version: legacy BLS operator keys (v1).
-#[expect(unused, reason = "consensus constant")]
-pub(crate) const PROTX_VERSION_LEGACY_BLS: u16 = 1;
-
-/// ProTx version: basic (IETF) BLS operator keys (v2).
-pub(crate) const PROTX_VERSION_BASIC_BLS: u16 = 2;
-
-/// ProTx version: extended network addresses (v3).
-pub(crate) const PROTX_VERSION_EXT_ADDR: u16 = 3;
 
 make_hash! {
   /// LLMQ quorum identifier.
@@ -95,12 +85,9 @@ hash_impl!(MnType);
 /// Provider transaction validation failure.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, thiserror::Error, Unencodable)]
 pub enum ProTxInvalid {
-  /// `bad-protx-version`
-  #[error("bad-protx-version: {version}")]
-  BadVersion { version: u16 },
   /// `bad-protx-evo-version`
   #[error("bad-protx-evo-version: {version}")]
-  EvoVersionTooLow { version: u16 },
+  EvoVersionTooLow { version: ProTxVersion },
   /// `bad-protx-type`
   #[error("bad-protx-type: {mn_type}")]
   BadMnType { mn_type: MnType },
@@ -143,7 +130,7 @@ pub enum ProTxInvalid {
 }
 
 /// Checks that an extended net info payload is trivially valid.
-pub(crate) fn check_sptx_netinfo(ext: &NetInfoV2, version: u16, mn_type: MnType) -> Option<ProTxInvalid> {
+pub(crate) fn check_sptx_netinfo(ext: &NetInfoV2, version: ProTxVersion, mn_type: MnType) -> Option<ProTxInvalid> {
   if let Some(error) = ext.check() {
     return Some(ProTxInvalid::NetInfoInvalid { error });
   }
@@ -157,7 +144,7 @@ pub(crate) fn check_sptx_netinfo(ext: &NetInfoV2, version: u16, mn_type: MnType)
       error: NIError::Malformed,
     });
   }
-  if version >= PROTX_VERSION_EXT_ADDR
+  if version >= ProTxVersion::ExtAddr
     && mn_type == MnType::Evo
     && (!ext.has_entries(NIPurpose::PlatformP2p) || !ext.has_entries(NIPurpose::PlatformHttps))
   {
