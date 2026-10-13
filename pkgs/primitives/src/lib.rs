@@ -18,6 +18,7 @@ mod gov;
 mod payload;
 #[allow(unused_imports, reason = "ergonomic shim, exports may be unused")]
 mod prelude;
+mod sptx;
 mod support;
 mod transaction;
 mod types;
@@ -36,12 +37,8 @@ pub use block::{
 };
 pub use codec::MAX_SPTX_PAYLOAD_SIZE;
 pub use gov::*;
-pub use payload::{
-  AssetLock, AssetLockInvalid, AssetUnlock, AssetUnlockInvalid, CbTxInvalid, CoinbaseCommitment, Commitment,
-  CommitmentInvalid, FinalCommitment, InputsHash, MnHardFork, MnHardForkInvalid, MnType, PayloadError, PayloadInvalid,
-  PlatformNodeId, ProRegTx, ProTxInvalid, ProUpRegTx, ProUpRevTx, ProUpServTx, QuorumHash, QuorumVvecHash,
-  SpecialPayload, TxType, VERSIONBITS_NUM_BITS,
-};
+pub use payload::*;
+pub use sptx::*;
 pub use support::{DynBitset, DynBitsetIterator, LlmqType, RevocationReason};
 pub use transaction::{
   OutPoint, Transaction, TxHash, TxIn, TxInvalid, TxOut, MAX_COINBASE_SCRIPT_SIZE, MAX_TX_EXTRA_PAYLOAD,

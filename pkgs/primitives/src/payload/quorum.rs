@@ -6,9 +6,9 @@
 
 //! LLMQ final commitment payload (type 6).
 
-use super::QuorumHash;
 use crate::codec::impl_payload;
 use crate::hash_impl;
+use crate::sptx::QuorumHash;
 use crate::support::{DynBitset, LlmqType};
 
 use dash_num::make_hash;

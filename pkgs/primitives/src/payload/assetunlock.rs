@@ -6,8 +6,8 @@
 
 //! AssetUnlock (type 9): Platform to L1.
 
-use super::QuorumHash;
 use crate::codec::codec_payload;
+use crate::sptx::QuorumHash;
 
 use dash_pkc::bls::BlsSigBytes;
 use dash_types::type_id::{TypeId, Unencodable};

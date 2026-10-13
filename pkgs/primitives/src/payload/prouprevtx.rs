@@ -6,8 +6,8 @@
 
 //! ProUpRevTx revocation payload (type 4).
 
-use super::{InputsHash, ProTxInvalid};
 use crate::codec::codec_payload;
+use crate::sptx::{InputsHash, ProTxInvalid};
 use crate::support::RevocationReason;
 use crate::TxHash;
 

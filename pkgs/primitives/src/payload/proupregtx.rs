@@ -6,9 +6,9 @@
 
 //! ProUpRegTx registrar-update payload (type 3).
 
-use super::{InputsHash, ProTxInvalid};
 use crate::codec::codec_payload;
 use crate::prelude::*;
+use crate::sptx::{InputsHash, ProTxInvalid};
 use crate::TxHash;
 
 use bitcoin_primitives::script::ScriptPubKeyBuf;
