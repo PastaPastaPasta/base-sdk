@@ -22,7 +22,7 @@ pub use public_bytes::{EcdsaPkBytes, ECDSA_PK_LEN};
 pub use public_hash::EcdsaPkHash;
 pub use secret_bytes::{EcdsaSkBytes, ECDSA_SK_LEN};
 pub use sig_bytes::{EcdsaSigBytes, ECDSA_SIG_LEN};
-pub use sig_rec_bytes::EcdsaRecSigBytes;
+pub use sig_rec_bytes::{EcdsaRecSigBytes, ECDSA_REC_SIG_LEN};
 
 /// Whether a key's public counterpart serializes in compressed (33-byte) or
 /// uncompressed (65-byte) SEC1 form.
