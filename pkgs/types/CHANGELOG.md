@@ -18,6 +18,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   without the `MAX_SER_SIZE` range check.
 - `CompactSize::decode_len`, which decodes a length or count prefix range-checked as by `CompactSize::decode` and
   bounded by the remaining input.
+- `Signable`, a trait for consensus types that hold a signature. `Signable::payload` returns the 32-byte digest the
+  key signs, `Signable::set_signature` stores a signature only if it verifies against the supplied key and
+  `Signable::reset_signature` removes it.
 
 ### Changed
 
