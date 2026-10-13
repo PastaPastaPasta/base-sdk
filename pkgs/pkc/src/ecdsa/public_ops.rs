@@ -249,18 +249,22 @@ impl EcdsaPublicKey {
   /// Verify a signature over a 32-byte prehashed message.
   ///
   /// Accepts anything that can view itself as a plain signature, so a
-  /// recoverable signature verifies without an explicit downcast. High-S
-  /// signatures are rejected, the underlying curve primitive checks `s`
-  /// before the curve arithmetic runs.
+  /// recoverable signature verifies without an explicit downcast.
+  ///
+  /// A high-S signature verifies like its low-S twin. Callers refusing
+  /// malleable signatures check [`EcdsaSignature::is_low_s`].
   ///
   /// # Errors
   ///
   /// Returns [`EcdsaError::VerifyFailed`] when the signature does not verify
   /// against this key and message.
   pub fn verify_digest(&self, msg_hash: &[u8; 32], sig: impl AsRef<EcdsaSignature>) -> Result<(), EcdsaError> {
+    // The backend refuses high-S outright, so verify the low-S twin.
+    let mut inner = *sig.as_ref().as_inner();
+    inner.normalize_s();
     self
       .inner
-      .verify(Message::from_digest(*msg_hash), sig.as_ref().as_inner())
+      .verify(Message::from_digest(*msg_hash), &inner)
       .map_err(|_| EcdsaError::VerifyFailed)
   }
 }
@@ -504,5 +508,17 @@ mod tests {
     let mut bad = MSG;
     bad[0] ^= 0xff;
     assert!(alice_pk.verify_digest(&bad, alice_sig).is_err());
+  }
+
+  #[rstest]
+  fn verify_accepts_high_s(alice_pk: EcdsaPublicKey, alice_sig: EcdsaSignature) {
+    let compact = alice_sig.to_bytes();
+    let mut high = [0u8; 64];
+    high[..32].copy_from_slice(&compact[..32]);
+    high[32..].copy_from_slice(&negate_scalar(&compact[32..]));
+    let high_sig = EcdsaSignature::from_bytes(&high).unwrap();
+
+    assert!(!high_sig.is_low_s());
+    assert_eq!(alice_pk.verify_digest(&MSG, high_sig), Ok(()));
   }
 }

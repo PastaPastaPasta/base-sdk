@@ -201,9 +201,6 @@ mod tests {
     high_bytes[32..].copy_from_slice(&negate_scalar(&compact[32..]));
     let high_sig = EcdsaSignature::from_bytes(&high_bytes).unwrap();
 
-    // The curve primitive rejects high-S signatures at recovery time (see
-    // `EcdsaSignature::verify`), so only the invariant that normalizing
-    // restores the original signature and recovery id is checked here.
     let flipped_id = alice_rec_sig.recovery_id() ^ 1;
     let high_rec =
       EcdsaRecSignature::from_parts(high_sig, flipped_id, Compression::from(alice_rec_sig.is_compressed())).unwrap();
