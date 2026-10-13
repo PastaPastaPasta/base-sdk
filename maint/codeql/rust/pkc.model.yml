@@ -13,8 +13,11 @@ extensions:
       - ["Bls", "Signature", "secure_aggregate"]          # Add w/ binding against rogue keys
       - ["Bls", "Signature", "sub_insecure"]              # Subtract
       - ["Bls", "Signature", "verify_aggregates_digests"]         # Verify multi-message, multiple signers
+      - ["Bls", "Signature", "verify_aggregates_messages"]        # Verify multi-message, multiple signers
       - ["Bls", "Signature", "fast_verify_aggregates_digest"]     # Verify single-message, multiple signers
+      - ["Bls", "Signature", "fast_verify_aggregates_message"]    # Verify single-message, multiple signers
       - ["Bls", "Signature", "secure_verify_aggregates_digest"]   # Verify w/ binding against rogue keys
+      - ["Bls", "Signature", "secure_verify_aggregates_message"]  # Verify w/ binding against rogue keys
       # Integrated Encryption Scheme
       - ["Bls", "SecretKey", "dh_exchange"]               # Derive shared secret
       - ["Bls", "SecretKey", "ies_decrypt"]               # Decrypt blob
@@ -62,14 +65,14 @@ extensions:
       # Recoverable signatures
       - ["Ecdsa", "SecretKey", "sign_recoverable"]        # Sign
       - ["Ecdsa", "PublicKey", "recover"]                 # Get public key from a signature
-      # Ed25519
-      # Signing
-      - ["Eddsa", "SecretKey", "sign_message"]            # Sign a message of any length
-      - ["Eddsa", "PublicKey", "verify_message"]          # Verify a message of any length
   - addsTo:
       pack: base-sdk/codeql-rust
       extensible: armLacks
     data:
+      # ECDSA
+      # Signing
+      - ["Ecdsa", "SecretKey", "sign_message"]            # Signs a 32-byte hashed message only
+      - ["Ecdsa", "PublicKey", "verify_message"]          # Verifies a 32-byte hashed message only
       # Ed25519
       # Signing
       - ["Eddsa", "SecretKey", "sign_digest"]             # Hashes the message itself, see RFC 8032

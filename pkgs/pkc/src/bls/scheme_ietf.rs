@@ -132,6 +132,11 @@ impl BlsScheme for BlsScIetf {
     digest
   }
 
+  /// The message is hashed to the curve directly.
+  fn plaintext_msg(msg: &[u8]) -> Self::Msg<'_> {
+    msg
+  }
+
   /// Aggregate the public keys via blst.
   fn aggregate_pk(pks: &[&Self::InnerPk]) -> Result<Self::InnerPk, BlsError> {
     if pks.is_empty() {

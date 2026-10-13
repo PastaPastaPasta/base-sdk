@@ -48,6 +48,14 @@ impl<S: BlsScheme> BlsSkShare<S> {
     }
   }
 
+  /// Sign an arbitrary-length message, yielding a signature share.
+  pub fn sign_message(&self, msg: &[u8]) -> BlsSigShare<S> {
+    BlsSigShare {
+      id: self.id,
+      sig: self.sk.sign_message(msg),
+    }
+  }
+
   /// The underlying secret key.
   pub fn secret_key(&self) -> &BlsSecretKey<S> {
     &self.sk

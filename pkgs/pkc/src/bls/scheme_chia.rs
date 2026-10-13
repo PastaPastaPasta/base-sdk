@@ -17,6 +17,7 @@ use super::schemes::BlsScChia;
 use crate::prelude::*;
 
 use blst::min_pk;
+use sha2::{Digest, Sha256};
 use zeroize::{Zeroize, Zeroizing};
 
 /// y.c1 > (p-1)/2, matching the legacy sign convention.
@@ -230,6 +231,11 @@ impl BlsScheme for BlsScChia {
   /// The legacy message is the 32-byte digest itself.
   fn digest_msg(digest: &[u8; 32]) -> Self::Msg<'_> {
     *digest
+  }
+
+  /// The legacy scheme signs the SHA-256 digest of the message.
+  fn plaintext_msg(msg: &[u8]) -> Self::Msg<'_> {
+    Sha256::digest(msg).into()
   }
 
   /// Sum the public keys in G1.

@@ -130,6 +130,16 @@ impl<S: BlsScheme> BlsPublicKey<S> {
     S::verify(sig.as_inner(), S::digest_msg(digest), &self.0)
   }
 
+  /// Verify `sig` over an arbitrary-length message, hashed as
+  /// [`BlsSecretKey::sign_message`](super::BlsSecretKey::sign_message) does.
+  ///
+  /// # Errors
+  ///
+  /// Returns `VerifyFailed` when the pairing check does not hold.
+  pub fn verify_message(&self, msg: &[u8], sig: &BlsSignature<S>) -> Result<(), BlsError> {
+    S::verify(sig.as_inner(), S::plaintext_msg(msg), &self.0)
+  }
+
   pub(crate) fn from_inner(inner: S::InnerPk) -> Self {
     Self(inner)
   }

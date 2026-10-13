@@ -134,6 +134,15 @@ impl<S: BlsScheme> BlsSecretKey<S> {
     BlsSignature::from_inner(S::sign(&self.0, S::digest_msg(digest)))
   }
 
+  /// Sign an arbitrary-length message.
+  ///
+  /// The legacy scheme signs the SHA-256 digest of `msg`, which equals
+  /// [`Self::sign_digest`] over that digest. The IETF scheme hashes `msg` to
+  /// the curve directly.
+  pub fn sign_message(&self, msg: &[u8]) -> BlsSignature<S> {
+    BlsSignature::from_inner(S::sign(&self.0, S::plaintext_msg(msg)))
+  }
+
   /// Compute a DH shared key: `self * peer_pk`.
   ///
   /// # Errors

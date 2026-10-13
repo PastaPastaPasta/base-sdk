@@ -54,6 +54,21 @@ impl<S: BlsScheme> BlsSignature<S> {
     S::fast_verify_aggregates(&self.0, S::digest_msg(digest), &inner_pks)
   }
 
+  /// Verify an aggregated signature where every signer signed one
+  /// arbitrary-length message.
+  ///
+  /// Every key must already be bound to its holder, as for
+  /// [`Self::fast_verify_aggregates_digest`].
+  ///
+  /// # Errors
+  ///
+  /// Returns `EmptyAggregation` when no keys are given, or `VerifyFailed` on
+  /// mismatch.
+  pub fn fast_verify_aggregates_message(&self, msg: &[u8], pks: &[&BlsPublicKey<S>]) -> Result<(), BlsError> {
+    let inner_pks: Vec<&S::InnerPk> = pks.iter().map(|k| &k.0).collect();
+    S::fast_verify_aggregates(&self.0, S::plaintext_msg(msg), &inner_pks)
+  }
+
   /// Aggregate signatures under public-key weighting, the counterpart to
   /// [`Self::secure_verify_aggregates_digest`]. Each signature is raised to
   /// its own key's weight, so a rogue key cannot cancel an honest one.
@@ -79,6 +94,17 @@ impl<S: BlsScheme> BlsSignature<S> {
     let inner_pks: Vec<&S::InnerPk> = pks.iter().map(|k| &k.0).collect();
     S::secure_verify_aggregates(&self.0, S::digest_msg(digest), &inner_pks)
   }
+
+  /// Verify a weighted aggregate over an arbitrary-length message.
+  ///
+  /// # Errors
+  ///
+  /// Returns `EmptyAggregation` when no keys are given, `InvalidPublicKey`
+  /// when a key fails to decode, or `VerifyFailed` on mismatch.
+  pub fn secure_verify_aggregates_message(&self, msg: &[u8], pks: &[&BlsPublicKey<S>]) -> Result<(), BlsError> {
+    let inner_pks: Vec<&S::InnerPk> = pks.iter().map(|k| &k.0).collect();
+    S::secure_verify_aggregates(&self.0, S::plaintext_msg(msg), &inner_pks)
+  }
 }
 
 impl<S: BlsScheme> BlsSignature<S> {
@@ -91,6 +117,19 @@ impl<S: BlsScheme> BlsSignature<S> {
   /// scheme refuses a repeat, or `VerifyFailed` on mismatch.
   pub fn verify_aggregates_digests(&self, digests: &[[u8; 32]], pks: &[&BlsPublicKey<S>]) -> Result<(), BlsError> {
     let msgs: Vec<S::Msg<'_>> = digests.iter().map(S::digest_msg).collect();
+    let inner_pks: Vec<_> = pks.iter().map(|k| &k.0).collect();
+    S::verify_aggregates(&self.0, &msgs, &inner_pks)
+  }
+
+  /// Verify an aggregate carrying one arbitrary-length message per signer.
+  ///
+  /// # Errors
+  ///
+  /// Returns `CountMismatch` when the message and key counts differ,
+  /// `EmptyAggregation` when no keys are given, `DuplicateMessage` where the
+  /// scheme refuses a repeat, or `VerifyFailed` on mismatch.
+  pub fn verify_aggregates_messages(&self, msgs: &[&[u8]], pks: &[&BlsPublicKey<S>]) -> Result<(), BlsError> {
+    let msgs: Vec<S::Msg<'_>> = msgs.iter().map(|msg| S::plaintext_msg(msg)).collect();
     let inner_pks: Vec<_> = pks.iter().map(|k| &k.0).collect();
     S::verify_aggregates(&self.0, &msgs, &inner_pks)
   }

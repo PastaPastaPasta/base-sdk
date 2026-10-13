@@ -378,6 +378,16 @@ mod tests {
     assertion(scheme);
   }
 
+  /// An IETF digest is an ordinary message, so both paths sign it alike.
+  #[rstest]
+  fn ietf_digest_signs_as_message() {
+    let sk = BlsSecretKey::<BlsScIetf>::from_ikm(&RSEED[1]).unwrap();
+    let sig = sk.sign_digest(&MSG_DEADBEEF);
+    assert_eq!(sk.sign_message(&MSG_DEADBEEF), sig);
+    assert!(sk.public_key().verify_message(&MSG_DEADBEEF, &sig).is_ok());
+    assert!(sk.public_key().verify_message(&MSG_8BADFOOD, &sig).is_err());
+  }
+
   /// One secret scalar over one message yields two different signatures, so a
   /// scheme mix-up cannot go unnoticed.
   #[rstest]

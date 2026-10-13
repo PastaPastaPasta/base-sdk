@@ -140,6 +140,9 @@ pub trait BlsScheme: BlsSchemeId + sealed::Sealed + Sized {
   /// Convert a 32-byte digest to the hash-to-curve input.
   fn digest_msg(digest: &[u8; 32]) -> Self::Msg<'_>;
 
+  /// Build the hash-to-curve input for an arbitrary-length message.
+  fn plaintext_msg(msg: &[u8]) -> Self::Msg<'_>;
+
   /// Compute the Diffie-Hellman shared key `sk * peer_pk`.
   ///
   /// # Errors
