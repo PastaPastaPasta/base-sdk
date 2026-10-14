@@ -58,6 +58,8 @@ cfg_if::cfg_if! {
     #[cfg(test)]
     pub(crate) mod tests;
 
+    pub mod core;
+
     pub use ies_ops::{BlsIesBlob, BlsIesMulti};
     pub use public_ops::BlsPublicKey;
     pub use group::{BlsPointRepr, G1Affine, G2Affine, G1, G2};

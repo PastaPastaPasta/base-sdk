@@ -8,7 +8,10 @@
 
 use crate::common::bls::{sequential_ids, test_ikm, test_msg};
 
-use dash_pkc::bls::{BlsPublicKey, BlsScChia, BlsScIetf, BlsScheme, BlsSecretKey, BlsSigShare, BlsSignature};
+use dash_pkc::bls::core::{verify_insecure, BlsPkValue, BlsSigValue};
+use dash_pkc::bls::{
+  BlsPublicKey, BlsScChia, BlsScIetf, BlsScheme, BlsSchemeKind, BlsSecretKey, BlsSigShare, BlsSignature, BlsValue,
+};
 use divan::{counter::ItemsCount, Bencher};
 use getrandom::SysRng;
 use rand_core::UnwrapErr;
@@ -32,6 +35,29 @@ fn verify<S: BlsScheme>(bencher: Bencher) {
   bencher
     .counter(ItemsCount::new(1u32))
     .bench(|| pk.verify(S::msg_ref(&msg), &sig));
+}
+
+/// Single signature verification as Core makes it, on the calling thread
+/// alone; [`verify`] is the pooled one.
+#[divan::bench(args = [BlsSchemeKind::Legacy, BlsSchemeKind::Basic])]
+fn verify_core(bencher: Bencher, kind: BlsSchemeKind) {
+  let (msg, sig, pk) = match kind {
+    BlsSchemeKind::Legacy => core_operands::<BlsScChia>(kind),
+    BlsSchemeKind::Basic => core_operands::<BlsScIetf>(kind),
+  };
+  bencher
+    .counter(ItemsCount::new(1u32))
+    .bench(|| verify_insecure(&sig, &pk, &msg, kind));
+}
+
+fn core_operands<S: BlsScheme>(kind: BlsSchemeKind) -> ([u8; 32], BlsSigValue, BlsPkValue) {
+  let sk = BlsSecretKey::<S>::from_ikm(&test_ikm(2)).unwrap();
+  let msg = test_msg(99);
+  let sig = sk.sign(S::msg_ref(&msg)).to_bytes();
+  let pk = sk.public_key().to_bytes();
+  let sig = BlsValue::from_canonical(&sig, kind).unwrap();
+  let pk = BlsValue::from_canonical(&pk, kind).unwrap();
+  (msg, sig, pk)
 }
 
 /// Public key aggregation at various quorum sizes.
