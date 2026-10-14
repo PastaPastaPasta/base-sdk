@@ -61,19 +61,6 @@ pub struct DsAccept {
 
 impl_p2p!(DsAccept);
 
-impl DsAccept {
-  fn read(data: &mut &[u8], has_flags: impl FnOnce(&[u8]) -> bool) -> Result<Self, DecodeError> {
-    let denom = i32::decode(data)?;
-    let collateral = Transaction::decode(data)?;
-    let flags = if has_flags(data) { Some(u8::decode(data)?) } else { None };
-    Ok(Self {
-      denom,
-      collateral,
-      flags,
-    })
-  }
-}
-
 impl BaseCodec for DsAccept {
   /// Reads the flags when a byte follows the transaction; a peer's message
   /// is read at its version ([`MsgDecode::decode_msg`]).
@@ -91,6 +78,19 @@ impl BaseCodec for DsAccept {
 }
 
 hash_impl!(DsAccept);
+
+impl DsAccept {
+  fn read(data: &mut &[u8], has_flags: impl FnOnce(&[u8]) -> bool) -> Result<Self, DecodeError> {
+    let denom = i32::decode(data)?;
+    let collateral = Transaction::decode(data)?;
+    let flags = if has_flags(data) { Some(u8::decode(data)?) } else { None };
+    Ok(Self {
+      denom,
+      collateral,
+      flags,
+    })
+  }
+}
 
 impl MsgDecode for DsAccept {
   /// The flags byte at the negotiated version, as Core's
@@ -121,8 +121,6 @@ codec_p2p!(DsEntry {
   outputs
 });
 
-impl MsgDecode for DsEntry {}
-
 impl DsEntry {
   /// Whether Core reads both lists: each at most [`max_pool_entries`], which
   /// Core checks against each count before reading the list. Past it Core
@@ -132,6 +130,8 @@ impl DsEntry {
     self.inputs.len() <= max && self.outputs.len() <= max
   }
 }
+
+impl MsgDecode for DsEntry {}
 
 /// The transaction to sign, the `dsf` payload.
 ///
@@ -168,8 +168,6 @@ pub struct DsSignedInputs {
 
 codec_p2p!(DsSignedInputs { inputs });
 
-impl MsgDecode for DsSignedInputs {}
-
 impl DsSignedInputs {
   /// Core's count check before the read: [`P2pDecodeError::TooManyEntries`]
   /// past [`max_pool_entries`], which Core answers with `ERR_MAXIMUM`, and
@@ -187,6 +185,8 @@ impl DsSignedInputs {
     Ok(())
   }
 }
+
+impl MsgDecode for DsSignedInputs {}
 
 /// The end of a session, the `dsc` payload; read per session as
 /// [`DsFinalTx`] is.
@@ -263,8 +263,6 @@ codec_p2p!(DsQueue {
   sig
 });
 
-impl MsgDecode for DsQueue {}
-
 impl DsQueue {
   /// Core's `GetSignatureHash()`: the queue as written, without the
   /// signature.
@@ -277,6 +275,8 @@ impl DsQueue {
     dsha256(&buf)
   }
 }
+
+impl MsgDecode for DsQueue {}
 
 /// A masternode-signed mixed transaction, the `dstx` payload (Core's
 /// `CCoinJoinBroadcastTx`). Core keys it by the transaction's hash
@@ -303,8 +303,6 @@ codec_p2p!(DsTx {
   sig_time
 });
 
-impl MsgDecode for DsTx {}
-
 impl DsTx {
   /// Core's `GetSignatureHash()`: the message as written without the
   /// signature, its time included.
@@ -316,3 +314,5 @@ impl DsTx {
     dsha256(&buf)
   }
 }
+
+impl MsgDecode for DsTx {}
