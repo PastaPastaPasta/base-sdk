@@ -92,7 +92,8 @@ define_p2p! {
     GetHeaders2(GetHeaders2) => GETHEADERS2 "getheaders2" @ 163,
     /// Compressed block headers.
     Headers2(Headers2) => HEADERS2 "headers2" @ 165,
-    /// Governance sync request.
+    /// Governance sync request. Core ignores it before governance is synced,
+    /// unread; the node checks that first.
     GovSync(GovSync) => GOVSYNC "govsync" @ 140,
     /// Governance object.
     GovObj(GovObject) => GOVOBJ "govobj" @ 141,
@@ -188,14 +189,20 @@ define_p2p! {
     /// LLMQ: signature shares.
     QSigShare(SigShareMsg) => QSIGSHARE "qsigshare" @ 157,
     /// CoinJoin: join a session, its flags read at the negotiated version.
+    ///
+    /// Like the other CoinJoin messages a masternode serves (`dsi`, `dss`),
+    /// Core answers some requests before reading them (a full queue, no
+    /// session, the wrong state or sender), with a status update rather
+    /// than a failed read: the node gates on the command before
+    /// [`P2pMsg::decode_with_policy`].
     Dsa(DsAccept) => DSA "dsa" @ 131,
-    /// CoinJoin: a participant's inputs and outputs. The node checks
-    /// [`DsEntry::fits_pool`].
+    /// CoinJoin: a participant's inputs and outputs, gated as `dsa` is. The
+    /// node checks [`DsEntry::fits_pool`].
     Dsi(DsEntry) => DSI "dsi" @ 132,
     /// CoinJoin: the transaction to sign.
     Dsf(DsFinalTx) => DSF "dsf" @ 133,
-    /// CoinJoin: signed inputs of the final transaction. The node checks
-    /// [`DsSignedInputs::fits_pool`].
+    /// CoinJoin: signed inputs of the final transaction, gated as `dsa` is.
+    /// The node runs [`DsSignedInputs::check_payload`] before the read.
     Dss(DsSignedInputs) => DSS "dss" @ 134,
     /// CoinJoin: the session's end.
     Dsc(DsComplete) => DSC "dsc" @ 135,

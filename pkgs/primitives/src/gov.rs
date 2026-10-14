@@ -20,6 +20,11 @@ use hex_conservative::DisplayHex;
 
 use core::fmt;
 
+/// SHA-256d of `buf`, as Core's `CHashWriter` computes it.
+fn dsha256(buf: &[u8]) -> Hash256 {
+  Hash256::from_lendian(sha256d::Hash::hash(buf).to_byte_array())
+}
+
 /// Maximum allowed name length for governance proposals.
 const MAX_PROPOSAL_NAME_LEN: usize = 40;
 
@@ -179,7 +184,7 @@ impl Hashable for GovObject {
     0xFFFF_FFFFu32.encode(&mut buf);
     self.sig.encode(&mut buf);
 
-    Hash256::from_lendian(sha256d::Hash::hash(&buf).to_byte_array())
+    dsha256(&buf)
   }
 }
 
@@ -205,7 +210,7 @@ impl GovObject {
     self.data.encode(&mut buf);
     self.object_type.encode(&mut buf);
     self.masternode_outpoint.encode(&mut buf);
-    Hash256::from_lendian(sha256d::Hash::hash(&buf).to_byte_array())
+    dsha256(&buf)
   }
 }
 
@@ -301,14 +306,15 @@ impl Hashable for GovVote {
     self.outcome.encode(&mut buf);
     self.time.encode(&mut buf);
 
-    Hash256::from_lendian(sha256d::Hash::hash(&buf.into_array()).to_byte_array())
+    dsha256(&buf.into_array())
   }
 }
 
 impl GovVote {
-  /// Core's `GetSignatureHash()`, which both an ECDSA and a BLS vote
-  /// signature sign: the vote as written without its signature, outcome
-  /// before signal.
+  /// Core's `GetSignatureHash()`: the vote as written without its
+  /// signature, outcome before signal. A BLS vote signature signs it, and
+  /// an ECDSA one on testnet only; elsewhere Core verifies an ECDSA vote
+  /// signature over its message string (`GetSignatureString()`), not this.
   pub fn signature_hash(&self) -> Hash256 {
     let mut buf = ArrayBuf::<84>::new();
     self.masternode_outpoint.encode(&mut buf);
@@ -316,7 +322,7 @@ impl GovVote {
     self.outcome.encode(&mut buf);
     self.signal.encode(&mut buf);
     self.time.encode(&mut buf);
-    Hash256::from_lendian(sha256d::Hash::hash(&buf.into_array()).to_byte_array())
+    dsha256(&buf.into_array())
   }
 }
 

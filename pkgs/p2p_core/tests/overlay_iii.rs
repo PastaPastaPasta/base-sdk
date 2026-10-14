@@ -11,14 +11,14 @@
 
 #![expect(clippy::panic, clippy::unwrap_used, reason = "test code")]
 
+use bitcoin_hashes::sha256d;
 use dash_num::Hash256;
 use dash_p2p_core::{
-  max_pool_entries, CommandString, DsAccept, DsEntry, DsQueue, DsSignedInputs, DsTx, GovSync, P2pDecodeError, P2pMsg,
-  ProtoCtx, ProtocolVersion,
+  max_pool_entries, CommandString, DsAccept, DsSignedInputs, GovSync, P2pDecodeError, P2pMsg, ProtoCtx, ProtocolVersion,
 };
 use dash_params::{ChainParamsBuilder, NetworkKind, Release};
 use dash_pkc::bls::BlsCtx;
-use dash_primitives::{GovObject, GovVote};
+use dash_primitives::GovVote;
 use dash_types::codec::BaseCodec;
 use dash_types::{CoreBool, Hashable, Numeric};
 use rstest::rstest;
@@ -38,8 +38,7 @@ fn encode(msg: &P2pMsg) -> Vec<u8> {
   out
 }
 
-fn sha256d(bytes: &[u8]) -> Hash256 {
-  use bitcoin_hashes::sha256d;
+fn dsha256(bytes: &[u8]) -> Hash256 {
   Hash256::from_lendian(sha256d::Hash::hash(bytes).to_byte_array())
 }
 
@@ -47,7 +46,7 @@ fn sha256d(bytes: &[u8]) -> Hash256 {
 /// type 1 with a one-byte payload.
 fn tx(special: bool) -> Vec<u8> {
   if special {
-    [&[0x03, 0x00, 0x01, 0x00, 0, 0, 0, 0, 0, 0][..], &[0x01, 0xaa]].concat()
+    vec![0x03, 0x00, 0x01, 0x00, 0, 0, 0, 0, 0, 0, 0x01, 0xaa]
   } else {
     vec![0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0]
   }
@@ -110,18 +109,30 @@ fn dsi_and_dss_counts_are_the_pools() {
   let P2pMsg::Dsi(over) = decode("dsi", &entry(max + 1)).unwrap() else {
     panic!("dsi")
   };
-  assert!(!DsEntry::fits_pool(&over, params));
+  assert!(!over.fits_pool(params));
   // The collateral sits between the lists.
   assert_eq!((at.inputs.len(), at.outputs.len()), (max, 0));
 
-  let P2pMsg::Dss(at) = decode("dss", &list(max, &txin())).unwrap() else {
-    panic!("dss")
-  };
-  assert!(at.fits_pool(params));
-  let P2pMsg::Dss(over) = decode("dss", &list(max + 1, &txin())).unwrap() else {
-    panic!("dss")
-  };
-  assert!(!DsSignedInputs::fits_pool(&over, params));
+  // dss: the count, before any input is read (Core answers ERR_MAXIMUM).
+  assert!(DsSignedInputs::check_payload(&list(max, &txin()), params).is_ok());
+  let over = DsSignedInputs::check_payload(&list(max + 1, &[]), params);
+  assert!(
+    matches!(
+      over,
+      Err(P2pDecodeError::TooManyEntries {
+        count: 181,
+        max: 180,
+        ..
+      })
+    ),
+    "{over:?}"
+  );
+  // A count within the bound that the inputs don't fill fails in the read.
+  assert!(DsSignedInputs::check_payload(&[5], params).is_ok());
+  assert!(
+    DsSignedInputs::check_payload(&[0xfd, 1, 0], params).is_err(),
+    "non-canonical"
+  );
 }
 
 fn dsq(ready: u8) -> Vec<u8> {
@@ -144,14 +155,14 @@ fn dsq_hashes_its_ready_flag_as_core_writes_it() {
   assert_eq!(q.ready, CoreBool(true));
   // Core writes any non-zero byte back as 0x01 and hashes that.
   assert_eq!(encode(&P2pMsg::Dsq(q.clone())), canonical);
-  assert_eq!(q.hash(), sha256d(&canonical));
+  assert_eq!(q.hash(), dsha256(&canonical));
   // The sign hash leaves out the signature.
   let unsigned = &canonical[..canonical.len() - 97];
-  assert_eq!(q.signature_hash(), sha256d(unsigned));
+  assert_eq!(q.signature_hash(), dsha256(unsigned));
   let P2pMsg::Dsq(q0) = decode("dsq", &dsq(0)).unwrap() else {
     panic!("dsq")
   };
-  assert_ne!(q0.signature_hash(), DsQueue::signature_hash(&q));
+  assert_ne!(q0.signature_hash(), q.signature_hash());
 }
 
 #[rstest]
@@ -163,7 +174,7 @@ fn dstx_signs_its_time_and_not_its_signature() {
   };
   assert_eq!(encode(&P2pMsg::Dstx(d.clone())), raw);
   let unsigned = [&tx(false)[..], &[0x44; 32], &sig_time].concat();
-  assert_eq!(DsTx::signature_hash(&d), sha256d(&unsigned));
+  assert_eq!(d.signature_hash(), dsha256(&unsigned));
 }
 
 fn vote(sig: &[u8]) -> Vec<u8> {
@@ -204,12 +215,12 @@ fn a_vote_signature_over_96_fails_before_its_bytes() {
 }
 
 #[rstest]
-fn a_vote_signs_its_wire_order_and_hashes_core_s_identity() {
+fn a_vote_signs_its_wire_order_and_hashes_cores_identity() {
   let raw = vote(&list(96, &[0x88]));
   let P2pMsg::GovObjVote(v) = decode("govobjvote", &raw).unwrap() else {
     panic!("govobjvote")
   };
-  assert_eq!(v.signature_hash(), sha256d(&raw[..raw.len() - 97]));
+  assert_eq!(v.signature_hash(), dsha256(&raw[..raw.len() - 97]));
   // The identity hash: the outpoint with Core's legacy padding, the
   // parent, then the signal before the outcome, and the time.
   let identity = [
@@ -222,7 +233,7 @@ fn a_vote_signs_its_wire_order_and_hashes_core_s_identity() {
     &raw[76..84],
   ]
   .concat();
-  assert_eq!(v.hash(), sha256d(&identity));
+  assert_eq!(v.hash(), dsha256(&identity));
 }
 
 #[rstest]
@@ -242,7 +253,7 @@ fn an_object_signs_everything_but_its_signature() {
   let P2pMsg::GovObj(o) = decode("govobj", &raw).unwrap() else {
     panic!("govobj")
   };
-  assert_eq!(GovObject::signature_hash(&o), sha256d(&unsigned));
+  assert_eq!(o.signature_hash(), dsha256(&unsigned));
 }
 
 #[rstest]

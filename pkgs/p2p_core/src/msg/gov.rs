@@ -30,8 +30,12 @@ pub struct GovSync {
   /// Object hash (zero for full sync).
   pub hash: Hash256,
   /// Core's `CBloomFilter`, as `filterload` carries it (an empty one asks
-  /// for no filtering). Core penalises data over its limit as a failed
-  /// read.
+  /// for no filtering).
+  ///
+  /// Core reads the hash and the filter apart: a payload too short for the
+  /// hash (32 bytes) is only logged, while any failure to read the filter,
+  /// and one not [`FilterLoad::is_within_size_constraints`], scores the peer
+  /// 100. The node tells the reads apart by the payload's length.
   pub bloom_filter: FilterLoad,
 }
 
@@ -58,7 +62,7 @@ impl MsgDecode for GovVote {
       time: i64::decode(data)?,
       sig: read_limited_byte_vec(data, VOTE_BLS_SIG_LEN)?,
     };
-    if ![VOTE_ECDSA_SIG_LEN, VOTE_BLS_SIG_LEN].contains(&vote.sig.len()) {
+    if !matches!(vote.sig.len(), VOTE_ECDSA_SIG_LEN | VOTE_BLS_SIG_LEN) {
       return Err(P2pDecodeError::InvalidValue {
         field: "governance vote signature size",
       });

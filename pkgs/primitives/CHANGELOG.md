@@ -8,3 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 - Initial release.
+
+### Added
+
+- `GovObject::signature_hash` and `GovVote::signature_hash`, Core's `GetSignatureHash()` (the object or vote as written
+  without its signature).

@@ -11,6 +11,10 @@
 //! ignores bytes after a message. Its handlers run only once the chain is
 //! synced. The entry and signature counts are bounded by the chain's pool
 //! size ([`max_pool_entries`]), which the node checks.
+//!
+//! The types' [`Hashable`](dash_types::Hashable) hash is of the message as
+//! written; it is a Core key only for [`DsQueue`] (Core keys a [`DsTx`] by
+//! its transaction's hash).
 
 use crate::codec::{codec_p2p, dsha256, impl_p2p, MsgDecode};
 use crate::ctx::ProtoCtx;
@@ -23,7 +27,7 @@ use dash_params::ChainParams;
 use dash_primitives::{hash_impl, Transaction, TxHash, TxIn, TxOut};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
-use dash_types::CoreBool;
+use dash_types::{CompactSize, CoreBool, Numeric};
 
 /// Core's `COINJOIN_ENTRY_MAX_SIZE`, the most inputs or outputs one
 /// participant may add.
@@ -38,6 +42,11 @@ pub fn max_pool_entries(params: &ChainParams) -> usize {
 
 /// A request to join a mixing session, the `dsa` payload (Core's
 /// `CCoinJoinAccept`).
+///
+/// Written with its flags when they are `Some`: a peer at
+/// [`ProtocolVersion::COINJOIN_REBALANCE`] or later needs them (Core fails
+/// its read without), and one before it reads none. Core compares a
+/// request without flags as one with flags 0.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct DsAccept {
@@ -52,15 +61,24 @@ pub struct DsAccept {
 
 impl_p2p!(DsAccept);
 
+impl DsAccept {
+  fn read(data: &mut &[u8], has_flags: impl FnOnce(&[u8]) -> bool) -> Result<Self, DecodeError> {
+    let denom = i32::decode(data)?;
+    let collateral = Transaction::decode(data)?;
+    let flags = if has_flags(data) { Some(u8::decode(data)?) } else { None };
+    Ok(Self {
+      denom,
+      collateral,
+      flags,
+    })
+  }
+}
+
 impl BaseCodec for DsAccept {
   /// Reads the flags when a byte follows the transaction; a peer's message
   /// is read at its version ([`MsgDecode::decode_msg`]).
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    Ok(Self {
-      denom: i32::decode(data)?,
-      collateral: Transaction::decode(data)?,
-      flags: if data.is_empty() { None } else { Some(u8::decode(data)?) },
-    })
+    Self::read(data, |rest| !rest.is_empty())
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
@@ -78,15 +96,9 @@ impl MsgDecode for DsAccept {
   /// The flags byte at the negotiated version, as Core's
   /// `SERIALIZE_METHODS` reads it.
   fn decode_msg(data: &mut &[u8], ctx: &ProtoCtx) -> Result<Self, P2pDecodeError> {
-    Ok(Self {
-      denom: i32::decode(data)?,
-      collateral: Transaction::decode(data)?,
-      flags: if ctx.version >= ProtocolVersion::COINJOIN_REBALANCE {
-        Some(u8::decode(data)?)
-      } else {
-        None
-      },
-    })
+    Ok(Self::read(data, |_| {
+      ctx.version >= ProtocolVersion::COINJOIN_REBALANCE
+    })?)
   }
 }
 
@@ -113,7 +125,8 @@ impl MsgDecode for DsEntry {}
 
 impl DsEntry {
   /// Whether Core reads both lists: each at most [`max_pool_entries`], which
-  /// Core checks against each count before reading the list.
+  /// Core checks against each count before reading the list. Past it Core
+  /// fails the read, as for any other failure.
   pub fn fits_pool(&self, params: &ChainParams) -> bool {
     let max = max_pool_entries(params);
     self.inputs.len() <= max && self.outputs.len() <= max
@@ -121,6 +134,11 @@ impl DsEntry {
 }
 
 /// The transaction to sign, the `dsf` payload.
+///
+/// Core's client hands one stream to each of its sessions mixing on the
+/// sending masternode in turn, and each reads a message from where the
+/// last stopped (`dsf`, `dsc` and `dssu` alike): a payload holding two
+/// messages updates two sessions. The node's port reads them so.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
@@ -137,11 +155,14 @@ impl MsgDecode for DsFinalTx {}
 
 /// A participant's signed inputs of the final transaction, the `dss`
 /// payload.
+///
+/// Core compares the count with [`max_pool_entries`] before reading any
+/// input and answers a larger one (`ERR_MAXIMUM`) where it only logs a
+/// failed read: the node runs [`DsSignedInputs::check_payload`] first.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct DsSignedInputs {
-  /// The inputs with their signatures; Core answers `ERR_MAXIMUM` to more
-  /// than [`max_pool_entries`] without reading them.
+  /// The inputs with their signatures.
   pub inputs: Vec<TxIn>,
 }
 
@@ -150,13 +171,25 @@ codec_p2p!(DsSignedInputs { inputs });
 impl MsgDecode for DsSignedInputs {}
 
 impl DsSignedInputs {
-  /// Whether Core reads the list: at most [`max_pool_entries`].
-  pub fn fits_pool(&self, params: &ChainParams) -> bool {
-    self.inputs.len() <= max_pool_entries(params)
+  /// Core's count check before the read: [`P2pDecodeError::TooManyEntries`]
+  /// past [`max_pool_entries`], which Core answers with `ERR_MAXIMUM`, and
+  /// otherwise a count that does not read (Core logs it).
+  pub fn check_payload(payload: &[u8], params: &ChainParams) -> Result<(), P2pDecodeError> {
+    let count = CompactSize::decode_size(&mut &payload[..])?.to_base();
+    let max = max_pool_entries(params) as u64;
+    if count > max {
+      return Err(P2pDecodeError::TooManyEntries {
+        command: "dss",
+        count,
+        max,
+      });
+    }
+    Ok(())
   }
 }
 
-/// The end of a session, the `dsc` payload.
+/// The end of a session, the `dsc` payload; read per session as
+/// [`DsFinalTx`] is.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
@@ -172,7 +205,8 @@ codec_p2p!(DsComplete { session_id, message });
 impl MsgDecode for DsComplete {}
 
 /// A session's status, the `dssu` payload (Core's
-/// `CCoinJoinStatusUpdate`; its entry count is not sent).
+/// `CCoinJoinStatusUpdate`; its entry count is not sent); read per session
+/// as [`DsFinalTx`] is.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
@@ -245,7 +279,8 @@ impl DsQueue {
 }
 
 /// A masternode-signed mixed transaction, the `dstx` payload (Core's
-/// `CCoinJoinBroadcastTx`). Core keys it by the transaction's hash.
+/// `CCoinJoinBroadcastTx`). Core keys it by the transaction's hash
+/// (`tx.hash()`), not by [`Hashable::hash`](dash_types::Hashable::hash).
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
