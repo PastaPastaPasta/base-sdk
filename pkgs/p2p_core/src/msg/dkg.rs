@@ -25,7 +25,7 @@ use dash_params::LlmqParams;
 use dash_pkc::bls::{BlsIesMultiBytes, BlsPkBytes, BlsScIetf, BlsSigBytes, BLS_PK_LEN, BLS_SIG_LEN, BLS_SK_LEN};
 use dash_primitives::{DynBitset, LlmqType, QuorumHash, QuorumVvecHash, TxHash};
 use dash_types::codec::BaseCodec;
-use dash_types::type_id::TypeId;
+use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{CompactSize, Numeric};
 
 use core::fmt;
@@ -77,6 +77,7 @@ pub trait DkgMessage: MsgDecode {
 }
 
 /// A position in a payload, as Core's framing walk reads it.
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Unencodable)]
 struct Walk<'a>(&'a [u8]);
 
 impl Walk<'_> {

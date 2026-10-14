@@ -71,6 +71,12 @@ predicate isSecretType(TypeItem t) {
       // A masternode's owner payouts and shared-collateral entries (v24 ProTx) hold public scripts,
       // key ids and amounts, and the share-update payload a public script and signature.
       "PayoutShare", "CollateralShare", "ProUpShareTx",
+      // LLMQ signing messages carry signature shares, published like `BlsSigShare`, and the
+      // sessions and inventories that name them.
+      "SigShare", "SigShareMsg", "SigSharesInv", "SigSharesInvMsg", "BatchedSigShare",
+      "BatchedSigShares", "BatchedSigSharesMsg",
+      // A DKG justification reveals a key share to the whole quorum: once sent it is public.
+      "DkgShare",
       // Serde artifact to deserialize a tagged enum.
       "__Seed"
     ]
