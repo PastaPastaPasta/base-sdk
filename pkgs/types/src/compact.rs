@@ -7,7 +7,33 @@
 //! CompactSize-encoded integers.
 
 use crate::codec::{BaseCodec, DecodeError, EncodeBuf};
+use crate::sealed::Sealed;
 use crate::{Numeric, MAX_SER_SIZE};
+
+/// An unsigned integer type that a type-bounded CompactSize read produces.
+pub trait CompactUint: Sealed + Sized {
+  /// Reported as the limit when a decoded value does not fit the type.
+  const MAX: u64;
+
+  /// Narrows a decoded value to the type.
+  fn from_u64(value: u64) -> Option<Self>;
+}
+
+macro_rules! impl_compactuint {
+  ($($ty:ty),+) => {$(
+    impl Sealed for $ty {}
+
+    impl CompactUint for $ty {
+      const MAX: u64 = <$ty>::MAX as u64;
+
+      fn from_u64(value: u64) -> Option<Self> {
+        Self::try_from(value).ok()
+      }
+    }
+  )+};
+}
+
+impl_compactuint!(u8, u16, u32, u64);
 
 /// An unsigned integer encoded in variable-width CompactSize.
 #[repr(transparent)]
@@ -146,6 +172,21 @@ impl CompactSize {
     let len = Self::decode(data)?.into_len(MAX_SER_SIZE)?;
     crate::codec::ensure(data, len)?;
     Ok(len)
+  }
+
+  /// Reads a CompactSize-encoded integer field of type `T`, range-checked as
+  /// by [`CompactSize::decode`].
+  ///
+  /// # Errors
+  ///
+  /// Returns [`DecodeError::CompactSizeExceedsLimit`] when the value exceeds
+  /// the maximum of `T`, and the errors of [`CompactSize::decode`].
+  pub fn decode_as<T: CompactUint>(data: &mut &[u8]) -> Result<T, DecodeError> {
+    let value = Self::decode(data)?.0;
+    T::from_u64(value).ok_or(DecodeError::CompactSizeExceedsLimit {
+      limit: usize::try_from(T::MAX).unwrap_or(usize::MAX),
+      value,
+    })
   }
 
   /// Converts the value to a length no greater than `limit`.
@@ -295,6 +336,17 @@ mod tests {
         value,
       })
     );
+  }
+
+  #[rstest]
+  #[case::u8_max(0xFF, Ok(0xFF))]
+  #[case::past_u8(0x100, Err((0xFF, 0x100)))]
+  #[case::past_max_size(0x0200_0001, Err((crate::MAX_SER_SIZE, 0x0200_0001)))]
+  fn decode_as_bounds_the_value_by_the_type(#[case] value: u64, #[case] expected: Result<u8, (usize, u64)>) {
+    let mut wire = Vec::new();
+    CompactSize::new(value).encode(&mut wire);
+    let expected = expected.map_err(|(limit, value)| DecodeError::CompactSizeExceedsLimit { limit, value });
+    assert_eq!(CompactSize::decode_as::<u8>(&mut wire.as_slice()), expected);
   }
 
   #[rstest]
