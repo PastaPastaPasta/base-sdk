@@ -42,6 +42,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   valid member count, as Core's `UnserializeVectorWithMaxSize` does, failing with `TooManyEntries` before the entries;
   `QData::read_vvec` and `QData::read_contributions` read the two apart, as Core's handler does, with
   `VerificationVector`.
+- Typed DKG messages: `qcontrib` (`DkgContribution`), `qcomplaint` (`DkgComplaint`), `qjustify`
+  (`DkgJustification`, with `DkgShare`) and `qpcommit` (`DkgPrematureCommitment`), read whole as Core's DKG worker
+  reads them, with Core's `GetSignHash()` as `sign_hash`. `DkgMessage::check_payload` runs Core's handler checks
+  before the read: `MaxDKGMessageSize` (`HandlerPayloadTooLarge`) and the framing walk against the quorum's
+  `LlmqParams` (`P2pDecodeError::DkgFraming`); `dkg_quorum` peeks the type and quorum the parameters come from.
+- Typed signature share messages: `qsigsesann` (`SigSesAnnMsg`), `qsigsinv` and `qgetsigs` (`SigSharesInvMsg`),
+  `qbsigs` (`BatchedSigSharesMsg`) and `qsigshare` (`SigShareMsg`), each refusing more entries than Core's limits
+  before reading them (`MAX_SIG_SES_ANNS`, `MAX_SIG_SHARES_INVS`, `MAX_SIG_SHARES`, and `MAX_BATCHED_SIGS` for the
+  batches and their shares together). Session ids are Core's `VARINT`s, and a share inventory's bits its
+  `AUTOBITSET`, written in Core's shorter form. `SigSesAnn::sign_hash` and `SigShare::sign_hash` are Core's
+  `SignHash`.
 - `MAX_SPORK_SIG_LEN` and `MAX_QRINFO_BASE_HASHES`, the read limits of `spork` and `getqrinfo`. Core checks them only
   when reading, so both encode any length.
 

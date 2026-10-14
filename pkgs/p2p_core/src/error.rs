@@ -82,6 +82,16 @@ pub enum P2pDecodeError {
     /// The handler's limit.
     max: u64,
   },
+  /// A DKG payload whose framing does not fit its quorum's parameters.
+  ///
+  /// Core's DKG handler walks the payload's counts and lengths before
+  /// reading it and refuses a count outside the quorum's bounds, a payload
+  /// cut short or bytes after the message; it scores the peer's misbehaviour
+  /// at the discouragement threshold.
+  DkgFraming {
+    /// Wire command name.
+    command: &'static str,
+  },
   /// A `version` whose fields after `addr_recv` fail to decode.
   ///
   /// Core checks the peer's version and services in `head` before it reads
@@ -129,6 +139,7 @@ impl fmt::Display for P2pDecodeError {
       Self::TooManyEntries { command, count, max } => {
         write!(f, "{command} lists {count} entries, max {max}")
       }
+      Self::DkgFraming { command } => write!(f, "{command} framing does not fit its quorum"),
       Self::VersionTail { error, .. } => write!(f, "version after addr_recv: {error}"),
       Self::InvalidValue { field } => {
         write!(f, "invalid value for {field}")

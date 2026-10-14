@@ -11,7 +11,7 @@ use crate::limits;
 use crate::prelude::*;
 use crate::P2pDecodeError;
 
-use dash_types::codec::{read_bytes, BaseCodec, DecodeError};
+use dash_types::codec::{read_bytes, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::{CompactSize, Numeric};
 
 /// Core's `MAX_PROTOCOL_MESSAGE_LENGTH`, the V1 payload limit.
@@ -102,4 +102,70 @@ pub(crate) fn read_count_at_most(data: &mut &[u8], command: &'static str, max: u
     });
   }
   Ok(count.into_len(data.len())?)
+}
+
+/// Reads a whole payload as `T`: Core's readers that check `ds.empty()`
+/// after the read refuse bytes past it.
+pub(crate) fn decode_whole<T: BaseCodec>(data: &mut &[u8]) -> Result<T, P2pDecodeError> {
+  let value = T::decode(data)?;
+  if !data.is_empty() {
+    return Err(DecodeError::TrailingBytes { remaining: data.len() }.into());
+  }
+  Ok(value)
+}
+
+/// Reads Core's `VARINT` of a `uint32_t` (`VarIntMode::DEFAULT`): base-128
+/// digits, most significant first, each continued digit offset by one.
+///
+/// Every value has one encoding. A value past `u32::MAX` fails as Core's
+/// "ReadVarInt(): size too large" does, before the digit that overflows.
+pub(crate) fn read_varint_u32(data: &mut &[u8]) -> Result<u32, DecodeError> {
+  let mut n = 0u32;
+  loop {
+    let digit = u8::decode(data)?;
+    if n > u32::MAX >> 7 {
+      return Err(DecodeError::InvalidValue {
+        expected: Vec::new(),
+        actual: u64::from(n),
+      });
+    }
+    n = (n << 7) | u32::from(digit & 0x7f);
+    if digit & 0x80 == 0 {
+      return Ok(n);
+    }
+    if n == u32::MAX {
+      return Err(DecodeError::InvalidValue {
+        expected: Vec::new(),
+        actual: u64::from(n),
+      });
+    }
+    n += 1;
+  }
+}
+
+/// Writes `n` as Core's `VARINT` (`WriteVarInt`).
+pub(crate) fn write_varint_u32(mut n: u32, buf: &mut impl EncodeBuf) {
+  let mut digits = [0u8; 5];
+  let mut len = 0;
+  loop {
+    digits[len] = (n & 0x7f) as u8 | if len == 0 { 0 } else { 0x80 };
+    if n <= 0x7f {
+      break;
+    }
+    n = (n >> 7) - 1;
+    len += 1;
+  }
+  for &digit in digits[..=len].iter().rev() {
+    buf.push(digit);
+  }
+}
+
+/// Bytes of `n` as Core's `VARINT`, `GetSizeOfVarInt`.
+pub(crate) fn varint_u32_len(mut n: u32) -> usize {
+  let mut len = 1;
+  while n > 0x7f {
+    n = (n >> 7) - 1;
+    len += 1;
+  }
+  len
 }
