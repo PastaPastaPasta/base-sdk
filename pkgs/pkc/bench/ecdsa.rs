@@ -19,7 +19,7 @@ fn sign(bencher: divan::Bencher) {
   let sk = test_key();
   bencher.counter(divan::counter::ItemsCount::new(1u32)).bench(|| {
     let msg = message_hash(42);
-    sk.sign(&msg)
+    sk.sign_digest(&msg)
   });
 }
 
@@ -27,11 +27,11 @@ fn sign(bencher: divan::Bencher) {
 fn verify(bencher: divan::Bencher) {
   let sk = test_key();
   let msg = message_hash(99);
-  let sig = sk.sign(&msg);
+  let sig = sk.sign_digest(&msg);
   let pk = sk.public_key();
   bencher
     .counter(divan::counter::ItemsCount::new(1u32))
-    .bench(|| pk.verify(&msg, sig));
+    .bench(|| pk.verify_digest(&msg, sig));
 }
 
 #[divan::bench]

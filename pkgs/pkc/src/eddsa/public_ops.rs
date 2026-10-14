@@ -65,7 +65,7 @@ impl EddsaPublicKey {
   /// # Errors
   ///
   /// Returns `VerifyFailed` when the signature does not match.
-  pub fn verify(&self, msg: &[u8], sig: &EddsaSignature) -> Result<(), EddsaError> {
+  pub fn verify_message(&self, msg: &[u8], sig: &EddsaSignature) -> Result<(), EddsaError> {
     self
       .0
       .verify_strict(msg, sig.as_inner())

@@ -48,7 +48,7 @@ impl EddsaSecretKey {
   }
 
   /// Signs a message.
-  pub fn sign(&self, msg: &[u8]) -> EddsaSignature {
+  pub fn sign_message(&self, msg: &[u8]) -> EddsaSignature {
     EddsaSignature::from_inner(self.0.sign(msg))
   }
 }
@@ -184,7 +184,7 @@ mod tests {
     let sk = EddsaSecretKey::generate(&mut UnwrapErr(SysRng));
 
     assert!(sk.verify_pubkey(&sk.public_key()));
-    assert!(sk.public_key().verify(MSG, &sk.sign(MSG)).is_ok());
+    assert!(sk.public_key().verify_message(MSG, &sk.sign_message(MSG)).is_ok());
     assert_ne!(sk, EddsaSecretKey::generate(&mut UnwrapErr(SysRng)));
   }
 
@@ -196,11 +196,11 @@ mod tests {
 
   #[rstest]
   fn signature_verifies_under_its_own_key(alice_sk: EddsaSecretKey, bob_sk: EddsaSecretKey) {
-    let sig = alice_sk.sign(MSG);
+    let sig = alice_sk.sign_message(MSG);
 
-    assert!(alice_sk.public_key().verify(MSG, &sig).is_ok());
-    assert!(alice_sk.public_key().verify(b"another message", &sig).is_err());
-    assert!(bob_sk.public_key().verify(MSG, &sig).is_err());
+    assert!(alice_sk.public_key().verify_message(MSG, &sig).is_ok());
+    assert!(alice_sk.public_key().verify_message(b"another message", &sig).is_err());
+    assert!(bob_sk.public_key().verify_message(MSG, &sig).is_err());
   }
 
   #[rstest]

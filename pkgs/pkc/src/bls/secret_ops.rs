@@ -129,9 +129,18 @@ impl<S: BlsScheme> BlsSecretKey<S> {
     self.public_key() == *pubkey
   }
 
-  /// Sign a message of the scheme's message type.
-  pub fn sign(&self, msg: &S::Msg) -> BlsSignature<S> {
-    BlsSignature::from_inner(S::sign(&self.0, msg))
+  /// Sign a 32-byte hashed message.
+  pub fn sign_digest(&self, digest: &[u8; 32]) -> BlsSignature<S> {
+    BlsSignature::from_inner(S::sign(&self.0, S::digest_msg(digest)))
+  }
+
+  /// Sign an arbitrary-length message.
+  ///
+  /// The legacy scheme signs the SHA-256 digest of `msg`, which equals
+  /// [`Self::sign_digest`] over that digest. The IETF scheme hashes `msg` to
+  /// the curve directly.
+  pub fn sign_message(&self, msg: &[u8]) -> BlsSignature<S> {
+    BlsSignature::from_inner(S::sign(&self.0, S::plaintext_msg(msg)))
   }
 
   /// Compute a DH shared key: `self * peer_pk`.
@@ -279,8 +288,8 @@ mod tests {
     assert_eq!(tweaked_sk.public_key(), tweaked_pk);
     assert!(tweaked_sk.verify_pubkey(&tweaked_pk));
 
-    let msg = S::msg_ref(&[0x5a; 32]);
-    assert_eq!(tweaked_pk.verify(msg, &tweaked_sk.sign(msg)), Ok(()));
+    let msg = &[0x5a; 32];
+    assert_eq!(tweaked_pk.verify_digest(msg, &tweaked_sk.sign_digest(msg)), Ok(()));
   }
 
   #[rstest]

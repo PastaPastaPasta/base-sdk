@@ -140,6 +140,24 @@
         "agg_sig": "834c7d972c285c2ec38c99d600b18b0ae68fb9266a65358920131556b71a4420f43a24bc8278ba3f697d45054aba6606015f3247c157d6cc8c42041f05bcf52a59f256201b081a96a66a3dac7cffd1f86e66f63a16f90b02a2900a3123d6006f",
         "accepted": true
       }
+    ],
+    // Sourced from the pre-1.0 Chia bls-signatures "Test vectors 1"
+    // https://github.com/Chia-Network/bls-signatures/blob/0.1.15/src/test.cpp#L31-L83
+    "verify_message": [
+      {
+        "pks": [
+          "02a8d2aaa6a5e2e08d4b8d406aaf0121a2fc2088ed12431e6b0663028da9ac5922c9ea91cde7dd74b7d795580acc7a61",
+          "02a8d2aaa6a5e2e08d4b8d406aaf0121a2fc2088ed12431e6b0663028da9ac5922c9ea91cde7dd74b7d795580acc7a61",
+          "83fbcbbfa6b7a5a0e707efaa9e6de258a79a59116dd889ce74f1ab7f54c9b7ba15439dcb4acfbdd8bcffdd8825795b90"
+        ],
+        "msgs": [
+          "010203",
+          "01020304",
+          "0102"
+        ],
+        "agg_sig": "8b11daf73cd05f2fe27809b74a7b4c65b1bb79cc1066bdf839d96b97e073c1a635d2ec048e0801b4a208118fdbbb63a516bab8755cc8d850862eeaa099540cd83621ff9db97b4ada857ef54c50715486217bd2ecb4517e05ab49380c041e159b",
+        "accepted": true
+      }
     ]
   },
   "ietf": {
@@ -253,6 +271,50 @@
         ],
         "agg_sig": "a61c6b1abaf8a0baac5947e9b2266e72285c10eb28db3023b0ec6e00fb77b63b8d65af635b73a1c12545e99ca331a6b407def3a9e0c152c8479994ea403e5f9c9665503b4a013ce3e7178734a0274094d9389c4bb9aca6be1b7506b8e25c8fea",
         "accepted": false
+      }
+    ],
+    // Sourced from the dashbls basic scheme KAT, whose second key derives from 32 bytes of 0x01 and is pinned upstream only by fingerprint b839add1.
+    // https://github.com/dashpay/bls-signatures/blob/1.3.5/src/test.cpp#L336-L402
+    "verify_message": [
+      {
+        "pks": [
+          "85695fcbc06cc4c4c9451f4dce21cbf8de3e5a13bf48f44cdbb18e2038ba7b8bb1632d7911ef1e2e08749bddbf165352",
+          "aefe1789d6476f60439e1168f588ea16652dc321279f05a805fbc63933e88ae9c175d6c6ab182e54af562e1a0dce41bb"
+        ],
+        "msgs": [
+          "070809",
+          "0a0b0c"
+        ],
+        "agg_sig": "aee003c8cdaf3531b6b0ca354031b0819f7586b5846796615aee8108fec75ef838d181f9d244a94d195d7b0231d4afcf06f27f0cc4d3c72162545c240de7d5034a7ef3a2a03c0159de982fbc2e7790aeb455e27beae91d64e077c70b5506dea3",
+        "accepted": true
+      },
+      {
+        // The first signer's lone signature is not the aggregate.
+        "pks": [
+          "85695fcbc06cc4c4c9451f4dce21cbf8de3e5a13bf48f44cdbb18e2038ba7b8bb1632d7911ef1e2e08749bddbf165352",
+          "aefe1789d6476f60439e1168f588ea16652dc321279f05a805fbc63933e88ae9c175d6c6ab182e54af562e1a0dce41bb"
+        ],
+        "msgs": [
+          "070809",
+          "0a0b0c"
+        ],
+        "agg_sig": "b8faa6d6a3881c9fdbad803b170d70ca5cbf1e6ba5a586262df368c75acd1d1ffa3ab6ee21c71f844494659878f5eb230c958dd576b08b8564aad2ee0992e85a1e565f299cd53a285de729937f70dc176a1f01432129bb2b94d3d5031f8065a1",
+        "accepted": false
+      },
+      {
+        // One key signs two distinct messages.
+        "pks": [
+          "85695fcbc06cc4c4c9451f4dce21cbf8de3e5a13bf48f44cdbb18e2038ba7b8bb1632d7911ef1e2e08749bddbf165352",
+          "85695fcbc06cc4c4c9451f4dce21cbf8de3e5a13bf48f44cdbb18e2038ba7b8bb1632d7911ef1e2e08749bddbf165352",
+          "aefe1789d6476f60439e1168f588ea16652dc321279f05a805fbc63933e88ae9c175d6c6ab182e54af562e1a0dce41bb"
+        ],
+        "msgs": [
+          "010203",
+          "01020304",
+          "0102"
+        ],
+        "agg_sig": "a0b1378d518bea4d1100adbc7bdbc4ff64f2c219ed6395cd36fe5d2aa44a4b8e710b607afd965e505a5ac3283291b75413d09478ab4b5cfbafbeea366de2d0c0bcf61deddaa521f6020460fd547ab37659ae207968b545727beba0a3c5572b9c",
+        "accepted": true
       }
     ]
   }

@@ -16,11 +16,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `EcdsaRecSigBytes::from_bytes_mask`, which accepts any header byte and masks it into a recovery id and compression
   flag.
 - `ECDSA_REC_SIG_LEN`, the length of a compact recoverable signature.
+- `BlsSecretKey::sign_message`, `BlsSkShare::sign_message`, `BlsPublicKey::verify_message`,
+  `BlsSignature::{fast,secure}_verify_aggregates_message`, `BlsSignature::verify_aggregates_messages` and
+  `BlsScheme::plaintext_msg`, taking a message of any length. The legacy scheme signs the message's SHA-256 digest.
 
 ### Changed
 
 - **The minimum supported Rust version is raised from 1.85 to 1.89.**
 - **`bls` requires ADX on x86_64 unless `portable` is enabled.**
+- `BlsSecretKey::sign`, `BlsSkShare::sign`, `BlsPublicKey::verify` and `BlsSignature::{fast,secure}_verify_aggregates`
+  gain a `_digest` suffix and take a 32-byte hashed message. `BlsSignature::verify_aggregates` is renamed to
+  `verify_aggregates_digests` and takes `&[[u8; 32]]`. `BlsScheme::msg_ref` is renamed to `digest_msg`, and
+  `BlsScheme::Msg` is passed by value as `Msg<'a>`.
+- `EcdsaSecretKey::sign` and `EcdsaPublicKey::verify` are renamed to `sign_digest` and `verify_digest`.
+  `EddsaSecretKey::sign` and `EddsaPublicKey::verify` are renamed to `sign_message` and `verify_message`.
 - `BlsScheme::sk_to_bytes` returns `Zeroizing<[u8; 32]>` instead of a bare array. Code that binds the result as
   `[u8; 32]` must dereference it.
 - `EcdsaSecretKey::negate` takes `&self` and returns the negated key as `Result<Self, EcdsaError>` instead of negating
@@ -45,6 +54,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Decoding `BlsIes{Blob,Multi}Bytes`, and so `BlsIes{Blob,Multi}`, rejects a ciphertext length, blob count or blob
   length above `MAX_SER_SIZE` even when enough bytes remain, and reports one past the remaining input as
   `DecodeError::Eof`.
+- `EcdsaPublicKey::verify_digest` normalizes S before verifying, so a high-S signature verifies like its low-S twin.
+  Callers refusing malleable signatures check `EcdsaSignature::is_low_s`.
 
 ## [0.1.0-beta] - 2026-09-15
 

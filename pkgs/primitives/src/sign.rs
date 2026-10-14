@@ -69,7 +69,7 @@ pub(crate) fn verify_compact(digest: &[u8], sig: &[u8; ECDSA_REC_SIG_LEN], key: 
 /// does not verify.
 pub(crate) fn verify_bls<S: BlsScheme>(digest: &[u8], sig: &BlsSigBytes, key: &BlsPkBytes) -> Result<(), BlsError> {
   let digest = <&[u8; 32]>::try_from(digest).map_err(|_| BlsError::VerifyFailed)?;
-  key.to::<S>()?.verify(S::msg_ref(digest), &sig.to::<S>()?)
+  key.to::<S>()?.verify_digest(digest, &sig.to::<S>()?)
 }
 
 #[cfg(test)]
@@ -93,10 +93,7 @@ pub(crate) mod tests {
   /// Signs `digest` under scheme `S`, returning the public key and signature.
   pub(crate) fn bls_sign<S: BlsScheme>(seed: u8, digest: &[u8; 32]) -> (BlsPkBytes, [u8; 96]) {
     let sk = BlsSecretKey::<S>::from_ikm(&[seed; 32]).unwrap();
-    (
-      BlsPkBytes::from(sk.public_key()),
-      sk.sign(S::msg_ref(digest)).to_bytes(),
-    )
+    (BlsPkBytes::from(sk.public_key()), sk.sign_digest(digest).to_bytes())
   }
 
   #[rstest]
