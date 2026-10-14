@@ -126,9 +126,6 @@ fn open(name: &str) -> Corpus {
   Corpus::open(env!("CARGO_MANIFEST_DIR"), name)
 }
 
-/// Commands whose decode stops short of what Core sends, with the reason.
-const READ_SHORT: [(&str, &str); 1] = [("govsync", "govsync reads only the bloom filter data")];
-
 #[rstest]
 fn every_message_core_sent_round_trips() {
   let messages: Vec<Message> = open("core_messages").value("messages");
@@ -141,9 +138,6 @@ fn every_message_core_sent_round_trips() {
     let mut buf = Vec::new();
     d.msg.encode_payload(&mut buf);
     assert_eq!(buf, raw[..d.consumed], "{label}");
-    if READ_SHORT.iter().any(|(cmd, _)| *cmd == m.command) {
-      continue;
-    }
     assert_eq!(d.consumed, raw.len(), "{label}: Core sends no trailing bytes");
   }
 }

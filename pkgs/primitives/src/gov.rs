@@ -193,6 +193,20 @@ impl GovObject {
   pub fn data_as_hex(&self) -> String {
     self.data.to_lower_hex_string()
   }
+
+  /// Core's `GetSignatureHash()`: the object as written without its
+  /// signature.
+  pub fn signature_hash(&self) -> Hash256 {
+    let mut buf = Vec::new();
+    self.hash_parent.encode(&mut buf);
+    self.revision.encode(&mut buf);
+    self.time.encode(&mut buf);
+    self.collateral_hash.encode(&mut buf);
+    self.data.encode(&mut buf);
+    self.object_type.encode(&mut buf);
+    self.masternode_outpoint.encode(&mut buf);
+    Hash256::from_lendian(sha256d::Hash::hash(&buf).to_byte_array())
+  }
 }
 
 enum_map! {
@@ -287,6 +301,21 @@ impl Hashable for GovVote {
     self.outcome.encode(&mut buf);
     self.time.encode(&mut buf);
 
+    Hash256::from_lendian(sha256d::Hash::hash(&buf.into_array()).to_byte_array())
+  }
+}
+
+impl GovVote {
+  /// Core's `GetSignatureHash()`, which both an ECDSA and a BLS vote
+  /// signature sign: the vote as written without its signature, outcome
+  /// before signal.
+  pub fn signature_hash(&self) -> Hash256 {
+    let mut buf = ArrayBuf::<84>::new();
+    self.masternode_outpoint.encode(&mut buf);
+    self.parent_hash.encode(&mut buf);
+    self.outcome.encode(&mut buf);
+    self.signal.encode(&mut buf);
+    self.time.encode(&mut buf);
     Hash256::from_lendian(sha256d::Hash::hash(&buf.into_array()).to_byte_array())
   }
 }

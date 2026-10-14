@@ -59,11 +59,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   batches and their shares together). Session ids are Core's `VARINT`s, and a share inventory's bits its
   `AUTOBITSET`, written in Core's shorter form. `SigSesAnn::sign_hash` and `SigShare::sign_hash` are Core's
   `SignHash`.
+- Typed CoinJoin messages: `dsa` (`DsAccept`, its flags read from `ProtocolVersion::COINJOIN_REBALANCE`), `dsi`
+  (`DsEntry`, the collateral between its lists), `dsf` (`DsFinalTx`), `dss` (`DsSignedInputs`), `dsc` (`DsComplete`),
+  `dssu` (`DsStatusUpdate`), `dstx` (`DsTx`) and `dsq` (`DsQueue`). `DsQueue`'s `ready` is a `CoreBool`, so its hash
+  (`GetHash`) and `DsQueue::signature_hash` are of the queue as Core writes it back; `DsTx::signature_hash` signs the
+  time and not the signature. `max_pool_entries` and the `fits_pool` checks are Core's pool bound on `dsi` and `dss`.
+- `govobjvote` is read as Core's network read: a signature of at most 96 bytes, then exactly 65 or 96
+  (`VOTE_ECDSA_SIG_LEN`, `VOTE_BLS_SIG_LEN`), else `P2pDecodeError::InvalidValue`.
 - `MAX_SPORK_SIG_LEN` and `MAX_QRINFO_BASE_HASHES`, the read limits of `spork` and `getqrinfo`. Core checks them only
   when reading, so both encode any length.
 
 ### Changed
 
+- `GovSync::bloom_filter` is a `FilterLoad`, Core's whole `CBloomFilter` (its data limited to 36,000 bytes, then the
+  hash function count, tweak and flags); it was the data alone.
 - `headers2` decodes the headers Core's `Compress` builds, restoring their fields as Core's `Uncompress` does, and
   computes a previous block hash only where Core computes it. A first header with a field left off, or a version
   offset past the list, fails with `DecodeError::InvalidValue`, where Core's `Uncompress` leaves the fields zero.
