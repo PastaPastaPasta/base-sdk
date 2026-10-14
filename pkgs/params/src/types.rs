@@ -8,6 +8,7 @@
 
 pub(crate) use bitcoin_units::BlockHeight;
 use dash_num::{Arith256, Hash256};
+use dash_primitives::LlmqType;
 use dash_script::AddrParams;
 
 /// P2P network message start bytes (magic).
@@ -106,39 +107,6 @@ pub enum BuriedDeployment {
   MnRr,
   /// Credit withdrawal transactions.
   Withdrawals,
-}
-
-/// Long-living masternode quorum type identifiers.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum LlmqType {
-  /// 50 members, 60% threshold.
-  Llmq50_60,
-  /// 60 members, 75% threshold.
-  Llmq60_75,
-  /// 400 members, 60% threshold.
-  Llmq400_60,
-  /// 400 members, 85% threshold.
-  Llmq400_85,
-  /// 100 members, 67% threshold.
-  Llmq100_67,
-  /// 25 members, 67% threshold.
-  Llmq25_67,
-  /// Small test quorum for regtest.
-  LlmqTest,
-  /// Test quorum for InstantSend on regtest.
-  LlmqTestInstantSend,
-  /// Test quorum introduced with v17 features.
-  LlmqTestV17,
-  /// Test quorum for DIP0024 rotation.
-  LlmqTestDip0024,
-  /// Test quorum for Platform on regtest.
-  LlmqTestPlatform,
-  /// Devnet general-purpose quorum.
-  LlmqDevnet,
-  /// Devnet quorum for DIP0024 rotation.
-  LlmqDevnetDip0024,
-  /// Devnet quorum for Platform.
-  LlmqDevnetPlatform,
 }
 
 /// Parameters that influence chain consensus.

@@ -35,8 +35,12 @@ enum_map! {
     LlmqDevnet = 101 => "llmq_devnet",
     /// Test v17-era quorum.
     LlmqTestV17 = 102 => "llmq_test_v17",
+    /// Test DIP-0024 rotated quorum.
+    LlmqTestDip0024 = 103 => "llmq_test_dip0024",
     /// Test InstantSend quorum.
     LlmqTestInstantsend = 104 => "llmq_test_instantsend",
+    /// Devnet DIP-0024 rotated quorum.
+    LlmqDevnetDip0024 = 105 => "llmq_devnet_dip0024",
     /// Test Platform quorum.
     LlmqTestPlatform = 106 => "llmq_test_platform",
     /// Devnet Platform quorum.
