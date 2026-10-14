@@ -11,6 +11,8 @@ use crate::limits;
 use crate::prelude::*;
 use crate::P2pDecodeError;
 
+use bitcoin_hashes::sha256d;
+use dash_num::Hash256;
 use dash_types::codec::{read_bytes, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::{CompactSize, Numeric};
 
@@ -112,6 +114,11 @@ pub(crate) fn decode_whole<T: BaseCodec>(data: &mut &[u8]) -> Result<T, P2pDecod
     return Err(DecodeError::TrailingBytes { remaining: data.len() }.into());
   }
   Ok(value)
+}
+
+/// `CHashWriter`'s hash of `buf`: sha256d, as a little-endian `uint256`.
+pub(crate) fn dsha256(buf: &[u8]) -> Hash256 {
+  Hash256::from_lendian(sha256d::Hash::hash(buf).to_byte_array())
 }
 
 /// Reads Core's `VARINT` of a `uint32_t` (`VarIntMode::DEFAULT`): base-128

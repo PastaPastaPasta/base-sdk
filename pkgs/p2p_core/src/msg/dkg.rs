@@ -10,16 +10,21 @@
 //! Core's handler checks a DKG payload against its quorum's parameters
 //! before reading it: a size cap, then a walk over its framing
 //! ([`DkgMessage::check_payload`]). A DKG worker then reads the message
-//! ([`MsgDecode`]), refusing bytes after it. The BLS fields hold the wire
-//! bytes: Core reads them eagerly under its process-wide scheme, which the
-//! node applies.
+//! ([`MsgDecode`]), refusing bytes after it; [`DkgMessage::decode_checked`]
+//! runs both. Core's handler gates come first (a verified peer, a known
+//! quorum, a DKG session) and score their refusals apart, so the node routes
+//! these commands through them before decoding.
+//!
+//! The BLS fields hold the wire bytes: Core reads them eagerly under its
+//! process-wide scheme, which the node applies. Core signs and checks its
+//! eager read, so a sign hash is of the message with its BLS fields as the
+//! node normalizes them, not as read.
 
-use crate::codec::{codec_p2p, decode_whole, MsgDecode};
+use crate::codec::{codec_p2p, decode_whole, dsha256, MsgDecode};
 use crate::ctx::ProtoCtx;
 use crate::error::P2pDecodeError;
 use crate::prelude::*;
 
-use bitcoin_hashes::sha256d;
 use dash_num::Hash256;
 use dash_params::LlmqParams;
 use dash_pkc::bls::{BlsIesMultiBytes, BlsPkBytes, BlsScIetf, BlsSigBytes, BLS_PK_LEN, BLS_SIG_LEN, BLS_SK_LEN};
@@ -34,7 +39,7 @@ use core::fmt;
 const PREFIX_LEN: u64 = 1 + 32 + 32;
 
 /// A DKG message, read as Core's DKG handler and worker read it.
-pub trait DkgMessage: MsgDecode {
+pub trait DkgMessage: BaseCodec + MsgDecode {
   /// The message's command.
   const COMMAND: &'static str;
 
@@ -74,6 +79,34 @@ pub trait DkgMessage: MsgDecode {
     }
     Ok(())
   }
+
+  /// [`DkgMessage::check_payload`], then the worker's read of the whole
+  /// payload.
+  ///
+  /// # Errors
+  ///
+  /// [`DkgMessage::check_payload`]'s, then the read's.
+  fn decode_checked(payload: &[u8], params: &LlmqParams) -> Result<Self, P2pDecodeError> {
+    Self::check_payload(payload, params)?;
+    decode_whole(&mut &payload[..])
+  }
+}
+
+/// The impls every DKG message shares: the worker's whole read and a label.
+macro_rules! dkg_message {
+  ($ty:ident, $command:literal) => {
+    impl MsgDecode for $ty {
+      fn decode_msg(data: &mut &[u8], _ctx: &ProtoCtx) -> Result<Self, P2pDecodeError> {
+        decode_whole(data)
+      }
+    }
+
+    impl fmt::Display for $ty {
+      fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, concat!($command, "({}, {})"), self.quorum_hash, self.pro_tx_hash)
+      }
+    }
+  };
 }
 
 /// A position in a payload, as Core's framing walk reads it.
@@ -139,7 +172,7 @@ fn hash_without_sig(obj: &impl BaseCodec) -> Hash256 {
   obj.encode(&mut buf);
   let at = buf.len() - BLS_SIG_LEN;
   buf[at..].fill(0);
-  Hash256::from_lendian(sha256d::Hash::hash(&buf).to_byte_array())
+  dsha256(&buf)
 }
 
 /// A member's DKG contribution, the `qcontrib` payload (Core's
@@ -173,17 +206,14 @@ codec_p2p!(DkgContribution {
 });
 
 impl DkgContribution {
-  /// Core's `GetSignHash()`: the message's hash with the signature zeroed.
+  /// Core's `GetSignHash()`: the message's hash with the signature zeroed,
+  /// over the BLS fields as held (see the module docs).
   pub fn sign_hash(&self) -> Hash256 {
     hash_without_sig(self)
   }
 }
 
-impl MsgDecode for DkgContribution {
-  fn decode_msg(data: &mut &[u8], _ctx: &ProtoCtx) -> Result<Self, P2pDecodeError> {
-    decode_whole(data)
-  }
-}
+dkg_message!(DkgContribution, "qcontrib");
 
 impl DkgMessage for DkgContribution {
   const COMMAND: &'static str = "qcontrib";
@@ -220,12 +250,6 @@ impl DkgMessage for DkgContribution {
   }
 }
 
-impl fmt::Display for DkgContribution {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "qcontrib({}, {})", self.quorum_hash, self.pro_tx_hash)
-  }
-}
-
 /// A member's complaints, the `qcomplaint` payload (Core's `CDKGComplaint`):
 /// the members it found bad and those whose contribution it complains of.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
@@ -256,17 +280,14 @@ codec_p2p!(DkgComplaint {
 });
 
 impl DkgComplaint {
-  /// Core's `GetSignHash()`: the message's hash with the signature zeroed.
+  /// Core's `GetSignHash()`: the message's hash with the signature zeroed,
+  /// over the BLS fields as held (see the module docs).
   pub fn sign_hash(&self) -> Hash256 {
     hash_without_sig(self)
   }
 }
 
-impl MsgDecode for DkgComplaint {
-  fn decode_msg(data: &mut &[u8], _ctx: &ProtoCtx) -> Result<Self, P2pDecodeError> {
-    decode_whole(data)
-  }
-}
+dkg_message!(DkgComplaint, "qcomplaint");
 
 impl DkgMessage for DkgComplaint {
   const COMMAND: &'static str = "qcomplaint";
@@ -288,12 +309,6 @@ impl DkgMessage for DkgComplaint {
   }
 }
 
-impl fmt::Display for DkgComplaint {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "qcomplaint({}, {})", self.quorum_hash, self.pro_tx_hash)
-  }
-}
-
 /// A secret key share a justification reveals, Core's
 /// `CDKGJustification::Contribution`.
 ///
@@ -301,7 +316,7 @@ impl fmt::Display for DkgComplaint {
 /// [`dash_pkc::bls::BlsSkBytes`], which never leaves memory unwiped.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
-pub struct DkgShare {
+pub struct DkgRevealedShare {
   /// Index of the member the share is for.
   pub index: u32,
   /// The share's scalar, as read; Core reads it eagerly.
@@ -309,7 +324,7 @@ pub struct DkgShare {
   pub key: [u8; BLS_SK_LEN],
 }
 
-codec_p2p!(DkgShare { index, key });
+codec_p2p!(DkgRevealedShare { index, key });
 
 /// A member's justification, the `qjustify` payload (Core's
 /// `CDKGJustification`): the shares it was complained of, revealed.
@@ -324,7 +339,7 @@ pub struct DkgJustification {
   /// Registration transaction hash of the justifying member.
   pub pro_tx_hash: TxHash,
   /// The revealed shares.
-  pub contributions: Vec<DkgShare>,
+  pub contributions: Vec<DkgRevealedShare>,
   /// The member's signature, as read.
   pub sig: BlsSigBytes<BlsScIetf>,
 }
@@ -338,17 +353,14 @@ codec_p2p!(DkgJustification {
 });
 
 impl DkgJustification {
-  /// Core's `GetSignHash()`: the message's hash with the signature zeroed.
+  /// Core's `GetSignHash()`: the message's hash with the signature zeroed,
+  /// over the BLS fields as held (see the module docs).
   pub fn sign_hash(&self) -> Hash256 {
     hash_without_sig(self)
   }
 }
 
-impl MsgDecode for DkgJustification {
-  fn decode_msg(data: &mut &[u8], _ctx: &ProtoCtx) -> Result<Self, P2pDecodeError> {
-    decode_whole(data)
-  }
-}
+dkg_message!(DkgJustification, "qjustify");
 
 impl DkgMessage for DkgJustification {
   const COMMAND: &'static str = "qjustify";
@@ -366,12 +378,6 @@ impl DkgMessage for DkgJustification {
       walk.ignore(BLS_SIG_LEN as u64)?;
       Some(())
     })
-  }
-}
-
-impl fmt::Display for DkgJustification {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "qjustify({}, {})", self.quorum_hash, self.pro_tx_hash)
   }
 }
 
@@ -414,7 +420,7 @@ codec_p2p!(DkgPrematureCommitment {
 impl DkgPrematureCommitment {
   /// Core's `GetSignHash()`, `BuildCommitmentHash`: the hash both
   /// signatures sign, over the type, the quorum, the valid members, the key
-  /// and the vector's hash.
+  /// and the vector's hash; over the key as held (see the module docs).
   pub fn sign_hash(&self) -> Hash256 {
     let mut buf = Vec::new();
     self.llmq_type.encode(&mut buf);
@@ -422,15 +428,11 @@ impl DkgPrematureCommitment {
     self.valid_members.encode(&mut buf);
     self.quorum_public_key.encode(&mut buf);
     self.quorum_vvec_hash.encode(&mut buf);
-    Hash256::from_lendian(sha256d::Hash::hash(&buf).to_byte_array())
+    dsha256(&buf)
   }
 }
 
-impl MsgDecode for DkgPrematureCommitment {
-  fn decode_msg(data: &mut &[u8], _ctx: &ProtoCtx) -> Result<Self, P2pDecodeError> {
-    decode_whole(data)
-  }
-}
+dkg_message!(DkgPrematureCommitment, "qpcommit");
 
 impl DkgMessage for DkgPrematureCommitment {
   const COMMAND: &'static str = "qpcommit";
@@ -446,12 +448,6 @@ impl DkgMessage for DkgPrematureCommitment {
       walk.ignore(BLS_PK_LEN as u64 + 32 + 2 * BLS_SIG_LEN as u64)?;
       Some(())
     })
-  }
-}
-
-impl fmt::Display for DkgPrematureCommitment {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "qpcommit({}, {})", self.quorum_hash, self.pro_tx_hash)
   }
 }
 

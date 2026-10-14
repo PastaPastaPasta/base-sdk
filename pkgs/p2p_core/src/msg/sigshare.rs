@@ -12,13 +12,12 @@
 //! run before the read. The shares are lazy: Core keeps their wire bytes.
 
 use crate::codec::{
-  codec_p2p, impl_p2p, read_count_at_most, read_varint_u32, varint_u32_len, write_varint_u32, MsgDecode,
+  codec_p2p, dsha256, impl_p2p, read_count_at_most, read_varint_u32, varint_u32_len, write_varint_u32, MsgDecode,
 };
 use crate::ctx::ProtoCtx;
 use crate::error::P2pDecodeError;
 use crate::prelude::*;
 
-use bitcoin_hashes::sha256d;
 use dash_num::Hash256;
 use dash_params::MAX_LLMQ_SIZE;
 use dash_pkc::bls::{BlsScIetf, BlsSigBytes};
@@ -49,7 +48,7 @@ fn sign_hash(llmq_type: LlmqType, quorum_hash: &QuorumHash, id: &Hash256, msg_ha
   quorum_hash.encode(&mut buf);
   id.encode(&mut buf);
   msg_hash.encode(&mut buf);
-  Hash256::from_lendian(sha256d::Hash::hash(&buf).to_byte_array())
+  dsha256(&buf)
 }
 
 /// A signing session's announcement (Core's `CSigSesAnn`): the session id
@@ -92,6 +91,8 @@ impl BaseCodec for SigSesAnn {
   }
 }
 
+// The hash of the encoding: an identity for maps, not one Core computes or
+// keys inventory by.
 hash_impl!(SigSesAnn);
 
 impl SigSesAnn {
@@ -220,6 +221,8 @@ impl BaseCodec for SigSharesInv {
   }
 }
 
+// The hash of the encoding: an identity for maps, not one Core computes or
+// keys inventory by.
 hash_impl!(SigSharesInv);
 
 /// One member's share in a batch.
@@ -307,6 +310,9 @@ impl SigShare {
 }
 
 /// Session announcements, the `qsigsesann` payload.
+///
+/// Like the other message lists here, its handler limits apply in
+/// [`MsgDecode::decode_msg`]; [`BaseCodec::decode`] reads any count.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct SigSesAnnMsg {
@@ -339,7 +345,7 @@ codec_p2p!(SigSharesInvMsg { invs });
 impl MsgDecode for SigSharesInvMsg {
   /// Core refuses more than [`MAX_SIG_SHARES_INVS`] before reading any.
   fn decode_msg(data: &mut &[u8], _ctx: &ProtoCtx) -> Result<Self, P2pDecodeError> {
-    let count = read_count_at_most(data, "qsigsinv", MAX_SIG_SHARES_INVS)?;
+    let count = read_count_at_most(data, "qsigsinv/qgetsigs", MAX_SIG_SHARES_INVS)?;
     let invs = (0..count)
       .map(|_| SigSharesInv::decode(data))
       .collect::<Result<_, _>>()?;

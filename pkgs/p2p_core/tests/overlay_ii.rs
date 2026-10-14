@@ -144,6 +144,19 @@ fn dkg_walk_bounds_counts_by_the_quorum() {
     DkgContribution::check_payload(&big, &p),
     Err(P2pDecodeError::HandlerPayloadTooLarge { max: 9365, .. })
   ));
+  // Checked then read: the checks refuse first.
+  let P2pMsg::QContrib(read) = decode("qcontrib", &ok).unwrap() else {
+    panic!("qcontrib")
+  };
+  assert_eq!(DkgContribution::decode_checked(&ok, &p), Ok(*read));
+  assert!(matches!(
+    DkgContribution::decode_checked(&contribution(29, 40), &p),
+    Err(P2pDecodeError::DkgFraming { .. })
+  ));
+  assert!(matches!(
+    DkgContribution::decode_checked(&big, &p),
+    Err(P2pDecodeError::HandlerPayloadTooLarge { .. })
+  ));
 
   let framing = Err(P2pDecodeError::DkgFraming { command: "qcomplaint" });
   assert_eq!(

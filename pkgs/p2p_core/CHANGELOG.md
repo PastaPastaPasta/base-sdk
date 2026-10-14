@@ -43,10 +43,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `QData::read_vvec` and `QData::read_contributions` read the two apart, as Core's handler does, with
   `VerificationVector`.
 - Typed DKG messages: `qcontrib` (`DkgContribution`), `qcomplaint` (`DkgComplaint`), `qjustify`
-  (`DkgJustification`, with `DkgShare`) and `qpcommit` (`DkgPrematureCommitment`), read whole as Core's DKG worker
+  (`DkgJustification`, with `DkgRevealedShare`) and `qpcommit` (`DkgPrematureCommitment`), read whole as Core's DKG worker
   reads them, with Core's `GetSignHash()` as `sign_hash`. `DkgMessage::check_payload` runs Core's handler checks
   before the read: `MaxDKGMessageSize` (`HandlerPayloadTooLarge`) and the framing walk against the quorum's
-  `LlmqParams` (`P2pDecodeError::DkgFraming`); `dkg_quorum` peeks the type and quorum the parameters come from.
+  `LlmqParams` (`P2pDecodeError::DkgFraming`), and `DkgMessage::decode_checked` runs them then the read;
+  `dkg_quorum` peeks the type and quorum the parameters come from.
 - Typed signature share messages: `qsigsesann` (`SigSesAnnMsg`), `qsigsinv` and `qgetsigs` (`SigSharesInvMsg`),
   `qbsigs` (`BatchedSigSharesMsg`) and `qsigshare` (`SigShareMsg`), each refusing more entries than Core's limits
   before reading them (`MAX_SIG_SES_ANNS`, `MAX_SIG_SHARES_INVS`, `MAX_SIG_SHARES`, and `MAX_BATCHED_SIGS` for the

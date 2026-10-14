@@ -76,7 +76,7 @@ predicate isSecretType(TypeItem t) {
       "SigShare", "SigShareMsg", "SigSharesInv", "SigSharesInvMsg", "BatchedSigShare",
       "BatchedSigShares", "BatchedSigSharesMsg",
       // A DKG justification reveals a key share to the whole quorum: once sent it is public.
-      "DkgShare",
+      "DkgRevealedShare",
       // Serde artifact to deserialize a tagged enum.
       "__Seed"
     ]
