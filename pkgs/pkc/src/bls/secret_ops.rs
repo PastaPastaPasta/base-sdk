@@ -6,7 +6,7 @@
 
 //! Scheme-generic BLS secret key.
 
-use super::dh_bytes::BlsDhBytes;
+use super::byte_bags::BlsDhBytes;
 use super::error::BlsError;
 use super::public_ops::BlsPublicKey;
 use super::scalar::Fr;
@@ -34,7 +34,7 @@ use core::fmt::{Debug, Formatter, Result as FmtResult};
 pub struct BlsSecretKey<S: BlsScheme>(pub(crate) S::InnerSk);
 
 #[cfg(feature = "codec")]
-dlgt_scodec!(for[S: BlsScheme] BlsSecretKey<S> => BlsSkBytes<S>, Hash256, BlsError, BLS_SK_LEN);
+dlgt_scodec!(for[S: BlsScheme] BlsSecretKey<S> => BlsSkBytes, Hash256, BlsError, BLS_SK_LEN);
 
 impl<S: BlsScheme> BlsSecretKey<S> {
   /// Derive a secret key from input keying material (>= 32 bytes).
@@ -140,7 +140,7 @@ impl<S: BlsScheme> BlsSecretKey<S> {
   ///
   /// Returns `InvalidPublicKey` when the peer key or the product point
   /// is invalid.
-  pub fn dh_exchange(&self, peer_pk: &BlsPublicKey<S>) -> Result<BlsDhBytes<S>, BlsError> {
+  pub fn dh_exchange(&self, peer_pk: &BlsPublicKey<S>) -> Result<BlsDhBytes, BlsError> {
     S::dh_bytes(&self.0, &peer_pk.0)
   }
 
@@ -203,13 +203,24 @@ impl<S: BlsScheme> Zeroize for BlsSecretKey<S> {
 
 impl<S: BlsScheme> ZeroizeOnDrop for BlsSecretKey<S> {}
 
-type_cvrt!(for[S: BlsScheme] From<BlsSecretKey<S>> for BlsSkBytes<S>, |sk| {
+type_cvrt!(for[S: BlsScheme] From<BlsSecretKey<S>> for BlsSkBytes, |sk| {
   Self::from_bytes(*sk.to_bytes())
 });
 
-type_cvrt!(for[S: BlsScheme] TryFrom<BlsSkBytes<S>> for BlsSecretKey<S>, BlsError, |bytes| {
+type_cvrt!(for[S: BlsScheme] TryFrom<BlsSkBytes> for BlsSecretKey<S>, BlsError, |bytes| {
   Self::from_bytes(bytes.as_bytes())
 });
+
+impl BlsSkBytes {
+  /// Validates the bytes as a secret key under scheme `S`.
+  ///
+  /// # Errors
+  ///
+  /// Returns `InvalidSecretKey` when the bytes are not a valid scalar.
+  pub fn to<S: BlsScheme>(&self) -> Result<BlsSecretKey<S>, BlsError> {
+    BlsSecretKey::try_from(self)
+  }
+}
 
 type_cvrt!(for[S: BlsScheme] TryFrom<BlsSecretKey<S>> for Zeroizing<Fr>, BlsError, |sk| {
   Fr::from_bendian_reduce(&sk.to_bytes()).map(Zeroizing::new)

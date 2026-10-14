@@ -274,9 +274,9 @@ impl Hash for EcdsaPublicKey {
 type_cvrt!(From<EcdsaPublicKey> for EcdsaPkBytes, |pk| {
   let prefix = pk.sec1_prefix();
   match pk.form {
-    PkForm::Compressed => Self::from_raw(prefix, &pk.to_compressed()),
-    PkForm::Uncompressed => Self::from_raw(prefix, &pk.to_uncompressed()),
-    PkForm::Hybrid => Self::from_raw(prefix, &pk.to_hybrid()),
+    PkForm::Compressed => Self::new(prefix, &pk.to_compressed()),
+    PkForm::Uncompressed => Self::new(prefix, &pk.to_uncompressed()),
+    PkForm::Hybrid => Self::new(prefix, &pk.to_hybrid()),
   }
 });
 

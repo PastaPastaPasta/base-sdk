@@ -6,13 +6,13 @@
 
 //! LLMQ final commitment payload (type 6).
 
-use super::QuorumHash;
 use crate::codec::impl_payload;
 use crate::hash_impl;
+use crate::sptx::QuorumHash;
 use crate::support::{DynBitset, LlmqType};
 
 use dash_num::make_hash;
-use dash_pkc::bls::{BlsPkBytes, BlsScIetf, BlsSigBytes};
+use dash_pkc::bls::{BlsPkBytes, BlsSigBytes};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{Checkable, Numeric};
@@ -49,13 +49,13 @@ pub struct Commitment {
   /// Valid members bitset.
   pub valid_members: DynBitset,
   /// Quorum BLS public key (48 bytes).
-  pub quorum_public_key: BlsPkBytes<BlsScIetf>,
+  pub quorum_public_key: BlsPkBytes,
   /// Quorum verification vector hash (32 bytes).
   pub quorum_vvec_hash: QuorumVvecHash,
   /// Threshold signature over commitment.
-  pub quorum_sig: BlsSigBytes<BlsScIetf>,
+  pub quorum_sig: BlsSigBytes,
   /// Aggregated per-member signature.
-  pub members_sig: BlsSigBytes<BlsScIetf>,
+  pub members_sig: BlsSigBytes,
 }
 
 impl_payload!(Commitment);
@@ -78,10 +78,10 @@ impl BaseCodec for Commitment {
       quorum_index,
       signers: DynBitset::decode(data)?,
       valid_members: DynBitset::decode(data)?,
-      quorum_public_key: BlsPkBytes::<BlsScIetf>::decode(data)?,
+      quorum_public_key: BlsPkBytes::decode(data)?,
       quorum_vvec_hash: QuorumVvecHash::decode(data)?,
-      quorum_sig: BlsSigBytes::<BlsScIetf>::decode(data)?,
-      members_sig: BlsSigBytes::<BlsScIetf>::decode(data)?,
+      quorum_sig: BlsSigBytes::decode(data)?,
+      members_sig: BlsSigBytes::decode(data)?,
     })
   }
 

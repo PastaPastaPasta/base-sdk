@@ -23,6 +23,9 @@ use dash_types::{Hashable, Numeric};
 
 use core::fmt;
 
+/// Compact recoverable signature (header || r || s) length.
+pub const ECDSA_REC_SIG_LEN: usize = ECDSA_SIG_LEN + 1;
+
 enum_map! {
   /// Header flags for a compact recoverable ECDSA signature.
   #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -96,10 +99,10 @@ pub struct EcdsaRecSigBytes {
 #[cfg(feature = "codec")]
 impl BaseCodec for EcdsaRecSigBytes {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let n = CompactSize::decode(data)?.into_len(ECDSA_SIG_LEN + 1)?;
-    if n != ECDSA_SIG_LEN + 1 {
+    let n = CompactSize::decode(data)?.into_len(ECDSA_REC_SIG_LEN)?;
+    if n != ECDSA_REC_SIG_LEN {
       return Err(DecodeError::BadLen {
-        expected: vec![ECDSA_SIG_LEN + 1],
+        expected: vec![ECDSA_REC_SIG_LEN],
         actual: n,
       });
     }
@@ -120,7 +123,7 @@ impl BaseCodec for EcdsaRecSigBytes {
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
-    CompactSize::from(ECDSA_SIG_LEN + 1).encode(buf);
+    CompactSize::from(ECDSA_REC_SIG_LEN).encode(buf);
     buf.push(self.flags.to_base());
     let sig = self.sig.as_bytes();
     buf.extend_from_slice(sig); // nosemgrep: codec-no-raw-extend
@@ -169,7 +172,7 @@ impl EcdsaRecSigBytes {
   ///
   /// Returns `None` when the header byte is outside the `27..=34` range that
   /// encodes a recovery id and compression flag.
-  pub fn from_raw(bytes: [u8; ECDSA_SIG_LEN + 1]) -> Option<Self> {
+  pub fn from_bytes(bytes: [u8; ECDSA_REC_SIG_LEN]) -> Option<Self> {
     let flags = CompactFlags::try_from_base(bytes[0])?;
     let mut arr = [0u8; ECDSA_SIG_LEN];
     arr.copy_from_slice(&bytes[1..]);
@@ -177,6 +180,20 @@ impl EcdsaRecSigBytes {
       flags,
       sig: EcdsaSigBytes::from(arr),
     })
+  }
+
+  /// Construct from a 65-byte buffer with any header byte.
+  ///
+  /// The header less 27 gives the recovery id in its low two bits and the
+  /// compression flag in bit 2. Encoding writes the canonical header.
+  pub fn from_bytes_mask(bytes: [u8; ECDSA_REC_SIG_LEN]) -> Self {
+    let h = bytes[0].wrapping_sub(CompactFlags::Uncompressed0.to_base());
+    let mut arr = [0u8; ECDSA_SIG_LEN];
+    arr.copy_from_slice(&bytes[1..]);
+    Self {
+      flags: CompactFlags::from_parts(h & 3, Compression::from(h & 4 != 0)),
+      sig: EcdsaSigBytes::from(arr),
+    }
   }
 
   /// Whether the signing key was compressed.
@@ -195,8 +212,8 @@ impl EcdsaRecSigBytes {
   }
 
   /// The full 65-byte encoding.
-  pub fn to_bytes(&self) -> [u8; ECDSA_SIG_LEN + 1] {
-    let mut out = [0u8; ECDSA_SIG_LEN + 1];
+  pub fn to_bytes(&self) -> [u8; ECDSA_REC_SIG_LEN] {
+    let mut out = [0u8; ECDSA_REC_SIG_LEN];
     out[0] = self.flags.to_base();
     out[1..].copy_from_slice(self.sig.as_bytes());
     out
@@ -241,11 +258,11 @@ cfg_if! {
 
     impl<'de> ::serde::Deserialize<'de> for EcdsaRecSigBytes {
       fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let arr: [u8; ECDSA_SIG_LEN + 1] = serde_hex::deserialize::<_, Vec<u8>>(deserializer)?
+        let arr: [u8; ECDSA_REC_SIG_LEN] = serde_hex::deserialize::<_, Vec<u8>>(deserializer)?
           .as_slice()
           .try_into()
           .map_err(|_| DeError::custom("invalid compact recoverable signature length"))?;
-        Self::from_raw(arr).ok_or_else(|| DeError::custom("invalid compact signature header"))
+        Self::from_bytes(arr).ok_or_else(|| DeError::custom("invalid compact signature header"))
       }
     }
   }
@@ -254,7 +271,7 @@ cfg_if! {
 #[cfg(test)]
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
-  use super::{CompactFlags, Compression, EcdsaRecSigBytes, EcdsaSigBytes, ECDSA_SIG_LEN};
+  use super::{CompactFlags, Compression, EcdsaRecSigBytes, EcdsaSigBytes, ECDSA_REC_SIG_LEN, ECDSA_SIG_LEN};
   use crate::prelude::*;
 
   use dash_types::codec::{BaseCodec, DecodeError};
@@ -270,7 +287,7 @@ mod tests {
     let mut buf = Vec::new();
     rec.encode(&mut buf);
     assert_eq!(buf.len(), ECDSA_SIG_LEN + 2);
-    assert_eq!(buf[0] as usize, ECDSA_SIG_LEN + 1);
+    assert_eq!(buf[0] as usize, ECDSA_REC_SIG_LEN);
     let decoded = EcdsaRecSigBytes::decode(&mut buf.as_slice()).unwrap();
     assert_eq!(decoded, rec);
   }
@@ -305,13 +322,34 @@ mod tests {
   }
 
   #[rstest]
-  fn from_raw_rejects_bad_header() {
-    let mut buf = [0u8; ECDSA_SIG_LEN + 1];
+  fn from_bytes_rejects_bad_header() {
+    let mut buf = [0u8; ECDSA_REC_SIG_LEN];
     buf[0] = 0x00;
-    assert!(EcdsaRecSigBytes::from_raw(buf).is_none());
+    assert!(EcdsaRecSigBytes::from_bytes(buf).is_none());
 
     buf[0] = CompactFlags::Compressed3.to_base() + 1;
-    assert!(EcdsaRecSigBytes::from_raw(buf).is_none());
+    assert!(EcdsaRecSigBytes::from_bytes(buf).is_none());
+  }
+
+  #[rstest]
+  #[case::zero(0, 1, Compression::Compressed)]
+  #[case::below_range(26, 3, Compression::Compressed)]
+  #[case::first(27, 0, Compression::Uncompressed)]
+  #[case::last_uncompressed(30, 3, Compression::Uncompressed)]
+  #[case::first_compressed(31, 0, Compression::Compressed)]
+  #[case::last(34, 3, Compression::Compressed)]
+  #[case::above_range(35, 0, Compression::Uncompressed)]
+  #[case::above_range_compressed(39, 0, Compression::Compressed)]
+  #[case::max(255, 0, Compression::Compressed)]
+  fn from_bytes_mask_masks_header(#[case] header: u8, #[case] rid: u8, #[case] compressed: Compression) {
+    let mut buf = [0xab; ECDSA_REC_SIG_LEN];
+    buf[0] = header;
+    let mut canonical = buf;
+    canonical[0] = CompactFlags::from_parts(rid, compressed).to_base();
+    assert_eq!(
+      EcdsaRecSigBytes::from_bytes_mask(buf),
+      EcdsaRecSigBytes::from_bytes(canonical).unwrap()
+    );
   }
 
   #[rstest]

@@ -6,16 +6,14 @@
 
 //! Hashed representation of a BLS public key.
 
-use crate::bls::BlsSchemeId;
-
 use dash_types::make_bytes;
 
 /// Length of a public key hash.
 pub const BLS_PK_HASH_LEN: usize = 32;
 
 make_bytes! { // nosemgrep: bytes-rev-means-hash
-  /// Scheme-tagged 32-byte public key hash.
-  for[S: BlsSchemeId] BlsPkHash<S>, BLS_PK_HASH_LEN, rev
+  /// 32-byte public key hash.
+  BlsPkHash, BLS_PK_HASH_LEN, rev
 }
 
 #[cfg(all(test, feature = "bls", feature = "codec"))]
@@ -40,11 +38,8 @@ mod tests {
   fn slice_conversion_checks_length() {
     let bytes = [7u8; 33];
 
-    assert_eq!(
-      BlsPkHash::<BlsScChia>::try_from(&bytes[..32]).unwrap().as_bytes(),
-      &[7u8; 32]
-    );
-    assert!(BlsPkHash::<BlsScChia>::try_from(&bytes[..]).is_err());
-    assert!(BlsPkHash::<BlsScChia>::try_from(&bytes[..31]).is_err());
+    assert_eq!(BlsPkHash::try_from(&bytes[..32]).unwrap().as_bytes(), &[7u8; 32]);
+    assert!(BlsPkHash::try_from(&bytes[..]).is_err());
+    assert!(BlsPkHash::try_from(&bytes[..31]).is_err());
   }
 }

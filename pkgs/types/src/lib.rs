@@ -32,7 +32,7 @@ pub mod serialize;
 pub use hex::ParseHexError;
 pub use macros::qtypestr;
 pub use numeric::Numeric;
-pub use traits::{Checkable, Hashable};
+pub use traits::{Checkable, Hashable, Signable};
 
 cfg_if::cfg_if! {
   if #[cfg(feature = "codec")] {

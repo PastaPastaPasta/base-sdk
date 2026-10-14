@@ -28,12 +28,12 @@ use core::hash::{Hash, Hasher};
 /// A BLS signature (96-byte compressed G2 point)
 #[cfg_attr(feature = "codec", derive(TypeId))]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(into = "BlsSigBytes<S>", try_from = "BlsSigBytes<S>"))]
+#[cfg_attr(feature = "serde", serde(into = "BlsSigBytes", try_from = "BlsSigBytes"))]
 #[cfg_attr(feature = "serde", serde(bound(serialize = "", deserialize = "")))]
 pub struct BlsSignature<S: BlsScheme>(pub(crate) S::InnerSig);
 
 #[cfg(feature = "codec")]
-dlgt_codec!(for[S: BlsScheme] BlsSignature<S> => BlsSigBytes<S>, Hash256, BlsError, BLS_SIG_LEN);
+dlgt_codec!(for[S: BlsScheme] BlsSignature<S> => BlsSigBytes, Hash256, BlsError, BLS_SIG_LEN);
 
 impl<S: BlsScheme> BlsSignature<S> {
   /// Deserialize from 96 bytes.
@@ -101,13 +101,24 @@ impl<S: BlsScheme> Hash for BlsSignature<S> {
   }
 }
 
-type_cvrt!(for[S: BlsScheme] From<BlsSignature<S>> for BlsSigBytes<S>, |sig| {
+type_cvrt!(for[S: BlsScheme] From<BlsSignature<S>> for BlsSigBytes, |sig| {
   Self::from_bytes(sig.to_bytes())
 });
 
-type_cvrt!(for[S: BlsScheme] TryFrom<BlsSigBytes<S>> for BlsSignature<S>, BlsError, |bytes| {
+type_cvrt!(for[S: BlsScheme] TryFrom<BlsSigBytes> for BlsSignature<S>, BlsError, |bytes| {
   Self::from_bytes(bytes.as_bytes())
 });
+
+impl BlsSigBytes {
+  /// Validates the bytes as a signature under scheme `S`.
+  ///
+  /// # Errors
+  ///
+  /// Returns `InvalidSignature` when the bytes are not a valid point under `S`.
+  pub fn to<S: BlsScheme>(&self) -> Result<BlsSignature<S>, BlsError> {
+    BlsSignature::try_from(self)
+  }
+}
 
 type_cvrt!(for[S: BlsScheme] TryFrom<BlsSignature<S>> for G2, BlsError, |sig| {
   S::sig_to_g2(&sig.0)
@@ -444,5 +455,25 @@ mod tests {
         assert_eq!(to_json(&ietf), format!("\"{}\"", ietf.to_bytes().to_lower_hex_string()));
       }
     }
+  }
+
+  fn assert_to_matches_from_bytes<S: BlsScheme>() {
+    let valid = BlsSecretKey::<S>::from_ikm(&RSEED[0])
+      .unwrap()
+      .sign(S::msg_ref(&MSG_DEADBEEF))
+      .to_bytes();
+    for encoded in [valid, G2_OFF_SUBGROUP_CHIA, G2_OFF_SUBGROUP_IETF, [0; 96]] {
+      assert_eq!(
+        BlsSigBytes::from_bytes(encoded).to::<S>(),
+        BlsSignature::<S>::from_bytes(&encoded)
+      );
+    }
+  }
+
+  #[rstest]
+  #[case::chia(assert_to_matches_from_bytes::<BlsScChia>)]
+  #[case::ietf(assert_to_matches_from_bytes::<BlsScIetf>)]
+  fn to_admits_what_from_bytes_admits(#[case] assertion: fn()) {
+    assertion();
   }
 }

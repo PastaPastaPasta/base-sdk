@@ -6,14 +6,18 @@
 
 //! ProUpRevTx revocation payload (type 4).
 
-use super::{InputsHash, ProTxInvalid};
+use super::sig::verify_operator;
+use super::{OperatorSig, ProTxVersion};
 use crate::codec::codec_payload;
+use crate::prelude::*;
+use crate::sign::unsigned_digest;
+use crate::sptx::{InputsHash, ProTxInvalid};
 use crate::support::RevocationReason;
 use crate::TxHash;
 
-use dash_pkc::bls::{BlsScIetf, BlsSigBytes};
+use dash_pkc::bls::{BlsError, BlsPkBytes, BlsSigBytes, BLS_SIG_LEN};
 use dash_types::type_id::TypeId;
-use dash_types::Checkable;
+use dash_types::{Checkable, Signable};
 
 use core::fmt;
 
@@ -25,8 +29,8 @@ use core::fmt;
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ProUpRevTx {
-  /// 1=LegacyBLS, 2=BasicBLS.
-  pub version: u16,
+  /// Payload version.
+  pub version: ProTxVersion,
   /// ProTx hash identifying the masternode.
   pub pro_tx_hash: TxHash,
   /// Revocation reason.
@@ -34,7 +38,7 @@ pub struct ProUpRevTx {
   /// Hash of all inputs.
   pub inputs_hash: InputsHash,
   /// Operator BLS signature.
-  pub sig: BlsSigBytes<BlsScIetf>,
+  pub sig: OperatorSig,
 }
 
 codec_payload!(ProUpRevTx {
@@ -45,14 +49,36 @@ codec_payload!(ProUpRevTx {
   sig,
 });
 
+impl Signable for ProUpRevTx {
+  type Key = BlsPkBytes;
+  type Context = ();
+  type Error = BlsError;
+
+  fn payload(&self, _ctx: &()) -> Vec<u8> {
+    unsigned_digest(self, &self.sig).to_vec()
+  }
+
+  fn set_signature(&mut self, sig: &[u8], key: &BlsPkBytes, _ctx: &()) -> Result<(), BlsError> {
+    let sig = <[u8; BLS_SIG_LEN]>::try_from(sig).map_err(|_| BlsError::InvalidSignature)?;
+    let sig = OperatorSig::new(BlsSigBytes::from_bytes(sig));
+    verify_operator(self.version, &self.payload(&()), &sig, key)?;
+    self.sig = sig;
+    Ok(())
+  }
+
+  fn reset_signature(&mut self) {
+    self.sig = OperatorSig::default();
+  }
+
+  fn verify(&self, key: &BlsPkBytes, _ctx: &()) -> Option<BlsError> {
+    verify_operator(self.version, &self.payload(&()), &self.sig, key).err()
+  }
+}
+
 impl Checkable for ProUpRevTx {
   type Error = ProTxInvalid;
 
   fn check(&self) -> Option<Self::Error> {
-    if self.version == 0 {
-      return Some(ProTxInvalid::BadVersion { version: self.version });
-    }
-
     if matches!(self.reason, RevocationReason::Unknown(_)) {
       return Some(ProTxInvalid::BadReason { reason: self.reason });
     }
@@ -63,7 +89,7 @@ impl Checkable for ProUpRevTx {
 
 impl fmt::Display for ProUpRevTx {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "ProUpRevTx {{ v{} }}", self.version)
+    write!(f, "ProUpRevTx {{ v{} }}", self.version.to_base())
   }
 }
 

@@ -14,7 +14,6 @@ use dash_num::{Arith256, Hash256};
 use dash_primitives::{
   Block, BlockHash, BlockHeader, LlmqType, MerkleRoot, OutPoint, Transaction, TxHash, TxIn, TxOut, TxType,
 };
-use dash_script::AddrParams;
 use dash_types::Numeric;
 use hex_conservative::hex;
 
@@ -156,14 +155,7 @@ pub static PARAMS: ChainParams = ChainParams {
   assumed_blockchain_size_gb: 0,
   assumed_chain_state_size_gb: 0,
   dns_seeds: &[],
-  addr_params: AddrParams {
-    pubkey_addr: 140,                     // addresses start with 'y'
-    script_addr: 19,                      // addresses start with '8' or '9'
-    secret_key: 239,                      // keys start with '9' or 'c'
-    ext_pubkey: [0x04, 0x35, 0x87, 0xCF], // tpub
-    ext_secret: [0x04, 0x35, 0x83, 0x94], // tprv
-    bip44_idx: 1,
-  },
+  addr_params: dash_script::__private::params::REGTEST,
   network_id: "regtest",
   is_test_chain: true,
   require_standard: true,

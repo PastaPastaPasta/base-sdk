@@ -7,8 +7,8 @@
 //! Dash transaction with version/type packing and optional extra payload for
 //! special transactions.
 
-use crate::payload::{PayloadError, PayloadInvalid, TxType};
 use crate::prelude::*;
+use crate::sptx::{PayloadError, PayloadInvalid, TxType};
 use crate::{codec_type, hash_impl};
 
 use bitcoin_hashes::sha256d;
@@ -347,15 +347,15 @@ impl Transaction {
   ///
   /// Returns `PayloadError` if the payload bytes cannot be decoded for the
   /// declared transaction type.
-  pub fn decode_payload(&self) -> Option<Result<crate::payload::SpecialPayload, crate::payload::PayloadError>> {
+  pub fn decode_payload(&self) -> Option<Result<crate::sptx::SpecialPayload, crate::sptx::PayloadError>> {
     if !self.has_extra_payload() {
       return None;
     }
     let mut cursor = &self.extra_payload[..];
-    let result = crate::payload::SpecialPayload::decode(self.tx_type, &mut cursor);
+    let result = crate::sptx::SpecialPayload::decode(self.tx_type, &mut cursor);
     Some(result.and_then(|payload| {
       if !cursor.is_empty() {
-        return Err(crate::payload::PayloadError {
+        return Err(crate::sptx::PayloadError {
           tx_type: self.tx_type,
           message: format!("trailing bytes: {} remaining", cursor.len()),
         });

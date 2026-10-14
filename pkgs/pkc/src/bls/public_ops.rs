@@ -30,12 +30,12 @@ use core::hash::{Hash, Hasher};
 /// A BLS public key (48-byte compressed G1 point)
 #[cfg_attr(feature = "codec", derive(TypeId))]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(into = "BlsPkBytes<S>", try_from = "BlsPkBytes<S>",))]
+#[cfg_attr(feature = "serde", serde(into = "BlsPkBytes", try_from = "BlsPkBytes",))]
 #[cfg_attr(feature = "serde", serde(bound(serialize = "", deserialize = "")))]
 pub struct BlsPublicKey<S: BlsScheme>(pub(crate) S::InnerPk);
 
 #[cfg(feature = "codec")]
-dlgt_codec!(for[S: BlsScheme] BlsPublicKey<S> => BlsPkBytes<S>, BlsPkHash<S>, BlsError, BLS_PK_LEN);
+dlgt_codec!(for[S: BlsScheme] BlsPublicKey<S> => BlsPkBytes, BlsPkHash, BlsError, BLS_PK_LEN);
 
 impl<S: BlsScheme> BlsPublicKey<S> {
   /// Deserialize from 48 bytes.
@@ -176,13 +176,24 @@ impl<S: BlsScheme> PartialEq for BlsPublicKey<S> {
   }
 }
 
-type_cvrt!(for[S: BlsScheme] From<BlsPublicKey<S>> for BlsPkBytes<S>, |pk| {
+type_cvrt!(for[S: BlsScheme] From<BlsPublicKey<S>> for BlsPkBytes, |pk| {
   Self::from_bytes(pk.to_bytes())
 });
 
-type_cvrt!(for[S: BlsScheme] TryFrom<BlsPkBytes<S>> for BlsPublicKey<S>, BlsError, |bytes| {
+type_cvrt!(for[S: BlsScheme] TryFrom<BlsPkBytes> for BlsPublicKey<S>, BlsError, |bytes| {
   Self::from_bytes(bytes.as_bytes())
 });
+
+impl BlsPkBytes {
+  /// Validates the bytes as a public key under scheme `S`.
+  ///
+  /// # Errors
+  ///
+  /// Returns `InvalidPublicKey` when the bytes are not a valid point under `S`.
+  pub fn to<S: BlsScheme>(&self) -> Result<BlsPublicKey<S>, BlsError> {
+    BlsPublicKey::try_from(self)
+  }
+}
 
 type_cvrt!(for[S: BlsScheme] TryFrom<BlsPublicKey<S>> for G1, BlsError, |pk| {
   S::pk_to_g1(&pk.0)

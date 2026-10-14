@@ -10,7 +10,7 @@ use crate::codec::impl_payload;
 use crate::{hash_impl, MerkleRoot};
 
 use bitcoin_units::BlockHeight;
-use dash_pkc::bls::{BlsScIetf, BlsSigBytes};
+use dash_pkc::bls::BlsSigBytes;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{Checkable, CompactSize, Numeric};
@@ -37,7 +37,7 @@ pub struct CoinbaseCommitment {
   /// Best ChainLock height difference (v3+, CompactSize).
   pub best_cl_height_diff: Option<u64>,
   /// Best ChainLock BLS signature (v3+).
-  pub best_cl_signature: Option<BlsSigBytes<BlsScIetf>>,
+  pub best_cl_signature: Option<BlsSigBytes>,
   /// Credit pool balance in duffs (v3+).
   pub credit_pool_balance: Option<i64>,
 }
@@ -57,7 +57,7 @@ impl BaseCodec for CoinbaseCommitment {
     let (best_cl_height_diff, best_cl_signature, credit_pool_balance) = if version >= 3 {
       (
         Some(CompactSize::decode(data)?.to_base()),
-        Some(BlsSigBytes::<BlsScIetf>::decode(data)?),
+        Some(BlsSigBytes::decode(data)?),
         Some(i64::decode(data)?),
       )
     } else {

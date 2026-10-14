@@ -9,7 +9,7 @@
 use crate::codec::{codec_p2p, impl_p2p};
 use crate::prelude::*;
 
-use dash_pkc::bls::{BlsPkBytes, BlsScIetf, BlsSigBytes};
+use dash_pkc::bls::{BlsPkBytes, BlsSigBytes};
 use dash_primitives::{
   hash_impl, BlockHash, Commitment, LlmqType, MnType, PlatformNodeId, ServiceV1, Transaction, TxHash,
 };
@@ -127,7 +127,7 @@ impl fmt::Display for MnListDiffPayload {
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct QuorumClSig {
   /// BLS signature.
-  pub sig: BlsSigBytes<BlsScIetf>,
+  pub sig: BlsSigBytes,
   /// Indices into the `new_quorums` vector.
   pub index_set: Vec<u16>,
 }
@@ -148,7 +148,7 @@ pub struct SimplifiedMnListEntry {
   /// Network service address.
   pub service: ServiceV1,
   /// BLS operator public key.
-  pub operator_key: BlsPkBytes<BlsScIetf>,
+  pub operator_key: BlsPkBytes,
   /// Voting key hash (HASH160).
   pub voting_key_id: PubKeyHash,
   /// Whether this masternode is currently valid.
@@ -170,7 +170,7 @@ impl BaseCodec for SimplifiedMnListEntry {
     let pro_reg_tx_hash = TxHash::decode(data)?;
     let confirmed_hash = BlockHash::decode(data)?;
     let service = ServiceV1::decode(data)?;
-    let operator_key = BlsPkBytes::<BlsScIetf>::decode(data)?;
+    let operator_key = BlsPkBytes::decode(data)?;
     let voting_key_id = PubKeyHash::decode(data)?;
     let is_valid = bool::decode(data)?;
 

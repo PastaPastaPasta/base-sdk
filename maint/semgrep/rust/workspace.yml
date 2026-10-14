@@ -172,6 +172,22 @@ rules:
         - /docs/samples/**
     pattern-regex: '\buse\s+crate::prelude::[^*]'
 
+  - id: style-no-from-raw
+    message: "byte constructors are named from_bytes, not from_raw"
+    severity: ERROR
+    languages: [rust]
+    paths:
+      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs]
+    patterns:
+      - pattern-either:
+          - pattern: |
+              fn $FN(...) { ... }
+          - pattern: |
+              fn $FN(...) -> $RET { ... }
+      - metavariable-regex:
+          metavariable: $FN
+          regex: "^from_raw$"
+
   - id: style-no-get-prefix
     message: "getters omit the get_ prefix"
     severity: ERROR

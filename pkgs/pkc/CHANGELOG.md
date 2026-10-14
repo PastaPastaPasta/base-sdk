@@ -11,6 +11,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `Bls{Public,Secret}Key::negate`, `BlsSecretKey::mul_tweak`, `EcdsaPublicKey::negate` and `EcdsaSecretKey::mul_tweak`.
 - `portable` feature, forwarding `blst/portable`, for binaries that run on any CPU of the target architecture.
+- `to::<S>()` on `BlsPkBytes`, `BlsSkBytes`, `BlsSigBytes`, `BlsIesBlobBytes` and `BlsIesMultiBytes`, which
+  validates the bytes under scheme `S` and returns the typed value.
+- `EcdsaRecSigBytes::from_bytes_mask`, which accepts any header byte and masks it into a recovery id and compression
+  flag.
+- `ECDSA_REC_SIG_LEN`, the length of a compact recoverable signature.
 
 ### Changed
 
@@ -31,6 +36,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The `serde` feature no longer implies `codec`. `BlsIes{Blob,Multi}` and `BlsIes{Blob,Multi}Bytes` serialize as
   their wire image and implement `Serialize` and `Deserialize` only with both features. Callers that relied on `serde`
   to enable `codec` must enable it explicitly.
+- `BlsPkBytes`, `BlsSkBytes`, `BlsSigBytes`, `BlsPkHash`, `BlsDhBytes`, `BlsIesBlobBytes` and `BlsIesMultiBytes` drop
+  their scheme parameter. Callers remove the type argument and pick the scheme when they convert with `to::<S>()`.
+- `EcdsaRecSigBytes::from_raw` is renamed to `from_bytes`, with unchanged behaviour.
 
 ### Fixed
 
