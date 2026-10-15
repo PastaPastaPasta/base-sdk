@@ -6,6 +6,7 @@
 
 //! Compressed header messages.
 
+use super::headers::decode_count;
 use crate::codec::{codec_p2p, impl_p2p};
 use crate::prelude::*;
 use crate::version::ProtocolVersion;
@@ -14,6 +15,10 @@ use dash_primitives::{hash_impl, BlockHash, BlockHeader, MerkleRoot};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{CompactSize, Hashable};
+
+/// Smallest compressed header, made of flags, a merkle root, a time delta
+/// and a nonce.
+const MIN_HEADERS2_ENTRY: usize = 39;
 
 /// Maximum entries in the MRU version cache.
 const MAX_VERSION_CACHE: usize = 7;
@@ -252,7 +257,7 @@ impl_p2p!(Headers2);
 
 impl BaseCodec for Headers2 {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let count = CompactSize::decode(data)?.into_len(Self::MAX_COUNT)?;
+    let count = decode_count(data, Self::MAX_COUNT, MIN_HEADERS2_ENTRY)?;
     let mut state = CompressionState::new();
     let mut headers = Vec::with_capacity(count);
     for _ in 0..count {
@@ -325,6 +330,18 @@ mod tests {
       Err(DecodeError::CompactSizeExceedsLimit {
         limit: Headers2::MAX_COUNT,
         value: 8_001,
+      })
+    );
+  }
+
+  #[rstest]
+  fn counts_past_the_input_fail_before_any_header() {
+    let payload = [&[2][..], &[0; MIN_HEADERS2_ENTRY]].concat();
+    assert_eq!(
+      Headers2::decode(&mut &payload[..]),
+      Err(DecodeError::Eof {
+        needed: 2 * MIN_HEADERS2_ENTRY,
+        remaining: MIN_HEADERS2_ENTRY,
       })
     );
   }

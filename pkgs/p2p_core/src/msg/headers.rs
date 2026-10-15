@@ -11,9 +11,22 @@ use crate::prelude::*;
 use crate::version::ProtocolVersion;
 
 use dash_primitives::{hash_impl, BlockHash, BlockHeader, MerkleRoot};
-use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
+use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
 use dash_types::CompactSize;
+
+/// Smallest `headers` entry, an 80-byte header and a one-byte tx count.
+const MIN_HEADERS_ENTRY: usize = 81;
+
+/// Reads an entry count of at most `limit`.
+///
+/// A count the remaining input cannot hold at `min_entry` bytes each is
+/// [`DecodeError::Eof`], reported before anything is allocated for it.
+pub(super) fn decode_count(data: &mut &[u8], limit: usize, min_entry: usize) -> Result<usize, DecodeError> {
+  let count = CompactSize::decode(data)?.into_len(limit)?;
+  codec::ensure(data, count * min_entry)?;
+  Ok(count)
+}
 
 /// Requests block headers starting from a locator.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
@@ -48,7 +61,7 @@ impl_p2p!(Headers);
 
 impl BaseCodec for Headers {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let count = CompactSize::decode(data)?.into_len(Self::MAX_COUNT)?;
+    let count = decode_count(data, Self::MAX_COUNT, MIN_HEADERS_ENTRY)?;
     let mut headers = Vec::with_capacity(count);
     for _ in 0..count {
       headers.push(BlockHeader {
@@ -84,4 +97,23 @@ hash_impl!(Headers);
 impl Headers {
   /// The most headers a `headers` message carries.
   pub const MAX_COUNT: usize = 2_000;
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  use rstest::rstest;
+
+  #[rstest]
+  fn counts_past_the_input_fail_before_any_header() {
+    let payload = [&[2][..], &[0; MIN_HEADERS_ENTRY]].concat();
+    assert_eq!(
+      Headers::decode(&mut &payload[..]),
+      Err(DecodeError::Eof {
+        needed: 2 * MIN_HEADERS_ENTRY,
+        remaining: MIN_HEADERS_ENTRY,
+      })
+    );
+  }
 }
