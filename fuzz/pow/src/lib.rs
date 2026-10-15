@@ -33,6 +33,7 @@ macro_rules! reference {
 reference!(
   blake => dash_sph_blake,
   bmw => dash_sph_bmw,
+  groestl => dash_sph_groestl,
 );
 
 /// Misalignments tried, every offset within a 16-byte vector.
@@ -81,7 +82,7 @@ pub fn assert_same(name: &str, ours: Digest, theirs: Digest, data: &[u8]) {
 mod tests {
   use super::*;
 
-  use dash_pow::__private::{blake, bmw};
+  use dash_pow::__private::{blake, bmw, groestl};
   use rstest::rstest;
 
   use std::fs;
@@ -93,6 +94,7 @@ mod tests {
   enum Stage {
     Blake,
     Bmw,
+    Groestl,
   }
 
   impl Stage {
@@ -101,6 +103,7 @@ mod tests {
       match self {
         Self::Blake => "blake",
         Self::Bmw => "bmw",
+        Self::Groestl => "groestl",
       }
     }
 
@@ -109,6 +112,7 @@ mod tests {
       let (ours, theirs): (Digest, Digest) = match self {
         Self::Blake => (blake::hash512, sph::blake),
         Self::Bmw => (bmw::hash512, sph::bmw),
+        Self::Groestl => (groestl::hash512, sph::groestl),
       };
       assert_same_at(self.name(), ours, theirs, data, offset);
     }
@@ -179,7 +183,7 @@ mod tests {
   /// Every stage agrees with sphlib across four blocks of lengths at
   /// every misalignment, without a fuzzing engine.
   #[rstest]
-  fn sweep(#[values(Stage::Blake, Stage::Bmw)] stage: Stage) {
+  fn sweep(#[values(Stage::Blake, Stage::Bmw, Stage::Groestl)] stage: Stage) {
     for len in 0..=512 {
       let data = input(len);
       for offset in 0..OFFSETS {
@@ -191,7 +195,7 @@ mod tests {
   /// Every input of every corpus still agrees with sphlib, so a plain
   /// `cargo test` replays what the fuzzers found without running one.
   #[rstest]
-  fn corpora(#[values(Stage::Blake, Stage::Bmw)] stage: Stage) {
+  fn corpora(#[values(Stage::Blake, Stage::Bmw, Stage::Groestl)] stage: Stage) {
     for data in corpus(stage.name()) {
       stage.assert_same_at(&data, offset_for(&data));
     }

@@ -36,5 +36,12 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "groestl"
+path = "targets/groestl.rs"
+test = false
+doc = false
+bench = false
+
 [lints]
 workspace = true
