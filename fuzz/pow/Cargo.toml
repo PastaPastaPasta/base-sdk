@@ -29,5 +29,12 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "bmw"
+path = "targets/bmw.rs"
+test = false
+doc = false
+bench = false
+
 [lints]
 workspace = true

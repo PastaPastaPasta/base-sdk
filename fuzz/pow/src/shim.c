@@ -9,6 +9,7 @@
 #include <stddef.h>
 
 #include "sph_blake.h"
+#include "sph_bmw.h"
 
 #define DASH_SPH(name)                                                       \
   void dash_sph_##name(const void *data, size_t len, unsigned char *out) { \
@@ -19,3 +20,4 @@
   }
 
 DASH_SPH(blake)
+DASH_SPH(bmw)
