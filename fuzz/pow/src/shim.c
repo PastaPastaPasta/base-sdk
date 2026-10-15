@@ -11,6 +11,7 @@
 #include "sph_blake.h"
 #include "sph_bmw.h"
 #include "sph_cubehash.h"
+#include "sph_echo.h"
 #include "sph_groestl.h"
 #include "sph_jh.h"
 #include "sph_keccak.h"
@@ -30,6 +31,7 @@
 DASH_SPH(blake)
 DASH_SPH(bmw)
 DASH_SPH(cubehash)
+DASH_SPH(echo)
 DASH_SPH(groestl)
 DASH_SPH(jh)
 DASH_SPH(keccak)

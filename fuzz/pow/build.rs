@@ -6,8 +6,8 @@
 
 //! Builds the sphlib reference implementations behind a one-call shim.
 
-const STAGES: [&str; 10] = [
-  "blake", "bmw", "cubehash", "groestl", "jh", "keccak", "luffa", "shavite", "simd", "skein",
+const STAGES: [&str; 11] = [
+  "blake", "bmw", "cubehash", "echo", "groestl", "jh", "keccak", "luffa", "shavite", "simd", "skein",
 ];
 
 fn main() {

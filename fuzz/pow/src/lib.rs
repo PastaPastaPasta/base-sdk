@@ -34,6 +34,7 @@ reference!(
   blake => dash_sph_blake,
   bmw => dash_sph_bmw,
   cubehash => dash_sph_cubehash,
+  echo => dash_sph_echo,
   groestl => dash_sph_groestl,
   jh => dash_sph_jh,
   keccak => dash_sph_keccak,
@@ -89,7 +90,7 @@ pub fn assert_same(name: &str, ours: Digest, theirs: Digest, data: &[u8]) {
 mod tests {
   use super::*;
 
-  use dash_pow::__private::{blake, bmw, cubehash, groestl, jh, keccak, luffa, shavite, simd, skein};
+  use dash_pow::__private::{blake, bmw, cubehash, echo, groestl, jh, keccak, luffa, shavite, simd, skein};
   use rstest::rstest;
 
   use std::fs;
@@ -102,6 +103,7 @@ mod tests {
     Blake,
     Bmw,
     CubeHash,
+    Echo,
     Groestl,
     Jh,
     Keccak,
@@ -118,6 +120,7 @@ mod tests {
         Self::Blake => "blake",
         Self::Bmw => "bmw",
         Self::CubeHash => "cubehash",
+        Self::Echo => "echo",
         Self::Groestl => "groestl",
         Self::Jh => "jh",
         Self::Keccak => "keccak",
@@ -134,6 +137,7 @@ mod tests {
         Self::Blake => (blake::hash512, sph::blake),
         Self::Bmw => (bmw::hash512, sph::bmw),
         Self::CubeHash => (cubehash::hash512, sph::cubehash),
+        Self::Echo => (echo::hash512, sph::echo),
         Self::Groestl => (groestl::hash512, sph::groestl),
         Self::Jh => (jh::hash512, sph::jh),
         Self::Keccak => (keccak::hash512, sph::keccak),
@@ -208,11 +212,11 @@ mod tests {
       .collect()
   }
 
-  /// SHAvite counts message bits in 32-bit words, which carry after 2^29
-  /// bytes; no fuzzer input gets near that.
+  /// Echo and SHAvite agree with sphlib across their 32-bit bit-count carry.
+  /// Fuzzer inputs never reach the 2^29 bytes the carry needs.
   #[rstest]
   #[ignore = "hashes 512 MiB inputs, run with `--release --ignored`"]
-  fn counter_word_carries(#[values(Stage::Shavite)] stage: Stage) {
+  fn counter_word_carries(#[values(Stage::Echo, Stage::Shavite)] stage: Stage) {
     const CARRY: usize = 1 << 29;
     let data = input(CARRY + 129);
     // CARRY - 1 crosses the carry inside the final block's counter keys.
@@ -231,6 +235,7 @@ mod tests {
       Stage::Blake,
       Stage::Bmw,
       Stage::CubeHash,
+      Stage::Echo,
       Stage::Groestl,
       Stage::Jh,
       Stage::Keccak,
@@ -257,6 +262,7 @@ mod tests {
       Stage::Blake,
       Stage::Bmw,
       Stage::CubeHash,
+      Stage::Echo,
       Stage::Groestl,
       Stage::Jh,
       Stage::Keccak,

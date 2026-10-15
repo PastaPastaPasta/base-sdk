@@ -44,6 +44,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "echo"
+path = "targets/echo.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "groestl"
 path = "targets/groestl.rs"
 test = false
