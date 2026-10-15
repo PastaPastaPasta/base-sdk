@@ -40,7 +40,8 @@ pub use chainlock::{ClSig, IsdLock};
 pub use compact::{short_id_with_keys, BlockTxn, CmpctBlock, GetBlockTxn, PrefilledTx, SendCmpct, ShortTxId};
 pub use control::{QSendRecSigs, SendDsq, SendTxRcncl, Ssc};
 pub use dkg::{
-  dkg_quorum, DkgComplaint, DkgContribution, DkgJustification, DkgMessage, DkgPrematureCommitment, DkgRevealedShare,
+  dkg_inventory_hash, dkg_quorum, DkgComplaint, DkgContribution, DkgJustification, DkgMessage, DkgPrematureCommitment,
+  DkgRevealedShare,
 };
 pub use gov::GovSync;
 pub use headers::{GetBlocks, GetHeaders, Headers};
@@ -159,17 +160,17 @@ define_p2p! {
     QrInfo(Box<QrInfo>) => QRINFO "qrinfo" @ 167,
     /// DIP-0031: platform ban.
     PlatformBan(PlatformBan) => PLATFORMBAN "platformban" @ 168,
-    /// LLMQ: DKG contribution. Gate and check it first, as Core does
-    /// ([`DkgMessage::decode_checked`]).
+    /// LLMQ: DKG contribution. The handler gates, checks and queues it
+    /// before this read, in the order [`DkgMessage`] gives.
     QContrib(Box<DkgContribution>) => QCONTRIB "qcontrib" @ 147,
-    /// LLMQ: DKG complaint. Gate and check it first, as Core does
-    /// ([`DkgMessage::decode_checked`]).
+    /// LLMQ: DKG complaint. The handler gates, checks and queues it
+    /// before this read, in the order [`DkgMessage`] gives.
     QComplaint(DkgComplaint) => QCOMPLAINT "qcomplaint" @ 148,
-    /// LLMQ: DKG justification. Gate and check it first, as Core does
-    /// ([`DkgMessage::decode_checked`]).
+    /// LLMQ: DKG justification. The handler gates, checks and queues it
+    /// before this read, in the order [`DkgMessage`] gives.
     QJustify(DkgJustification) => QJUSTIFY "qjustify" @ 149,
-    /// LLMQ: DKG premature commitment. Gate and check it first, as
-    /// Core does ([`DkgMessage::decode_checked`]).
+    /// LLMQ: DKG premature commitment. The handler gates, checks and queues it
+    /// before this read, in the order [`DkgMessage`] gives.
     QpCommit(DkgPrematureCommitment) => QPCOMMIT "qpcommit" @ 150,
     /// LLMQ: signing session announcements.
     QSigSesAnn(SigSesAnnMsg) => QSIGSESANN "qsigsesann" @ 152,

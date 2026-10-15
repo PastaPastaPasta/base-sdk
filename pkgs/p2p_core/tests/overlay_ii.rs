@@ -12,15 +12,15 @@
 #![expect(clippy::panic, clippy::unwrap_used, reason = "test code")]
 
 use dash_p2p_core::{
-  BatchedSigShare, BatchedSigShares, BatchedSigSharesMsg, CommandString, DkgComplaint, DkgContribution,
-  DkgJustification, DkgMessage, DkgPrematureCommitment, P2pDecodeError, P2pMsg, ProtoCtx, ProtocolVersion, SigSesAnn,
-  SigSesAnnMsg, SigSharesInv, MAX_BATCHED_SIGS,
+  dkg_inventory_hash, BatchedSigShare, BatchedSigShares, BatchedSigSharesMsg, CommandString, DkgComplaint,
+  DkgContribution, DkgJustification, DkgMessage, DkgPrematureCommitment, P2pDecodeError, P2pMsg, ProtoCtx,
+  ProtocolVersion, SigSesAnn, SigSesAnnMsg, SigSharesInv, MAX_BATCHED_SIGS,
 };
 use dash_params::LlmqParams;
 use dash_pkc::bls::{BlsCtx, BlsSigBytes};
 use dash_primitives::{DynBitset, LlmqType};
 use dash_types::codec::{BaseCodec, DecodeError};
-use dash_types::{CompactSize, Numeric};
+use dash_types::{CompactSize, Hashable, Numeric};
 use rstest::rstest;
 
 fn decode(cmd: &'static str, payload: &[u8]) -> Result<P2pMsg, P2pDecodeError> {
@@ -220,6 +220,29 @@ fn dkg_walk_bounds_counts_by_the_quorum() {
   );
   // Fewer than the type and the quorum hash.
   assert_eq!(DkgPrematureCommitment::check_payload(&[1; 32], &p), framing);
+}
+
+/// The eager read keeps zeros and refuses bytes canonical in neither
+/// scheme; the inventory hash is the received payload's.
+#[rstest]
+fn dkg_eager_read_and_inventory_hash() {
+  let ok = complaint(&bitset(50, 0), &bitset(50, 0));
+  let P2pMsg::QComplaint(read) = decode("qcomplaint", &ok).unwrap() else {
+    panic!("qcomplaint")
+  };
+  assert_eq!(dkg_inventory_hash(&ok), read.hash());
+  for bls in [BlsCtx::BASIC, BlsCtx::LEGACY] {
+    assert_eq!(read.eager(bls).as_ref(), Ok(&read));
+  }
+  let mut bad = ok.clone();
+  let at = bad.len() - 96;
+  bad[at..].fill(0xff);
+  let P2pMsg::QComplaint(read) = decode("qcomplaint", &bad).unwrap() else {
+    panic!("qcomplaint")
+  };
+  for bls in [BlsCtx::BASIC, BlsCtx::LEGACY] {
+    assert!(read.eager(bls).is_err());
+  }
 }
 
 /// `DYNBITSET`'s padding bits: set ones fail the walk and the read.

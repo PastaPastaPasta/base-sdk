@@ -5,20 +5,8 @@
 //
 
 //! LLMQ DKG messages: contributions, complaints, justifications and
-//! premature commitments.
-//!
-//! Core's handler checks a DKG payload against its quorum's parameters
-//! before reading it: a size cap, then a walk over its framing
-//! ([`DkgMessage::check_payload`]). A DKG worker then reads the message
-//! ([`MsgDecode`]), refusing bytes after it; [`DkgMessage::decode_checked`]
-//! runs both. Core's handler gates come first (a verified peer, a known
-//! quorum, a DKG session) and score their refusals apart, so the node routes
-//! these commands through them before decoding.
-//!
-//! The BLS fields hold the wire bytes: Core reads them eagerly under its
-//! process-wide scheme, which the node applies. Core signs and checks its
-//! eager read, so a sign hash is of the message with its BLS fields as the
-//! node normalizes them, not as read.
+//! premature commitments. [`DkgMessage`] gives the order in which Core's
+//! handler and worker take them.
 
 use crate::codec::{codec_p2p, decode_whole, dsha256, MsgDecode};
 use crate::ctx::ProtoCtx;
@@ -27,7 +15,10 @@ use crate::prelude::*;
 
 use dash_num::Hash256;
 use dash_params::LlmqParams;
-use dash_pkc::bls::{BlsIesMultiBytes, BlsPkBytes, BlsScIetf, BlsSigBytes, BLS_PK_LEN, BLS_SIG_LEN, BLS_SK_LEN};
+use dash_pkc::bls::{
+  BlsCtx, BlsDecodeError, BlsEagerPk, BlsEagerSig, BlsEagerSk, BlsIesMultiBytes, BlsPkBytes, BlsScIetf,
+  BlsSchemeSource, BlsSigBytes, BLS_PK_LEN, BLS_SIG_LEN, BLS_SK_LEN,
+};
 use dash_primitives::{DynBitset, LlmqType, QuorumHash, QuorumVvecHash, TxHash};
 use dash_types::codec::BaseCodec;
 use dash_types::type_id::{TypeId, Unencodable};
@@ -39,6 +30,31 @@ use core::fmt;
 const PREFIX_LEN: u64 = 1 + 32 + 32;
 
 /// A DKG message, read as Core's DKG handler and worker read it.
+///
+/// Core takes a received DKG message in this order, which the node keeps:
+///
+/// 1. The handler's gates on the peer and the quorum, each scored apart: a
+///    verified masternode peer, a payload holding the type and quorum hash
+///    ([`dkg_quorum`]), a known type and a usable quorum.
+/// 2. [`DkgMessage::check_payload`]: the quorum's size cap, then the framing
+///    walk. Each refusal scores 100.
+/// 3. The inventory hash of the payload as received ([`dkg_inventory_hash`]).
+/// 4. The GETDATA-response gate: a message the node did not request scores 10
+///    and is dropped. It runs after step 2, so an unrequested payload that
+///    fails those checks scores 100.
+/// 5. The queue of the quorum's session handler; none scores 100.
+/// 6. On the DKG worker, the read: [`MsgDecode::decode_msg`] of the whole
+///    payload, then [`DkgMessage::eager`] under the process-wide scheme. A
+///    failure of either scores 100.
+///
+/// [`DkgMessage::decode_checked`] runs step 2 and the whole read in one
+/// call, for single-step use such as tests. At intake the node runs the
+/// steps apart, so it never reads a message that is unrequested, has no
+/// handler or waits in a queue.
+///
+/// The BLS fields hold the wire bytes. Core signs and checks the fields as
+/// its eager read leaves them, so a sign hash is of the message
+/// [`DkgMessage::eager`] returns.
 pub trait DkgMessage: BaseCodec + MsgDecode {
   /// The message's command.
   const COMMAND: &'static str;
@@ -56,10 +72,10 @@ pub trait DkgMessage: BaseCodec + MsgDecode {
   /// [`DkgMessage::max_size`], then its framing against `params`, the
   /// parameters of the quorum type in its first byte.
   ///
-  /// Core runs these after finding the type's parameters and the quorum,
-  /// and before reading the message ([`MsgDecode::decode_msg`]), which fails
-  /// for bytes after it. Both refusals cost the peer the discouragement
-  /// score.
+  /// Core runs these after the handler's gates on the peer and the quorum,
+  /// and before the inventory hash, the GETDATA-response gate and the read
+  /// (steps 2 to 6 in [`DkgMessage`]). Both refusals cost the peer the
+  /// discouragement score.
   ///
   /// # Errors
   ///
@@ -81,7 +97,8 @@ pub trait DkgMessage: BaseCodec + MsgDecode {
   }
 
   /// [`DkgMessage::check_payload`], then the worker's read of the whole
-  /// payload.
+  /// payload, in one call. A node at intake runs them apart, with the
+  /// GETDATA-response gate between them (see [`DkgMessage`]).
   ///
   /// # Errors
   ///
@@ -90,6 +107,40 @@ pub trait DkgMessage: BaseCodec + MsgDecode {
     Self::check_payload(payload, params)?;
     decode_whole(&mut &payload[..])
   }
+
+  /// Core's eager read of the message's BLS fields (`CBLSWrapper`'s
+  /// `Unserialize`) under the process-wide scheme `bls`: the message as
+  /// Core's worker holds, writes back and signs it.
+  ///
+  /// All-zero bytes stay zeros, bytes canonical in the scheme are kept, and
+  /// bytes canonical only in the other scheme become zeros. The inventory
+  /// hash stays the received payload's ([`dkg_inventory_hash`]), which the
+  /// result's [`dash_types::Hashable`] hash can differ from.
+  ///
+  /// # Errors
+  ///
+  /// [`BlsDecodeError`] when a field is canonical in neither scheme, where
+  /// Core's read throws.
+  fn eager(&self, bls: BlsCtx) -> Result<Self, BlsDecodeError>;
+}
+
+/// Core's inventory hash of a received DKG message: sha256d of the payload
+/// as received, taken before the read. The node keys the GETDATA-response
+/// gate, its queues and its relay by it.
+pub fn dkg_inventory_hash(payload: &[u8]) -> Hash256 {
+  dsha256(payload)
+}
+
+/// A public key as Core's eager read leaves it under `bls`.
+fn eager_pk(key: &BlsPkBytes<BlsScIetf>, bls: BlsCtx) -> Result<BlsPkBytes<BlsScIetf>, BlsDecodeError> {
+  let read = BlsEagerPk::decode(key.as_bytes(), BlsSchemeSource::Global(bls))?;
+  Ok(BlsPkBytes::from_bytes(read.to_bytes(bls.scheme())))
+}
+
+/// A signature as Core's eager read leaves it under `bls`.
+fn eager_sig(sig: &BlsSigBytes<BlsScIetf>, bls: BlsCtx) -> Result<BlsSigBytes<BlsScIetf>, BlsDecodeError> {
+  let read = BlsEagerSig::decode(sig.as_bytes(), BlsSchemeSource::Global(bls))?;
+  Ok(BlsSigBytes::from_bytes(read.to_bytes(bls.scheme())))
 }
 
 /// Core's ceiling on every DKG payload: `MaxDKGMessageSize` never exceeds
@@ -220,7 +271,7 @@ codec_p2p!(DkgContribution {
 
 impl DkgContribution {
   /// Core's `GetSignHash()`: the message's hash with the signature zeroed,
-  /// over the BLS fields as held (see the module docs).
+  /// over the BLS fields as held; Core's is over [`DkgMessage::eager`]'s.
   pub fn sign_hash(&self) -> Hash256 {
     hash_without_sig(self)
   }
@@ -230,6 +281,24 @@ dkg_message!(DkgContribution, "qcontrib");
 
 impl DkgMessage for DkgContribution {
   const COMMAND: &'static str = "qcontrib";
+
+  fn eager(&self, bls: BlsCtx) -> Result<Self, BlsDecodeError> {
+    let shares = &self.contributions;
+    Ok(Self {
+      vvec: self
+        .vvec
+        .iter()
+        .map(|key| eager_pk(key, bls))
+        .collect::<Result<_, _>>()?,
+      contributions: BlsIesMultiBytes::new(
+        eager_pk(shares.ephemeral_pk(), bls)?,
+        *shares.iv_seed(),
+        shares.blobs().to_vec(),
+      ),
+      sig: eager_sig(&self.sig, bls)?,
+      ..self.clone()
+    })
+  }
 
   fn max_size(params: &LlmqParams) -> usize {
     const BLOB: u64 = COMPACT + 128;
@@ -294,7 +363,7 @@ codec_p2p!(DkgComplaint {
 
 impl DkgComplaint {
   /// Core's `GetSignHash()`: the message's hash with the signature zeroed,
-  /// over the BLS fields as held (see the module docs).
+  /// over the BLS fields as held; Core's is over [`DkgMessage::eager`]'s.
   pub fn sign_hash(&self) -> Hash256 {
     hash_without_sig(self)
   }
@@ -304,6 +373,13 @@ dkg_message!(DkgComplaint, "qcomplaint");
 
 impl DkgMessage for DkgComplaint {
   const COMMAND: &'static str = "qcomplaint";
+
+  fn eager(&self, bls: BlsCtx) -> Result<Self, BlsDecodeError> {
+    Ok(Self {
+      sig: eager_sig(&self.sig, bls)?,
+      ..self.clone()
+    })
+  }
 
   fn max_size(params: &LlmqParams) -> usize {
     capped(PREFIX_LEN + 2 * (COMPACT + param(params.size).div_ceil(8)) + BLS_SIG_LEN as u64)
@@ -367,7 +443,7 @@ codec_p2p!(DkgJustification {
 
 impl DkgJustification {
   /// Core's `GetSignHash()`: the message's hash with the signature zeroed,
-  /// over the BLS fields as held (see the module docs).
+  /// over the BLS fields as held; Core's is over [`DkgMessage::eager`]'s.
   pub fn sign_hash(&self) -> Hash256 {
     hash_without_sig(self)
   }
@@ -377,6 +453,25 @@ dkg_message!(DkgJustification, "qjustify");
 
 impl DkgMessage for DkgJustification {
   const COMMAND: &'static str = "qjustify";
+
+  fn eager(&self, bls: BlsCtx) -> Result<Self, BlsDecodeError> {
+    let contributions = self
+      .contributions
+      .iter()
+      .map(|share| {
+        let read = BlsEagerSk::decode(&share.key, BlsSchemeSource::Global(bls))?;
+        Ok(DkgRevealedShare {
+          index: share.index,
+          key: read.to_bytes(bls.scheme()),
+        })
+      })
+      .collect::<Result<_, _>>()?;
+    Ok(Self {
+      contributions,
+      sig: eager_sig(&self.sig, bls)?,
+      ..self.clone()
+    })
+  }
 
   fn max_size(params: &LlmqParams) -> usize {
     capped(PREFIX_LEN + (COMPACT + param(params.size) * (4 + BLS_SK_LEN as u64)) + BLS_SIG_LEN as u64)
@@ -433,7 +528,8 @@ codec_p2p!(DkgPrematureCommitment {
 impl DkgPrematureCommitment {
   /// Core's `GetSignHash()`, `BuildCommitmentHash`: the hash both
   /// signatures sign, over the type, the quorum, the valid members, the key
-  /// and the vector's hash; over the key as held (see the module docs).
+  /// and the vector's hash; over the key as held, Core's over
+  /// [`DkgMessage::eager`]'s.
   pub fn sign_hash(&self) -> Hash256 {
     let mut buf = Vec::new();
     self.llmq_type.encode(&mut buf);
@@ -449,6 +545,15 @@ dkg_message!(DkgPrematureCommitment, "qpcommit");
 
 impl DkgMessage for DkgPrematureCommitment {
   const COMMAND: &'static str = "qpcommit";
+
+  fn eager(&self, bls: BlsCtx) -> Result<Self, BlsDecodeError> {
+    Ok(Self {
+      quorum_public_key: eager_pk(&self.quorum_public_key, bls)?,
+      quorum_sig: eager_sig(&self.quorum_sig, bls)?,
+      sig: eager_sig(&self.sig, bls)?,
+      ..self.clone()
+    })
+  }
 
   fn max_size(params: &LlmqParams) -> usize {
     capped(PREFIX_LEN + (COMPACT + param(params.size).div_ceil(8)) + BLS_PK_LEN as u64 + 32 + 2 * BLS_SIG_LEN as u64)

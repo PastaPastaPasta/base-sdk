@@ -49,6 +49,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `LlmqParams` (`P2pDecodeError::DkgFraming`), and `DkgMessage::decode_checked` runs them then the read;
   `dkg_quorum` peeks the type and quorum the parameters come from. `P2pMsg::decode_with_policy` refuses a DKG payload
   over 1 MiB (`HandlerPayloadTooLarge`) before reading it, as Core's size cap does whatever the quorum.
+- `DkgMessage::eager`, Core's eager read of a DKG message's BLS fields under the process-wide scheme (the message Core
+  writes back and signs), and `dkg_inventory_hash`, Core's inventory hash of the payload as received. `DkgMessage`
+  documents the order of Core's handler and worker: gates, checks, inventory hash, GETDATA-response gate, queue, read.
 - Typed signature share messages: `qsigsesann` (`SigSesAnnMsg`), `qsigsinv` and `qgetsigs` (`SigSharesInvMsg`),
   `qbsigs` (`BatchedSigSharesMsg`) and `qsigshare` (`SigShareMsg`), each refusing more entries than Core's limits
   before reading them (`MAX_SIG_SES_ANNS`, `MAX_SIG_SHARES_INVS`, `MAX_SIG_SHARES`, and `MAX_BATCHED_SIGS` for the
