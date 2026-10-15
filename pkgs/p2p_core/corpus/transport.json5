@@ -44,6 +44,42 @@ BOOST_AUTO_TEST_CASE(transport_v1_size)
     { "command": "70691f6e6700000000000000", "size": 3145729, "disconnect": true },
   ],
 /*
+BOOST_AUTO_TEST_CASE(transport_v1_command)
+{
+    using namespace std::literals;
+    for (const auto name : {"ping"sv, "abcdefghijkl"sv, "a b"sv, ""sv, " "sv, "~"sv, "pi\x7fng"sv, "pi\x1fng"sv,
+                            "pi\x80ng"sv, "\xffping"sv, "pi\0ng"sv, "ping\0\0\0\0\0\0\0\x01"sv}) {
+        V1Transport transport{0, SER_NETWORK, INIT_PROTO_VERSION};
+        CMessageHeader hdr{Params().MessageStart(), "", 0};
+        std::copy(name.begin(), name.end(), hdr.pchCommand);
+        const uint256 hash{Hash(Span<const uint8_t>{})};
+        std::copy(hash.begin(), hash.begin() + CMessageHeader::CHECKSUM_SIZE, hdr.pchChecksum);
+        CDataStream ss{SER_NETWORK, PROTOCOL_VERSION};
+        ss << hdr;
+        Span<const uint8_t> bytes{UCharCast(ss.data()), ss.size()};
+        BOOST_REQUIRE(transport.ReceivedBytes(bytes) && transport.ReceivedMessageComplete());
+        bool reject{false};
+        transport.GetReceivedMessage({}, reject);
+        std::printf("    { \"command\": \"%s\", \"valid\": %s },\n", HexStr(Span{hdr.pchCommand}).c_str(),
+                    reject ? "false" : "true");
+    }
+}
+*/
+  "v1_command": [
+    { "command": "70696e670000000000000000", "valid": true },
+    { "command": "6162636465666768696a6b6c", "valid": true },
+    { "command": "612062000000000000000000", "valid": true },
+    { "command": "000000000000000000000000", "valid": true },
+    { "command": "200000000000000000000000", "valid": true },
+    { "command": "7e0000000000000000000000", "valid": true },
+    { "command": "70697f6e6700000000000000", "valid": false },
+    { "command": "70691f6e6700000000000000", "valid": false },
+    { "command": "7069806e6700000000000000", "valid": false },
+    { "command": "ff70696e6700000000000000", "valid": false },
+    { "command": "7069006e6700000000000000", "valid": false },
+    { "command": "70696e670000000000000001", "valid": false },
+  ],
+/*
 BOOST_AUTO_TEST_CASE(transport_v2)
 {
     using namespace std::literals;
