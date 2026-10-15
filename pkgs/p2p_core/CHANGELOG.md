@@ -59,12 +59,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   batches and their shares together). Session ids are Core's `VARINT`s, and a share inventory's bits its
   `AUTOBITSET`, written in Core's shorter form. `SigSesAnn::sign_hash` and `SigShare::sign_hash` are Core's
   `SignHash`.
-- Typed CoinJoin messages: `dsa` (`DsAccept`, its flags read from `ProtocolVersion::COINJOIN_REBALANCE`), `dsi`
-  (`DsEntry`, the collateral between its lists), `dsf` (`DsFinalTx`), `dss` (`DsSignedInputs`), `dsc` (`DsComplete`),
-  `dssu` (`DsStatusUpdate`), `dstx` (`DsTx`) and `dsq` (`DsQueue`). `DsQueue`'s `ready` is a `CoreBool`, so its hash
-  (`GetHash`) and `DsQueue::signature_hash` are of the queue as Core writes it back; `DsTx::signature_hash` signs the
-  time and not the signature. `max_pool_entries` is Core's pool bound: `DsEntry::fits_pool` on a read `dsi`, and
-  `DsSignedInputs::check_payload` on a `dss` count before the read (`TooManyEntries`, Core's `ERR_MAXIMUM`).
+- Typed CoinJoin messages: `dsa` (`DsAccept`, its flags read from `ProtocolVersion::COINJOIN_REBALANCE`, written for the
+  connection's negotiated version by `DsAccept::for_version`), `dsi` (`DsEntry`, the collateral between its lists),
+  `dsf` (`DsFinalTx`), `dss` (`DsSignedInputs`), `dsc` (`DsComplete`), `dssu` (`DsStatusUpdate`), `dstx` (`DsTx`) and
+  `dsq` (`DsQueue`). `DsQueue`'s `ready` is a `CoreBool`, so its hash (`GetHash`) and `DsQueue::signature_hash` are of
+  the queue as Core writes it back; `DsTx::signature_hash` signs the time and not the signature. `max_pool_entries` is
+  Core's pool bound: `DsEntry::fits_pool` on a read `dsi`, and `DsSignedInputs::check_payload` on a `dss` count before
+  the read (`TooManyEntries`, Core's `ERR_MAXIMUM`).
 - `VOTE_ECDSA_SIG_LEN` and `VOTE_BLS_SIG_LEN`, Core's vote signature sizes.
 - `FilterLoad::is_within_size_constraints`, Core's `CBloomFilter::IsWithinSizeConstraints()`.
 - `MAX_SPORK_SIG_LEN` and `MAX_QRINFO_BASE_HASHES`, the read limits of `spork` and `getqrinfo`. Core checks them only

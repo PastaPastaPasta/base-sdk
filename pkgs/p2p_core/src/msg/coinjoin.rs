@@ -46,7 +46,9 @@ pub fn max_pool_entries(params: &ChainParams) -> usize {
 /// Written with its flags when they are `Some`: a peer at
 /// [`ProtocolVersion::COINJOIN_REBALANCE`] or later needs them (Core fails
 /// its read without), and one before it reads none. Core compares a
-/// request without flags as one with flags 0.
+/// request without flags as one with flags 0. Send
+/// [`DsAccept::for_version`] of the request, as Core's versioned writer
+/// does.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct DsAccept {
@@ -80,6 +82,14 @@ impl BaseCodec for DsAccept {
 hash_impl!(DsAccept);
 
 impl DsAccept {
+  /// The request as Core writes it at the connection's negotiated
+  /// `version` (the lower of both sides'): flags (0 when unset) at
+  /// [`ProtocolVersion::COINJOIN_REBALANCE`] and later, none before.
+  pub fn for_version(&self, version: ProtocolVersion) -> Self {
+    let flags = (version >= ProtocolVersion::COINJOIN_REBALANCE).then(|| self.flags.unwrap_or(0));
+    Self { flags, ..self.clone() }
+  }
+
   fn read(data: &mut &[u8], has_flags: impl FnOnce(&[u8]) -> bool) -> Result<Self, DecodeError> {
     let denom = i32::decode(data)?;
     let collateral = Transaction::decode(data)?;

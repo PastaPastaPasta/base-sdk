@@ -87,6 +87,21 @@ fn dsa_reads_the_flags_from_the_rebalance_version() {
   assert_eq!(encode(&msg), body);
 }
 
+/// A request built here goes to each peer in the layout of its version.
+#[rstest]
+fn dsa_is_written_for_the_peer_version() {
+  let body = [&[0x04, 0, 0, 0][..], &tx(false)].concat();
+  let (msg, _) = decode_at("dsa", &[&body[..], &[0x01]].concat(), 70241).unwrap();
+  let P2pMsg::Dsa(request) = msg else { panic!("{msg:?}") };
+  let old = P2pMsg::Dsa(request.for_version(ProtocolVersion::from_base(70240)));
+  assert_eq!(encode(&old), body);
+  let new = P2pMsg::Dsa(request.for_version(ProtocolVersion::from_base(70241)));
+  assert_eq!(encode(&new), [&body[..], &[0x01]].concat());
+  let unset = DsAccept { flags: None, ..request };
+  let new = P2pMsg::Dsa(unset.for_version(ProtocolVersion::from_base(70242)));
+  assert_eq!(encode(&new), [&body[..], &[0x00]].concat());
+}
+
 #[rstest]
 fn special_transactions_keep_their_payload() {
   let raw = [&[0, 0, 0, 0][..], &tx(true)].concat();
