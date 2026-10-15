@@ -17,9 +17,9 @@ use dash_p2p_core::{
   DkgPrematureCommitment, P2pDecodeError, P2pMsg, ProtoCtx, ProtocolVersion,
 };
 use dash_params::LlmqParams;
-use dash_pkc::bls::BlsCtx;
+use dash_pkc::bls::{BlsCtx, BlsDecodeError};
 use dash_primitives::LlmqType;
-use dash_types::Numeric;
+use dash_types::{Hashable, Numeric};
 use hex_conservative::decode_to_array;
 use rstest::rstest;
 
@@ -123,10 +123,11 @@ fn dkg_checks(c: &Case, raw: &[u8]) -> Result<(), Stage> {
   }
 }
 
-/// A DKG message as Core's worker leaves it: its BLS fields read eagerly
-/// under the case's scheme, a failure refusing the read.
-fn eager<M: DkgMessage>(m: &M, bls: BlsCtx) -> Result<M, Stage> {
-  m.eager(bls).map_err(|_| Stage::Read)
+/// A BLS field Core cannot read eagerly fails the worker's read.
+impl From<BlsDecodeError> for Stage {
+  fn from(_: BlsDecodeError) -> Self {
+    Self::Read
+  }
 }
 
 fn read(c: &Case, raw: &[u8]) -> Result<Read, Stage> {
@@ -137,40 +138,43 @@ fn read(c: &Case, raw: &[u8]) -> Result<Read, Stage> {
     P2pDecodeError::HandlerPayloadTooLarge { .. } => Stage::Oversized,
     _ => Stage::Read,
   })?;
-  // Core keys a DKG message by the payload it received, then signs and
-  // writes back its eager read.
-  let (msg, sign_hash) = match &d.msg {
+  // Core keys a DKG message by the payload it received, which the read
+  // writes back as is, then signs and writes back its eager read.
+  let (msg, hash, sign_hash) = match &d.msg {
     P2pMsg::QContrib(m) => {
-      let m = eager(&**m, bls)?;
+      let (hash, m) = (m.hash(), m.eager(bls)?);
       let sign_hash = le(m.sign_hash()).to_vec();
-      (P2pMsg::QContrib(Box::new(m)), Some(sign_hash))
+      (P2pMsg::QContrib(Box::new(m)), Some(hash), Some(sign_hash))
     }
     P2pMsg::QComplaint(m) => {
-      let m = eager(m, bls)?;
+      let (hash, m) = (m.hash(), m.eager(bls)?);
       let sign_hash = le(m.sign_hash()).to_vec();
-      (P2pMsg::QComplaint(m), Some(sign_hash))
+      (P2pMsg::QComplaint(m), Some(hash), Some(sign_hash))
     }
     P2pMsg::QJustify(m) => {
-      let m = eager(m, bls)?;
+      let (hash, m) = (m.hash(), m.eager(bls)?);
       let sign_hash = le(m.sign_hash()).to_vec();
-      (P2pMsg::QJustify(m), Some(sign_hash))
+      (P2pMsg::QJustify(m), Some(hash), Some(sign_hash))
     }
     P2pMsg::QpCommit(m) => {
-      let m = eager(m, bls)?;
+      let (hash, m) = (m.hash(), m.eager(bls)?);
       let sign_hash = le(m.sign_hash()).to_vec();
-      (P2pMsg::QpCommit(m), Some(sign_hash))
+      (P2pMsg::QpCommit(m), Some(hash), Some(sign_hash))
     }
-    P2pMsg::QSigSesAnn(m) => (
-      d.msg.clone(),
-      Some(m.anns.iter().flat_map(|a| le(a.sign_hash())).collect()),
-    ),
-    P2pMsg::QSigShare(m) => (
-      d.msg.clone(),
-      Some(m.shares.iter().flat_map(|s| le(s.sign_hash())).collect()),
-    ),
-    other => (other.clone(), None),
+    P2pMsg::QSigSesAnn(m) => {
+      let sign_hash = m.anns.iter().flat_map(|a| le(a.sign_hash())).collect();
+      (d.msg.clone(), None, Some(sign_hash))
+    }
+    P2pMsg::QSigShare(m) => {
+      let sign_hash = m.shares.iter().flat_map(|s| le(s.sign_hash())).collect();
+      (d.msg.clone(), None, Some(sign_hash))
+    }
+    other => (other.clone(), None, None),
   };
-  let hash = is_dkg(&c.command).then(|| le(dkg_inventory_hash(raw)));
+  if let Some(hash) = hash {
+    assert_eq!(hash, dkg_inventory_hash(raw), "{}: inventory hash", c.name);
+  }
+  let hash = hash.map(le);
   let mut reenc = Vec::new();
   msg.encode_payload(&mut reenc);
   Ok(Read {
@@ -179,10 +183,6 @@ fn read(c: &Case, raw: &[u8]) -> Result<Read, Stage> {
     hash,
     sign_hash,
   })
-}
-
-fn is_dkg(command: &str) -> bool {
-  matches!(command, "qcontrib" | "qcomplaint" | "qjustify" | "qpcommit")
 }
 
 fn cases() -> Vec<Case> {
