@@ -168,6 +168,20 @@ pub enum TxInvalid {
   PayloadCheck(PayloadInvalid),
 }
 
+/// An encode target that counts the bytes written instead of storing them.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Unencodable)]
+struct ByteCount(usize);
+
+impl EncodeBuf for ByteCount {
+  fn push(&mut self, _byte: u8) {
+    self.0 += 1;
+  }
+
+  fn extend_from_slice(&mut self, data: &[u8]) {
+    self.0 += data.len();
+  }
+}
+
 /// A Dash transaction.
 ///
 /// The wire format packs `version` (i16) and `tx_type` (u16) into a single
@@ -243,6 +257,12 @@ impl Checkable for Transaction {
     }
     if !allows_empty_vout && self.outputs.is_empty() {
       return Some(TxInvalid::EmptyOutputs);
+    }
+
+    let mut size = ByteCount::default();
+    self.encode(&mut size);
+    if size.0 > crate::MAX_LEGACY_BLOCK_SIZE {
+      return Some(TxInvalid::Oversize { size: size.0 });
     }
 
     if !self.has_extra_payload() && !self.extra_payload.is_empty() {

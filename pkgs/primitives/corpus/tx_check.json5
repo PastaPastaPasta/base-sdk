@@ -81,6 +81,12 @@ BOOST_AUTO_TEST_CASE(tx_check_shapes)
              {5, {0}, 0, {1}, 0, 0},
              {5, {0}, 1, {1}, 0, 0},
              {5, {0}, 101, {1}, 0, 0},
+             {0, {1}, 0, {1}, 0, MAX_LEGACY_BLOCK_SIZE},
+             {0, {1}, 0, {1}, 0, MAX_LEGACY_BLOCK_SIZE + 1},
+             {0, {}, 0, {1}, 0, MAX_LEGACY_BLOCK_SIZE + 100},
+             {1, {1}, 0, {1}, MAX_TX_EXTRA_PAYLOAD + 1, MAX_LEGACY_BLOCK_SIZE + 1},
+             {0, {1}, 0, {MAX_MONEY, 1}, 0, MAX_LEGACY_BLOCK_SIZE + 1},
+             {0, {1, 1}, 0, {1}, 0, MAX_LEGACY_BLOCK_SIZE + 1},
          }) {
         const auto size = [&](size_t pad) { return ::GetSerializeSize(BuildTx(s, pad), PROTOCOL_VERSION); };
         size_t pad{0};
@@ -126,5 +132,11 @@ BOOST_AUTO_TEST_CASE(tx_check_shapes)
     { "type": 5, "inputs": [0], "script_sig": 0, "values": [1], "pad": 0, "payload": 0, "size": 61, "reason": "bad-cb-length" },
     { "type": 5, "inputs": [0], "script_sig": 1, "values": [1], "pad": 0, "payload": 0, "size": 62, "reason": "" },
     { "type": 5, "inputs": [0], "script_sig": 101, "values": [1], "pad": 0, "payload": 0, "size": 162, "reason": "bad-cb-length" },
+    { "type": 0, "inputs": [1], "script_sig": 0, "values": [1], "pad": 999936, "payload": 0, "size": 1000000, "reason": "" },
+    { "type": 0, "inputs": [1], "script_sig": 0, "values": [1], "pad": 999937, "payload": 0, "size": 1000001, "reason": "bad-txns-oversize" },
+    { "type": 0, "inputs": [], "script_sig": 0, "values": [1], "pad": 1000077, "payload": 0, "size": 1000100, "reason": "bad-txns-vin-empty" },
+    { "type": 1, "inputs": [1], "script_sig": 0, "values": [1], "pad": 989933, "payload": 10001, "size": 1000001, "reason": "bad-txns-oversize" },
+    { "type": 0, "inputs": [1], "script_sig": 0, "values": [2100000000000000, 1], "pad": 999928, "payload": 0, "size": 1000001, "reason": "bad-txns-oversize" },
+    { "type": 0, "inputs": [1, 1], "script_sig": 0, "values": [1], "pad": 999896, "payload": 0, "size": 1000001, "reason": "bad-txns-oversize" },
   ],
 }
