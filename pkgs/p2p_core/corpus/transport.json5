@@ -43,4 +43,74 @@ BOOST_AUTO_TEST_CASE(transport_v1_size)
     { "command": "70691f6e6700000000000000", "size": 3145728, "disconnect": false },
     { "command": "70691f6e6700000000000000", "size": 3145729, "disconnect": true },
   ],
+/*
+BOOST_AUTO_TEST_CASE(transport_v2)
+{
+    using namespace std::literals;
+    const auto send = [](Span<const uint8_t> contents) {
+        V2TransportTester tester(true);
+        auto ret = tester.Interact();
+        BOOST_REQUIRE(ret && ret->empty());
+        tester.SendKey();
+        tester.SendGarbage();
+        tester.ReceiveKey();
+        tester.SendGarbageTerm();
+        tester.SendVersion();
+        ret = tester.Interact();
+        BOOST_REQUIRE(ret && ret->empty());
+        tester.ReceiveGarbage();
+        tester.ReceiveVersion();
+        tester.SendPacket(contents);
+        ret = tester.Interact();
+        if (!ret) return "disconnect";
+        BOOST_REQUIRE(ret->size() == 1);
+        return (*ret)[0] ? "accept" : "reject";
+    };
+    const auto long_form = [](std::string_view name) {
+        std::vector<uint8_t> prefix(1 + CMessageHeader::COMMAND_SIZE);
+        std::copy(name.begin(), name.end(), prefix.begin() + 1);
+        return prefix;
+    };
+    std::vector<std::pair<std::vector<uint8_t>, size_t>> cases;
+    for (const auto name : {"ping"sv, "abcdefghijkl"sv, ""sv, "pi\x7fng"sv, "pi\x1fng"sv, "pi\x80ng"sv,
+                            "pi\0ng"sv, "ping\0\0\0\0\0\0\0\x01"sv}) {
+        cases.emplace_back(long_form(name), 1 + CMessageHeader::COMMAND_SIZE);
+    }
+    const size_t max_contents{1 + CMessageHeader::COMMAND_SIZE + MAX_PROTOCOL_MESSAGE_LENGTH};
+    for (const size_t len : {size_t{1}, max_contents, max_contents + 1}) {
+        cases.emplace_back(std::vector<uint8_t>{21}, len);
+        cases.emplace_back(std::vector<uint8_t>{0xff}, len);
+    }
+    for (const size_t len : {max_contents, max_contents + 1}) {
+        cases.emplace_back(long_form("ping"sv), len);
+        cases.emplace_back(long_form("pi\0ng"sv), len);
+    }
+    for (const auto& [prefix, len] : cases) {
+        std::vector<uint8_t> contents{prefix};
+        contents.resize(len);
+        std::printf("    { \"prefix\": \"%s\", \"len\": %zu, \"result\": \"%s\" },\n", HexStr(prefix).c_str(), len,
+                    send(contents));
+    }
+}
+*/
+  "v2": [
+    { "prefix": "0070696e670000000000000000", "len": 13, "result": "accept" },
+    { "prefix": "006162636465666768696a6b6c", "len": 13, "result": "accept" },
+    { "prefix": "00000000000000000000000000", "len": 13, "result": "accept" },
+    { "prefix": "0070697f6e6700000000000000", "len": 13, "result": "accept" },
+    { "prefix": "0070691f6e6700000000000000", "len": 13, "result": "reject" },
+    { "prefix": "007069806e6700000000000000", "len": 13, "result": "reject" },
+    { "prefix": "007069006e6700000000000000", "len": 13, "result": "reject" },
+    { "prefix": "0070696e670000000000000001", "len": 13, "result": "reject" },
+    { "prefix": "15", "len": 1, "result": "accept" },
+    { "prefix": "ff", "len": 1, "result": "reject" },
+    { "prefix": "15", "len": 3145741, "result": "accept" },
+    { "prefix": "ff", "len": 3145741, "result": "reject" },
+    { "prefix": "15", "len": 3145742, "result": "disconnect" },
+    { "prefix": "ff", "len": 3145742, "result": "disconnect" },
+    { "prefix": "0070696e670000000000000000", "len": 3145741, "result": "accept" },
+    { "prefix": "007069006e6700000000000000", "len": 3145741, "result": "reject" },
+    { "prefix": "0070696e670000000000000000", "len": 3145742, "result": "disconnect" },
+    { "prefix": "007069006e6700000000000000", "len": 3145742, "result": "disconnect" },
+  ],
 }

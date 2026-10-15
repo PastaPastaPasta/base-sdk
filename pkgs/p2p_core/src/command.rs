@@ -57,6 +57,30 @@ impl CommandString {
     // validated on decode, so this conversion is sound.
     core::str::from_utf8(&self.0[..end]).unwrap_or("")
   }
+
+  /// Whether a V2 transport accepts the command as a long-form type.
+  ///
+  /// Bytes before the first NUL must be in 0x20 to 0x7f, and every byte after
+  /// it NUL.
+  pub const fn is_valid_v2(&self) -> bool {
+    self.is_valid_up_to(0x7f)
+  }
+
+  /// Bytes in 0x20 to `max` up to the first NUL, then only NULs.
+  const fn is_valid_up_to(&self, max: u8) -> bool {
+    let mut padding = false;
+    let mut i = 0;
+    while i < self.0.len() {
+      let b = self.0[i];
+      if b == 0 {
+        padding = true;
+      } else if padding || b < b' ' || b > max {
+        return false;
+      }
+      i += 1;
+    }
+    true
+  }
 }
 
 type_cvrt!(From<[u8; 12]> for CommandString, |bytes| Self(*bytes));

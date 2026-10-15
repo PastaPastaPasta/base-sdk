@@ -25,6 +25,12 @@ pub enum P2pDecodeError {
     /// The raw command bytes.
     bytes: [u8; 12],
   },
+  /// A V2 long-form command that fails [`CommandString::is_valid_v2`].
+  #[error(fmt = fmt_invalid_command)]
+  InvalidCommand {
+    /// The command as received.
+    command: CommandString,
+  },
   /// V2 short ID does not map to a known message.
   #[error("unknown v2 short id: {id}")]
   UnknownShortId {
@@ -36,7 +42,7 @@ pub enum P2pDecodeError {
   PayloadTooLarge {
     /// The message's command.
     command: CommandString,
-    /// Size of the raw payload, in bytes.
+    /// Size of the payload, or of the whole contents for V2, in bytes.
     size: usize,
     /// Maximum allowed size, in bytes.
     max: usize,
@@ -61,6 +67,12 @@ pub enum P2pDecodeError {
 fn fmt_unknown_command(bytes: &[u8; 12], f: &mut fmt::Formatter<'_>) -> fmt::Result {
   f.write_str("unknown command: ")?;
   write_command(bytes, f)
+}
+
+/// Formats `P2pDecodeError::InvalidCommand`, escaping non-printable bytes.
+fn fmt_invalid_command(command: &CommandString, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+  f.write_str("invalid command: ")?;
+  write_command(command.as_bytes(), f)
 }
 
 /// Formats `P2pDecodeError::PayloadTooLarge`, escaping non-printable bytes.
