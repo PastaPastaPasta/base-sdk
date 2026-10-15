@@ -34,6 +34,7 @@ from common import (
   declare_verbs,
   format_verbs,
   formatted,
+  repo_files,
   require_bin,
   root_dir,
   touched,
@@ -89,8 +90,7 @@ def _ql_sources(repo_root: Path, only: list[str] | None) -> list[Path]:
   # Formatting is a property of the text, so it is not scoped to what an
   # analysis would read. A run writes and formats its own generated QL,
   # so reading it here would only race that write.
-  root = repo_root / "maint" / "codeql"
-  found = sorted([*root.rglob("*.ql"), *root.rglob("*.qll")])
+  found = repo_files(repo_root, "maint/codeql/*.ql", "maint/codeql/*.qll")
   return [p for p in found if p.parts[-2:] != _GENERATED_QL]
 
 
@@ -119,7 +119,7 @@ def _format_ql(
 
 def _generate_source_lines(
   repo_root: Path,
-  source_dirs: list[Path],
+  source_dirs: tuple[str, ...],
   query_dir: Path,
 ) -> Path:
   """Emit a raw source-line predicate for CodeQL queries.
@@ -133,9 +133,7 @@ def _generate_source_lines(
   out = query_dir.joinpath(*_GENERATED_QL)
   rows: list[str] = []
   for source_dir in source_dirs:
-    for rs_file in sorted(source_dir.rglob("*.rs")):
-      if "target" in rs_file.parts:
-        continue
+    for rs_file in repo_files(repo_root, f"{source_dir}/*.rs"):
       rel = str(rs_file.relative_to(repo_root))
       try:
         text = rs_file.read_text(encoding="latin-1")
@@ -324,8 +322,7 @@ def _analyse(
 
   # Only Rust needs the pre-scanned source text; see the generator itself.
   if language.name == "rust":
-    source_dirs = [repo_root / where for where in SOURCE_DIRS]
-    generated = _generate_source_lines(repo_root, source_dirs, query_dir)
+    generated = _generate_source_lines(repo_root, SOURCE_DIRS, query_dir)
     subprocess.run(  # noqa: S603
       [codeql_bin, "query", "format", "-i", str(generated)],
       check=True,
