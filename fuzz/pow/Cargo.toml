@@ -51,6 +51,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "keccak"
+path = "targets/keccak.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "skein"
 path = "targets/skein.rs"
 test = false
