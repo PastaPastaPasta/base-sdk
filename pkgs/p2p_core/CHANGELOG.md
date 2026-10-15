@@ -47,7 +47,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   reads them, with Core's `GetSignHash()` as `sign_hash`. `DkgMessage::check_payload` runs Core's handler checks
   before the read: `MaxDKGMessageSize` (`HandlerPayloadTooLarge`) and the framing walk against the quorum's
   `LlmqParams` (`P2pDecodeError::DkgFraming`), and `DkgMessage::decode_checked` runs them then the read;
-  `dkg_quorum` peeks the type and quorum the parameters come from.
+  `dkg_quorum` peeks the type and quorum the parameters come from. `P2pMsg::decode_with_policy` refuses a DKG payload
+  over 1 MiB (`HandlerPayloadTooLarge`) before reading it, as Core's size cap does whatever the quorum.
 - Typed signature share messages: `qsigsesann` (`SigSesAnnMsg`), `qsigsinv` and `qgetsigs` (`SigSharesInvMsg`),
   `qbsigs` (`BatchedSigSharesMsg`) and `qsigshare` (`SigShareMsg`), each refusing more entries than Core's limits
   before reading them (`MAX_SIG_SES_ANNS`, `MAX_SIG_SHARES_INVS`, `MAX_SIG_SHARES`, and `MAX_BATCHED_SIGS` for the

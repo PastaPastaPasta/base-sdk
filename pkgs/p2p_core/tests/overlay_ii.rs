@@ -123,6 +123,39 @@ fn dkg_sizes_cap_at_one_mebibyte() {
   assert_eq!(DkgJustification::max_size(&p), 1 << 20);
 }
 
+/// The stateless read refuses a DKG payload over 1 MiB before reading it,
+/// as Core's size cap does for any quorum: three million empty blobs would
+/// otherwise each allocate.
+#[rstest]
+fn dkg_reads_cap_at_one_mebibyte() {
+  let ceiling = 1 << 20;
+  let blobs = (3 << 20) - 512;
+  let mut big = prefix();
+  big.extend(count(0));
+  big.extend([0; 48 + 32]);
+  big.extend(count(blobs));
+  big.extend(vec![0; blobs]);
+  big.extend([0; 96]);
+  for cmd in ["qcontrib", "qcomplaint", "qjustify", "qpcommit"] {
+    assert_eq!(
+      decode(cmd, &big),
+      Err(P2pDecodeError::HandlerPayloadTooLarge {
+        command: cmd,
+        size: big.len(),
+        max: ceiling,
+      }),
+      "{cmd}"
+    );
+  }
+  // At the ceiling the read runs, and fails on these bytes as Core's would.
+  assert!(!matches!(
+    decode("qcontrib", &big[..ceiling]),
+    Err(P2pDecodeError::HandlerPayloadTooLarge { .. })
+  ));
+  let ok = contribution(30, 40);
+  assert!(matches!(decode("qcontrib", &ok), Ok(P2pMsg::QContrib(_))));
+}
+
 #[rstest]
 fn dkg_walk_bounds_counts_by_the_quorum() {
   let p = params(LlmqType::Llmq50_60);

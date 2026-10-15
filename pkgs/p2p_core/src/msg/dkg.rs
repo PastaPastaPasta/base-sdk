@@ -92,11 +92,25 @@ pub trait DkgMessage: BaseCodec + MsgDecode {
   }
 }
 
+/// Core's ceiling on every DKG payload: `MaxDKGMessageSize` never exceeds
+/// it, whatever the quorum's parameters.
+const HARD_CEILING: usize = 1 << 20;
+
 /// The impls every DKG message shares: the worker's whole read and a label.
 macro_rules! dkg_message {
   ($ty:ident, $command:literal) => {
     impl MsgDecode for $ty {
+      /// The worker's whole read, after refusing a payload over 1 MiB as
+      /// Core's size cap does for every quorum. The quorum's own cap and the
+      /// framing walk are [`DkgMessage::check_payload`]'s.
       fn decode_msg(data: &mut &[u8], _ctx: &ProtoCtx) -> Result<Self, P2pDecodeError> {
+        if data.len() > HARD_CEILING {
+          return Err(P2pDecodeError::HandlerPayloadTooLarge {
+            command: $command,
+            size: data.len(),
+            max: HARD_CEILING,
+          });
+        }
         decode_whole(data)
       }
     }
@@ -158,8 +172,7 @@ fn param(value: i32) -> u64 {
 /// 1 MiB.
 fn capped(bound: u64) -> usize {
   const SLACK: u64 = 1024;
-  const HARD_CEILING: u64 = 1 << 20;
-  usize::try_from((bound + SLACK).min(HARD_CEILING)).unwrap_or(usize::MAX)
+  usize::try_from(bound + SLACK).map_or(HARD_CEILING, |cap| cap.min(HARD_CEILING))
 }
 
 /// The largest CompactSize `MaxDKGMessageSize` allows for a count.
