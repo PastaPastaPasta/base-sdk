@@ -28,7 +28,8 @@ pub enum P2pDecodeError {
   /// V2 contents end before the message type does.
   #[error("missing command")]
   MissingCommand,
-  /// A V2 long-form command that fails [`CommandString::is_valid_v2`].
+  /// A command its transport refuses, per [`CommandString::is_valid_v1`] or
+  /// [`CommandString::is_valid_v2`].
   #[error(fmt = fmt_invalid_command)]
   InvalidCommand {
     /// The command as received.

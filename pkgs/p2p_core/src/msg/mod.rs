@@ -222,4 +222,21 @@ mod tests {
       assert_eq!(too_large, v.disconnect, "{} of {} bytes", v.command, v.size);
     }
   }
+
+  #[derive(Deserialize)]
+  struct CommandVector {
+    command: String,
+    valid: bool,
+  }
+
+  #[rstest]
+  fn invalid_commands_match_vectors() {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "transport");
+    for v in corpus.vectors::<CommandVector>("v1_command") {
+      let cmd = CommandString::from_bytes(decode_to_array(&v.command).unwrap());
+      let result = P2pMsg::decode_payload(&cmd, &[]);
+      let invalid = matches!(result, Err(P2pDecodeError::InvalidCommand { .. }));
+      assert_eq!(invalid, !v.valid, "{}", v.command);
+    }
+  }
 }

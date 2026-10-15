@@ -51,11 +51,19 @@ impl CommandString {
   }
 
   /// Returns the command as a `&str` (trimmed of null padding).
+  ///
+  /// A command that is not UTF-8 up to its first NUL gives the empty string.
   pub fn as_str(&self) -> &str {
     let end = self.0.iter().position(|&b| b == 0).unwrap_or(12);
-    // The bytes are always valid ASCII written by from_static or
-    // validated on decode, so this conversion is sound.
     core::str::from_utf8(&self.0[..end]).unwrap_or("")
+  }
+
+  /// Whether a V1 transport accepts the command.
+  ///
+  /// Bytes before the first NUL must be in 0x20 to 0x7e, and every byte after
+  /// it NUL.
+  pub const fn is_valid_v1(&self) -> bool {
+    self.is_valid_up_to(0x7e)
   }
 
   /// Whether a V2 transport accepts the command as a long-form type.
