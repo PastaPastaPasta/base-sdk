@@ -15,9 +15,6 @@ use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
 use dash_types::CompactSize;
 
-/// Maximum headers per message.
-const MAX_HEADERS: usize = 2_000;
-
 /// Requests block headers starting from a locator.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -51,7 +48,7 @@ impl_p2p!(Headers);
 
 impl BaseCodec for Headers {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let count = CompactSize::decode(data)?.into_len(MAX_HEADERS)?;
+    let count = CompactSize::decode(data)?.into_len(Self::MAX_COUNT)?;
     let mut headers = Vec::with_capacity(count);
     for _ in 0..count {
       headers.push(BlockHeader {
@@ -83,3 +80,8 @@ impl BaseCodec for Headers {
 }
 
 hash_impl!(Headers);
+
+impl Headers {
+  /// The most headers a `headers` message carries.
+  pub const MAX_COUNT: usize = 2_000;
+}
