@@ -85,6 +85,43 @@ pub fn assert_same(name: &str, ours: Digest, theirs: Digest, data: &[u8]) {
   assert_same_at(name, ours, theirs, data, offset_for(data));
 }
 
+/// The X11 chain over sphlib, truncated to 256 bits.
+pub fn x11(data: &[u8]) -> [u8; 32] {
+  const CHAIN: [Digest; 10] = [
+    sph::bmw,
+    sph::groestl,
+    sph::skein,
+    sph::jh,
+    sph::keccak,
+    sph::luffa,
+    sph::cubehash,
+    sph::shavite,
+    sph::simd,
+    sph::echo,
+  ];
+  let digest = CHAIN.iter().fold(sph::blake(data), |digest, stage| stage(&digest));
+  let mut out = [0u8; 32];
+  out.copy_from_slice(&digest[..32]);
+  out
+}
+
+/// Asserts the X11 chain agrees with sphlib on `data` placed at `offset`.
+pub fn assert_same_x11_at(data: &[u8], offset: usize) {
+  let (buffer, start) = misalign(data, offset);
+  let shifted = &buffer[start..start + data.len()];
+  assert_eq!(
+    dash_pow::hash(shifted),
+    x11(shifted),
+    "x11 differs on {} bytes at offset {offset}",
+    data.len(),
+  );
+}
+
+/// Runs [`assert_same_x11_at`] at the misalignment `data` selects.
+pub fn assert_same_x11(data: &[u8]) {
+  assert_same_x11_at(data, offset_for(data));
+}
+
 #[cfg(test)]
 #[expect(clippy::expect_used, clippy::panic, reason = "test code")]
 mod tests {
@@ -97,7 +134,7 @@ mod tests {
   use std::ops::Deref;
   use std::path::{Path, PathBuf};
 
-  /// An X11 stage, checked against sphlib.
+  /// An X11 stage, or the whole chain, checked against sphlib.
   #[derive(Clone, Copy, Debug)]
   enum Stage {
     Blake,
@@ -111,6 +148,7 @@ mod tests {
     Shavite,
     Simd,
     Skein,
+    X11,
   }
 
   impl Stage {
@@ -128,6 +166,7 @@ mod tests {
         Self::Shavite => "shavite",
         Self::Simd => "simd",
         Self::Skein => "skein",
+        Self::X11 => "x11",
       }
     }
 
@@ -145,6 +184,7 @@ mod tests {
         Self::Shavite => (shavite::hash512, sph::shavite),
         Self::Simd => (simd::hash512, sph::simd),
         Self::Skein => (skein::hash512, sph::skein),
+        Self::X11 => return assert_same_x11_at(data, offset),
       };
       assert_same_at(self.name(), ours, theirs, data, offset);
     }
@@ -227,8 +267,8 @@ mod tests {
     }
   }
 
-  /// Every stage agrees with sphlib across four blocks of lengths at
-  /// every misalignment, without a fuzzing engine.
+  /// Every stage and the chain agree with sphlib on 0 to 512 bytes at every
+  /// misalignment, without a fuzzing engine.
   #[rstest]
   fn sweep(
     #[values(
@@ -242,7 +282,8 @@ mod tests {
       Stage::Luffa,
       Stage::Shavite,
       Stage::Simd,
-      Stage::Skein
+      Stage::Skein,
+      Stage::X11
     )]
     stage: Stage,
   ) {
@@ -269,7 +310,8 @@ mod tests {
       Stage::Luffa,
       Stage::Shavite,
       Stage::Simd,
-      Stage::Skein
+      Stage::Skein,
+      Stage::X11
     )]
     stage: Stage,
   ) {

@@ -99,5 +99,12 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "x11"
+path = "targets/x11.rs"
+test = false
+doc = false
+bench = false
+
 [lints]
 workspace = true
