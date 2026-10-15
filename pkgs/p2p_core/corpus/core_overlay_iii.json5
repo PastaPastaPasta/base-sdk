@@ -8,7 +8,7 @@
 // or vote's; a mixed transaction's txid) and "signHash"
 // (GetSignatureHash()), little-endian; or "class", the exception kind.
 // Built from rust-dashcore contrib/node/dde-probe/bs9 (seeds.rs cases,
-// make_corpus.py selection); judge source and binary hashes: judge.cpp 1472018402d40e9d, binary 1e3f16d9f97227ba.
+// make_corpus.py selection); judge source and binary hashes: judge.cpp 839f33e02b461825, binary 1e3f16d9f97227ba.
 // Payloads over 4 KiB are lists of hex and {"b": byte, "n": count} runs.
 {
  "cases": [
