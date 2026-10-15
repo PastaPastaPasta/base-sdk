@@ -6,11 +6,12 @@
 // length of its type and quorum hash and MaxDKGMessageSize ("oversized"),
 // the wire walk ("framing"), then the worker's whole read. "core": "ok" with
 // "consumed" (the bytes read), "reenc" where Core's write-back is not the
-// bytes read (an eager BLS field re-serialized), "hash" (a DKG message's
+// bytes read (an eager BLS field re-serialized, or an AUTOBITSET rewritten
+// in its shorter form), "hash" (a DKG message's
 // inventory hash) and "signHash" (the sign hash Core computes, one per
 // object, little-endian, concatenated); or "class", the exception kind.
 // Built from rust-dashcore contrib/node/dde-probe/bs9 (seeds.rs cases,
-// make_corpus.py selection); judge source and binary hashes: judge.cpp a0eed6da829beaf2, binary bd629c83bb99e188.
+// make_corpus.py selection); judge source and binary hashes: judge.cpp 2558986087353340, binary bd629c83bb99e188.
 // Payloads over 4 KiB are lists of hex and {"b": byte, "n": count} runs.
 {
  "cases": [

@@ -13,13 +13,13 @@
 use dash_dev::{vec_from_hex, Corpus};
 use dash_num::Hash256;
 use dash_p2p_core::{
-  dkg_quorum, CommandString, DkgComplaint, DkgContribution, DkgJustification, DkgMessage, DkgPrematureCommitment,
-  P2pDecodeError, P2pMsg, ProtoCtx, ProtocolVersion,
+  dkg_inventory_hash, dkg_quorum, CommandString, DkgComplaint, DkgContribution, DkgJustification, DkgMessage,
+  DkgPrematureCommitment, P2pDecodeError, P2pMsg, ProtoCtx, ProtocolVersion,
 };
 use dash_params::LlmqParams;
 use dash_pkc::bls::BlsCtx;
 use dash_primitives::LlmqType;
-use dash_types::{Hashable, Numeric};
+use dash_types::Numeric;
 use hex_conservative::decode_to_array;
 use rstest::rstest;
 
@@ -123,30 +123,66 @@ fn dkg_checks(c: &Case, raw: &[u8]) -> Result<(), Stage> {
   }
 }
 
+/// A DKG message as Core's worker leaves it: its BLS fields read eagerly
+/// under the case's scheme, a failure refusing the read.
+fn eager<M: DkgMessage>(m: &M, bls: BlsCtx) -> Result<M, Stage> {
+  m.eager(bls).map_err(|_| Stage::Read)
+}
+
 fn read(c: &Case, raw: &[u8]) -> Result<Read, Stage> {
   dkg_checks(c, raw)?;
-  let ctx = ProtoCtx::new(ProtocolVersion::from_base(70242), BlsCtx::from_legacy(c.legacy));
+  let bls = BlsCtx::from_legacy(c.legacy);
+  let ctx = ProtoCtx::new(ProtocolVersion::from_base(70242), bls);
   let d = P2pMsg::decode_with_policy(&CommandString::from_static(&c.command), raw, &ctx).map_err(|e| match e {
     P2pDecodeError::HandlerPayloadTooLarge { .. } => Stage::Oversized,
     _ => Stage::Read,
   })?;
-  let (hash, sign_hash) = match &d.msg {
-    P2pMsg::QContrib(m) => (Some(le(m.hash())), Some(le(m.sign_hash()).to_vec())),
-    P2pMsg::QComplaint(m) => (Some(le(m.hash())), Some(le(m.sign_hash()).to_vec())),
-    P2pMsg::QJustify(m) => (Some(le(m.hash())), Some(le(m.sign_hash()).to_vec())),
-    P2pMsg::QpCommit(m) => (Some(le(m.hash())), Some(le(m.sign_hash()).to_vec())),
-    P2pMsg::QSigSesAnn(m) => (None, Some(m.anns.iter().flat_map(|a| le(a.sign_hash())).collect())),
-    P2pMsg::QSigShare(m) => (None, Some(m.shares.iter().flat_map(|s| le(s.sign_hash())).collect())),
-    _ => (None, None),
+  // Core keys a DKG message by the payload it received, then signs and
+  // writes back its eager read.
+  let (msg, sign_hash) = match &d.msg {
+    P2pMsg::QContrib(m) => {
+      let m = eager(&**m, bls)?;
+      let sign_hash = le(m.sign_hash()).to_vec();
+      (P2pMsg::QContrib(Box::new(m)), Some(sign_hash))
+    }
+    P2pMsg::QComplaint(m) => {
+      let m = eager(m, bls)?;
+      let sign_hash = le(m.sign_hash()).to_vec();
+      (P2pMsg::QComplaint(m), Some(sign_hash))
+    }
+    P2pMsg::QJustify(m) => {
+      let m = eager(m, bls)?;
+      let sign_hash = le(m.sign_hash()).to_vec();
+      (P2pMsg::QJustify(m), Some(sign_hash))
+    }
+    P2pMsg::QpCommit(m) => {
+      let m = eager(m, bls)?;
+      let sign_hash = le(m.sign_hash()).to_vec();
+      (P2pMsg::QpCommit(m), Some(sign_hash))
+    }
+    P2pMsg::QSigSesAnn(m) => (
+      d.msg.clone(),
+      Some(m.anns.iter().flat_map(|a| le(a.sign_hash())).collect()),
+    ),
+    P2pMsg::QSigShare(m) => (
+      d.msg.clone(),
+      Some(m.shares.iter().flat_map(|s| le(s.sign_hash())).collect()),
+    ),
+    other => (other.clone(), None),
   };
+  let hash = is_dkg(&c.command).then(|| le(dkg_inventory_hash(raw)));
   let mut reenc = Vec::new();
-  d.msg.encode_payload(&mut reenc);
+  msg.encode_payload(&mut reenc);
   Ok(Read {
     consumed: d.consumed,
     reenc,
     hash,
     sign_hash,
   })
+}
+
+fn is_dkg(command: &str) -> bool {
+  matches!(command, "qcontrib" | "qcomplaint" | "qjustify" | "qpcommit")
 }
 
 fn cases() -> Vec<Case> {
@@ -177,17 +213,17 @@ fn dkg_and_sig_share_reads_are_cores() {
           hash.as_deref().map(|h| decode_to_array::<32>(h).unwrap()),
           "{label}: hash"
         );
-        // Core writes an eager BLS field back canonical or as zeros, and
-        // signs that; the node applies those rules (its process-wide
-        // scheme). Otherwise Core writes and signs what it read.
-        if reenc.is_none() {
-          assert_eq!(r.reenc, raw[..r.consumed], "{label}: write-back");
-          assert_eq!(
-            r.sign_hash,
-            sign_hash.as_deref().map(vec_from_hex),
-            "{label}: sign hash"
-          );
-        }
+        // Core writes back what it read, but for an eager BLS field
+        // (canonical or zeros) and an AUTOBITSET (its shorter form).
+        let written = reenc
+          .as_deref()
+          .map_or_else(|| raw[..r.consumed].to_vec(), vec_from_hex);
+        assert_eq!(r.reenc, written, "{label}: write-back");
+        assert_eq!(
+          r.sign_hash,
+          sign_hash.as_deref().map(vec_from_hex),
+          "{label}: sign hash"
+        );
       }
       Core { class, .. } => {
         // Verdicts and, for a DKG message, the stage: the handler scores a
@@ -199,9 +235,6 @@ fn dkg_and_sig_share_reads_are_cores() {
         };
         match ours {
           Err(s) => assert_eq!(s, want, "{label}: Core refused it ({class:?})"),
-          // A BLS field Core cannot read eagerly: bytes here, refused
-          // node-side (rust-dashcore contrib/node/dde-probe/bs9 checks it).
-          Ok(_) if class.as_deref() == Some("malleable") => {}
           Ok(_) => panic!("{label}: Core refused it ({class:?}), base-sdk read it"),
         }
       }
