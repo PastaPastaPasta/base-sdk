@@ -37,6 +37,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "cubehash"
+path = "targets/cubehash.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "groestl"
 path = "targets/groestl.rs"
 test = false

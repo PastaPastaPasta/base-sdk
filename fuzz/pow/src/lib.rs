@@ -33,6 +33,7 @@ macro_rules! reference {
 reference!(
   blake => dash_sph_blake,
   bmw => dash_sph_bmw,
+  cubehash => dash_sph_cubehash,
   groestl => dash_sph_groestl,
   jh => dash_sph_jh,
   keccak => dash_sph_keccak,
@@ -86,7 +87,7 @@ pub fn assert_same(name: &str, ours: Digest, theirs: Digest, data: &[u8]) {
 mod tests {
   use super::*;
 
-  use dash_pow::__private::{blake, bmw, groestl, jh, keccak, luffa, skein};
+  use dash_pow::__private::{blake, bmw, cubehash, groestl, jh, keccak, luffa, skein};
   use rstest::rstest;
 
   use std::fs;
@@ -98,6 +99,7 @@ mod tests {
   enum Stage {
     Blake,
     Bmw,
+    CubeHash,
     Groestl,
     Jh,
     Keccak,
@@ -111,6 +113,7 @@ mod tests {
       match self {
         Self::Blake => "blake",
         Self::Bmw => "bmw",
+        Self::CubeHash => "cubehash",
         Self::Groestl => "groestl",
         Self::Jh => "jh",
         Self::Keccak => "keccak",
@@ -124,6 +127,7 @@ mod tests {
       let (ours, theirs): (Digest, Digest) = match self {
         Self::Blake => (blake::hash512, sph::blake),
         Self::Bmw => (bmw::hash512, sph::bmw),
+        Self::CubeHash => (cubehash::hash512, sph::cubehash),
         Self::Groestl => (groestl::hash512, sph::groestl),
         Self::Jh => (jh::hash512, sph::jh),
         Self::Keccak => (keccak::hash512, sph::keccak),
@@ -203,6 +207,7 @@ mod tests {
     #[values(
       Stage::Blake,
       Stage::Bmw,
+      Stage::CubeHash,
       Stage::Groestl,
       Stage::Jh,
       Stage::Keccak,
@@ -226,6 +231,7 @@ mod tests {
     #[values(
       Stage::Blake,
       Stage::Bmw,
+      Stage::CubeHash,
       Stage::Groestl,
       Stage::Jh,
       Stage::Keccak,
