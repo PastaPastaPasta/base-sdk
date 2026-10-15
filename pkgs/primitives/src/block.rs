@@ -233,7 +233,11 @@ impl fmt::Display for Block {
 #[expect(clippy::panic, clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
+  use crate::sptx::TxType;
+  use crate::transaction::{OutPoint, TxIn, TxOut};
 
+  use bitcoin_primitives::script::{ScriptPubKeyBuf, ScriptSigBuf};
+  use bitcoin_units::Amount;
   use dash_dev::{assert_serde_rt, check_wire, Corpus};
   use rstest::rstest;
 
@@ -252,5 +256,44 @@ mod tests {
       assert!(!mutated, "{label}: merkle mutated");
     });
     assert_serde_rt("blocks", &items);
+  }
+
+  /// A coinbase has a lone input, so a second input leaves the block
+  /// without one.
+  #[rstest]
+  #[case::lone_input(&[0], None)]
+  #[case::second_input(&[0, 1], Some(BlockInvalid::MissingCoinbase))]
+  fn coinbase_has_a_lone_input(#[case] seeds: &[u8], #[case] expected: Option<BlockInvalid>) {
+    let inputs = seeds.iter().map(|&seed| TxIn {
+      prevout: OutPoint {
+        hash: TxHash::from_lendian([seed; 32]),
+        index: if seed == 0 { u32::MAX } else { 0 },
+      },
+      script_sig: ScriptSigBuf::from_bytes(vec![0; 2]),
+      sequence: u32::MAX,
+    });
+    let coinbase = Transaction {
+      version: 3,
+      tx_type: TxType::Spend,
+      inputs: inputs.collect(),
+      outputs: vec![TxOut {
+        value: Amount::ZERO,
+        script_pubkey: ScriptPubKeyBuf::new(),
+      }],
+      lock_time: 0,
+      extra_payload: vec![],
+    };
+    let mut block = Block {
+      header: BlockHeader {
+        bits: 0x207f_ffff,
+        ..BlockHeader::default()
+      },
+      transactions: vec![coinbase],
+    };
+    block.header.merkle_root = block.merkle().0;
+    while block.check() == Some(BlockInvalid::BadProofOfWork) {
+      block.header.nonce += 1;
+    }
+    assert_eq!(block.check(), expected);
   }
 }

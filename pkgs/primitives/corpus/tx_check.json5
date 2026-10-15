@@ -87,6 +87,8 @@ BOOST_AUTO_TEST_CASE(tx_check_shapes)
              {1, {1}, 0, {1}, MAX_TX_EXTRA_PAYLOAD + 1, MAX_LEGACY_BLOCK_SIZE + 1},
              {0, {1}, 0, {MAX_MONEY, 1}, 0, MAX_LEGACY_BLOCK_SIZE + 1},
              {0, {1, 1}, 0, {1}, 0, MAX_LEGACY_BLOCK_SIZE + 1},
+             {0, {0, 1}, 0, {1}, 0, 0},
+             {0, {0, 1}, 2, {1}, 0, 0},
          }) {
         const auto size = [&](size_t pad) { return ::GetSerializeSize(BuildTx(s, pad), PROTOCOL_VERSION); };
         size_t pad{0};
@@ -138,5 +140,7 @@ BOOST_AUTO_TEST_CASE(tx_check_shapes)
     { "type": 1, "inputs": [1], "script_sig": 0, "values": [1], "pad": 989933, "payload": 10001, "size": 1000001, "reason": "bad-txns-oversize" },
     { "type": 0, "inputs": [1], "script_sig": 0, "values": [2100000000000000, 1], "pad": 999928, "payload": 0, "size": 1000001, "reason": "bad-txns-oversize" },
     { "type": 0, "inputs": [1, 1], "script_sig": 0, "values": [1], "pad": 999896, "payload": 0, "size": 1000001, "reason": "bad-txns-oversize" },
+    { "type": 0, "inputs": [0, 1], "script_sig": 0, "values": [1], "pad": 0, "payload": 0, "size": 101, "reason": "bad-txns-prevout-null" },
+    { "type": 0, "inputs": [0, 1], "script_sig": 2, "values": [1], "pad": 0, "payload": 0, "size": 103, "reason": "bad-txns-prevout-null" },
   ],
 }

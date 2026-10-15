@@ -384,9 +384,9 @@ impl Transaction {
     }))
   }
 
-  /// Returns `true` when the first input spends the null outpoint.
+  /// Returns `true` when the only input spends the null outpoint.
   pub(crate) fn is_coinbase(&self) -> bool {
-    !self.inputs.is_empty() && self.inputs[0].prevout.is_null()
+    self.inputs.len() == 1 && self.inputs[0].prevout.is_null()
   }
 }
 
