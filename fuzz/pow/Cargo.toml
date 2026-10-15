@@ -79,6 +79,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "simd"
+path = "targets/simd.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "skein"
 path = "targets/skein.rs"
 test = false

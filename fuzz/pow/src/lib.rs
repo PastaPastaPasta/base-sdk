@@ -39,6 +39,7 @@ reference!(
   keccak => dash_sph_keccak,
   luffa => dash_sph_luffa,
   shavite => dash_sph_shavite,
+  simd => dash_sph_simd,
   skein => dash_sph_skein,
 );
 
@@ -88,7 +89,7 @@ pub fn assert_same(name: &str, ours: Digest, theirs: Digest, data: &[u8]) {
 mod tests {
   use super::*;
 
-  use dash_pow::__private::{blake, bmw, cubehash, groestl, jh, keccak, luffa, shavite, skein};
+  use dash_pow::__private::{blake, bmw, cubehash, groestl, jh, keccak, luffa, shavite, simd, skein};
   use rstest::rstest;
 
   use std::fs;
@@ -106,6 +107,7 @@ mod tests {
     Keccak,
     Luffa,
     Shavite,
+    Simd,
     Skein,
   }
 
@@ -121,6 +123,7 @@ mod tests {
         Self::Keccak => "keccak",
         Self::Luffa => "luffa",
         Self::Shavite => "shavite",
+        Self::Simd => "simd",
         Self::Skein => "skein",
       }
     }
@@ -136,6 +139,7 @@ mod tests {
         Self::Keccak => (keccak::hash512, sph::keccak),
         Self::Luffa => (luffa::hash512, sph::luffa),
         Self::Shavite => (shavite::hash512, sph::shavite),
+        Self::Simd => (simd::hash512, sph::simd),
         Self::Skein => (skein::hash512, sph::skein),
       };
       assert_same_at(self.name(), ours, theirs, data, offset);
@@ -232,6 +236,7 @@ mod tests {
       Stage::Keccak,
       Stage::Luffa,
       Stage::Shavite,
+      Stage::Simd,
       Stage::Skein
     )]
     stage: Stage,
@@ -257,6 +262,7 @@ mod tests {
       Stage::Keccak,
       Stage::Luffa,
       Stage::Shavite,
+      Stage::Simd,
       Stage::Skein
     )]
     stage: Stage,
