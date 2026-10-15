@@ -43,16 +43,20 @@ const MAX_V2_CONTENTS: usize = 1 + 12 + MAX_P2P_PAYLOAD_SIZE;
 /// # Errors
 ///
 /// Returns `PayloadTooLarge` above the bound, with an empty command for an
-/// unknown short ID. Returns `UnknownShortId` or `InvalidCommand` for a type
-/// the transport refuses, and otherwise the error decoding the message.
+/// unknown short ID. Returns `MissingCommand`, `UnknownShortId` or
+/// `InvalidCommand` for a type the transport refuses, and otherwise the error
+/// decoding the message.
 pub fn decode_v2(contents: &[u8]) -> Result<P2pMsg, P2pDecodeError> {
   let mut payload = contents;
-  let [short_id] = take(&mut payload)?;
+  let [short_id] = take(&mut payload).map_err(|_| P2pDecodeError::MissingCommand)?;
   let id = ShortId(short_id);
   let cmd = if id == ShortId::LONG_FORMAT {
-    Some(CommandString::from_bytes(take(&mut payload)?))
+    let bytes = take(&mut payload).map_err(|_| P2pDecodeError::MissingCommand)?;
+    Some(CommandString::from_bytes(bytes))
+  } else if id.is_in_table() {
+    Some(id.to_command().unwrap_or(CommandString::from_static("")))
   } else {
-    id.to_command()
+    None
   };
 
   if contents.len() > MAX_V2_CONTENTS {
@@ -94,8 +98,18 @@ mod tests {
       contents.resize(v.len, 0);
       let result = match decode_v2(&contents) {
         Err(P2pDecodeError::PayloadTooLarge { .. }) => "disconnect",
-        Err(P2pDecodeError::InvalidCommand { .. } | P2pDecodeError::UnknownShortId { .. }) => "reject",
-        _ => "accept",
+        Err(
+          P2pDecodeError::MissingCommand
+          | P2pDecodeError::InvalidCommand { .. }
+          | P2pDecodeError::UnknownShortId { .. },
+        ) => "reject",
+        Ok(_)
+        | Err(
+          P2pDecodeError::UnknownCommand { .. }
+          | P2pDecodeError::Consensus(_)
+          | P2pDecodeError::PayloadNotEmpty { .. }
+          | P2pDecodeError::InvalidValue { .. },
+        ) => "accept",
       };
       assert_eq!(result, v.result, "{} of {} bytes", v.prefix, v.len);
     }

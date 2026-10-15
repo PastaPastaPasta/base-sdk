@@ -10,6 +10,12 @@ use crate::command::CommandString;
 
 use dash_types::type_id::Unencodable;
 
+/// Number of short IDs from 0 that a V2 transport takes.
+const LOW_TABLE_LEN: u8 = 33;
+
+/// Number of short IDs from 128 that a V2 transport takes.
+const HIGH_TABLE_LEN: u8 = 41;
+
 /// A resolved V2 short ID.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -22,6 +28,11 @@ impl ShortId {
   /// Returns `true` if this ID maps to a known command.
   pub const fn is_valid(self) -> bool {
     self.to_command_str().is_some()
+  }
+
+  /// Whether a V2 transport takes the ID as a message type, assigned or not.
+  pub const fn is_in_table(self) -> bool {
+    self.0 < LOW_TABLE_LEN || (self.0 >= 128 && self.0 - 128 < HIGH_TABLE_LEN)
   }
 
   /// Resolves the short ID to a `CommandString`, if known.
