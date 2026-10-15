@@ -6,6 +6,8 @@
 
 //! P2P-layer decoding errors.
 
+use crate::command::CommandString;
+
 use dash_types::codec::DecodeError;
 use dash_types::type_id::Unencodable;
 
@@ -30,10 +32,10 @@ pub enum P2pDecodeError {
     id: u8,
   },
   /// Message payload exceeds the allowed size.
-  #[error("{command} payload too large: {size} bytes, max {max}")]
+  #[error(fmt = fmt_payload_too_large)]
   PayloadTooLarge {
-    /// Wire command name.
-    command: &'static str,
+    /// The message's command.
+    command: CommandString,
     /// Size of the raw payload, in bytes.
     size: usize,
     /// Maximum allowed size, in bytes.
@@ -58,6 +60,22 @@ pub enum P2pDecodeError {
 /// Formats `P2pDecodeError::UnknownCommand`, escaping non-printable bytes.
 fn fmt_unknown_command(bytes: &[u8; 12], f: &mut fmt::Formatter<'_>) -> fmt::Result {
   f.write_str("unknown command: ")?;
+  write_command(bytes, f)
+}
+
+/// Formats `P2pDecodeError::PayloadTooLarge`, escaping non-printable bytes.
+fn fmt_payload_too_large(
+  command: &CommandString,
+  size: &usize,
+  max: &usize,
+  f: &mut fmt::Formatter<'_>,
+) -> fmt::Result {
+  write!(f, "payload too large: {size} bytes, max {max}, command ")?;
+  write_command(command.as_bytes(), f)
+}
+
+/// Writes command bytes up to the first NUL, escaping non-printable bytes.
+fn write_command(bytes: &[u8; 12], f: &mut fmt::Formatter<'_>) -> fmt::Result {
   for &b in bytes.iter().take_while(|&&b| b != 0) {
     if b.is_ascii_graphic() || b == b' ' {
       write!(f, "{}", b as char)?;

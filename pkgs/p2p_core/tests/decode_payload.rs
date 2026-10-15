@@ -19,3 +19,14 @@ fn decode_errors_are_typed(#[case] payload: &[u8], #[case] err: DecodeError) {
     Err(P2pDecodeError::Consensus(err))
   );
 }
+
+#[rstest]
+fn oversized_commands_are_escaped() {
+  let cmd = CommandString::from_bytes(*b"pi\nng\0\0\0\0\0\0\0");
+  assert_eq!(
+    P2pMsg::decode_payload(&cmd, &vec![0; 3 * 1024 * 1024 + 1]).map_err(|e| e.to_string()),
+    Err(String::from(
+      "payload too large: 3145729 bytes, max 3145728, command pi\\x0ang"
+    ))
+  );
+}
