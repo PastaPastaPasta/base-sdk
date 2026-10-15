@@ -98,6 +98,12 @@ impl<K: BlsWire<N>, const N: usize> BlsValue<K, N> {
     self.valid.then_some(&self.element.point)
   }
 
+  /// The element whatever the validity, Core's `impl`: its serialization
+  /// under `scheme` and its point.
+  pub(crate) fn element(&self, scheme: BlsSchemeKind) -> ([u8; N], &K::Point) {
+    (K::encode(&self.element.basic, scheme), &self.element.point)
+  }
+
   /// Serializes under `scheme`, Core's `ToBytes`; zeros when invalid. For a
   /// secret key the copy is the caller's to wipe.
   pub fn to_bytes(&self, scheme: BlsSchemeKind) -> [u8; N] {

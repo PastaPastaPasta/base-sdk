@@ -41,14 +41,6 @@ pub type BlsPkValue = BlsValue<G1, BLS_PK_LEN>;
 /// A signature as Core's wrapper holds it.
 pub type BlsSigValue = BlsValue<G2, BLS_SIG_LEN>;
 
-/// The basic serialization of dashbls's default element, infinity, which
-/// both schemes write alike.
-const INFINITY_PK: [u8; BLS_PK_LEN] = {
-  let mut bytes = [0u8; BLS_PK_LEN];
-  bytes[0] = 0xc0;
-  bytes
-};
-
 /// Core's answer to a verification.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "codec", derive(Unencodable))]
@@ -120,8 +112,9 @@ pub fn verify_insecure_aggregated(
 
 /// `CBLSSignature::VerifySecureAggregated(pks, h)` under the verify flag.
 ///
-/// Core checks no object's validity here. An invalid object holds dashbls's
-/// default element, infinity, and takes part as that.
+/// Core checks no object's validity here: an invalid object takes part with
+/// the element it holds, dashbls's default element, infinity, unless an
+/// operation that failed in place kept an earlier one.
 pub fn verify_secure_aggregated(
   sig: &BlsSigValue,
   pks: &[&BlsPkValue],
@@ -131,7 +124,7 @@ pub fn verify_secure_aggregated(
   if pks.is_empty() {
     return BlsVerdict::Invalid;
   }
-  let sig = sig.point().map_or(Some(G2Affine::default()), |p| p.usable().copied());
+  let sig = sig.element(flag).1.usable().copied();
 
   // HashPubKeys weighs the keys in the order of their serializations under
   // the flag, and Core then decodes each serialization again. Under the
@@ -140,17 +133,14 @@ pub fn verify_secure_aggregated(
   // and is left to relic's arithmetic.
   let mut keyed = Vec::with_capacity(pks.len());
   for pk in pks {
-    let entry = match pk.point().map(|p| p.usable()) {
-      None => (INFINITY_PK, G1::identity()),
-      Some(Some(point)) => (pk.to_bytes(flag), point.to_projective()),
-      Some(None) => {
-        return match flag {
-          BlsSchemeKind::Basic => BlsVerdict::Invalid,
-          BlsSchemeKind::Legacy => BlsVerdict::Unsupported,
-        };
-      }
+    let (bytes, point) = pk.element(flag);
+    let Some(point) = point.usable() else {
+      return match flag {
+        BlsSchemeKind::Basic => BlsVerdict::Invalid,
+        BlsSchemeKind::Legacy => BlsVerdict::Unsupported,
+      };
     };
-    keyed.push(entry);
+    keyed.push((bytes, point.to_projective()));
   }
   keyed.sort_unstable_by_key(|(bytes, _)| *bytes);
   let sorted: Vec<[u8; BLS_PK_LEN]> = keyed.iter().map(|(bytes, _)| *bytes).collect();
@@ -205,7 +195,7 @@ fn aggregate_verify(
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
-  use crate::bls::{BlsScChia, BlsScIetf, BlsScheme, BlsSecretKey, BlsSignature};
+  use crate::bls::{BlsPublicKey, BlsScChia, BlsScIetf, BlsScheme, BlsSecretKey, BlsSignature};
 
   use hex_conservative::hex;
   use rstest::rstest;
@@ -291,5 +281,34 @@ mod tests {
       verify_secure_aggregated(&no_sig, &[&pk], &msg, kind),
       BlsVerdict::Invalid
     );
+  }
+
+  fn assert_secure_kept_elements<S: BlsScheme>(kind: BlsSchemeKind) {
+    let msg = [7u8; 32];
+    let (sig, pk) = values::<S>(7, &msg, kind);
+    let secure = BlsSignature::<S>::secure_aggregate(
+      &[&BlsSignature::from_bytes(&sig.to_bytes(kind)).unwrap()],
+      &[&BlsPublicKey::from_bytes(&pk.to_bytes(kind)).unwrap()],
+    )
+    .unwrap();
+    let secure = BlsValue::from_canonical(&secure.to_bytes(), kind).unwrap();
+    assert_eq!(verify_secure_aggregated(&secure, &[&pk], &msg, kind), BlsVerdict::Valid);
+    let (mut no_sig, mut no_pk) = (secure.clone(), pk.clone());
+    no_sig.invalidate();
+    no_pk.invalidate();
+    assert_eq!(verify_secure_aggregated(&no_sig, &[&pk], &msg, kind), BlsVerdict::Valid);
+    assert_eq!(
+      verify_secure_aggregated(&secure, &[&no_pk], &msg, kind),
+      BlsVerdict::Valid
+    );
+  }
+
+  /// An object invalidated in place keeps its element, and the secure
+  /// verify uses it as Core uses `impl`, not infinity.
+  #[rstest]
+  #[case::legacy(assert_secure_kept_elements::<BlsScChia>, BlsSchemeKind::Legacy)]
+  #[case::basic(assert_secure_kept_elements::<BlsScIetf>, BlsSchemeKind::Basic)]
+  fn secure_verify_uses_kept_elements(#[case] assertion: fn(BlsSchemeKind), #[case] kind: BlsSchemeKind) {
+    assertion(kind);
   }
 }
