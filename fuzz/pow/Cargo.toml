@@ -43,5 +43,12 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "skein"
+path = "targets/skein.rs"
+test = false
+doc = false
+bench = false
+
 [lints]
 workspace = true
