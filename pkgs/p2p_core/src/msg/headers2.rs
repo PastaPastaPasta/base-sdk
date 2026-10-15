@@ -15,9 +15,6 @@ use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{CompactSize, Hashable};
 
-/// Maximum headers per message.
-const MAX_HEADERS: usize = 2_000;
-
 /// Maximum entries in the MRU version cache.
 const MAX_VERSION_CACHE: usize = 7;
 
@@ -255,7 +252,7 @@ impl_p2p!(Headers2);
 
 impl BaseCodec for Headers2 {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let count = CompactSize::decode(data)?.into_len(MAX_HEADERS)?;
+    let count = CompactSize::decode(data)?.into_len(Self::MAX_COUNT)?;
     let mut state = CompressionState::new();
     let mut headers = Vec::with_capacity(count);
     for _ in 0..count {
@@ -275,11 +272,17 @@ impl BaseCodec for Headers2 {
 
 hash_impl!(Headers2);
 
+impl Headers2 {
+  /// The most headers a `headers2` message carries.
+  pub const MAX_COUNT: usize = 8_000;
+}
+
 #[cfg(all(test, feature = "serde"))]
 mod tests {
   use super::*;
 
   use dash_dev::{assert_serde_rt, check_wire, Corpus};
+  use dash_types::Numeric;
   use rstest::rstest;
 
   #[rstest]
@@ -294,5 +297,35 @@ mod tests {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "headers2");
     let items = corpus.entries::<Headers2>("headers2", check_wire);
     assert_serde_rt("headers2", &items);
+  }
+
+  #[rstest]
+  fn counts_past_2000_decode() {
+    let headers = (0..2_001)
+      .map(|i| BlockHeader {
+        version: 0x2000_0000,
+        prev_hash: BlockHash::from_lendian([0; 32]),
+        merkle_root: MerkleRoot::from_lendian([1; 32]),
+        time: 1_700_000_000 + i,
+        bits: 0x1e0f_ffff,
+        nonce: i,
+      })
+      .collect();
+    let msg = Headers2 { headers };
+    let mut buf = Vec::new();
+    msg.encode(&mut buf);
+    assert_eq!(Headers2::decode(&mut &buf[..]), Ok(msg));
+  }
+
+  #[rstest]
+  fn counts_past_the_limit_fail_before_any_header() {
+    let payload = [0xfd, 0x41, 0x1f];
+    assert_eq!(
+      Headers2::decode(&mut &payload[..]),
+      Err(DecodeError::CompactSizeExceedsLimit {
+        limit: Headers2::MAX_COUNT,
+        value: 8_001,
+      })
+    );
   }
 }
