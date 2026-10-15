@@ -66,8 +66,9 @@ impl<K: BlsWirePoint<N>, const N: usize> BlsGlobal<K, N> {
   /// The object Core reads under `ctx`'s flag: valid when the bytes are
   /// canonical in that scheme, otherwise invalid.
   ///
-  /// Every call decodes the bytes in full, decompressing the point and
-  /// checking its subgroup, so keep the result rather than call it again.
+  /// Every call decodes the bytes in full, decompressing the point and,
+  /// under the basic scheme, checking its subgroup, so keep the result
+  /// rather than call it again.
   pub fn get(&self, ctx: BlsCtx) -> BlsEager<K, N> {
     let scheme = ctx.scheme();
     let value = if is_zero(&self.bytes) {

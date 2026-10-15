@@ -21,6 +21,7 @@ use hex_conservative::hex;
 use subtle::{Choice, ConstantTimeEq};
 
 use core::fmt::Debug;
+use core::hash::{Hash, Hasher};
 
 /// The BLS12-381 group order `r`, big-endian.
 const GROUP_ORDER: [u8; BLS_SK_LEN] = hex!("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001");
@@ -43,32 +44,80 @@ pub(crate) mod sealed {
 /// A curve point a valid object holds.
 ///
 /// Legacy decoding checks neither the curve nor the subgroup, so a valid
-/// legacy object may hold a point no pairing accepts.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+/// legacy object may hold a point no pairing accepts. Core decides validity
+/// without a subgroup test, so legacy decoding leaves that test to
+/// [`Self::usable`].
+///
+/// Equality and hashing ignore whether the subgroup test has run: a point
+/// decoded under both schemes is one element.
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "codec", derive(Unencodable))]
 pub enum BlsPoint<A> {
   /// On the curve and in the prime-order subgroup.
   Usable(A),
-  /// Off the curve or outside the subgroup; reachable only through legacy
-  /// decoding.
+  /// On the curve, decoded under the legacy scheme; the subgroup is not yet
+  /// tested.
+  OnCurve(A),
+  /// Off the curve, or one of the G1 points of order 3, which blst cannot
+  /// hold; reachable only through legacy decoding.
   Exotic,
 }
 
 impl<A> BlsPoint<A> {
-  /// The point, when it is usable for curve arithmetic and pairings.
-  pub fn usable(&self) -> Option<&A> {
+  /// The point blst holds, whether or not it is in the subgroup.
+  fn held(&self) -> Option<&A> {
     match self {
-      Self::Usable(point) => Some(point),
+      Self::Usable(point) | Self::OnCurve(point) => Some(point),
       Self::Exotic => None,
     }
+  }
+}
+
+/// Implements [`BlsPoint::usable`] for an affine point type.
+macro_rules! impl_usable {
+  ($affine:ty) => {
+    impl BlsPoint<$affine> {
+      /// The point, when it is usable for curve arithmetic and pairings. A
+      /// legacy-decoded point runs the subgroup test here, on every call.
+      pub fn usable(&self) -> Option<&$affine> {
+        match self {
+          Self::Usable(point) => Some(point),
+          Self::OnCurve(point) => point.to_projective().in_subgroup().then_some(point),
+          Self::Exotic => None,
+        }
+      }
+    }
+  };
+}
+
+impl_usable!(G1Affine);
+impl_usable!(G2Affine);
+
+impl<A: Eq> Eq for BlsPoint<A> {}
+
+impl<A: Hash> Hash for BlsPoint<A> {
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    self.held().hash(state);
+  }
+}
+
+impl<A: PartialEq> PartialEq for BlsPoint<A> {
+  fn eq(&self, other: &Self) -> bool {
+    self.held() == other.held()
   }
 }
 
 /// An object kind Core's BLS wrapper serializes in `N` bytes, a G1 public key,
 /// a G2 signature or a secret key.
 pub trait BlsWire<const N: usize>: sealed::Sealed + Sized + 'static {
-  /// What a valid object holds besides its bytes.
+  /// What an object holds besides its bytes.
   type Point: Clone + Debug + Eq + Send + Sync;
+
+  /// Core's default element as basic-scheme bytes and point: infinity for a
+  /// curve point, zero for a secret key. An invalid object holds it unless an
+  /// operation that failed in place kept its previous element.
+  #[doc(hidden)]
+  fn default_element() -> ([u8; N], Self::Point);
 
   /// Whether the bytes are secret, so they are redacted and wiped.
   #[doc(hidden)]
@@ -250,13 +299,19 @@ macro_rules! impl_wire_point {
 
       const SECRET: bool = false;
 
+      fn default_element() -> ([u8; $len], Self::Point) {
+        let mut basic = [0u8; $len];
+        basic[0] = FLAG_HIGH | FLAG_INFINITY;
+        // blst's affine identity is all zero.
+        (basic, BlsPoint::Usable(<$affine>::default()))
+      }
+
       fn decode_canonical(bytes: &[u8; $len], scheme: BlsSchemeKind) -> Option<([u8; $len], Self::Point)> {
         match scheme {
           BlsSchemeKind::Basic => Self::decode_set_basic(bytes).filter(|(ser, _)| ser == bytes),
-          BlsSchemeKind::Legacy => $decode_legacy(bytes).map(|(basic, point)| {
-            let usable = point.filter(|p| p.to_projective().in_subgroup());
-            (basic, usable.map_or(BlsPoint::Exotic, BlsPoint::Usable))
-          }),
+          BlsSchemeKind::Legacy => {
+            $decode_legacy(bytes).map(|(basic, point)| (basic, point.map_or(BlsPoint::Exotic, BlsPoint::OnCurve)))
+          }
         }
       }
 
@@ -309,6 +364,10 @@ impl BlsWire<BLS_SK_LEN> for Fr {
   type Point = ();
 
   const SECRET: bool = true;
+
+  fn default_element() -> ([u8; BLS_SK_LEN], Self::Point) {
+    ([0u8; BLS_SK_LEN], ())
+  }
 
   fn decode_canonical(bytes: &[u8; BLS_SK_LEN], scheme: BlsSchemeKind) -> Option<([u8; BLS_SK_LEN], Self::Point)> {
     let in_range = match scheme {

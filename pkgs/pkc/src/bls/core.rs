@@ -30,7 +30,6 @@ use super::chia_h2c;
 use super::group::{G1Affine, G2Affine, Point, G1, G2};
 use super::scheme_ietf::DST_BASIC;
 use super::scheme_ops::secure_weights;
-use super::wrap_codec::BlsPoint;
 use super::{BlsSchemeKind, BlsValue, BLS_PK_LEN, BLS_SIG_LEN};
 use crate::prelude::*;
 
@@ -87,7 +86,12 @@ pub fn verify_insecure(sig: &BlsSigValue, pk: &BlsPkValue, h: &[u8; 32], flag: B
   let (Some(sig), Some(pk)) = (sig.point(), pk.point()) else {
     return BlsVerdict::Invalid;
   };
-  aggregate_verify(flag, usable(sig), &[usable(pk)], ::core::slice::from_ref(h))
+  aggregate_verify(
+    flag,
+    sig.usable().copied(),
+    &[pk.usable().copied()],
+    ::core::slice::from_ref(h),
+  )
 }
 
 /// `CBLSSignature::VerifyInsecureAggregated(pks, hs)` under the verify
@@ -104,10 +108,14 @@ pub fn verify_insecure_aggregated(
   if pks.is_empty() || pks.len() != hs.len() {
     return BlsVerdict::Invalid;
   }
-  let Some(points) = pks.iter().map(|pk| pk.point().map(usable)).collect::<Option<Vec<_>>>() else {
+  let Some(points) = pks
+    .iter()
+    .map(|pk| pk.point().map(|p| p.usable().copied()))
+    .collect::<Option<Vec<_>>>()
+  else {
     return BlsVerdict::Invalid;
   };
-  aggregate_verify(flag, usable(sig), &points, hs)
+  aggregate_verify(flag, sig.usable().copied(), &points, hs)
 }
 
 /// `CBLSSignature::VerifySecureAggregated(pks, h)` under the verify flag.
@@ -123,7 +131,7 @@ pub fn verify_secure_aggregated(
   if pks.is_empty() {
     return BlsVerdict::Invalid;
   }
-  let sig = sig.point().map_or(Some(G2Affine::default()), usable);
+  let sig = sig.point().map_or(Some(G2Affine::default()), |p| p.usable().copied());
 
   // HashPubKeys weighs the keys in the order of their serializations under
   // the flag, and Core then decodes each serialization again. Under the
@@ -132,10 +140,10 @@ pub fn verify_secure_aggregated(
   // and is left to relic's arithmetic.
   let mut keyed = Vec::with_capacity(pks.len());
   for pk in pks {
-    let entry = match pk.point() {
+    let entry = match pk.point().map(|p| p.usable()) {
       None => (INFINITY_PK, G1::identity()),
-      Some(BlsPoint::Usable(point)) => (pk.to_bytes(flag), point.to_projective()),
-      Some(BlsPoint::Exotic) => {
+      Some(Some(point)) => (pk.to_bytes(flag), point.to_projective()),
+      Some(None) => {
         return match flag {
           BlsSchemeKind::Basic => BlsVerdict::Invalid,
           BlsSchemeKind::Legacy => BlsVerdict::Unsupported,
@@ -154,13 +162,9 @@ pub fn verify_secure_aggregated(
   aggregate_verify(flag, sig, &[Some(sum.to_affine())], ::core::slice::from_ref(h))
 }
 
-/// The point a valid object holds, `None` when it is exotic.
-fn usable<A: Copy>(point: &BlsPoint<A>) -> Option<A> {
-  point.usable().copied()
-}
-
 /// The scheme's `AggregateVerify` (its `Verify` for one key) over
-/// non-empty lists of equal length. `None` stands for an exotic point.
+/// non-empty lists of equal length. `None` stands for a point no pairing
+/// accepts.
 fn aggregate_verify(
   flag: BlsSchemeKind,
   sig: Option<G2Affine>,
@@ -259,7 +263,7 @@ mod tests {
     let bytes =
       hex!("0589c416bd798099fb08ed6d642e04865013fbd317a1ec5ec1041e2fb4b06c404e2059fb0145504474fac768c3c3e1af");
     let exotic = BlsPkValue::from_canonical(&bytes, BlsSchemeKind::Legacy).unwrap();
-    assert_eq!(exotic.point(), Some(&BlsPoint::Exotic));
+    assert_eq!(exotic.point().map(|p| p.usable()), Some(None));
     let msg = [5u8; 32];
     let (sig, pk) = values::<BlsScChia>(5, &msg, BlsSchemeKind::Legacy);
     assert_eq!(verify_insecure(&sig, &exotic, &msg, flag), want);

@@ -63,11 +63,11 @@ impl<K: BlsWire<N>, const N: usize> BlsEager<K, N> {
   /// scheme, the identity encoding included.
   pub fn decode(bytes: &[u8; N], source: BlsSchemeSource) -> Result<Self, BlsDecodeError> {
     let scheme = source.kind();
-    let value = if is_zero(bytes) {
-      BlsValue::invalid()
-    } else if let Some(value) = BlsValue::from_canonical(bytes, scheme) {
+    // All-zero bytes are canonical in neither scheme, so testing for them
+    // after the decode keeps Core's order of outcomes.
+    let value = if let Some(value) = BlsValue::from_canonical(bytes, scheme) {
       value
-    } else if K::is_canonical(bytes, scheme.opposite()) {
+    } else if is_zero(bytes) || K::is_canonical(bytes, scheme.opposite()) {
       BlsValue::invalid()
     } else {
       return Err(BlsDecodeError);

@@ -24,8 +24,8 @@ use dash_pkc::bls::core::{
   verify_insecure, verify_insecure_aggregated, verify_secure_aggregated, BlsPkValue, BlsSigValue, BlsVerdict,
 };
 use dash_pkc::bls::{
-  BlsEager, BlsIesBlob, BlsIesBlobBytes, BlsIesMulti, BlsIesMultiBytes, BlsLazy, BlsPoint, BlsPublicKey, BlsScChia,
-  BlsScIetf, BlsScheme, BlsSchemeKind, BlsSchemeSource, BlsSecretKey, BlsShareId, BlsSigShare, BlsSignature, BlsWire,
+  BlsEager, BlsIesBlob, BlsIesBlobBytes, BlsIesMulti, BlsIesMultiBytes, BlsLazy, BlsPublicKey, BlsScChia, BlsScIetf,
+  BlsScheme, BlsSchemeKind, BlsSchemeSource, BlsSecretKey, BlsShareId, BlsSigShare, BlsSignature, BlsWire,
   BlsWirePoint, Fr, BLS_PK_LEN, BLS_SIG_LEN, BLS_SK_LEN, G1, G2,
 };
 use dash_types::codec::BaseCodec;
@@ -631,7 +631,8 @@ fn assert_edge() {
       other => panic!("op {other}"),
     };
     let label = format!("{} {} under {}: {}", row.op, row.decode, row.flag, row.note);
-    let exotic = sig.point() == Some(&BlsPoint::Exotic) || pks.iter().any(|p| p.point() == Some(&BlsPoint::Exotic));
+    let exotic = sig.point().is_some_and(|p| p.usable().is_none())
+      || pks.iter().any(|pk| pk.point().is_some_and(|p| p.usable().is_none()));
     if flag == LEGACY && exotic {
       gaps += 1;
       assert_eq!(core, BlsVerdict::Unsupported, "{label}: the relic gap closed");

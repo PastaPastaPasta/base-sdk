@@ -10,11 +10,20 @@ use crate::common::bls::{sequential_ids, test_ikm, test_msg};
 
 use dash_pkc::bls::core::{verify_insecure, BlsPkValue, BlsSigValue};
 use dash_pkc::bls::{
-  BlsPublicKey, BlsScChia, BlsScIetf, BlsScheme, BlsSchemeKind, BlsSecretKey, BlsSigShare, BlsSignature, BlsValue,
+  BlsEagerPk, BlsEagerSig, BlsPublicKey, BlsScChia, BlsScIetf, BlsScheme, BlsSchemeKind, BlsSchemeSource, BlsSecretKey,
+  BlsSigShare, BlsSignature, BlsValue,
 };
 use divan::{counter::ItemsCount, Bencher};
 use getrandom::SysRng;
 use rand_core::UnwrapErr;
+
+use core::any::TypeId;
+
+/// The wrapper scheme whose encoding `S` writes: Chia's is the legacy one.
+fn wrapper_scheme<S: 'static>() -> BlsSchemeSource {
+  let legacy = TypeId::of::<S>() == TypeId::of::<BlsScChia>();
+  BlsSchemeSource::Version(BlsSchemeKind::from_legacy(legacy))
+}
 
 /// Single signature creation.
 #[divan::bench(types = [BlsScChia, BlsScIetf])]
@@ -145,6 +154,19 @@ fn deser_pk<S: BlsScheme>(bencher: Bencher) {
   bencher.bench(|| BlsPublicKey::<S>::from_bytes(&bytes));
 }
 
+/// Eager wrapper decoding of a public key, against [`deser_pk`] for the
+/// same scheme.
+#[divan::bench(types = [BlsScChia, BlsScIetf])]
+fn decode_eager_pk<S: BlsScheme + 'static>(bencher: Bencher) {
+  let bytes = BlsSecretKey::<S>::from_ikm(&test_ikm(1))
+    .unwrap()
+    .public_key()
+    .to_bytes();
+  let source = wrapper_scheme::<S>();
+  assert!(BlsEagerPk::decode(&bytes, source).unwrap().is_valid());
+  bencher.bench(|| BlsEagerPk::decode(&bytes, source));
+}
+
 /// Signature serialization.
 #[divan::bench(types = [BlsScChia, BlsScIetf])]
 fn ser_sig<S: BlsScheme>(bencher: Bencher) {
@@ -162,6 +184,19 @@ fn deser_sig<S: BlsScheme>(bencher: Bencher) {
     .sign(S::msg_ref(&test_msg(0)))
     .to_bytes();
   bencher.bench(|| BlsSignature::<S>::from_bytes(&bytes));
+}
+
+/// Eager wrapper decoding of a signature, against [`deser_sig`] for the
+/// same scheme.
+#[divan::bench(types = [BlsScChia, BlsScIetf])]
+fn decode_eager_sig<S: BlsScheme + 'static>(bencher: Bencher) {
+  let bytes = BlsSecretKey::<S>::from_ikm(&test_ikm(1))
+    .unwrap()
+    .sign(S::msg_ref(&test_msg(0)))
+    .to_bytes();
+  let source = wrapper_scheme::<S>();
+  assert!(BlsEagerSig::decode(&bytes, source).unwrap().is_valid());
+  bencher.bench(|| BlsEagerSig::decode(&bytes, source));
 }
 
 /// Threshold secret key splitting at various quorum sizes.
