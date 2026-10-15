@@ -31,7 +31,8 @@ const PREFIX_LEN: u64 = 1 + 32 + 32;
 
 /// A DKG message, read as Core's DKG handler and worker read it.
 ///
-/// Core takes a received DKG message in this order, which the node keeps:
+/// A node running DKG sessions (an active masternode) takes a received DKG
+/// message in this order, as Core does:
 ///
 /// 1. The handler's gates on the peer and the quorum, each scored apart: a
 ///    verified masternode peer, a payload holding the type and quorum hash
@@ -42,10 +43,15 @@ const PREFIX_LEN: u64 = 1 + 32 + 32;
 /// 4. The GETDATA-response gate: a message the node did not request scores 10
 ///    and is dropped. It runs after step 2, so an unrequested payload that
 ///    fails those checks scores 100.
-/// 5. The queue of the quorum's session handler; none scores 100.
+/// 5. The queue of the quorum's session handler; none scores 100. The queue
+///    drops, unscored and unread, a hash it has seen and a message over the
+///    sender's quota.
 /// 6. On the DKG worker, the read: [`MsgDecode::decode_msg`] of the whole
 ///    payload, then [`DkgMessage::eager`] under the process-wide scheme. A
 ///    failure of either scores 100.
+///
+/// Core's other nodes read none of them: an observer ignores them, and a
+/// node with no LLMQ role scores each 10.
 ///
 /// [`DkgMessage::decode_checked`] runs step 2 and the whole read in one
 /// call, for single-step use such as tests. At intake the node runs the
@@ -137,6 +143,11 @@ fn eager_pk(key: &BlsPkBytes<BlsScIetf>, bls: BlsCtx) -> Result<BlsPkBytes<BlsSc
   Ok(BlsPkBytes::from_bytes(read.to_bytes(bls.scheme())))
 }
 
+/// A secret key as Core's eager read leaves it under `bls`.
+fn eager_sk(key: &[u8; BLS_SK_LEN], bls: BlsCtx) -> Result<[u8; BLS_SK_LEN], BlsDecodeError> {
+  Ok(BlsEagerSk::decode(key, BlsSchemeSource::Global(bls))?.to_bytes(bls.scheme()))
+}
+
 /// A signature as Core's eager read leaves it under `bls`.
 fn eager_sig(sig: &BlsSigBytes<BlsScIetf>, bls: BlsCtx) -> Result<BlsSigBytes<BlsScIetf>, BlsDecodeError> {
   let read = BlsEagerSig::decode(sig.as_bytes(), BlsSchemeSource::Global(bls))?;
@@ -223,7 +234,7 @@ fn param(value: i32) -> u64 {
 /// 1 MiB.
 fn capped(bound: u64) -> usize {
   const SLACK: u64 = 1024;
-  usize::try_from(bound + SLACK).map_or(HARD_CEILING, |cap| cap.min(HARD_CEILING))
+  usize::try_from(bound + SLACK).unwrap_or(usize::MAX).min(HARD_CEILING)
 }
 
 /// The largest CompactSize `MaxDKGMessageSize` allows for a count.
@@ -285,6 +296,9 @@ impl DkgMessage for DkgContribution {
   fn eager(&self, bls: BlsCtx) -> Result<Self, BlsDecodeError> {
     let shares = &self.contributions;
     Ok(Self {
+      llmq_type: self.llmq_type,
+      quorum_hash: self.quorum_hash,
+      pro_tx_hash: self.pro_tx_hash,
       vvec: self
         .vvec
         .iter()
@@ -296,7 +310,6 @@ impl DkgMessage for DkgContribution {
         shares.blobs().to_vec(),
       ),
       sig: eager_sig(&self.sig, bls)?,
-      ..self.clone()
     })
   }
 
@@ -459,10 +472,9 @@ impl DkgMessage for DkgJustification {
       .contributions
       .iter()
       .map(|share| {
-        let read = BlsEagerSk::decode(&share.key, BlsSchemeSource::Global(bls))?;
         Ok(DkgRevealedShare {
           index: share.index,
-          key: read.to_bytes(bls.scheme()),
+          key: eager_sk(&share.key, bls)?,
         })
       })
       .collect::<Result<_, _>>()?;

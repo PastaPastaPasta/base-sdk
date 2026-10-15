@@ -48,7 +48,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   before the read: `MaxDKGMessageSize` (`HandlerPayloadTooLarge`) and the framing walk against the quorum's
   `LlmqParams` (`P2pDecodeError::DkgFraming`), and `DkgMessage::decode_checked` runs them then the read;
   `dkg_quorum` peeks the type and quorum the parameters come from. `P2pMsg::decode_with_policy` refuses a DKG payload
-  over 1 MiB (`HandlerPayloadTooLarge`) before reading it, as Core's size cap does whatever the quorum.
+  over 1 MiB (`HandlerPayloadTooLarge`) before reading it, as Core's size cap does whatever the quorum once the
+  handler's gates have passed.
 - `DkgMessage::eager`, Core's eager read of a DKG message's BLS fields under the process-wide scheme (the message Core
   writes back and signs), and `dkg_inventory_hash`, Core's inventory hash of the payload as received. `DkgMessage`
   documents the order of Core's handler and worker: gates, checks, inventory hash, GETDATA-response gate, queue, read.
