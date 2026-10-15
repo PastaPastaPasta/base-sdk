@@ -401,6 +401,11 @@ def edge_rows(probe: o.Probe, decoded: list[Row]) -> list[Row]:
     agg = g.must(o.AGGREGATE_SIG, sigs([sig, g.sign(keys[1], msgs[1])]))
     same = [g.sign(sk, msgs[0]) for sk in keys]
     sec = g.must(o.AGGREGATE_SECURE, sigs(same), pk_list(pks), o.Raw(msgs[0]))
+    # Core aggregates an invalid object's element, infinity, as it verifies.
+    zero_sigs, zero_pks = [same[0], zero_sig], [pks[0], zero_pk]
+    sec_zero = g.must(
+      o.AGGREGATE_SECURE, sigs(zero_sigs), pk_list(zero_pks), o.Raw(msgs[0])
+    )
     xpk, xsig = (exotic["pk"], exotic["sig"]) if legacy else ([], [])
     insecure = [(sig, pks[0], "signed"), (zero_sig, pks[0], "invalid sig")]
     insecure += [(sig, zero_pk, "invalid key")]
@@ -420,6 +425,8 @@ def edge_rows(probe: o.Probe, decoded: list[Row]) -> list[Row]:
       (zero_sig, [zero_pk], "all invalid"),
       (zero_sig, [zero_pk, zero_pk], "all invalid, twice"),
       (sec, [zero_pk], "invalid key"),
+      (sec_zero, zero_pks, "signed with an invalid key"),
+      (sec_zero, zero_pks[::-1], "signed with an invalid key, reversed"),
     ]
     secure += [(sec, [pks[0], x], "an exotic key") for x in xpk]
     secure += [(x, pks, "exotic sig") for x in xsig]
