@@ -58,6 +58,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "luffa"
+path = "targets/luffa.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "skein"
 path = "targets/skein.rs"
 test = false
