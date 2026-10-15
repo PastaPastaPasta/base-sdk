@@ -384,11 +384,13 @@ impl fmt::Display for Transaction {
 }
 
 #[cfg(all(test, feature = "serde"))]
+#[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
 
   use dash_dev::{assert_serde_rt, check_tx, Corpus};
   use rstest::rstest;
+  use serde::Deserialize;
 
   #[rstest]
   #[case("spend")]
@@ -398,5 +400,73 @@ mod tests {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), section);
     let items = corpus.entries::<Transaction>(section, check_tx);
     assert_serde_rt(section, &items);
+  }
+
+  #[derive(Deserialize)]
+  struct CheckVector {
+    #[serde(rename = "type")]
+    tx_type: u16,
+    inputs: Vec<u8>,
+    script_sig: usize,
+    values: Vec<u64>,
+    pad: usize,
+    payload: usize,
+    size: usize,
+    reason: String,
+  }
+
+  impl CheckVector {
+    fn build(&self) -> Transaction {
+      let inputs = self.inputs.iter().enumerate().map(|(i, &seed)| TxIn {
+        prevout: OutPoint {
+          hash: TxHash::from_lendian([seed; 32]),
+          index: if seed == 0 { u32::MAX } else { 0 },
+        },
+        script_sig: ScriptSigBuf::from_bytes(vec![0; if i == 0 { self.script_sig } else { 0 }]),
+        sequence: u32::MAX,
+      });
+      let outputs = self.values.iter().enumerate().map(|(i, &value)| TxOut {
+        value: Amount::from_sat(value).unwrap(),
+        script_pubkey: ScriptPubKeyBuf::from_bytes(vec![0; if i == 0 { self.pad } else { 0 }]),
+      });
+      Transaction {
+        version: 3,
+        tx_type: TxType::from_base(self.tx_type),
+        inputs: inputs.collect(),
+        outputs: outputs.collect(),
+        lock_time: 0,
+        extra_payload: vec![0; self.payload],
+      }
+    }
+  }
+
+  /// Payload checks run after every check the vectors cover, so payload
+  /// errors count as a pass.
+  fn reason(result: Option<TxInvalid>) -> &'static str {
+    match result {
+      None | Some(TxInvalid::PayloadDecode(_) | TxInvalid::PayloadCheck(_)) => "",
+      Some(TxInvalid::EmptyInputs) => "bad-txns-vin-empty",
+      Some(TxInvalid::EmptyOutputs) => "bad-txns-vout-empty",
+      Some(TxInvalid::Oversize { .. }) => "bad-txns-oversize",
+      Some(TxInvalid::PayloadOversize { .. }) => "bad-txns-payload-oversize",
+      Some(TxInvalid::OutputTooLarge { .. }) => "bad-txns-vout-toolarge",
+      Some(TxInvalid::OutputTotalTooLarge { .. }) => "bad-txns-txouttotal-toolarge",
+      Some(TxInvalid::DuplicateInputs { .. }) => "bad-txns-inputs-duplicate",
+      Some(TxInvalid::BadCoinbaseScriptLength { .. }) => "bad-cb-length",
+      Some(TxInvalid::NullPrevout { .. }) => "bad-txns-prevout-null",
+      Some(TxInvalid::PayloadNotAllowed) => "bad-txns-payload-not-allowed",
+    }
+  }
+
+  #[rstest]
+  fn check_matches_vectors() {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "tx_check");
+    for (i, v) in corpus.vectors::<CheckVector>("check").into_iter().enumerate() {
+      let tx = v.build();
+      let mut buf = Vec::new();
+      tx.encode(&mut buf);
+      assert_eq!(buf.len(), v.size, "vector {i}");
+      assert_eq!(reason(tx.check()), v.reason, "vector {i}");
+    }
   }
 }
