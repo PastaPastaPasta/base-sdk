@@ -172,6 +172,14 @@ macro_rules! define_p2p {
         payload: &[u8],
       ) -> Result<Self, crate::P2pDecodeError> {
         crate::macros::check_payload(cmd, payload)?;
+        Self::decode_unbounded(cmd, payload)
+      }
+
+      /// Decodes a payload whose transport has already bounded its size.
+      pub(crate) fn decode_unbounded(
+        cmd: &CommandString,
+        payload: &[u8],
+      ) -> Result<Self, crate::P2pDecodeError> {
         let raw = || Vec::from(payload);
         let msg = match *cmd {
           $( CommandString::$p_cmd => Self::$p_variant(crate::macros::decode_msg(payload)?), )*
