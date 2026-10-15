@@ -6,7 +6,7 @@
 
 //! Compressed header messages.
 
-use super::headers::decode_count;
+use super::headers::{decode_count, Headers};
 use crate::codec::{codec_p2p, impl_p2p};
 use crate::prelude::*;
 use crate::version::ProtocolVersion;
@@ -280,6 +280,16 @@ hash_impl!(Headers2);
 impl Headers2 {
   /// The most headers a `headers2` message carries.
   pub const MAX_COUNT: usize = 8_000;
+
+  /// The most headers a peer may send in one `headers2` message, given the
+  /// protocol version both peers share.
+  pub fn max_count(common: ProtocolVersion) -> usize {
+    if common >= ProtocolVersion::INCREASE_MAX_HEADERS2 {
+      Self::MAX_COUNT
+    } else {
+      Headers::MAX_COUNT
+    }
+  }
 }
 
 #[cfg(all(test, feature = "serde"))]
@@ -344,5 +354,12 @@ mod tests {
         remaining: MIN_HEADERS2_ENTRY,
       })
     );
+  }
+
+  #[rstest]
+  #[case::below(70234, 2_000)]
+  #[case::at(70235, 8_000)]
+  fn max_count_follows_the_common_version(#[case] common: i32, #[case] max: usize) {
+    assert_eq!(Headers2::max_count(ProtocolVersion(common)), max);
   }
 }
