@@ -6,7 +6,7 @@
 
 //! Builds the sphlib reference implementations behind a one-call shim.
 
-const STAGES: [&str; 4] = ["blake", "bmw", "groestl", "skein"];
+const STAGES: [&str; 5] = ["blake", "bmw", "groestl", "jh", "skein"];
 
 fn main() {
   let mut build = cc::Build::new();

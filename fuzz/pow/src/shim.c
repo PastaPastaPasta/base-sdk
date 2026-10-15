@@ -11,6 +11,7 @@
 #include "sph_blake.h"
 #include "sph_bmw.h"
 #include "sph_groestl.h"
+#include "sph_jh.h"
 #include "sph_skein.h"
 
 #define DASH_SPH(name)                                                       \
@@ -24,4 +25,5 @@
 DASH_SPH(blake)
 DASH_SPH(bmw)
 DASH_SPH(groestl)
+DASH_SPH(jh)
 DASH_SPH(skein)
