@@ -38,6 +38,7 @@ reference!(
   jh => dash_sph_jh,
   keccak => dash_sph_keccak,
   luffa => dash_sph_luffa,
+  shavite => dash_sph_shavite,
   skein => dash_sph_skein,
 );
 
@@ -87,7 +88,7 @@ pub fn assert_same(name: &str, ours: Digest, theirs: Digest, data: &[u8]) {
 mod tests {
   use super::*;
 
-  use dash_pow::__private::{blake, bmw, cubehash, groestl, jh, keccak, luffa, skein};
+  use dash_pow::__private::{blake, bmw, cubehash, groestl, jh, keccak, luffa, shavite, skein};
   use rstest::rstest;
 
   use std::fs;
@@ -104,6 +105,7 @@ mod tests {
     Jh,
     Keccak,
     Luffa,
+    Shavite,
     Skein,
   }
 
@@ -118,6 +120,7 @@ mod tests {
         Self::Jh => "jh",
         Self::Keccak => "keccak",
         Self::Luffa => "luffa",
+        Self::Shavite => "shavite",
         Self::Skein => "skein",
       }
     }
@@ -132,6 +135,7 @@ mod tests {
         Self::Jh => (jh::hash512, sph::jh),
         Self::Keccak => (keccak::hash512, sph::keccak),
         Self::Luffa => (luffa::hash512, sph::luffa),
+        Self::Shavite => (shavite::hash512, sph::shavite),
         Self::Skein => (skein::hash512, sph::skein),
       };
       assert_same_at(self.name(), ours, theirs, data, offset);
@@ -200,6 +204,21 @@ mod tests {
       .collect()
   }
 
+  /// SHAvite counts message bits in 32-bit words, which carry after 2^29
+  /// bytes; no fuzzer input gets near that.
+  #[rstest]
+  #[ignore = "hashes 512 MiB inputs, run with `--release --ignored`"]
+  fn counter_word_carries(#[values(Stage::Shavite)] stage: Stage) {
+    const CARRY: usize = 1 << 29;
+    let data = input(CARRY + 129);
+    // CARRY - 1 crosses the carry inside the final block's counter keys.
+    // CARRY puts the carry on a block boundary. CARRY + 129 adds a partial
+    // block after the carry.
+    for len in [CARRY - 1, CARRY, CARRY + 129] {
+      stage.assert_same_at(&data[..len], 0);
+    }
+  }
+
   /// Every stage agrees with sphlib across four blocks of lengths at
   /// every misalignment, without a fuzzing engine.
   #[rstest]
@@ -212,6 +231,7 @@ mod tests {
       Stage::Jh,
       Stage::Keccak,
       Stage::Luffa,
+      Stage::Shavite,
       Stage::Skein
     )]
     stage: Stage,
@@ -236,6 +256,7 @@ mod tests {
       Stage::Jh,
       Stage::Keccak,
       Stage::Luffa,
+      Stage::Shavite,
       Stage::Skein
     )]
     stage: Stage,

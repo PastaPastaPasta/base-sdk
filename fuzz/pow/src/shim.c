@@ -15,6 +15,7 @@
 #include "sph_jh.h"
 #include "sph_keccak.h"
 #include "sph_luffa.h"
+#include "sph_shavite.h"
 #include "sph_skein.h"
 
 #define DASH_SPH(name)                                                       \
@@ -32,4 +33,5 @@ DASH_SPH(groestl)
 DASH_SPH(jh)
 DASH_SPH(keccak)
 DASH_SPH(luffa)
+DASH_SPH(shavite)
 DASH_SPH(skein)

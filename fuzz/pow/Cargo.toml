@@ -72,6 +72,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "shavite"
+path = "targets/shavite.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "skein"
 path = "targets/skein.rs"
 test = false
