@@ -193,3 +193,33 @@ define_p2p! {
     QWatch => QWATCH "qwatch" @ 151,
   }
 }
+
+#[cfg(all(test, feature = "serde"))]
+#[expect(clippy::unwrap_used, reason = "test code")]
+mod tests {
+  use super::*;
+  use crate::P2pDecodeError;
+
+  use dash_dev::Corpus;
+  use hex_conservative::decode_to_array;
+  use rstest::rstest;
+  use serde::Deserialize;
+
+  #[derive(Deserialize)]
+  struct SizeVector {
+    command: String,
+    size: usize,
+    disconnect: bool,
+  }
+
+  #[rstest]
+  fn payload_size_matches_vectors() {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "transport");
+    for v in corpus.vectors::<SizeVector>("v1_size") {
+      let cmd = CommandString::from_bytes(decode_to_array(&v.command).unwrap());
+      let result = P2pMsg::decode_payload(&cmd, &vec![0; v.size]);
+      let too_large = matches!(result, Err(P2pDecodeError::PayloadTooLarge { .. }));
+      assert_eq!(too_large, v.disconnect, "{} of {} bytes", v.command, v.size);
+    }
+  }
+}
