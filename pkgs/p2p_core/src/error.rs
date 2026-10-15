@@ -6,8 +6,6 @@
 
 //! P2P-layer decoding errors.
 
-use crate::prelude::*;
-
 use dash_types::codec::DecodeError;
 use dash_types::type_id::Unencodable;
 
@@ -16,9 +14,9 @@ use core::fmt;
 /// An error encountered during P2P message decoding.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, thiserror::Error, Unencodable)]
 pub enum P2pDecodeError {
-  /// Underlying consensus decoding error.
-  #[error("{0}")]
-  Consensus(String),
+  /// A field failed to decode.
+  #[error(transparent)]
+  Consensus(#[from] DecodeError),
   /// Unrecognised 12-byte command string.
   #[error(fmt = fmt_unknown_command)]
   UnknownCommand {
@@ -55,12 +53,6 @@ pub enum P2pDecodeError {
     /// Brief description of what was invalid.
     field: &'static str,
   },
-}
-
-impl From<DecodeError> for P2pDecodeError {
-  fn from(e: DecodeError) -> Self {
-    Self::Consensus(format!("{e}"))
-  }
 }
 
 /// Formats `P2pDecodeError::UnknownCommand`, escaping non-printable bytes.
