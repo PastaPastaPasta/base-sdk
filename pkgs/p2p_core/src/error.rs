@@ -25,13 +25,16 @@ pub enum P2pDecodeError {
     /// The raw command bytes.
     bytes: [u8; 12],
   },
+  /// V2 contents end before the message type does.
+  #[error("missing command")]
+  MissingCommand,
   /// A V2 long-form command that fails [`CommandString::is_valid_v2`].
   #[error(fmt = fmt_invalid_command)]
   InvalidCommand {
     /// The command as received.
     command: CommandString,
   },
-  /// V2 short ID does not map to a known message.
+  /// V2 short ID outside the short ID tables.
   #[error("unknown v2 short id: {id}")]
   UnknownShortId {
     /// The short ID byte.
