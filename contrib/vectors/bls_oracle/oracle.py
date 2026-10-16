@@ -8,32 +8,40 @@
 
 A script (oracle.h, oracle_bls_exec) loads Core's objects into registers
 and runs Core's operations on them; each op returns Core's code and
-output bytes. `Probe.call` runs one op on decoded operands.
+output bytes, and from ABI 19 relic's error code after the op and, with
+LOG, the relic calls Core made. `Probe.call` runs one op on decoded
+operands.
 """
 
 from __future__ import annotations
 
 import hashlib
 import subprocess
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
   from collections.abc import Iterable
 
 ABI = 14
+RELIC_ABI = 19
 
-OK, REJECT, E_DECODE, E_ARG = 0, 1, -1, -4
+OK, REJECT, E_DECODE, E_ARG, E_EXCEPTION = 0, 1, -1, -4, -5
 
 DECODE, SER, SIGN, PUBLIC_KEY, VERIFY = 0, 1, 2, 3, 4
 VERIFY_AGGREGATED, VERIFY_SECURE = 5, 6
 AGGREGATE_SK, AGGREGATE_PK, AGGREGATE_SIG, SUB_SIG = 7, 8, 9, 10
 AGGREGATE_SECURE, SK_SHARE, PK_SHARE, RECOVER_SIG, DH = 11, 12, 13, 14, 15
 IES_ENCRYPT, IES_DECRYPT, IES_DECRYPT_BLOB, HASH_TO_G2 = 16, 17, 18, 19
+EQ, ADD, NEG, MUL, IS_VALID, SER_HASH, IMPL_EQ = 20, 21, 22, 23, 24, 25, 26
+
+# Flag bits beside the scheme's (ABI 19).
+LOG, PAIR, INPLACE = 0x02, 0x04, 0x08
 
 # Ops that store their result in a destination register.
 STORES = {
   DECODE, SIGN, PUBLIC_KEY, AGGREGATE_SK, AGGREGATE_PK, AGGREGATE_SIG,
   SUB_SIG, AGGREGATE_SECURE, SK_SHARE, PK_SHARE, RECOVER_SIG, DH, HASH_TO_G2,
+  ADD, NEG, MUL,
 }  # fmt: skip
 
 PK, SIG, SK = 0, 1, 2
@@ -60,6 +68,16 @@ class Sig(Obj):
 
 class Raw(bytes):
   """An operand written into the script as it is."""
+
+
+class Record(NamedTuple):
+  """One op's record: Core's code, relic's code after the op (ABI 19),
+  the output, and with LOG the relic calls Core made (symbol, code)."""
+
+  status: int
+  code: int
+  output: bytes
+  log: list[tuple[str, int]] | None
 
 
 class OracleError(RuntimeError):
@@ -112,7 +130,7 @@ class Script:
     self.legacy = legacy
     self.code = bytearray()
     self.regs = 0
-    self.ops = 0
+    self.logged: list[bool] = []
 
   def reg(self) -> int:
     if self.regs == 256:
@@ -121,12 +139,15 @@ class Script:
     self.regs += 1
     return self.regs - 1
 
-  def emit(self, op: int, operands: bytes, legacy: bool | None = None) -> None:
-    """Appends an op under the script's scheme, or `legacy` if given; an
-    op with a destination gets the next register."""
+  def emit(
+    self, op: int, operands: bytes, legacy: bool | None = None, flags: int = 0
+  ) -> None:
+    """Appends an op under the script's scheme, or `legacy` if given, with
+    the other flag bits in `flags`; an op with a destination gets the next
+    register."""
     flag = self.legacy if legacy is None else legacy
-    self.code += bytes([op, int(flag)]) + operands
-    self.ops += 1
+    self.code += bytes([op, int(flag) | flags]) + operands
+    self.logged.append(bool(flags & LOG))
     if op in STORES:
       self.code.append(self.reg())
 
@@ -164,6 +185,36 @@ def read_compact(data: bytes, pos: int) -> tuple[int, int]:
   return int.from_bytes(data[pos + 1 : end], "little"), end
 
 
+class Reader:
+  """Reads oracle_bls_exec's output, failing on a short read."""
+
+  def __init__(self, data: bytes) -> None:
+    self.data = data
+    self.pos = 0
+
+  def take(self, n: int) -> bytes:
+    if self.pos + n > len(self.data):
+      msg = "the records end early"
+      raise OracleError(msg)
+    self.pos += n
+    return self.data[self.pos - n : self.pos]
+
+  def i32(self) -> int:
+    return int.from_bytes(self.take(4), "little", signed=True)
+
+  def compact(self) -> int:
+    self.take(1)
+    n, end = read_compact(self.data, self.pos - 1)
+    self.take(end - self.pos)
+    return n
+
+  def string(self) -> bytes:
+    return self.take(self.compact())
+
+  def log(self) -> list[tuple[str, int]]:
+    return [(self.string().decode(), self.i32()) for _ in range(self.compact())]
+
+
 class Probe:
   """A running probe.c process."""
 
@@ -176,8 +227,9 @@ class Probe:
       text=True,
     )
     abi, version = self._ask("I").split(" ", 1)
-    if int(abi) != ABI:
-      msg = f"{path}: ABI {abi}, want {ABI}"
+    self.abi = int(abi)
+    if self.abi < ABI:
+      msg = f"{path}: ABI {abi}, want {ABI} or later"
       raise OracleError(msg)
     self.core_version = version
 
@@ -194,27 +246,39 @@ class Probe:
       raise OracleError(msg)
     return answer.rstrip("\n").split("\t", 1)[0]
 
-  def run(self, script: Script) -> list[tuple[int, bytes]]:
-    """oracle_bls_exec: Core's code and output for every op."""
+  def exec(self, script: Script) -> list[Record]:
+    """oracle_bls_exec: every op's record. A throw under LOG ends the
+    script, so its record may be the last of fewer than the ops."""
     answer = self._ask(f"X {script.code.hex() or '-'}").split()
     ret, out = int(answer[0]), answer[1]
     if ret != OK:
       msg = f"script refused ({ret}): {script.code.hex()[:80]}"
       raise OracleError(msg)
-    data = b"" if out == "-" else bytes.fromhex(out)
-    records, pos = [], 0
-    while pos < len(data):
-      status = int.from_bytes(data[pos : pos + 4], "little", signed=True)
-      if data[pos + 4 : pos + 8] != bytes(4):
-        msg = "a record's reserved field is set (not ABI 14?)"
-        raise OracleError(msg)
-      n, pos = read_compact(data, pos + 8)
-      records.append((status, data[pos : pos + n]))
-      pos += n
-    if len(records) != script.ops:
-      msg = f"{len(records)} records for {script.ops} ops"
+    data = Reader(b"" if out == "-" else bytes.fromhex(out))
+    records: list[Record] = []
+    for logged in script.logged:
+      status, code, output = data.i32(), data.i32(), data.string()
+      records.append(
+        Record(status, code, output, data.log() if logged else None)
+      )
+      if logged and status == E_EXCEPTION:
+        break
+    if data.pos != len(data.data):
+      msg = f"bytes after {len(records)} records"
       raise OracleError(msg)
     return records
+
+  def run(self, script: Script) -> list[tuple[int, bytes]]:
+    """Core's code and output for every op; relic's code after each op is
+    RLC_OK (0 before ABI 19)."""
+    records = self.exec(script)
+    if len(records) != len(script.logged):
+      msg = f"{len(records)} records for {len(script.logged)} ops"
+      raise OracleError(msg)
+    if any(r.code != 0 for r in records):
+      msg = "relic's code is set after an op"
+      raise OracleError(msg)
+    return [(r.status, r.output) for r in records]
 
   def call(
     self, op: int, legacy: bool, *args: object, flag: bool | None = None

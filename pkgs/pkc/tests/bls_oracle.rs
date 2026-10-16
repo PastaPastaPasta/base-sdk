@@ -647,6 +647,96 @@ fn assert_edge() {
   );
 }
 
+// relic.json5
+
+#[derive(Deserialize)]
+struct RelicRow {
+  probe: String,
+  scheme: String,
+  note: String,
+  steps: Vec<RelicStep>,
+}
+
+#[derive(Deserialize)]
+struct RelicStep {
+  op: String,
+  flag: Option<String>,
+  kind: Option<String>,
+  input: Option<String>,
+  a: Option<usize>,
+  sig: Option<usize>,
+  pk: Option<usize>,
+  msg: Option<String>,
+  status: i32,
+  code: i32,
+  out: String,
+  log: Vec<(String, i32)>,
+}
+
+fn need<'a, T: ?Sized>(value: Option<&'a T>, label: &str, what: &str) -> &'a T {
+  value.unwrap_or_else(|| panic!("{label}: no {what}"))
+}
+
+/// The reference implementation's relic arithmetic on points outside the
+/// subgroup (the BS11a design's probes P1 to P5 and its fixed vectors), with
+/// relic's code `RLC_OK` after every step and every logged call. The
+/// arithmetic outputs are a known gap until the relic engine lands
+/// (BS11a-3); a verification on an exotic operand under the legacy flag
+/// stays `Unsupported` until BS11a-4.
+fn assert_relic() {
+  let rows = corpus("relic").vectors::<RelicRow>("rows");
+  let mut gaps = 0;
+  for row in &rows {
+    let scheme = scheme_named(&row.scheme);
+    for (i, step) in row.steps.iter().enumerate() {
+      let label = format!("{} ({}) step {i} {}", row.probe, row.note, step.op);
+      assert_eq!(step.code, 0, "{label}: relic's code");
+      assert!(step.log.iter().all(|(_, code)| *code == 0), "{label}: {:?}", step.log);
+      assert_eq!(step.log.is_empty(), step.op == "decode", "{label}: the log window");
+      let operand = |index: Option<usize>| &row.steps[*need(index.as_ref(), &label, "operand")];
+      match step.op.as_str() {
+        "decode" => {
+          let input = need(step.input.as_deref(), &label, "input");
+          let outcome = match step.kind.as_deref() {
+            Some("pk") => eager_outcome::<G1, BLS_PK_LEN>(&arr_from_hex(input), scheme),
+            Some("sig") => eager_outcome::<G2, BLS_SIG_LEN>(&arr_from_hex(input), scheme),
+            Some("sk") => eager_outcome::<Fr, BLS_SK_LEN>(&arr_from_hex(input), scheme),
+            other => panic!("{label}: kind {other:?}"),
+          };
+          assert_eq!(outcome, format!("V:{}", step.out), "{label}");
+        }
+        "is_valid" if operand(step.a).op == "decode" => {
+          let decoded = operand(step.a);
+          let input = need(decoded.input.as_deref(), &label, "input");
+          let usable = match decoded.kind.as_deref() {
+            Some("pk") => pk_value(input, scheme).point().is_some_and(|p| p.usable().is_some()),
+            Some("sig") => sig_value(input, scheme).point().is_some_and(|p| p.usable().is_some()),
+            other => panic!("{label}: kind {other:?}"),
+          };
+          assert_eq!(step.out, format!("01{:02x}", u8::from(usable)), "{label}");
+        }
+        "verify" => {
+          let flag = step.flag.as_deref().map_or(scheme, scheme_named);
+          let sig = sig_value(need(operand(step.sig).input.as_deref(), &label, "input"), scheme);
+          let pk = pk_value(&operand(step.pk).out, scheme);
+          let h = hash(need(step.msg.as_deref(), &label, "msg"));
+          let core = verify_insecure(&sig, &pk, &h, flag);
+          let exotic = sig.point().is_some_and(|p| p.usable().is_none());
+          if flag == LEGACY && exotic {
+            gaps += 1;
+            assert_eq!(core, BlsVerdict::Unsupported, "{label}: the relic gap closed");
+          } else {
+            assert_verdict(&label, core, None, step.status == 0);
+          }
+        }
+        "pubkey" | "sign" => assert_eq!(step.status, 0, "{label}"),
+        _ => gaps += 1,
+      }
+    }
+  }
+  assert!(gaps > 0, "no step in the relic gap");
+}
+
 // dkg.json5
 
 #[derive(Deserialize)]
@@ -959,7 +1049,7 @@ fn assert_dkg() {
 // The files and their provenance.
 
 /// Every corpus file, each checked by its own case below.
-const FILES: [&str; 9] = [
+const FILES: [&str; 10] = [
   "hash_to_g2",
   "sign",
   "aggregate",
@@ -968,6 +1058,7 @@ const FILES: [&str; 9] = [
   "ies",
   "decode",
   "edge",
+  "relic",
   "dkg",
 ];
 
@@ -980,6 +1071,7 @@ const FILES: [&str; 9] = [
 #[case::ies(|| { assert_ies::<BlsScChia>(LEGACY); assert_ies::<BlsScIetf>(BASIC); })]
 #[case::decode(assert_decode)]
 #[case::edge(assert_edge)]
+#[case::relic(assert_relic)]
 #[case::dkg(assert_dkg)]
 fn core_bls_corpus(#[case] check: fn()) {
   check();
