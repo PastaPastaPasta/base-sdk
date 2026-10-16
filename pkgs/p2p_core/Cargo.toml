@@ -32,7 +32,10 @@ bitcoin-consensus-encoding = { workspace = true, features = ["alloc"] }
 bitcoin_hashes = { workspace = true, features = ["alloc"] }
 cfg-if = "1"
 dash-num = { version = "0.1.0-beta", path = "../num", features = ["codec"] }
-dash-pkc = { version = "0.1.0-beta", path = "../pkc", features = ["codec"] }
+dash-pkc = { version = "0.1.0-beta", path = "../pkc", features = [
+  "bls",
+  "codec",
+] }
 dash-script = { version = "0.0.0", path = "../script" }
 dash-params = { version = "0.0.0", path = "../params" }
 dash-primitives = { version = "0.0.0", path = "../primitives" }

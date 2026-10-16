@@ -12,6 +12,7 @@ mod cfilter;
 mod chainlock;
 mod compact;
 mod control;
+mod dkg;
 mod gov;
 mod headers;
 mod headers2;
@@ -21,6 +22,7 @@ mod masternode;
 mod mn_list;
 mod ping;
 mod rotation;
+mod sigshare;
 mod version;
 
 use crate::codec::MsgDecode;
@@ -37,6 +39,10 @@ pub use cfilter::{CFCheckpt, CFHeaders, CFilter, GetCFCheckpt, GetCFHeaders, Get
 pub use chainlock::{ClSig, IsdLock};
 pub use compact::{short_id_with_keys, BlockTxn, CmpctBlock, GetBlockTxn, PrefilledTx, SendCmpct, ShortTxId};
 pub use control::{QSendRecSigs, SendDsq, SendTxRcncl, Ssc};
+pub use dkg::{
+  dkg_inventory_hash, dkg_quorum, DkgComplaint, DkgContribution, DkgJustification, DkgMessage, DkgPrematureCommitment,
+  DkgRevealedShare,
+};
 pub use gov::GovSync;
 pub use headers::{GetBlocks, GetHeaders, Headers};
 pub use headers2::{CompressedHeader, GetHeaders2, Headers2};
@@ -49,6 +55,10 @@ pub use masternode::{MnAuth, PlatformBan, Spork, MAX_SPORK_SIG_LEN};
 pub use mn_list::{DeletedQuorum, GetMnListDiff, MnListDiff, MnListFormat, QuorumClSig, SimplifiedMnListEntry};
 pub use ping::{Ping, Pong};
 pub use rotation::{CycleInfo, GetQrInfo, QrInfo, QuorumSnapshot, SnapshotSkipMode, MAX_QRINFO_BASE_HASHES};
+pub use sigshare::{
+  BatchedSigShare, BatchedSigShares, BatchedSigSharesMsg, SigSesAnn, SigSesAnnMsg, SigShare, SigShareMsg, SigSharesInv,
+  SigSharesInvMsg, MAX_BATCHED_SIGS, MAX_SIG_SES_ANNS, MAX_SIG_SHARES, MAX_SIG_SHARES_INVS,
+};
 pub use version::{ServiceFlags, UserAgent, UserAgentTooLong, Version, VersionAddr};
 
 define_p2p! {
@@ -150,6 +160,28 @@ define_p2p! {
     QrInfo(Box<QrInfo>) => QRINFO "qrinfo" @ 167,
     /// DIP-0031: platform ban.
     PlatformBan(PlatformBan) => PLATFORMBAN "platformban" @ 168,
+    /// LLMQ: DKG contribution. The handler gates, checks and queues it
+    /// before this read, in the order [`DkgMessage`] gives.
+    QContrib(Box<DkgContribution>) => QCONTRIB "qcontrib" @ 147,
+    /// LLMQ: DKG complaint. The handler gates, checks and queues it
+    /// before this read, in the order [`DkgMessage`] gives.
+    QComplaint(DkgComplaint) => QCOMPLAINT "qcomplaint" @ 148,
+    /// LLMQ: DKG justification. The handler gates, checks and queues it
+    /// before this read, in the order [`DkgMessage`] gives.
+    QJustify(DkgJustification) => QJUSTIFY "qjustify" @ 149,
+    /// LLMQ: DKG premature commitment. The handler gates, checks and queues it
+    /// before this read, in the order [`DkgMessage`] gives.
+    QpCommit(DkgPrematureCommitment) => QPCOMMIT "qpcommit" @ 150,
+    /// LLMQ: signing session announcements.
+    QSigSesAnn(SigSesAnnMsg) => QSIGSESANN "qsigsesann" @ 152,
+    /// LLMQ: signature share inventories.
+    QSigsInv(SigSharesInvMsg) => QSIGSINV "qsigsinv" @ 153,
+    /// LLMQ: signature share requests.
+    QGetSigs(SigSharesInvMsg) => QGETSIGS "qgetsigs" @ 154,
+    /// LLMQ: batched signature shares.
+    QbSigs(BatchedSigSharesMsg) => QBSIGS "qbsigs" @ 155,
+    /// LLMQ: signature shares.
+    QSigShare(SigShareMsg) => QSIGSHARE "qsigshare" @ 157,
   }
 
   parsed_empty {
@@ -188,24 +220,6 @@ define_p2p! {
     Dstx => DSTX "dstx" @ 137,
     /// CoinJoin: queue entry.
     Dsq => DSQ "dsq" @ 138,
-    /// LLMQ: contribution.
-    QContrib => QCONTRIB "qcontrib" @ 147,
-    /// LLMQ: complaint.
-    QComplaint => QCOMPLAINT "qcomplaint" @ 148,
-    /// LLMQ: justification.
-    QJustify => QJUSTIFY "qjustify" @ 149,
-    /// LLMQ: premature commitment.
-    QpCommit => QPCOMMIT "qpcommit" @ 150,
-    /// LLMQ: signing session announcement.
-    QSigSesAnn => QSIGSESANN "qsigsesann" @ 152,
-    /// LLMQ: signature shares inventory.
-    QSigsInv => QSIGSINV "qsigsinv" @ 153,
-    /// LLMQ: request signature shares.
-    QGetSigs => QGETSIGS "qgetsigs" @ 154,
-    /// LLMQ: batched signature shares.
-    QbSigs => QBSIGS "qbsigs" @ 155,
-    /// LLMQ: single signature share.
-    QSigShare => QSIGSHARE "qsigshare" @ 157,
   }
 
   stub_empty {
