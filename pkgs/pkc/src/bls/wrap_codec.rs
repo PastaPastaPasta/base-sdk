@@ -144,7 +144,8 @@ pub trait BlsWire<const N: usize>: sealed::Sealed + Sized + 'static {
     Self::decode_canonical(bytes, scheme).is_some()
   }
 
-  /// Re-encodes a valid object's basic-scheme encoding under `scheme`.
+  /// Re-encodes an element's basic-scheme encoding under `scheme`, as dashbls
+  /// serializes it; infinity, Core's default element, is the same in both.
   #[doc(hidden)]
   fn encode(basic: &[u8; N], scheme: BlsSchemeKind) -> [u8; N];
 }
@@ -328,8 +329,8 @@ macro_rules! impl_wire_point {
 
       fn encode(basic: &[u8; $len], scheme: BlsSchemeKind) -> [u8; $len] {
         match scheme {
-          BlsSchemeKind::Basic => *basic,
-          BlsSchemeKind::Legacy => $to_legacy(basic),
+          BlsSchemeKind::Legacy if basic[0] & FLAG_INFINITY == 0 => $to_legacy(basic),
+          _ => *basic,
         }
       }
     }
