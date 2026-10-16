@@ -7,7 +7,7 @@
 //! BIP37 bloom filter messages.
 
 use crate::codec::{codec_p2p, impl_p2p, read_limited_byte_vec};
-use crate::limits::{MAX_BLOOM_FILTER_SIZE, MAX_SCRIPT_ELEMENT_SIZE};
+use crate::limits::{MAX_BLOOM_FILTER_SIZE, MAX_HASH_FUNCS, MAX_SCRIPT_ELEMENT_SIZE};
 use crate::prelude::*;
 
 use dash_num::Hash256;
@@ -54,6 +54,15 @@ impl BaseCodec for FilterLoad {
 }
 
 hash_impl!(FilterLoad);
+
+impl FilterLoad {
+  /// Core's `IsWithinSizeConstraints()`, which `filterload` and `govsync`
+  /// handlers check after the read: data within [`MAX_BLOOM_FILTER_SIZE`]
+  /// and at most [`MAX_HASH_FUNCS`] hash functions.
+  pub fn is_within_size_constraints(&self) -> bool {
+    self.data.len() <= MAX_BLOOM_FILTER_SIZE && self.hash_funcs <= MAX_HASH_FUNCS
+  }
+}
 
 /// Data to add to the peer's bloom filter, the `filteradd` payload.
 ///

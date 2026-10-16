@@ -10,6 +10,7 @@ mod addr;
 mod bloom;
 mod cfilter;
 mod chainlock;
+mod coinjoin;
 mod compact;
 mod control;
 mod dkg;
@@ -37,13 +38,17 @@ pub use addr::{Addr, AddrV2Entry, AddrV2Msg, TimestampedAddr};
 pub use bloom::{FilterAdd, FilterLoad, MerkleBlock, PartialMerkleTree};
 pub use cfilter::{CFCheckpt, CFHeaders, CFilter, GetCFCheckpt, GetCFHeaders, GetCFilters};
 pub use chainlock::{ClSig, IsdLock};
+pub use coinjoin::{
+  max_pool_entries, DsAccept, DsComplete, DsEntry, DsFinalTx, DsQueue, DsSignedInputs, DsStatusUpdate, DsTx,
+  COINJOIN_ENTRY_MAX_SIZE,
+};
 pub use compact::{short_id_with_keys, BlockTxn, CmpctBlock, GetBlockTxn, PrefilledTx, SendCmpct, ShortTxId};
 pub use control::{QSendRecSigs, SendDsq, SendTxRcncl, Ssc};
 pub use dkg::{
   dkg_inventory_hash, dkg_quorum, DkgComplaint, DkgContribution, DkgJustification, DkgMessage, DkgPrematureCommitment,
   DkgRevealedShare,
 };
-pub use gov::GovSync;
+pub use gov::{GovSync, VOTE_BLS_SIG_LEN, VOTE_ECDSA_SIG_LEN};
 pub use headers::{GetBlocks, GetHeaders, Headers};
 pub use headers2::{CompressedHeader, GetHeaders2, Headers2};
 pub use inv::{GetData, Inv, InvType, Inventory, NotFound};
@@ -87,7 +92,8 @@ define_p2p! {
     GetHeaders2(GetHeaders2) => GETHEADERS2 "getheaders2" @ 163,
     /// Compressed block headers.
     Headers2(Headers2) => HEADERS2 "headers2" @ 165,
-    /// Governance sync request.
+    /// Governance sync request. Core ignores it before governance is synced,
+    /// unread; the node checks that first.
     GovSync(GovSync) => GOVSYNC "govsync" @ 140,
     /// Governance object.
     GovObj(GovObject) => GOVOBJ "govobj" @ 141,
@@ -182,6 +188,30 @@ define_p2p! {
     QbSigs(BatchedSigSharesMsg) => QBSIGS "qbsigs" @ 155,
     /// LLMQ: signature shares.
     QSigShare(SigShareMsg) => QSIGSHARE "qsigshare" @ 157,
+    /// CoinJoin: join a session, its flags read at the negotiated version.
+    ///
+    /// Like the other CoinJoin messages a masternode serves (`dsi`, `dss`),
+    /// Core answers some requests before reading them (a full queue, no
+    /// session, the wrong state or sender), with a status update rather
+    /// than a failed read: the node gates on the command before
+    /// [`P2pMsg::decode_with_policy`].
+    Dsa(DsAccept) => DSA "dsa" @ 131,
+    /// CoinJoin: a participant's inputs and outputs, gated as `dsa` is. The
+    /// node checks [`DsEntry::fits_pool`].
+    Dsi(DsEntry) => DSI "dsi" @ 132,
+    /// CoinJoin: the transaction to sign.
+    Dsf(DsFinalTx) => DSF "dsf" @ 133,
+    /// CoinJoin: signed inputs of the final transaction, gated as `dsa` is.
+    /// The node runs [`DsSignedInputs::check_payload`] before the read.
+    Dss(DsSignedInputs) => DSS "dss" @ 134,
+    /// CoinJoin: the session's end.
+    Dsc(DsComplete) => DSC "dsc" @ 135,
+    /// CoinJoin: a session's status.
+    Dssu(DsStatusUpdate) => DSSU "dssu" @ 136,
+    /// CoinJoin: a masternode-signed mixed transaction.
+    Dstx(Box<DsTx>) => DSTX "dstx" @ 137,
+    /// CoinJoin: a masternode's queue.
+    Dsq(DsQueue) => DSQ "dsq" @ 138,
   }
 
   parsed_empty {
@@ -204,22 +234,6 @@ define_p2p! {
   }
 
   stub {
-    /// CoinJoin: accept denomination.
-    Dsa => DSA "dsa" @ 131,
-    /// CoinJoin: submit inputs.
-    Dsi => DSI "dsi" @ 132,
-    /// CoinJoin: final transaction.
-    Dsf => DSF "dsf" @ 133,
-    /// CoinJoin: sign final transaction.
-    Dss => DSS "dss" @ 134,
-    /// CoinJoin: complete.
-    Dsc => DSC "dsc" @ 135,
-    /// CoinJoin: status update.
-    Dssu => DSSU "dssu" @ 136,
-    /// CoinJoin: broadcast transaction.
-    Dstx => DSTX "dstx" @ 137,
-    /// CoinJoin: queue entry.
-    Dsq => DSQ "dsq" @ 138,
   }
 
   stub_empty {
@@ -239,7 +253,6 @@ impl MsgDecode for GetHeaders {}
 impl MsgDecode for GetHeaders2 {}
 impl MsgDecode for GovSync {}
 impl MsgDecode for GovObject {}
-impl MsgDecode for GovVote {}
 impl MsgDecode for GetMnListDiff {}
 impl MsgDecode for SendDsq {}
 impl MsgDecode for QSendRecSigs {}
