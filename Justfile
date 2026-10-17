@@ -6,6 +6,8 @@ python := if os() == "windows" { "python" } else { "python3" }
 # (see https://packages.debian.org/trixie/just)
 export RUSTDOCFLAGS := "-D warnings"
 
+mod fuzz "fuzz/mod.just"
+
 each := "cargo hack --workspace --exclude-features default --each-feature"
 powerset := "cargo hack --workspace --exclude-features default --feature-powerset"
 
