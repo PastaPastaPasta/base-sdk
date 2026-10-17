@@ -126,6 +126,7 @@ impl PartialEq for EcdsaSkBytes {
 mod tests {
   use super::{Compression, EcdsaSkBytes, ECDSA_SK_LEN};
   use crate::prelude::*;
+  use bitcoin_hashes::sha256d;
 
   use rstest::*;
 
@@ -196,14 +197,16 @@ mod tests {
   fn wif_bad_checksum() -> String {
     let sk = EcdsaSkBytes::from_bytes([0x22u8; ECDSA_SK_LEN], Compression::Compressed);
     let mut wif = String::from(sk.to_wif(0x80).unwrap().as_str());
-    let good = base58ck::decode(&wif).unwrap();
+    let good = base58ck::decode_check(&wif).unwrap();
+    let digest = sha256d::Hash::hash(&good).to_byte_array();
+    let good_check = u32::from_le_bytes([digest[0], digest[1], digest[2], digest[3]]);
     // Swapping the last digit disturbs the low bytes, where the checksum lives
     let last = wif.pop().unwrap();
     wif.push(if last == '1' { '2' } else { '1' });
-    let bad = base58ck::decode(&wif).unwrap();
-    assert_eq!(bad.len(), good.len());
-    assert_eq!(bad[..34], good[..34], "payload intact");
-    assert_ne!(bad[34..], good[34..], "checksum altered");
+    let err = base58ck::decode_check(&wif).unwrap_err();
+    let (found, expected) = err.incorrect_checksum().unwrap();
+    assert_eq!(expected, good_check, "payload intact");
+    assert_ne!(found, expected, "checksum altered");
     wif
   }
 
