@@ -12,7 +12,6 @@ on:
       - Cargo.toml
       - .github/workflows/pkg_primitives.yml
       - .github/workflows/build_stable.yml
-      - .github/workflows/build_nightly.yml
       - contrib/nix/**
       - pyproject.toml
       - rust-toolchain.toml
@@ -30,10 +29,3 @@ jobs:
     with:
       package: dash-primitives
       package_dir: primitives
-
-  nightly:
-    uses: ./.github/workflows/build_nightly.yml
-    with:
-      package: dash-primitives
-      package_dir: primitives
-    secrets: inherit

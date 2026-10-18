@@ -61,6 +61,14 @@ jobs:
           key: cargo-deps-${{ hashFiles('Cargo.lock', 'docs/samples/Cargo.lock') }}
           restore-keys: cargo-deps-
 
+      - name: Manage build artifacts
+        uses: actions/cache@v5
+        with:
+          path: target
+          key: cargo-build-lint-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
+          restore-keys: |
+            cargo-build-lint-${{ runner.os }}-${{ runner.arch }}-
+
       - name: Manage CodeQL packs
         uses: actions/cache@v5
         with:
@@ -69,6 +77,9 @@ jobs:
 
       - name: Run linters
         run: just lint
+
+      - name: Lint every feature combination
+        run: cargo hack --workspace --exclude-features default --feature-powerset clippy --all-targets -- -D warnings
 
       - name: Check PR title
         if: github.event_name == 'pull_request'
@@ -85,6 +96,8 @@ jobs:
   build:
     name: Build and test
     runs-on: ubuntu-24.04-arm
+    env:
+      HAS_CODECOV: ${{ secrets.CODECOV_TOKEN != '' }}
 
     defaults:
       run:
@@ -133,21 +146,50 @@ jobs:
       - name: Manage build artifacts
         uses: actions/cache@v5
         with:
-          path: target
+          path: |
+            target
+            !target/nextest
           key: cargo-build-msrv-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
           restore-keys: |
             cargo-build-msrv-${{ runner.os }}-${{ runner.arch }}-
 
-      - name: Build workspace
+      - name: Select the MSRV toolchain
         run: |
-          export RUSTC="$TOOLCHAIN_MSRV/bin/rustc"
-          export RUSTDOC="$TOOLCHAIN_MSRV/bin/rustdoc"
-          "$TOOLCHAIN_MSRV/bin/cargo" build --workspace --exclude dash-pow --features full
-          "$TOOLCHAIN_MSRV/bin/cargo" build -p dash-pow --features std
+          {
+            echo "RUSTC=$TOOLCHAIN_MSRV/bin/rustc"
+            echo "RUSTDOC=$TOOLCHAIN_MSRV/bin/rustdoc"
+            echo "CARGO=$TOOLCHAIN_MSRV/bin/cargo"
+          } >> "$GITHUB_ENV"
 
-      - name: Test workspace
+      - name: Build every feature
+        run: '"$CARGO" hack --workspace --exclude-features default --each-feature build'
+
+      - name: Test every feature
         run: |
-          export RUSTC="$TOOLCHAIN_MSRV/bin/rustc"
-          export RUSTDOC="$TOOLCHAIN_MSRV/bin/rustdoc"
-          "$TOOLCHAIN_MSRV/bin/cargo" test --workspace --exclude dash-pow --features full
-          "$TOOLCHAIN_MSRV/bin/cargo" test -p dash-pow --features std
+          "$CARGO" hack --workspace --exclude-features default --each-feature nextest run --config-file .cargo/nextest.toml --no-tests=warn
+          "$CARGO" hack --workspace --exclude-features default --each-feature test --doc
+
+      - name: Test workspace (with coverage)
+        run: |
+          "$CARGO" llvm-cov clean --workspace
+          "$CARGO" llvm-cov --no-report nextest --config-file .cargo/nextest.toml --workspace --features full
+          "$CARGO" llvm-cov report --lcov --output-path lcov.info
+
+      - name: Upload coverage to Codecov
+        if: env.HAS_CODECOV == 'true'
+        uses: codecov/codecov-action@v5
+        with:
+          files: lcov.info
+          flags: dash-num,dash-p2p-core,dash-params,dash-pkc,dash-pow,dash-primitives,dash-script,dash-types
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() && env.HAS_CODECOV == 'true' && hashFiles('target/nextest/default/junit.xml') != '' }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: target/nextest/default/junit.xml
+          report_type: test_results
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Sanity check benchmarks
+        run: '"$CARGO" hack --workspace --exclude-features default --each-feature test --benches'

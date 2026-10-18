@@ -14,11 +14,12 @@ bench = false
 
 [features]
 default = []
-std = []
-full = ["std", "aes_hw", "simd"]
-aes_hw = ["simd"]
+std = ["wide/std"]
+full = ["std"]
 portable = []
-simd = []
+
+[dependencies]
+wide = { workspace = true }
 
 [dev-dependencies]
 dash-dev = { version = "0.0.0", path = "../dev", features = ["full"] }
@@ -26,33 +27,10 @@ divan = { workspace = true }
 hex-conservative = { workspace = true }
 rstest = { workspace = true }
 
-[[test]]
-name = "blake"
-[[test]]
-name = "bmw"
-[[test]]
-name = "cubehash"
-[[test]]
-name = "echo"
-[[test]]
-name = "groestl"
-[[test]]
-name = "jh"
-[[test]]
-name = "keccak"
-[[test]]
-name = "luffa"
-[[test]]
-name = "shavite"
-[[test]]
-name = "simd_hash"
-[[test]]
-name = "skein"
 [[bench]]
 name = "pow"
 path = "bench/main.rs"
 harness = false
-required-features = ["simd"]
 
 [lints]
 workspace = true

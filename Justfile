@@ -6,7 +6,8 @@ python := if os() == "windows" { "python" } else { "python3" }
 # (see https://packages.debian.org/trixie/just)
 export RUSTDOCFLAGS := "-D warnings"
 
-nextest := "cargo nextest run --config-file .cargo/nextest.toml"
+each := "cargo hack --workspace --exclude-features default --each-feature"
+powerset := "cargo hack --workspace --exclude-features default --feature-powerset"
 
 [private]
 default:
@@ -16,8 +17,7 @@ bench:
     cargo bench --workspace --features full
 
 build:
-    cargo build --workspace --features full
-    cargo build --workspace --no-default-features
+    {{ each }} build
 
 comb:
     {{ python }} contrib/git_filter.py --fast-fail --env NEXTEST_PROFILE=fail-fast develop HEAD -- just test lint
@@ -44,11 +44,8 @@ preview:
     {{ python }} docs/build_docs.py preview
 
 test:
-    cargo clippy --all-targets --no-default-features -- -D warnings
-    cargo clippy --all-targets --features full -- -D warnings
-    cargo clippy --all-targets --features full,portable -- -D warnings
-    cargo hack clippy --ignore-private --feature-powerset --exclude-features default -- -D warnings
-    {{ nextest }} --workspace --features full
-    cargo test --doc --workspace --features full
+    {{ powerset }} clippy --all-targets -- -D warnings
+    {{ each }} nextest run --config-file .cargo/nextest.toml --no-tests=warn
+    {{ each }} test --doc
     cargo doc --workspace --no-deps --features full
-    cargo test --workspace --features full --benches
+    {{ each }} test --benches

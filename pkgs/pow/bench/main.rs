@@ -22,14 +22,7 @@ macro_rules! bench_algo {
   };
   ($algo:ident) => {
     mod $algo {
-      use super::*;
-      mod scalar {
-        bench_algo!(@hash512 hash512, pow_crate::$algo::scalar::hash512);
-      }
-      #[cfg(feature = "simd")]
-      mod simd {
-        bench_algo!(@hash512 hash512, pow_crate::$algo::simd::hash512);
-      }
+      bench_algo!(@hash512 hash512, pow_crate::$algo::hash512);
     }
   };
 }
@@ -53,7 +46,7 @@ bench_algo!(jh);
 bench_algo!(keccak);
 bench_algo!(luffa);
 bench_algo!(shavite);
-bench_algo!(simd_hash);
+bench_algo!(simd);
 bench_algo!(skein);
 
 fn main() {

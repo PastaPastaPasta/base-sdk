@@ -11,7 +11,11 @@
 //! to 256 bits.
 
 #![no_std]
-#![cfg_attr(feature = "simd", feature(portable_simd))]
+#![deny(
+  unsafe_op_in_unsafe_fn,
+  clippy::undocumented_unsafe_blocks,
+  clippy::unnecessary_safety_comment
+)]
 
 extern crate alloc;
 #[cfg(feature = "std")]
@@ -50,8 +54,10 @@ compile_error!("dash-pow requires NEON and AES, build with `-C target-feature=+n
 ))]
 compile_error!("dash-pow requires 128-bit SIMD, build with `-C target-feature=+simd128` or enable `portable`");
 
+mod aes;
 mod blake;
 mod bmw;
+mod consts;
 mod cubehash;
 mod echo;
 mod groestl;
@@ -59,44 +65,46 @@ mod jh;
 mod keccak;
 mod luffa;
 mod shavite;
-mod simd_hash;
+mod simd;
 mod skein;
+#[cfg(test)]
+mod tests;
 mod util;
 
 #[doc(hidden)]
 pub mod __private {
   pub mod blake {
-    pub use crate::blake::*;
+    pub use crate::blake::hash512;
   }
   pub mod bmw {
-    pub use crate::bmw::*;
+    pub use crate::bmw::hash512;
   }
   pub mod cubehash {
-    pub use crate::cubehash::*;
+    pub use crate::cubehash::hash512;
   }
   pub mod echo {
-    pub use crate::echo::*;
+    pub use crate::echo::hash512;
   }
   pub mod groestl {
-    pub use crate::groestl::*;
+    pub use crate::groestl::hash512;
   }
   pub mod jh {
-    pub use crate::jh::*;
+    pub use crate::jh::hash512;
   }
   pub mod keccak {
-    pub use crate::keccak::*;
+    pub use crate::keccak::hash512;
   }
   pub mod luffa {
-    pub use crate::luffa::*;
+    pub use crate::luffa::hash512;
   }
   pub mod shavite {
-    pub use crate::shavite::*;
+    pub use crate::shavite::hash512;
   }
-  pub mod simd_hash {
-    pub use crate::simd_hash::*;
+  pub mod simd {
+    pub use crate::simd::hash512;
   }
   pub mod skein {
-    pub use crate::skein::*;
+    pub use crate::skein::hash512;
   }
 }
 
@@ -114,7 +122,7 @@ pub fn hash(data: &[u8]) -> [u8; 32] {
   let h = luffa::hash512(&h);
   let h = cubehash::hash512(&h);
   let h = shavite::hash512(&h);
-  let h = simd_hash::hash512(&h);
+  let h = simd::hash512(&h);
   let h = echo::hash512(&h);
   let mut out = [0u8; 32];
   out.copy_from_slice(&h[..32]);
