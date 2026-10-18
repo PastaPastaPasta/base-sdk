@@ -14,7 +14,7 @@ use dash_types::type_cvrt;
 use zeroize::{Zeroize, Zeroizing};
 
 use core::ops::{Add, Mul, Neg, Sub};
-use core::ptr::null_mut;
+use core::ptr::{null, null_mut};
 
 /// Serialize a scalar to its 32-byte big-endian encoding.
 pub(crate) fn bendian_from_scalar(scalar: &blst_scalar) -> [u8; 32] {
@@ -47,6 +47,36 @@ pub(crate) fn pairings_equal_with_g1_generator_prod(lhs_g2: &G2Affine, rhs_g2: &
     }
     blst_fp12_finalverify(&lhs, &rhs)
   }
+}
+
+/// Whether the product of `e(g1, g2)` over the pairs is one, dashbls
+/// `CoreMPL::NativeVerify`. A pair with an infinity side is skipped, as
+/// relic's `pc_map_sim` skips it, so an empty product is one.
+pub(crate) fn pairing_product_is_one(pairs: &[(G1Affine, G2Affine)]) -> bool {
+  let mut acc = unsafe { *blst_fp12_one() };
+  for (g1, g2) in pairs {
+    if g1.is_inf() || g2.is_inf() {
+      continue;
+    }
+    let mut term = blst_fp12::default();
+    let prev = acc;
+    unsafe {
+      blst_miller_loop(&mut term, &g2.0, &g1.0);
+      blst_fp12_mul(&mut acc, &prev, &term);
+    }
+  }
+  let mut out = blst_fp12::default();
+  unsafe {
+    blst_final_exp(&mut out, &acc);
+    blst_fp12_is_one(&out)
+  }
+}
+
+/// Hash a message to G2 under a ciphersuite tag, `G2Element::FromMessage`.
+pub(crate) fn hash_to_g2(msg: &[u8], dst: &[u8]) -> G2 {
+  let mut out = blst_p2::default();
+  unsafe { blst_hash_to_g2(&mut out, msg.as_ptr(), msg.len(), dst.as_ptr(), dst.len(), null(), 0) };
+  G2(out)
 }
 
 /// Pairing check `e(lhs_g2, G1) == e(rhs_g2, rhs_g1)`
@@ -393,6 +423,11 @@ impl G1Affine {
   /// The conventional G1 generator.
   pub(crate) fn generator() -> Self {
     Self(unsafe { *blst_p1_affine_generator() })
+  }
+
+  /// Whether the point is at infinity.
+  pub(crate) fn is_inf(&self) -> bool {
+    unsafe { blst_p1_affine_is_inf(&self.0) }
   }
 
   /// Convert to projective coordinates.

@@ -13,13 +13,16 @@ use bitcoin_hashes::sha256d::Hash as Sha256d;
 use dash_dev::{arr_from_hex, vec_from_hex, Corpus};
 use dash_pkc::bls::{
   BlsCtx, BlsEager, BlsEagerPk, BlsEagerSig, BlsEagerSk, BlsGlobal, BlsLazy, BlsLazyPk, BlsLazySig, BlsPoint,
-  BlsSchemeKind, BlsSchemeSource, BlsValue, BlsWire, BlsWirePoint, Fr, BLS_PK_LEN, BLS_SIG_LEN, BLS_SK_LEN, G1, G2,
+  BlsSchemeKind, BlsSchemeSource, BlsValue, BlsWire, BlsWirePoint, Fr, G1Affine, G2Affine, BLS_PK_LEN, BLS_SIG_LEN,
+  BLS_SK_LEN, G1, G2,
 };
 use hex_conservative::DisplayHex;
 use rstest::rstest;
 use serde::Deserialize;
 
+use std::collections::hash_map::DefaultHasher;
 use std::collections::BTreeMap;
+use std::hash::{Hash, Hasher};
 use std::sync::Barrier;
 
 const LEGACY: BlsSchemeKind = BlsSchemeKind::Legacy;
@@ -296,7 +299,7 @@ fn g1_100_decodes_to_opposite_points() {
     };
     for value in [legacy.value(), basic.value()] {
       assert!(
-        matches!(value.point(), Some(BlsPoint::Usable(_))),
+        value.point().is_some_and(|point| point.usable().is_some()),
         "subgroup points must be usable"
       );
     }
@@ -307,9 +310,13 @@ fn g1_100_decodes_to_opposite_points() {
   }
 }
 
-/// A legacy decode keeps a point outside the subgroup, or off the curve, as
-/// `Exotic`; every basic decode is usable.
-fn assert_point_classes<K: BlsWire<N, Point = BlsPoint<A>>, A, const N: usize>(kind: &str, usable: &[&str]) {
+/// A legacy decode leaves the subgroup test to `usable`, which refuses a point
+/// outside the subgroup or off the curve; every basic decode is usable.
+fn assert_point_classes<K: BlsWire<N, Point = BlsPoint<A>>, A, const N: usize>(
+  kind: &str,
+  usable: &[&str],
+  is_usable: fn(&BlsPoint<A>) -> bool,
+) {
   for row in eager_rows(kind) {
     let input: [u8; N] = arr_from_hex(&row.input);
     for scheme in [LEGACY, BASIC] {
@@ -320,10 +327,12 @@ fn assert_point_classes<K: BlsWire<N, Point = BlsPoint<A>>, A, const N: usize>(k
         continue;
       };
       let expect_usable = scheme == BASIC || usable.contains(&row.class.as_str());
+      assert_eq!(is_usable(point), expect_usable, "{kind}/{} under {scheme:?}", row.class);
+      let classified = matches!(point, BlsPoint::Usable(_));
       assert_eq!(
-        point.usable().is_some(),
-        expect_usable,
-        "{kind}/{} under {scheme:?}",
+        classified,
+        scheme == BASIC,
+        "{kind}/{}: only basic decoding classifies",
         row.class
       );
     }
@@ -331,9 +340,85 @@ fn assert_point_classes<K: BlsWire<N, Point = BlsPoint<A>>, A, const N: usize>(k
 }
 
 #[rstest]
-#[case::pk(|| assert_point_classes::<G1, _, BLS_PK_LEN>("pk", &["sub_000", "sub_100", "sub_000_basic"]))]
-#[case::sig(|| assert_point_classes::<G2, _, BLS_SIG_LEN>("sig", &["sub_legacy_s0", "sub_legacy_s1"]))]
-fn legacy_points_off_the_subgroup_are_exotic(#[case] check: fn()) {
+#[case::pk(|| {
+  let usable = ["sub_000", "sub_100", "sub_000_basic"];
+  assert_point_classes::<G1, G1Affine, BLS_PK_LEN>("pk", &usable, |p| p.usable().is_some());
+})]
+#[case::sig(|| {
+  let usable = ["sub_legacy_s0", "sub_legacy_s1"];
+  assert_point_classes::<G2, G2Affine, BLS_SIG_LEN>("sig", &usable, |p| p.usable().is_some());
+})]
+fn legacy_decoding_leaves_the_subgroup_test_to_usable(#[case] check: fn()) {
+  check();
+}
+
+fn hash_of<T: Hash>(value: &T) -> u64 {
+  let mut hasher = DefaultHasher::new();
+  value.hash(&mut hasher);
+  hasher.finish()
+}
+
+/// A point decoded under the legacy scheme, its subgroup untested, is the same
+/// element as the point decoded under the basic scheme: equal and hashed alike.
+fn assert_classification_is_not_compared<K: BlsWire<N, Point = BlsPoint<A>>, A, const N: usize>(kind: &str) {
+  let mut compared = 0;
+  for row in eager_rows(kind) {
+    let input: [u8; N] = arr_from_hex(&row.input);
+    let Some(legacy) = BlsValue::<K, N>::from_canonical(&input, LEGACY) else {
+      continue;
+    };
+    let Some(basic) = BlsValue::<K, N>::from_canonical(&legacy.to_bytes(BASIC), BASIC) else {
+      continue;
+    };
+    let ctx = format!("{kind}/{}", row.class);
+    assert!(matches!(legacy.point(), Some(BlsPoint::OnCurve(_))), "{ctx}");
+    assert!(matches!(basic.point(), Some(BlsPoint::Usable(_))), "{ctx}");
+    assert_eq!(legacy, basic, "{ctx}");
+    assert_eq!(hash_of(&legacy), hash_of(&basic), "{ctx}");
+    compared += 1;
+  }
+  assert!(compared > 0, "{kind}: no point decodes under both schemes");
+}
+
+#[rstest]
+#[case::pk(|| assert_classification_is_not_compared::<G1, G1Affine, BLS_PK_LEN>("pk"))]
+#[case::sig(|| assert_classification_is_not_compared::<G2, G2Affine, BLS_SIG_LEN>("sig"))]
+fn legacy_classification_is_not_part_of_equality(#[case] check: fn()) {
+  check();
+}
+
+/// Core's in-place operations clear `fValid` and keep `impl` when they fail:
+/// the object serializes as zeros but is not the default object.
+fn assert_invalidate_keeps_the_element<K: BlsWire<N>, const N: usize>(kind: &str) {
+  let row = eager_rows(kind)
+    .into_iter()
+    .find(|row| row.basic.starts_with('V'))
+    .unwrap_or_else(|| panic!("{kind}: no basic-valid row"));
+  let input: [u8; N] = arr_from_hex(&row.input);
+  let valid =
+    BlsValue::<K, N>::from_canonical(&input, BASIC).unwrap_or_else(|| panic!("{kind}/{} must decode", row.class));
+  let mut kept = valid.clone();
+  kept.invalidate();
+  assert!(!kept.is_valid());
+  assert_eq!(kept.point(), None);
+  for scheme in [LEGACY, BASIC] {
+    assert_eq!(kept.to_bytes(scheme), [0u8; N]);
+  }
+  assert_ne!(kept, valid, "validity is compared");
+  assert_ne!(kept, BlsValue::invalid(), "the element is compared");
+  assert_eq!(kept, kept.clone());
+  let mut default = BlsValue::<K, N>::invalid();
+  default.invalidate();
+  assert_eq!(default, BlsValue::invalid());
+  assert_eq!(format!("{default:?}"), "BlsValue(invalid)");
+  assert!(format!("{kept:?}").starts_with("BlsValue(invalid, "));
+}
+
+#[rstest]
+#[case::pk(|| assert_invalidate_keeps_the_element::<G1, BLS_PK_LEN>("pk"))]
+#[case::sig(|| assert_invalidate_keeps_the_element::<G2, BLS_SIG_LEN>("sig"))]
+#[case::sk(|| assert_invalidate_keeps_the_element::<Fr, BLS_SK_LEN>("sk"))]
+fn invalidate_keeps_the_element(#[case] check: fn()) {
   check();
 }
 

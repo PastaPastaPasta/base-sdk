@@ -651,7 +651,7 @@ pub trait BlsScheme: BlsSchemeId + sealed::Sealed + Sized {
 ///
 /// `SHA256(index || SHA256(all keys))`, kept in one place so the secure
 /// aggregate and its verification cannot drift apart.
-fn secure_weights(sorted_pks: &[[u8; 48]]) -> Vec<blst::blst_scalar> {
+pub(super) fn secure_weights(sorted_pks: &[[u8; 48]]) -> Vec<blst::blst_scalar> {
   let mut hasher = Sha256::new();
   for pk_bytes in sorted_pks {
     hasher.update(pk_bytes);

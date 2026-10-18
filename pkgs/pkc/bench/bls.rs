@@ -8,10 +8,22 @@
 
 use crate::common::bls::{sequential_ids, test_ikm, test_msg};
 
-use dash_pkc::bls::{BlsPublicKey, BlsScChia, BlsScIetf, BlsScheme, BlsSecretKey, BlsSigShare, BlsSignature};
+use dash_pkc::bls::core::{verify_insecure, BlsPkValue, BlsSigValue};
+use dash_pkc::bls::{
+  BlsEagerPk, BlsEagerSig, BlsPublicKey, BlsScChia, BlsScIetf, BlsScheme, BlsSchemeKind, BlsSchemeSource, BlsSecretKey,
+  BlsSigShare, BlsSignature, BlsValue,
+};
 use divan::{counter::ItemsCount, Bencher};
 use getrandom::SysRng;
 use rand_core::UnwrapErr;
+
+use core::any::TypeId;
+
+/// The wrapper scheme whose encoding `S` writes: Chia's is the legacy one.
+fn wrapper_scheme<S: 'static>() -> BlsSchemeSource {
+  let legacy = TypeId::of::<S>() == TypeId::of::<BlsScChia>();
+  BlsSchemeSource::Version(BlsSchemeKind::from_legacy(legacy))
+}
 
 /// Single signature creation.
 #[divan::bench(types = [BlsScChia, BlsScIetf])]
@@ -32,6 +44,29 @@ fn verify<S: BlsScheme>(bencher: Bencher) {
   bencher
     .counter(ItemsCount::new(1u32))
     .bench(|| pk.verify(S::msg_ref(&msg), &sig));
+}
+
+/// Single signature verification as Core makes it, on the calling thread
+/// alone; [`verify`] is the pooled one.
+#[divan::bench(args = [BlsSchemeKind::Legacy, BlsSchemeKind::Basic])]
+fn verify_core(bencher: Bencher, kind: BlsSchemeKind) {
+  let (msg, sig, pk) = match kind {
+    BlsSchemeKind::Legacy => core_operands::<BlsScChia>(kind),
+    BlsSchemeKind::Basic => core_operands::<BlsScIetf>(kind),
+  };
+  bencher
+    .counter(ItemsCount::new(1u32))
+    .bench(|| verify_insecure(&sig, &pk, &msg, kind));
+}
+
+fn core_operands<S: BlsScheme>(kind: BlsSchemeKind) -> ([u8; 32], BlsSigValue, BlsPkValue) {
+  let sk = BlsSecretKey::<S>::from_ikm(&test_ikm(2)).unwrap();
+  let msg = test_msg(99);
+  let sig = sk.sign(S::msg_ref(&msg)).to_bytes();
+  let pk = sk.public_key().to_bytes();
+  let sig = BlsValue::from_canonical(&sig, kind).unwrap();
+  let pk = BlsValue::from_canonical(&pk, kind).unwrap();
+  (msg, sig, pk)
 }
 
 /// Public key aggregation at various quorum sizes.
@@ -119,6 +154,19 @@ fn deser_pk<S: BlsScheme>(bencher: Bencher) {
   bencher.bench(|| BlsPublicKey::<S>::from_bytes(&bytes));
 }
 
+/// Eager wrapper decoding of a public key, against [`deser_pk`] for the
+/// same scheme.
+#[divan::bench(types = [BlsScChia, BlsScIetf])]
+fn decode_eager_pk<S: BlsScheme + 'static>(bencher: Bencher) {
+  let bytes = BlsSecretKey::<S>::from_ikm(&test_ikm(1))
+    .unwrap()
+    .public_key()
+    .to_bytes();
+  let source = wrapper_scheme::<S>();
+  assert!(BlsEagerPk::decode(&bytes, source).unwrap().is_valid());
+  bencher.bench(|| BlsEagerPk::decode(&bytes, source));
+}
+
 /// Signature serialization.
 #[divan::bench(types = [BlsScChia, BlsScIetf])]
 fn ser_sig<S: BlsScheme>(bencher: Bencher) {
@@ -136,6 +184,19 @@ fn deser_sig<S: BlsScheme>(bencher: Bencher) {
     .sign(S::msg_ref(&test_msg(0)))
     .to_bytes();
   bencher.bench(|| BlsSignature::<S>::from_bytes(&bytes));
+}
+
+/// Eager wrapper decoding of a signature, against [`deser_sig`] for the
+/// same scheme.
+#[divan::bench(types = [BlsScChia, BlsScIetf])]
+fn decode_eager_sig<S: BlsScheme + 'static>(bencher: Bencher) {
+  let bytes = BlsSecretKey::<S>::from_ikm(&test_ikm(1))
+    .unwrap()
+    .sign(S::msg_ref(&test_msg(0)))
+    .to_bytes();
+  let source = wrapper_scheme::<S>();
+  assert!(BlsEagerSig::decode(&bytes, source).unwrap().is_valid());
+  bencher.bench(|| BlsEagerSig::decode(&bytes, source));
 }
 
 /// Threshold secret key splitting at various quorum sizes.

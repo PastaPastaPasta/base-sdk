@@ -9,14 +9,21 @@
 mod addr;
 mod bloom;
 mod cfilter;
+mod chainlock;
+mod coinjoin;
 mod compact;
 mod control;
+mod dkg;
 mod gov;
 mod headers;
 mod headers2;
 mod inv;
+mod llmq;
+mod masternode;
 mod mn_list;
 mod ping;
+mod rotation;
+mod sigshare;
 mod version;
 
 use crate::codec::MsgDecode;
@@ -24,20 +31,39 @@ use crate::command::CommandString;
 use crate::prelude::*;
 use crate::short_id::ShortId;
 
-use dash_primitives::{Block, GovObject, GovVote, Transaction};
+use dash_primitives::{Block, Commitment, GovObject, GovVote, Transaction};
 use dash_types::type_id::Unencodable;
 
 pub use addr::{Addr, AddrV2Entry, AddrV2Msg, TimestampedAddr};
 pub use bloom::{FilterAdd, FilterLoad, MerkleBlock, PartialMerkleTree};
 pub use cfilter::{CFCheckpt, CFHeaders, CFilter, GetCFCheckpt, GetCFHeaders, GetCFilters};
+pub use chainlock::{ClSig, IsdLock};
+pub use coinjoin::{
+  max_pool_entries, DsAccept, DsComplete, DsEntry, DsFinalTx, DsQueue, DsSignedInputs, DsStatusUpdate, DsTx,
+  COINJOIN_ENTRY_MAX_SIZE,
+};
 pub use compact::{short_id_with_keys, BlockTxn, CmpctBlock, GetBlockTxn, PrefilledTx, SendCmpct, ShortTxId};
 pub use control::{QSendRecSigs, SendDsq, SendTxRcncl, Ssc};
-pub use gov::GovSync;
+pub use dkg::{
+  dkg_inventory_hash, dkg_quorum, DkgComplaint, DkgContribution, DkgJustification, DkgMessage, DkgPrematureCommitment,
+  DkgRevealedShare,
+};
+pub use gov::{GovSync, VOTE_BLS_SIG_LEN, VOTE_ECDSA_SIG_LEN};
 pub use headers::{GetBlocks, GetHeaders, Headers};
 pub use headers2::{CompressedHeader, GetHeaders2, Headers2};
 pub use inv::{GetData, Inv, InvType, Inventory, NotFound};
-pub use mn_list::{DeletedQuorum, GetMnListDiff, MnListDiff, MnListDiffPayload, QuorumClSig, SimplifiedMnListEntry};
+pub use llmq::{
+  QData, QuorumData, QuorumDataError, QuorumDataRequest, RecoveredSig, VerificationVector, QUORUM_DATA_CONTRIBUTIONS,
+  QUORUM_DATA_VVEC,
+};
+pub use masternode::{MnAuth, PlatformBan, Spork, MAX_SPORK_SIG_LEN};
+pub use mn_list::{DeletedQuorum, GetMnListDiff, MnListDiff, MnListFormat, QuorumClSig, SimplifiedMnListEntry};
 pub use ping::{Ping, Pong};
+pub use rotation::{CycleInfo, GetQrInfo, QrInfo, QuorumSnapshot, SnapshotSkipMode, MAX_QRINFO_BASE_HASHES};
+pub use sigshare::{
+  BatchedSigShare, BatchedSigShares, BatchedSigSharesMsg, SigSesAnn, SigSesAnnMsg, SigShare, SigShareMsg, SigSharesInv,
+  SigSharesInvMsg, MAX_BATCHED_SIGS, MAX_SIG_SES_ANNS, MAX_SIG_SHARES, MAX_SIG_SHARES_INVS,
+};
 pub use version::{ServiceFlags, UserAgent, UserAgentTooLong, Version, VersionAddr};
 
 define_p2p! {
@@ -66,7 +92,8 @@ define_p2p! {
     GetHeaders2(GetHeaders2) => GETHEADERS2 "getheaders2" @ 163,
     /// Compressed block headers.
     Headers2(Headers2) => HEADERS2 "headers2" @ 165,
-    /// Governance sync request.
+    /// Governance sync request. Core ignores it before governance is synced,
+    /// unread; the node checks that first.
     GovSync(GovSync) => GOVSYNC "govsync" @ 140,
     /// Governance object.
     GovObj(GovObject) => GOVOBJ "govobj" @ 141,
@@ -117,6 +144,74 @@ define_p2p! {
     SendTxRcncl(SendTxRcncl) => SENDTXRCNCL "sendtxrcncl",
     /// Masternode sync status count.
     Ssc(Ssc) => SSC "ssc" @ 139,
+    /// Spork broadcast.
+    Spork(Spork) => SPORK "spork" @ 128,
+    /// LLMQ: final commitment.
+    QfCommit(Box<Commitment>) => QFCOMMIT "qfcommit" @ 146,
+    /// LLMQ: recovered signature.
+    QSigRec(RecoveredSig) => QSIGREC "qsigrec" @ 156,
+    /// LLMQ: request quorum data.
+    QGetData(QuorumDataRequest) => QGETDATA "qgetdata" @ 158,
+    /// LLMQ: quorum data.
+    QData(QData) => QDATA "qdata" @ 159,
+    /// ChainLock signature.
+    ClSig(ClSig) => CLSIG "clsig" @ 160,
+    /// InstantSend deterministic lock.
+    IsdLock(IsdLock) => ISDLOCK "isdlock" @ 161,
+    /// Masternode authentication.
+    MnAuth(MnAuth) => MNAUTH "mnauth" @ 162,
+    /// Request quorum rotation info.
+    GetQrInfo(GetQrInfo) => GETQRINFO "getqrinfo" @ 166,
+    /// Quorum rotation info.
+    QrInfo(Box<QrInfo>) => QRINFO "qrinfo" @ 167,
+    /// DIP-0031: platform ban.
+    PlatformBan(PlatformBan) => PLATFORMBAN "platformban" @ 168,
+    /// LLMQ: DKG contribution. The handler gates, checks and queues it
+    /// before this read, in the order [`DkgMessage`] gives.
+    QContrib(Box<DkgContribution>) => QCONTRIB "qcontrib" @ 147,
+    /// LLMQ: DKG complaint. The handler gates, checks and queues it
+    /// before this read, in the order [`DkgMessage`] gives.
+    QComplaint(DkgComplaint) => QCOMPLAINT "qcomplaint" @ 148,
+    /// LLMQ: DKG justification. The handler gates, checks and queues it
+    /// before this read, in the order [`DkgMessage`] gives.
+    QJustify(DkgJustification) => QJUSTIFY "qjustify" @ 149,
+    /// LLMQ: DKG premature commitment. The handler gates, checks and queues it
+    /// before this read, in the order [`DkgMessage`] gives.
+    QpCommit(DkgPrematureCommitment) => QPCOMMIT "qpcommit" @ 150,
+    /// LLMQ: signing session announcements.
+    QSigSesAnn(SigSesAnnMsg) => QSIGSESANN "qsigsesann" @ 152,
+    /// LLMQ: signature share inventories.
+    QSigsInv(SigSharesInvMsg) => QSIGSINV "qsigsinv" @ 153,
+    /// LLMQ: signature share requests.
+    QGetSigs(SigSharesInvMsg) => QGETSIGS "qgetsigs" @ 154,
+    /// LLMQ: batched signature shares.
+    QbSigs(BatchedSigSharesMsg) => QBSIGS "qbsigs" @ 155,
+    /// LLMQ: signature shares.
+    QSigShare(SigShareMsg) => QSIGSHARE "qsigshare" @ 157,
+    /// CoinJoin: join a session, its flags read at the negotiated version.
+    ///
+    /// Like the other CoinJoin messages a masternode serves (`dsi`, `dss`),
+    /// Core answers some requests before reading them (a full queue, no
+    /// session, the wrong state or sender), with a status update rather
+    /// than a failed read: the node gates on the command before
+    /// [`P2pMsg::decode_with_policy`].
+    Dsa(DsAccept) => DSA "dsa" @ 131,
+    /// CoinJoin: a participant's inputs and outputs, gated as `dsa` is. The
+    /// node checks [`DsEntry::fits_pool`].
+    Dsi(DsEntry) => DSI "dsi" @ 132,
+    /// CoinJoin: the transaction to sign.
+    Dsf(DsFinalTx) => DSF "dsf" @ 133,
+    /// CoinJoin: signed inputs of the final transaction, gated as `dsa` is.
+    /// The node runs [`DsSignedInputs::check_payload`] before the read.
+    Dss(DsSignedInputs) => DSS "dss" @ 134,
+    /// CoinJoin: the session's end.
+    Dsc(DsComplete) => DSC "dsc" @ 135,
+    /// CoinJoin: a session's status.
+    Dssu(DsStatusUpdate) => DSSU "dssu" @ 136,
+    /// CoinJoin: a masternode-signed mixed transaction.
+    Dstx(Box<DsTx>) => DSTX "dstx" @ 137,
+    /// CoinJoin: a masternode's queue.
+    Dsq(DsQueue) => DSQ "dsq" @ 138,
   }
 
   parsed_empty {
@@ -139,62 +234,6 @@ define_p2p! {
   }
 
   stub {
-    /// Spork broadcast/request.
-    Spork => SPORK "spork" @ 128,
-    /// CoinJoin: accept denomination.
-    Dsa => DSA "dsa" @ 131,
-    /// CoinJoin: submit inputs.
-    Dsi => DSI "dsi" @ 132,
-    /// CoinJoin: final transaction.
-    Dsf => DSF "dsf" @ 133,
-    /// CoinJoin: sign final transaction.
-    Dss => DSS "dss" @ 134,
-    /// CoinJoin: complete.
-    Dsc => DSC "dsc" @ 135,
-    /// CoinJoin: status update.
-    Dssu => DSSU "dssu" @ 136,
-    /// CoinJoin: broadcast transaction.
-    Dstx => DSTX "dstx" @ 137,
-    /// CoinJoin: queue entry.
-    Dsq => DSQ "dsq" @ 138,
-    /// LLMQ: final commitment.
-    QfCommit => QFCOMMIT "qfcommit" @ 146,
-    /// LLMQ: contribution.
-    QContrib => QCONTRIB "qcontrib" @ 147,
-    /// LLMQ: complaint.
-    QComplaint => QCOMPLAINT "qcomplaint" @ 148,
-    /// LLMQ: justification.
-    QJustify => QJUSTIFY "qjustify" @ 149,
-    /// LLMQ: premature commitment.
-    QpCommit => QPCOMMIT "qpcommit" @ 150,
-    /// LLMQ: signing session announcement.
-    QSigSesAnn => QSIGSESANN "qsigsesann" @ 152,
-    /// LLMQ: signature shares inventory.
-    QSigsInv => QSIGSINV "qsigsinv" @ 153,
-    /// LLMQ: request signature shares.
-    QGetSigs => QGETSIGS "qgetsigs" @ 154,
-    /// LLMQ: batched signature shares.
-    QbSigs => QBSIGS "qbsigs" @ 155,
-    /// LLMQ: recovered signature.
-    QSigRec => QSIGREC "qsigrec" @ 156,
-    /// LLMQ: single signature share.
-    QSigShare => QSIGSHARE "qsigshare" @ 157,
-    /// LLMQ: request quorum data.
-    QGetData => QGETDATA "qgetdata" @ 158,
-    /// LLMQ: quorum data.
-    QData => QDATA "qdata" @ 159,
-    /// ChainLock signature.
-    ClSig => CLSIG "clsig" @ 160,
-    /// InstantSend deterministic lock.
-    IsdLock => ISDLOCK "isdlock" @ 161,
-    /// Masternode authentication.
-    MnAuth => MNAUTH "mnauth" @ 162,
-    /// Request quorum rotation info.
-    GetQrInfo => GETQRINFO "getqrinfo" @ 166,
-    /// Quorum rotation info.
-    QrInfo => QRINFO "qrinfo" @ 167,
-    /// DIP-0031: platform ban.
-    PlatformBan => PLATFORMBAN "platformban" @ 168,
   }
 
   stub_empty {
@@ -214,9 +253,7 @@ impl MsgDecode for GetHeaders {}
 impl MsgDecode for GetHeaders2 {}
 impl MsgDecode for GovSync {}
 impl MsgDecode for GovObject {}
-impl MsgDecode for GovVote {}
 impl MsgDecode for GetMnListDiff {}
-impl MsgDecode for MnListDiff {}
 impl MsgDecode for SendDsq {}
 impl MsgDecode for QSendRecSigs {}
 impl MsgDecode for Block {}
@@ -237,3 +274,12 @@ impl MsgDecode for CFHeaders {}
 impl MsgDecode for CFCheckpt {}
 impl MsgDecode for SendTxRcncl {}
 impl MsgDecode for Ssc {}
+impl MsgDecode for Spork {}
+impl MsgDecode for Commitment {}
+impl MsgDecode for RecoveredSig {}
+impl MsgDecode for ClSig {}
+impl MsgDecode for IsdLock {}
+impl MsgDecode for MnAuth {}
+impl MsgDecode for PlatformBan {}
+impl MsgDecode for QData {}
+impl MsgDecode for GetQrInfo {}

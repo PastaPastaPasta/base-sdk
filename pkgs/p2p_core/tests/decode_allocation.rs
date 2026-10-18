@@ -76,6 +76,13 @@ fn hostile(prefix: usize) -> Vec<u8> {
 #[case::filteradd("filteradd", hostile(0))]
 #[case::headers2_8000("headers2", { let mut p = vec![0xfd, 0x40, 0x1f]; p.extend([0u8; 64]); p })]
 #[case::headers_2000("headers", { let mut p = vec![0xfd, 0xd0, 0x07]; p.extend([0u8; 64]); p })]
+#[case::isdlock_inputs("isdlock", hostile(1))]
+#[case::spork_sig("spork", hostile(20))]
+#[case::getqrinfo_bases("getqrinfo", hostile(0))]
+#[case::qfcommit_signers("qfcommit", hostile(35))]
+#[case::mnlistdiff_merkle_hashes("mnlistdiff", hostile(70))]
+#[case::qrinfo_active_members("qrinfo", hostile(4))]
+#[case::qrinfo_skip_list("qrinfo", hostile(5))]
 fn a_count_the_payload_cannot_fill_allocates_little(#[case] cmd: &str, #[case] payload: Vec<u8>) {
   let ctx = ProtoCtx::new(ProtocolVersion::V24_0, BlsCtx::BASIC);
   LARGEST.with(|c| c.set(0));

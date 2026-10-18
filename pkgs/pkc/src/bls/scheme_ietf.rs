@@ -17,7 +17,7 @@ use blst::min_pk::{AggregatePublicKey, AggregateSignature, PublicKey, SecretKey,
 use zeroize::Zeroizing;
 
 /// Domain separation tag for the basic (NUL) signature scheme.
-const DST_BASIC: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_";
+pub(super) const DST_BASIC: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_";
 /// Domain separation tag for signatures in the proof-of-possession scheme.
 const DST_POP: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
 /// Domain separation tag for proofs of possession.
