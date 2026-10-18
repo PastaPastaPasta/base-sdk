@@ -1,0 +1,33 @@
+[package]
+name = "dash-pow-fuzz"
+version = "0.0.0"
+publish = false
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+afl = "0.18.2"
+dash-pow = { version = "0.0.0", path = "../../pkgs/pow" }
+
+[build-dependencies]
+cc = "1"
+
+[dev-dependencies]
+rstest = "0.25"
+
+[[bin]]
+name = "blake"
+path = "targets/blake.rs"
+test = false
+doc = false
+bench = false
+
+[lints]
+workspace = true

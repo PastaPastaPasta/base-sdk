@@ -1,0 +1,34 @@
+[workspace]
+members = ["pow"]
+resolver = "3"
+
+[workspace.lints.clippy]
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+unwrap_used = "deny"
+
+[workspace.lints.rust]
+keyword_idents = { level = "deny", priority = -1 }
+missing_debug_implementations = "deny"
+non_ascii_idents = "deny"
+rust_2021_incompatible_closure_captures = "deny"
+rust_2021_incompatible_or_patterns = "deny"
+unsafe_code = "deny"
+unused_must_use = "deny"
+
+[workspace.package]
+authors = ["Kittywhiskers Van Gogh <kittywhiskers@dash.org>"]
+edition = "2021"
+homepage = "https://dashpay.github.io/base-sdk"
+license = "MIT"
+repository = "https://github.com/dashpay/base-sdk"
+rust-version = "1.89.0"
+
+# Overflows and failed debug assertions must panic so the fuzzer sees them,
+# even when the targets are built without `cargo afl`.
+[profile.release]
+debug-assertions = true
+overflow-checks = true

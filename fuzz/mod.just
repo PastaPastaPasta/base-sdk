@@ -3,6 +3,31 @@
 python := if os() == "windows" { "python" } else { "python3" }
 ramdisk := if os() == "macos" { "/Volumes/mrd-fuzz" } else { "/mnt/mrd-fuzz" }
 ramdisk_gib := env("FUZZ_RAMDISK_GIB", "8")
+# `cargo afl` sets `RUSTFLAGS`, so `.cargo/config.toml` no longer applies.
+# `rustflags` restates the platform minimum over the `target-cpu=native`
+# that `cargo afl` adds.
+x86_64_flags := "-C target-cpu=x86-64-v3 -C target-feature=+aes"
+aarch64_flags := "-C target-cpu=generic -C target-feature=+aes"
+rustflags := if arch() == "x86_64" { x86_64_flags } else if arch() == "aarch64" { aarch64_flags } else { "" }
+
+# AFL++ needs `cargo afl system-config` again after every reboot.
+# Fetch sphlib, install cargo-afl and build AFL++
+setup:
+    git submodule update --init pow/sphlib
+    cargo install --locked cargo-afl@0.18.2
+    cargo afl config --build
+
+# Fuzz a `dash-pow` `target` against sphlib; extra arguments go to `afl-fuzz`
+pow target *args: (run "pow" target args)
+
+# Fuzz `target` of `dash-<crate>-fuzz` with AFL++ in a ramdisk
+[private]
+run crate target *args: mount-ramdisk
+    RUSTFLAGS="{{ rustflags }}" CARGO_TARGET_DIR={{ ramdisk }}/target \
+      cargo afl build --release -p dash-{{ crate }}-fuzz --bin {{ target }}
+    AFL_AUTORESUME=1 cargo afl fuzz -i {{ crate }}/corpora/{{ target }} -o {{ ramdisk }}/out/{{ target }} \
+      -x dicts/byte_patterns.dict {{ args }} \
+      -- {{ ramdisk }}/target/release/{{ target }}
 
 [private]
 ramdisk *args:

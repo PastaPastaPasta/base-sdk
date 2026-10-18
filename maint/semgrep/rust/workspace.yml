@@ -4,7 +4,7 @@ rules:
     severity: ERROR
     languages: [rust]
     paths:
-      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs]
+      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs, /fuzz/**/*.rs]
     pattern-regex: |-
       (?xm)
       ^[ \t]*                   # line start, optional indent
@@ -34,7 +34,7 @@ rules:
     severity: ERROR
     languages: [generic]
     paths:
-      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs]
+      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs, /fuzz/**/*.rs]
       exclude: ["**/lib.rs", "**/main.rs", "**/mod.rs"]
     options:
       generic_multiline: true
@@ -50,7 +50,7 @@ rules:
     severity: ERROR
     languages: [rust]
     paths:
-      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs]
+      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs, /fuzz/**/*.rs]
     patterns:
       - pattern-regex: |-
           (?xm)
@@ -81,7 +81,7 @@ rules:
     severity: ERROR
     languages: [rust]
     paths:
-      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs]
+      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs, /fuzz/**/*.rs]
     pattern-regex: 'derive\([^)]*(?<!:)serde::'
 
   - id: enum-bare-unknown
@@ -89,7 +89,7 @@ rules:
     severity: ERROR
     languages: [rust]
     paths:
-      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs]
+      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs, /fuzz/**/*.rs]
     pattern-regex: '(?m)^\s+Unknown\s*[,}=]'
 
   - id: impl-no-into
@@ -97,7 +97,7 @@ rules:
     severity: ERROR
     languages: [rust]
     paths:
-      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs]
+      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs, /fuzz/**/*.rs]
     pattern-regex: '\bimpl\b[^{]*\bInto\s*<.*>\s+for\b'
 
   - id: macro-export-no-serde-cfg
@@ -177,7 +177,7 @@ rules:
     severity: ERROR
     languages: [rust]
     paths:
-      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs]
+      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs, /fuzz/**/*.rs]
     patterns:
       - pattern-either:
           - pattern: |
@@ -193,7 +193,7 @@ rules:
     severity: ERROR
     languages: [rust]
     paths:
-      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs]
+      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs, /fuzz/**/*.rs]
       exclude: [/pkgs/**/tests/**, /pkgs/**/bench/**]
     patterns:
       - pattern-either:
@@ -222,7 +222,7 @@ rules:
     severity: ERROR
     languages: [rust]
     paths:
-      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs]
+      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs, /fuzz/**/*.rs]
     pattern-regex: '^\s*//[/!]?\s*[-=]{4,}|^\s*//\s+--\s'
 
   - id: style-latin1-source
@@ -230,7 +230,7 @@ rules:
     severity: ERROR
     languages: [rust]
     paths:
-      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs]
+      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs, /fuzz/**/*.rs]
     pattern-regex: '[^\x00-\xFF]'
 
   - id: typeid-no-manual-impl
@@ -241,6 +241,7 @@ rules:
       include:
         - /pkgs/**/*.rs
         - /docs/samples/**/*.rs
+        - /fuzz/**/*.rs
       exclude:
         - /pkgs/types/marker/**
     pattern-regex: '\bconst[ \t]+TYPE_ID[ \t]*:[^;]*='
@@ -250,7 +251,7 @@ rules:
     severity: ERROR
     languages: [rust]
     paths:
-      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs]
+      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs, /fuzz/**/*.rs]
       exclude: ["**/lib.rs", "**/mod.rs"]
     pattern-regex: '^\s*pub\s+use\s'
 
@@ -259,7 +260,7 @@ rules:
     severity: ERROR
     languages: [rust]
     paths:
-      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs]
+      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs, /fuzz/**/*.rs]
       exclude:
         - /pkgs/types/src/entity.rs # declares the generator
         - /pkgs/types/src/secret.rs # declares its secret sibling
