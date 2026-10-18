@@ -22,7 +22,7 @@ build:
     {{ each }} build
 
 comb:
-    {{ python }} contrib/git_filter.py --fast-fail --env NEXTEST_PROFILE=fail-fast develop HEAD -- just test lint
+    {{ python }} contrib/git_filter.py --fast-fail --env NEXTEST_PROFILE=fail-fast develop HEAD -- just test lint fuzz::test
 
 lint:
     @just --fmt --check

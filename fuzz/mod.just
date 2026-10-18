@@ -20,6 +20,12 @@ setup:
 # Fuzz a `dash-pow` `target` against sphlib; extra arguments go to `afl-fuzz`
 pow target *args: (run "pow" target args)
 
+# Check every stage against sphlib, natively and as a baseline `portable` build
+test:
+    git submodule update --init pow/sphlib
+    cargo test --locked --workspace
+    RUSTFLAGS="" cargo test --locked --workspace --features dash-pow/portable
+
 # Fuzz `target` of `dash-<crate>-fuzz` with AFL++ in a ramdisk
 [private]
 run crate target *args: mount-ramdisk
