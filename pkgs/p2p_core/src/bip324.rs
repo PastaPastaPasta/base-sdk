@@ -31,7 +31,7 @@ pub fn encode_v2(msg: &P2pMsg, buf: &mut Vec<u8>) {
   msg.encode_payload(buf);
 }
 
-/// The type byte, a 12-byte command and the 3 MiB message limit.
+/// The type byte, a 12-byte command and a [`MAX_P2P_PAYLOAD_SIZE`] payload.
 const MAX_V2_CONTENTS: usize = 1 + 12 + MAX_P2P_PAYLOAD_SIZE;
 
 /// Decodes V2 message contents into a `P2pMsg`.

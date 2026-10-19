@@ -31,6 +31,7 @@ pub mod __private {
   pub use dash_types;
 }
 pub use bip324::{decode_v2, encode_v2};
+pub use codec::MAX_P2P_PAYLOAD_SIZE;
 pub use command::CommandString;
 pub use error::P2pDecodeError;
 pub use magic::Magic;

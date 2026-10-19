@@ -6,7 +6,7 @@
 
 //! Checks applied by `P2pMsg::decode_payload`.
 
-use dash_p2p_core::{CommandString, P2pDecodeError, P2pMsg};
+use dash_p2p_core::{CommandString, P2pDecodeError, P2pMsg, MAX_P2P_PAYLOAD_SIZE};
 use dash_types::codec::DecodeError;
 use rstest::rstest;
 
@@ -37,10 +37,11 @@ fn commands_follow_the_v2_rule(#[case] bytes: [u8; 12], #[case] valid: bool) {
 #[rstest]
 fn oversized_commands_are_escaped() {
   let cmd = CommandString::from_bytes(*b"pi\nng\0\0\0\0\0\0\0");
+  let size = MAX_P2P_PAYLOAD_SIZE + 1;
   assert_eq!(
-    P2pMsg::decode_payload(&cmd, &vec![0; 3 * 1024 * 1024 + 1]).map_err(|e| e.to_string()),
-    Err(String::from(
-      "payload too large: 3145729 bytes, max 3145728, command pi\\x0ang"
+    P2pMsg::decode_payload(&cmd, &vec![0; size]).map_err(|e| e.to_string()),
+    Err(format!(
+      "payload too large: {size} bytes, max {MAX_P2P_PAYLOAD_SIZE}, command pi\\x0ang"
     ))
   );
 }

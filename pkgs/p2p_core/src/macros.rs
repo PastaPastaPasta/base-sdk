@@ -166,8 +166,10 @@ macro_rules! define_p2p {
 
       /// Decodes a message from its command string and raw payload.
       ///
-      /// Every command, known or not, is bounded by the 3 MiB limit. A command
-      /// that fails [`CommandString::is_valid_v2`] gives `InvalidCommand`.
+      /// Every command, known or not, is bounded by the
+      /// [`MAX_P2P_PAYLOAD_SIZE`](crate::MAX_P2P_PAYLOAD_SIZE) limit. A
+      /// command that fails [`CommandString::is_valid_v2`] gives
+      /// `InvalidCommand`.
       pub fn decode_payload(
         cmd: &CommandString,
         payload: &[u8],

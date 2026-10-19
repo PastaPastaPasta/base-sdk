@@ -315,8 +315,9 @@ mod tests {
   }
 
   #[rstest]
-  fn counts_past_2000_decode() {
-    let headers = (0..2_001)
+  fn counts_past_the_headers_limit_decode() {
+    let headers = (0..)
+      .take(Headers::MAX_COUNT + 1)
       .map(|i| BlockHeader {
         version: 0x2000_0000,
         prev_hash: BlockHash::from_lendian([0; 32]),
