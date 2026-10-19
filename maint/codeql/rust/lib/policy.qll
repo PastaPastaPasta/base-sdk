@@ -156,7 +156,7 @@ predicate isCheckableType(TypeItem t) {
   not isCodecType(t) and
   not isSecretType(t) and
   not isIteratorType(t) and
-  not isPrivateCrate(fileOf(t)) and
+  not isNoDeriveCrate(fileOf(t)) and
   not hasUnexpandedDerive(t)
 }
 

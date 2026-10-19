@@ -4,9 +4,10 @@ extensions:
   #
   # Available policies:
   #   `enforced`    subject to the codec and declaration ordering rules
+  #   `no-derive`   no derivations expected
   #   `no-serde`    carries no `serde` feature
   #   `opaque`      single-field wrappers hide their contents
-  #   `private`     holds no public API, no derivations expected
+  #   `private`     holds no public API
   #   `unencodable` able to derive `Unencodable`, codec coverage expected
   - addsTo:
       pack: base-sdk/codeql-rust
@@ -14,7 +15,7 @@ extensions:
     data:
       # | name               | policies                 |
       # | ------------------ | ------------------------ |
-      - ["dash-dev",           "private"]
+      - ["dash-dev",           "private, no-derive"]
       - ["dash-num",           "enforced"]
       - ["dash-p2p-core",      "enforced, unencodable"]
       - ["dash-params",        "no-serde"]

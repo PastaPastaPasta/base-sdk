@@ -62,5 +62,8 @@ predicate isOpaqueCrate(File f) { hasPolicy(f, "opaque") }
 /** Holds if file `f` is in a crate with no public API. */
 predicate isPrivateCrate(File f) { hasPolicy(f, "private") }
 
+/** Holds if file `f` is in a crate with no derivations expected. */
+predicate isNoDeriveCrate(File f) { hasPolicy(f, "no-derive") }
+
 /** Holds if file `f` is in a crate that can derive `Unencodable`. */
 predicate isUnencodableCrate(File f) { hasPolicy(f, "unencodable") }
