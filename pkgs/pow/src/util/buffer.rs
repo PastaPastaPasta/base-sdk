@@ -61,6 +61,38 @@ impl<const N: usize> Buffer<N> {
     self.len = tail.len();
   }
 
+  /// Feeds `data` but keeps a completed block until more data follows.
+  ///
+  /// For hashes that flag the last block instead of appending one, the block
+  /// in the buffer is only known not to be last once a byte follows it.
+  #[inline(always)]
+  pub(crate) fn update_lagging<C: Compress<N>>(&mut self, mut data: &[u8], core: &mut C) {
+    if data.is_empty() {
+      return;
+    }
+    if self.len > 0 {
+      if self.len < N {
+        let take = (N - self.len).min(data.len());
+        self.block[self.len..self.len + take].copy_from_slice(&data[..take]);
+        self.len += take;
+        data = &data[take..];
+        if data.is_empty() {
+          return;
+        }
+      }
+      core.compress(&self.block);
+      self.len = 0;
+    }
+    // Every block that ends before the last byte of `data` has data after it.
+    let (blocks, _) = data[..data.len() - 1].as_chunks::<N>();
+    for block in blocks {
+      core.compress(block);
+    }
+    let tail = &data[blocks.len() * N..];
+    self.block[..tail.len()].copy_from_slice(tail);
+    self.len = tail.len();
+  }
+
   /// Writes `marker` after the buffered bytes, zeroes the rest and returns
   /// the block for the caller to fill in the length fields.
   ///
@@ -71,6 +103,15 @@ impl<const N: usize> Buffer<N> {
   pub(crate) fn pad(&mut self, marker: u8) -> &mut [u8; N] {
     self.fill_tail(marker);
     &mut self.block
+  }
+
+  /// The buffered bytes followed by zeroes up to the block size.
+  #[inline(always)]
+  pub(crate) fn zero_padded(&mut self) -> &[u8; N] {
+    if self.len < N {
+      self.fill_tail(0);
+    }
+    &self.block
   }
 
   /// Overwrites the bytes past `len` with `marker` then zeroes.
@@ -205,6 +246,41 @@ mod tests {
     }
   }
 
+  /// Feeds `data` to a fresh lagging buffer in the pieces `cuts` delimit.
+  fn feed_lagging<const N: usize>(data: &[u8], cuts: &[usize]) -> (Log<N>, Buffer<N>) {
+    let mut buffer = Buffer::<N>::new();
+    let mut log = Log::new();
+    let mut start = 0;
+    for &cut in cuts.iter().chain(core::iter::once(&data.len())) {
+      buffer.update_lagging(&data[start..cut], &mut log);
+      start = cut;
+    }
+    (log, buffer)
+  }
+
+  /// The lagging variant holds a complete last block back, whatever the
+  /// chunking.
+  #[test]
+  fn lagging_holds_the_last_block() {
+    for len in 0..=RAMP.len() {
+      let data = &RAMP[..len];
+      let whole = data.as_chunks::<16>().0;
+      let held = usize::from(len > 0 && len % 16 == 0);
+      let expected = &whole[..whole.len() - held];
+      let check = |cuts: &[usize]| {
+        let (log, buffer) = feed_lagging::<16>(data, cuts);
+        assert_eq!(log.blocks(), expected, "len {len} cuts {cuts:?}");
+        assert_eq!(&buffer.block[..buffer.len], &data[expected.len() * 16..]);
+      };
+      for first in 0..=len {
+        for second in first..=len {
+          check(&[first, second]);
+        }
+      }
+      check(&BYTE_CUTS[1..len.max(1)]);
+    }
+  }
+
   /// Padding places the marker after the tail and zeroes stale bytes.
   #[test]
   fn pad_clears_stale_bytes() {
@@ -215,5 +291,18 @@ mod tests {
     assert_eq!(buffer.len(), 3);
     assert_eq!(*buffer.pad(0x80), [0xBB, 0xBB, 0xBB, 0x80, 0, 0, 0, 0]);
     assert_eq!(log.blocks(), [[0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xBB]]);
+  }
+
+  /// Zero padding clears stale bytes and leaves a full block alone.
+  #[test]
+  fn zero_padding_clears_stale_bytes() {
+    let mut buffer = Buffer::<8>::new();
+    let mut log = Log::new();
+    buffer.update(&[0xAA; 7], &mut log);
+    buffer.update(&[0xBB; 4], &mut log);
+    assert_eq!(*buffer.zero_padded(), [0xBB, 0xBB, 0xBB, 0, 0, 0, 0, 0]);
+    buffer.update_lagging(&[0xCC; 5], &mut log);
+    assert_eq!(buffer.len(), 8);
+    assert_eq!(*buffer.zero_padded(), [0xBB, 0xBB, 0xBB, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC]);
   }
 }

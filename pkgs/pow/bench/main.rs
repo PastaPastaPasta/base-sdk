@@ -48,7 +48,7 @@ bench_algo!(keccak => pow_crate::keccak::hash512);
 bench_algo!(luffa => pow_crate::luffa::hash512);
 bench_algo!(shavite => pow_crate::shavite::hash512);
 bench_algo!(simd => pow_crate::simd::hash512);
-bench_algo!(skein => pow_crate::skein::hash512);
+bench_algo!(skein => pow_crate::Skein512::digest);
 
 fn main() {
   divan::main();

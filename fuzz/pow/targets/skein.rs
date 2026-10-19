@@ -6,11 +6,11 @@
 
 //! Differential fuzz target for Skein.
 
-use dash_pow::__private::skein;
-use dash_pow_fuzz::{assert_same, sph};
+use dash_pow::__private::Skein512;
+use dash_pow_fuzz::{assert_same, digest512, sph};
 
 fn main() {
   afl::fuzz!(|data: &[u8]| {
-    assert_same("skein", skein::hash512, sph::skein, data);
+    assert_same("skein", digest512::<Skein512>, sph::skein, data);
   });
 }
