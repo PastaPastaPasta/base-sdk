@@ -209,7 +209,7 @@ impl BaseCodec for Transaction {
       outputs: Vec::decode(data)?,
       lock_time: u32::decode(data)?,
       extra_payload: if version >= 3 && tx_type != TxType::Spend {
-        let len = CompactSize::decode(data)?.into_len(crate::codec::MAX_SPTX_PAYLOAD_SIZE)?;
+        let len = CompactSize::decode_len(data, crate::codec::MAX_SPTX_PAYLOAD_SIZE)?;
         codec::read_bytes(data, len)?.to_vec()
       } else {
         Vec::new()

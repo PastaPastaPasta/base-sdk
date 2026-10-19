@@ -88,7 +88,7 @@ impl_p2p!(UserAgent);
 
 impl BaseCodec for UserAgent {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let len = CompactSize::decode(data)?.into_len(MAX_USER_AGENT)?;
+    let len = CompactSize::decode_len(data, MAX_USER_AGENT)?;
     let raw = codec::read_bytes(data, len)?;
     Ok(Self(raw.to_vec()))
   }

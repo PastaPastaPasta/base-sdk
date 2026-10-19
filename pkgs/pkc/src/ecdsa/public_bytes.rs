@@ -73,7 +73,7 @@ pub struct EcdsaPkBytes {
 #[cfg(feature = "codec")]
 impl BaseCodec for EcdsaPkBytes {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let n = CompactSize::decode(data)?.into_len(ECDSA_PK_LEN + 1)?;
+    let n = CompactSize::decode_len(data, ECDSA_PK_LEN + 1)?;
     let raw = read_bytes(data, n)?;
     let prefix = raw
       .first()
