@@ -7,7 +7,11 @@
 //! BMW-512 (Blue Midnight Wish) hash function.
 
 use crate::consts::bmw::*;
-use crate::util::memops::{digest_from_u64_le, load_u64_le, store_u64_le, zero_extend};
+use crate::util::buffer::{Buffer, Compress};
+use crate::util::impl_digest;
+use crate::util::memops::load_u64_le;
+
+use digest::{FixedOutput, Output, Update};
 
 const WORDS: usize = 16;
 const QWORDS: usize = 32;
@@ -183,56 +187,84 @@ fn compress(message: &[u64; WORDS], state: &[u64; WORDS], out: &mut [u64; WORDS]
   fold_schedule(message, &q, out);
 }
 
-/// Runs the full BMW-512 hash and returns the output eight u64 words.
-fn hash_to_words(data: &[u8]) -> [u64; 8] {
-  let mut left = IV;
-  let mut right = [0u64; WORDS];
-  let mut current = &mut left;
-  let mut next = &mut right;
-  let bit_count = (data.len() as u64) << 3;
-
-  let (blocks, tail) = data.as_chunks::<BLOCK>();
-  for block in blocks {
-    compress(&load_block(block), current, next);
-    core::mem::swap(&mut current, &mut next);
-  }
-
-  let remaining = tail.len();
-  let mut pad: [u8; 2 * BLOCK] = zero_extend(tail);
-  pad[remaining] = 0x80;
-
-  if remaining <= 119 {
-    store_u64_le(&mut pad, 15, bit_count);
-    compress(&load_block(&pad[..BLOCK]), current, next);
-    core::mem::swap(&mut current, &mut next);
-  } else {
-    compress(&load_block(&pad[..BLOCK]), current, next);
-    core::mem::swap(&mut current, &mut next);
-
-    let mut final_block = [0u8; BLOCK];
-    store_u64_le(&mut final_block, 15, bit_count);
-    compress(&load_block(&final_block), current, next);
-    core::mem::swap(&mut current, &mut next);
-  }
-
-  compress(current, &FINAL_B, next);
-
-  let mut out = [0u64; 8];
-  out.copy_from_slice(&next[8..]);
-  out
+/// Chaining value and block count.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct Core {
+  h: [u64; WORDS],
+  blocks: u64,
 }
 
-pub fn hash512(data: &[u8]) -> [u8; 64] {
-  digest_from_u64_le(&hash_to_words(data))
+impl Compress<BLOCK> for Core {
+  // Inlined at every call site, the compression runs slower, so all callers
+  // share one copy.
+  #[inline(never)]
+  fn compress(&mut self, block: &[u8; BLOCK]) {
+    let mut next = [0u64; WORDS];
+    compress(&load_block(block), &self.h, &mut next);
+    self.h = next;
+    self.blocks = self.blocks.wrapping_add(1);
+  }
 }
+
+/// Streaming BMW-512.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Bmw512 {
+  core: Core,
+  buffer: Buffer<BLOCK>,
+}
+
+impl Default for Bmw512 {
+  #[inline]
+  fn default() -> Self {
+    Self {
+      core: Core { h: IV, blocks: 0 },
+      buffer: Buffer::new(),
+    }
+  }
+}
+
+impl Update for Bmw512 {
+  #[inline]
+  fn update(&mut self, data: &[u8]) {
+    self.buffer.update(data, &mut self.core);
+  }
+}
+
+impl FixedOutput for Bmw512 {
+  fn finalize_into(mut self, out: &mut Output<Self>) {
+    let remaining = self.buffer.len();
+    let bit_count = (self.core.blocks << 10).wrapping_add((remaining as u64) << 3);
+
+    // The length takes the last word, so a tail past byte 119 spills into a
+    // second block holding the length alone.
+    let block = self.buffer.pad(0x80);
+    if remaining <= 119 {
+      block[120..].copy_from_slice(&bit_count.to_le_bytes());
+      self.core.compress(block);
+    } else {
+      self.core.compress(block);
+      let mut last = [0u8; BLOCK];
+      last[120..].copy_from_slice(&bit_count.to_le_bytes());
+      self.core.compress(&last);
+    }
+
+    let mut last = [0u64; WORDS];
+    compress(&self.core.h, &FINAL_B, &mut last);
+    for (bytes, word) in out.chunks_exact_mut(8).zip(&last[8..]) {
+      bytes.copy_from_slice(&word.to_le_bytes());
+    }
+  }
+}
+
+impl_digest!(Bmw512, U64);
 
 #[cfg(test)]
 mod tests {
-  use super::hash512;
-  use crate::tests::run_nist_kat;
+  use super::Bmw512;
+  use crate::tests::run_nist_kat_chunked;
 
   #[test]
   fn nist_kat() {
-    run_nist_kat("bmw", hash512);
+    run_nist_kat_chunked::<Bmw512>("bmw");
   }
 }

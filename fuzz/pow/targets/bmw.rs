@@ -6,11 +6,11 @@
 
 //! Differential fuzz target for Blue Midnight Wish.
 
-use dash_pow::__private::bmw;
-use dash_pow_fuzz::{assert_same, sph};
+use dash_pow::__private::Bmw512;
+use dash_pow_fuzz::{assert_same, digest512, sph};
 
 fn main() {
   afl::fuzz!(|data: &[u8]| {
-    assert_same("bmw", bmw::hash512, sph::bmw, data);
+    assert_same("bmw", digest512::<Bmw512>, sph::bmw, data);
   });
 }

@@ -39,7 +39,7 @@ mod pow {
 }
 
 bench_algo!(blake => pow_crate::Blake512::digest);
-bench_algo!(bmw => pow_crate::bmw::hash512);
+bench_algo!(bmw => pow_crate::Bmw512::digest);
 bench_algo!(cubehash => pow_crate::cubehash::hash512);
 bench_algo!(echo => pow_crate::echo::hash512);
 bench_algo!(groestl => pow_crate::groestl::hash512);

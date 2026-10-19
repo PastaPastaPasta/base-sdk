@@ -135,7 +135,7 @@ pub fn assert_same_x11(data: &[u8]) {
 mod tests {
   use super::*;
 
-  use dash_pow::__private::{bmw, cubehash, echo, groestl, jh, keccak, luffa, shavite, simd, skein, Blake512};
+  use dash_pow::__private::{cubehash, echo, groestl, jh, keccak, luffa, shavite, simd, skein, Blake512, Bmw512};
   use rstest::rstest;
 
   use std::fs;
@@ -182,7 +182,7 @@ mod tests {
     fn assert_same_at(self, data: &[u8], offset: usize) {
       let (ours, theirs): (Digest, Digest) = match self {
         Self::Blake => (digest512::<Blake512>, sph::blake),
-        Self::Bmw => (bmw::hash512, sph::bmw),
+        Self::Bmw => (digest512::<Bmw512>, sph::bmw),
         Self::CubeHash => (cubehash::hash512, sph::cubehash),
         Self::Echo => (echo::hash512, sph::echo),
         Self::Groestl => (groestl::hash512, sph::groestl),
