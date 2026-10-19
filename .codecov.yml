@@ -16,28 +16,36 @@ flags:
   dash-num:
     paths:
       - pkgs/num/
+    carryforward: true
   dash-script:
     paths:
       - pkgs/script/
+    carryforward: true
   dash-p2p-core:
     paths:
       - pkgs/p2p_core/
+    carryforward: true
   dash-params:
     paths:
       - pkgs/params/
+    carryforward: true
   dash-pkc:
     paths:
       - pkgs/pkc/
+    carryforward: true
   dash-pow:
     paths:
       - pkgs/pow/
+    carryforward: true
   dash-primitives:
     paths:
       - pkgs/primitives/
+    carryforward: true
   dash-types:
     paths:
       - pkgs/types/
       - pkgs/types/marker/
+    carryforward: true
 flag_management:
   default_rules:
     carryforward: true

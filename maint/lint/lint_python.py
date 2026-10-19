@@ -12,7 +12,7 @@ from __future__ import annotations
 import subprocess
 import sys
 
-from common import RETCODE_ERR, require_bin, root_dir
+from common import RETCODE_ERR, repo_files, require_bin, root_dir
 
 
 def main() -> int:
@@ -20,7 +20,7 @@ def main() -> int:
 
   repo_root = root_dir()
   result = subprocess.run(  # noqa: S603
-    [ruff_bin, "check", str(repo_root)],
+    [ruff_bin, "check", *[str(p) for p in repo_files(repo_root, "*.py")]],
     check=False,
   )
   return result.returncode

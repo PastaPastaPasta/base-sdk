@@ -11,7 +11,6 @@
 
 from __future__ import annotations
 
-import subprocess
 import sys
 from pathlib import Path
 
@@ -21,7 +20,7 @@ from common import (
   declare_verbs,
   format_verbs,
   formatted,
-  is_plain_file,
+  repo_files,
   require_bin,
   root_dir,
   touched,
@@ -31,22 +30,10 @@ SCRIPT = Path(__file__).stem
 
 
 def _sources(repo_root: Path, only: list[str] | None) -> list[Path]:
-  """Return tracked source files to lint or just *only* when given."""
+  """Return the Nix files to lint, or just *only* when given."""
   if only is not None:
     return [repo_root / name for name in only]
-  git = require_bin("git")
-  listed = subprocess.run(  # noqa: S603
-    [git, "ls-files", "*.nix"],
-    capture_output=True,
-    check=True,
-    cwd=str(repo_root),
-    text=True,
-  )
-  return [
-    repo_root / name
-    for name in listed.stdout.splitlines()
-    if is_plain_file(repo_root, name)
-  ]
+  return repo_files(repo_root, "*.nix")
 
 
 def main() -> int:

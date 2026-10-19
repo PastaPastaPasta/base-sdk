@@ -6,6 +6,8 @@ python := if os() == "windows" { "python" } else { "python3" }
 # (see https://packages.debian.org/trixie/just)
 export RUSTDOCFLAGS := "-D warnings"
 
+mod fuzz "fuzz/mod.just"
+
 each := "cargo hack --workspace --exclude-features default --each-feature"
 powerset := "cargo hack --workspace --exclude-features default --feature-powerset"
 
@@ -20,7 +22,7 @@ build:
     {{ each }} build
 
 comb:
-    {{ python }} contrib/git_filter.py --fast-fail --env NEXTEST_PROFILE=fail-fast develop HEAD -- just test lint
+    {{ python }} contrib/git_filter.py --fast-fail --env NEXTEST_PROFILE=fail-fast develop HEAD -- just test lint fuzz::test
 
 lint:
     @just --fmt --check

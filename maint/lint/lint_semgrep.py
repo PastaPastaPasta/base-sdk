@@ -23,6 +23,7 @@ from common import (
   RETCODE_PASS,
   RETCODE_SKIP,
   SOURCE_DIRS,
+  repo_files,
   require_bin,
   root_dir,
 )
@@ -30,7 +31,7 @@ from common import (
 # Root the per-language rule directories sit under.
 CONFIG_ROOT = ("maint", "semgrep")
 
-# Source roots each language's rules are scanned against.
+# Pathspecs each language's rules are scanned against.
 LANGUAGES: dict[str, tuple[str, ...]] = {
   "rust": SOURCE_DIRS,
 }
@@ -60,7 +61,7 @@ def _scan(
       "scan",
       *configs,
       "--error",
-      *[str(repo_root / where) for where in wheres],
+      *[str(p) for p in repo_files(repo_root, *wheres)],
     ],
     check=False,
   )

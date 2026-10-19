@@ -1,0 +1,3 @@
+[submodule "fuzz/pow/sphlib"]
+	path = fuzz/pow/sphlib
+	url = https://github.com/pornin/sphlib

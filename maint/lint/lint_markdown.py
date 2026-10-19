@@ -22,6 +22,7 @@ from common import (
   RETCODE_PASS,
   off_disk,
   relay,
+  repo_files,
   require_bin,
   root_dir,
 )
@@ -55,10 +56,13 @@ def _link_targets(text: str) -> list[str]:
   return [*collector.targets, *(url for url, _ in renderer.references.values())]
 
 
-def _check_crate_readmes(repo_root: Path) -> int:
+def _check_crate_readmes(repo_root: Path, sources: list[Path]) -> int:
   """Reject relative links in crate READMEs, which crates.io can't resolve."""
   ok = True
-  for readme in sorted(repo_root.glob("pkgs/**/README.md")):
+  pkgs = repo_root / "pkgs"
+  for readme in sources:
+    if readme.name != "README.md" or not readme.is_relative_to(pkgs):
+      continue
     text = readme.read_text(encoding="utf-8")
     rel = readme.relative_to(repo_root)
     for target in _link_targets(text):
@@ -78,15 +82,14 @@ def _check_crate_readmes(repo_root: Path) -> int:
 def main() -> int:
   pymarkdown_bin = require_bin("pymarkdownlnt")
   repo_root = root_dir()
+  sources = repo_files(repo_root, "*.md")
   result = subprocess.run(  # noqa: S603
     [
       pymarkdown_bin,
       "--disable-rules",
       DISABLED_RULES,
       "scan",
-      "--recurse",
-      "--respect-gitignore",
-      str(repo_root),
+      *[str(p) for p in sources],
     ],
     capture_output=True,
     check=False,
@@ -97,7 +100,7 @@ def main() -> int:
   relay(result.stdout, repo_root)
   relay(result.stderr, repo_root, stream=sys.stderr)
 
-  readme_retcode = _check_crate_readmes(repo_root)
+  readme_retcode = _check_crate_readmes(repo_root, sources)
 
   return result.returncode or readme_retcode
 
