@@ -136,7 +136,7 @@ mod tests {
   use super::*;
 
   use dash_pow::__private::{
-    echo, simd, Blake512, Bmw512, CubeHash512, Groestl512, Jh512, Keccak512, Luffa512, Shavite512, Skein512,
+    echo, Blake512, Bmw512, CubeHash512, Groestl512, Jh512, Keccak512, Luffa512, Shavite512, Simd512, Skein512,
   };
   use rstest::rstest;
 
@@ -192,7 +192,7 @@ mod tests {
         Self::Keccak => (digest512::<Keccak512>, sph::keccak),
         Self::Luffa => (digest512::<Luffa512>, sph::luffa),
         Self::Shavite => (digest512::<Shavite512>, sph::shavite),
-        Self::Simd => (simd::hash512, sph::simd),
+        Self::Simd => (digest512::<Simd512>, sph::simd),
         Self::Skein => (digest512::<Skein512>, sph::skein),
         Self::X11 => return assert_same_x11_at(data, offset),
       };

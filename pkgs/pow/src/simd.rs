@@ -7,8 +7,11 @@
 //! SIMD-512 hash function.
 
 use crate::consts::simd::{ALPHA_TAB, BLOCK, IV, PP8K, WBP, YOFF_B_F, YOFF_B_N};
-use crate::util::memops::{digest_from_u32_le, load_u32_le, zero_extend};
+use crate::util::buffer::{Buffer, Compress};
+use crate::util::impl_digest;
+use crate::util::memops::{digest_from_u32_le, load_u32_le};
 
+use digest::{FixedOutput, Output, Update};
 use wide::{i32x4, i32x8, u32x8};
 
 type BlockWords = [u32; 32];
@@ -416,45 +419,75 @@ fn encode_count(dst: &mut [u8], low: u32, high: u32, ptr: usize) {
   dst[4..8].copy_from_slice(&high_bits.to_le_bytes());
 }
 
-fn hash_to_words(data: &[u8]) -> [u32; 16] {
-  let mut h = IV;
-  let mut count_low = 0u32;
-  let mut count_high = 0u32;
+/// Chaining value and block count.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct Core {
+  h: [u32; 32],
+  /// Blocks compressed so far, low word first.
+  count: [u32; 2],
+}
 
-  let (blocks, tail) = data.as_chunks::<BLOCK>();
-  for block in blocks {
-    compress(&mut h, block, false);
-    count_low = count_low.wrapping_add(1);
-    if count_low == 0 {
-      count_high = count_high.wrapping_add(1);
+impl Compress<BLOCK> for Core {
+  #[inline(always)]
+  fn compress(&mut self, block: &[u8; BLOCK]) {
+    compress(&mut self.h, block, false);
+    self.count[0] = self.count[0].wrapping_add(1);
+    if self.count[0] == 0 {
+      self.count[1] = self.count[1].wrapping_add(1);
     }
   }
+}
 
-  let ptr = tail.len();
-  if ptr > 0 {
-    compress(&mut h, &zero_extend(tail), false);
+/// Streaming SIMD-512.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Simd512 {
+  core: Core,
+  buffer: Buffer<BLOCK>,
+}
+
+impl Default for Simd512 {
+  #[inline]
+  fn default() -> Self {
+    Self {
+      core: Core { h: IV, count: [0; 2] },
+      buffer: Buffer::new(),
+    }
   }
-
-  let mut block = [0u8; BLOCK];
-  encode_count(&mut block, count_low, count_high, ptr);
-  compress(&mut h, &block, true);
-
-  let mut out = [0u32; 16];
-  out.copy_from_slice(&h[..16]);
-  out
 }
 
-pub fn hash512(data: &[u8]) -> [u8; 64] {
-  digest_from_u32_le(&hash_to_words(data))
+impl Update for Simd512 {
+  #[inline]
+  fn update(&mut self, data: &[u8]) {
+    self.buffer.update(data, &mut self.core);
+  }
 }
+
+impl FixedOutput for Simd512 {
+  fn finalize_into(mut self, out: &mut Output<Self>) {
+    // A partial tail is compressed zero padded as an ordinary block. The
+    // final block then carries only the bit count.
+    let ptr = self.buffer.len();
+    let count = self.core.count;
+    let h = &mut self.core.h;
+    if ptr > 0 {
+      compress(h, self.buffer.zero_padded(), false);
+    }
+    let mut block = [0u8; BLOCK];
+    encode_count(&mut block, count[0], count[1], ptr);
+    compress(h, &block, true);
+    out.copy_from_slice(&digest_from_u32_le(h));
+  }
+}
+
+impl_digest!(Simd512, U64);
 
 #[cfg(test)]
 mod tests {
-  use super::hash512;
-  use crate::tests::run_nist_kat;
+  use super::Simd512;
+  use crate::tests::run_nist_kat_chunked;
 
   #[test]
   fn nist_kat() {
-    run_nist_kat("simd", hash512);
+    run_nist_kat_chunked::<Simd512>("simd");
   }
 }
