@@ -7,6 +7,7 @@
 //! P2P message types and dispatch.
 
 mod addr;
+mod blocks;
 mod coinjoin;
 mod gov;
 mod headers;
@@ -26,6 +27,7 @@ use dash_primitives::{GovObject, GovVote};
 use dash_types::type_id::Unencodable;
 
 pub use addr::{Addr, AddrV2Entry, AddrV2Msg, TimestampedAddr};
+pub use blocks::SendCmpct;
 pub use coinjoin::SendDsq;
 pub use gov::GovSync;
 pub use headers::{GetHeaders, Headers};
@@ -76,6 +78,8 @@ define_p2p! {
     SendDsq(SendDsq) => SENDDSQ "senddsq" @ 130,
     /// LLMQ: send recovered signatures.
     QSendRecSigs(QSendRecSigs) => QSENDRECSIGS "qsendrecsigs" @ 145,
+    /// BIP152: signal compact block support.
+    SendCmpct(SendCmpct) => SENDCMPCT "sendcmpct" @ 20,
   }
 
   parsed_empty {
@@ -108,8 +112,6 @@ define_p2p! {
     GetBlockTxn => GETBLOCKTXN "getblocktxn" @ 10,
     /// BIP37: filtered block.
     MerkleBlock => MERKLEBLOCK "merkleblock" @ 16,
-    /// BIP152: signal compact block support.
-    SendCmpct => SENDCMPCT "sendcmpct" @ 20,
     /// Transaction.
     Tx => TX "tx" @ 21,
     /// Request compact filters.
