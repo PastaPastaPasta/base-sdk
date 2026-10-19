@@ -8,8 +8,11 @@
 
 use crate::aes::{block_from_words, round, round_nk, words_from_block, Block};
 use crate::consts::echo::BLOCK;
-use crate::util::memops::{digest_from_u32_le, load_u32_le, zero_extend};
+use crate::util::buffer::{Buffer, Compress};
+use crate::util::impl_digest;
+use crate::util::memops::{digest_from_u32_le, load_u32_le};
 
+use digest::{FixedOutput, Output, Update};
 use wide::{i8x16, u32x4};
 
 type AesState = [u32; 4];
@@ -141,54 +144,84 @@ fn compress_block(chaining_value: &mut ChainingValue, block: &[u8; BLOCK], count
   compress_words(chaining_value, &words, counter);
 }
 
-fn hash_to_cells(data: &[u8]) -> ChainingValue {
-  let mut chaining_value = [[512, 0, 0, 0]; 8];
-  let mut counter = 0u128;
-
-  let (blocks, tail) = data.as_chunks::<BLOCK>();
-  for block in blocks {
-    counter = counter.wrapping_add(1024);
-    compress_block(&mut chaining_value, block, counter);
-  }
-
-  let used = tail.len();
-  counter = counter.wrapping_add(used as u128 * 8);
-  let saved_counter = counter;
-
-  if used == 0 {
-    counter = 0;
-  }
-
-  let mut block: [u8; BLOCK] = zero_extend(tail);
-  block[used] = 0x80;
-
-  if used + 1 > BLOCK - 18 {
-    compress_block(&mut chaining_value, &block, counter);
-    counter = 0;
-    block = [0u8; BLOCK];
-  }
-
-  block[BLOCK - 18..BLOCK - 16].copy_from_slice(&512u16.to_le_bytes());
-  block[BLOCK - 16..].copy_from_slice(&saved_counter.to_le_bytes());
-
-  compress_block(&mut chaining_value, &block, counter);
-
-  chaining_value
+/// Chaining value and HAIFA bit counter.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct Core {
+  h: ChainingValue,
+  counter: Counter,
 }
 
-pub fn hash512(data: &[u8]) -> [u8; 64] {
-  let cells = hash_to_cells(data);
-  let words: [u32; 16] = core::array::from_fn(|word| cells[word / 4][word % 4]);
-  digest_from_u32_le(&words)
+impl Compress<BLOCK> for Core {
+  #[inline(always)]
+  fn compress(&mut self, block: &[u8; BLOCK]) {
+    self.counter = self.counter.wrapping_add(1024);
+    compress_block(&mut self.h, block, self.counter);
+  }
 }
+
+/// Streaming Echo-512.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Echo512 {
+  core: Core,
+  buffer: Buffer<BLOCK>,
+}
+
+impl Default for Echo512 {
+  #[inline]
+  fn default() -> Self {
+    Self {
+      core: Core {
+        h: [[512, 0, 0, 0]; 8],
+        counter: 0,
+      },
+      buffer: Buffer::new(),
+    }
+  }
+}
+
+impl Update for Echo512 {
+  #[inline]
+  fn update(&mut self, data: &[u8]) {
+    self.buffer.update(data, &mut self.core);
+  }
+}
+
+impl FixedOutput for Echo512 {
+  fn finalize_into(mut self, out: &mut Output<Self>) {
+    let used = self.buffer.len();
+    let total = self.core.counter.wrapping_add(used as u128 * 8);
+    let h = &mut self.core.h;
+
+    // HAIFA keys each block with the bits counted so far and a block made
+    // only of padding with zero. The 16-bit digest length and the 128-bit
+    // count take the last 18 bytes, so a tail past byte 109 spills over.
+    let mut counter = total;
+    let block = self.buffer.pad(0x80);
+    if used == 0 {
+      counter = 0;
+    } else if used >= BLOCK - 18 {
+      compress_block(h, block, counter);
+      *block = [0u8; BLOCK];
+      counter = 0;
+    }
+    block[BLOCK - 18..BLOCK - 16].copy_from_slice(&512u16.to_le_bytes());
+    block[BLOCK - 16..].copy_from_slice(&total.to_le_bytes());
+    compress_block(h, block, counter);
+
+    let words: [u32; 16] = core::array::from_fn(|word| h[word / 4][word % 4]);
+    out.copy_from_slice(&digest_from_u32_le(&words));
+  }
+}
+
+impl_digest!(Echo512, U64);
 
 #[cfg(test)]
 mod tests {
-  use super::hash512;
-  use crate::tests::run_nist_kat;
+  use super::Echo512;
+  use crate::tests::run_nist_kat_chunked;
 
   #[test]
   fn nist_kat() {
-    run_nist_kat("echo", hash512);
+    run_nist_kat_chunked::<Echo512>("echo");
   }
 }

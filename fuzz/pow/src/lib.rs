@@ -136,7 +136,7 @@ mod tests {
   use super::*;
 
   use dash_pow::__private::{
-    echo, Blake512, Bmw512, CubeHash512, Groestl512, Jh512, Keccak512, Luffa512, Shavite512, Simd512, Skein512,
+    Blake512, Bmw512, CubeHash512, Echo512, Groestl512, Jh512, Keccak512, Luffa512, Shavite512, Simd512, Skein512,
   };
   use rstest::rstest;
 
@@ -186,7 +186,7 @@ mod tests {
         Self::Blake => (digest512::<Blake512>, sph::blake),
         Self::Bmw => (digest512::<Bmw512>, sph::bmw),
         Self::CubeHash => (digest512::<CubeHash512>, sph::cubehash),
-        Self::Echo => (echo::hash512, sph::echo),
+        Self::Echo => (digest512::<Echo512>, sph::echo),
         Self::Groestl => (digest512::<Groestl512>, sph::groestl),
         Self::Jh => (digest512::<Jh512>, sph::jh),
         Self::Keccak => (digest512::<Keccak512>, sph::keccak),

@@ -76,6 +76,7 @@ pub mod __private {
   pub use crate::blake::Blake512;
   pub use crate::bmw::Bmw512;
   pub use crate::cubehash::CubeHash512;
+  pub use crate::echo::Echo512;
   pub use crate::groestl::Groestl512;
   pub use crate::jh::Jh512;
   pub use crate::keccak::Keccak512;
@@ -83,16 +84,13 @@ pub mod __private {
   pub use crate::shavite::Shavite512;
   pub use crate::simd::Simd512;
   pub use crate::skein::Skein512;
-
-  pub mod echo {
-    pub use crate::echo::hash512;
-  }
 }
 
 use blake::Blake512;
 use bmw::Bmw512;
 use cubehash::CubeHash512;
 use digest::Digest;
+use echo::Echo512;
 use groestl::Groestl512;
 use jh::Jh512;
 use keccak::Keccak512;
@@ -116,7 +114,7 @@ pub fn hash(data: &[u8]) -> [u8; 32] {
   let h = CubeHash512::digest(h);
   let h = Shavite512::digest(h);
   let h = Simd512::digest(h);
-  let h = echo::hash512(&h);
+  let h = Echo512::digest(h);
   let mut out = [0u8; 32];
   out.copy_from_slice(&h[..32]);
   out

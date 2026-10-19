@@ -20,19 +20,6 @@ fn nist_input(byte_len: usize) -> &'static [u8] {
   &NIST_MSG_BLOB[off..off + byte_len]
 }
 
-/// Checks `hash512` against every NIST known answer in the `corpus` file.
-pub(crate) fn run_nist_kat(corpus: &str, hash512: fn(&[u8]) -> [u8; 64]) {
-  let vectors = Corpus::open(env!("CARGO_MANIFEST_DIR"), corpus).vectors::<alloc::string::String>("nist");
-  for (byte_len, digest) in vectors.iter().enumerate() {
-    let expected: [u8; 64] = arr_from_hex(digest);
-    assert_eq!(
-      hash512(nist_input(byte_len)),
-      expected,
-      "{corpus}: mismatch at byte_len={byte_len}"
-    );
-  }
-}
-
 /// Feeds `data` to `D` in two updates split at `cut` and finalizes.
 fn digest_split<D: Digest>(data: &[u8], cut: usize) -> Output<D> {
   let mut hasher = D::new();
