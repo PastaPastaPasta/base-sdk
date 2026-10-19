@@ -86,7 +86,7 @@ predicate hasLifetime(TypeItem t) {
 string cratePrefix(TypeItem t) {
   exists(string path |
     path = fileOf(t).getAbsolutePath() and
-    result = path.regexpCapture("(.*/pkgs/[^/]+/).*", 1)
+    result = path.regexpCapture("(.*/(?:meta|pkgs)/[^/]+/).*", 1)
   )
 }
 

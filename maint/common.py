@@ -36,7 +36,7 @@ ANSI_RESET = "\033[0m"
 CARGO_WORKSPACES: tuple[str, ...] = (".", "docs/samples", "fuzz")
 
 # Rust source roots the analysers scan, relative to the repository root.
-SOURCE_DIRS: tuple[str, ...] = ("pkgs", "docs/samples", "fuzz")
+SOURCE_DIRS: tuple[str, ...] = ("meta", "pkgs", "docs/samples", "fuzz")
 
 # Assumed base branch for codebase.
 DEFAULT_BASE = "develop"

@@ -41,7 +41,7 @@ digest = { workspace = true }
 wide = { workspace = true }
 
 [dev-dependencies]
-dash-dev = { path = "../dev", features = ["full"] }
+dash-dev = { path = "../../meta/dev", features = ["full"] }
 divan = { workspace = true }
 hex-conservative = { workspace = true }
 rstest = { workspace = true }
