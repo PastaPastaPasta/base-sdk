@@ -126,8 +126,8 @@ impl PartialEq for EcdsaSkBytes {
 mod tests {
   use super::{Compression, EcdsaSkBytes, ECDSA_SK_LEN};
   use crate::prelude::*;
-  use bitcoin_hashes::sha256d;
 
+  use bitcoin_hashes::sha256d;
   use rstest::*;
 
   #[rstest]
