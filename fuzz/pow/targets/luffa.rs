@@ -6,11 +6,11 @@
 
 //! Differential fuzz target for Luffa.
 
-use dash_pow::__private::luffa;
-use dash_pow_fuzz::{assert_same, sph};
+use dash_pow::__private::Luffa512;
+use dash_pow_fuzz::{assert_same, digest512, sph};
 
 fn main() {
   afl::fuzz!(|data: &[u8]| {
-    assert_same("luffa", luffa::hash512, sph::luffa, data);
+    assert_same("luffa", digest512::<Luffa512>, sph::luffa, data);
   });
 }

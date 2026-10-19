@@ -8,8 +8,11 @@
 
 use crate::consts::luffa::{BLOCK, IV, RC, RC_FIRST4_HIGH, RC_FIRST4_LOW};
 use crate::util::arx::rotl_u32x4;
-use crate::util::memops::{load_u32_le, store_u32_le, zero_extend};
+use crate::util::buffer::{Buffer, Compress};
+use crate::util::impl_digest;
+use crate::util::memops::{load_u32_le, store_u32_le};
 
+use digest::{FixedOutput, Output, Update};
 use wide::u32x4;
 
 type WordVec = u32x4;
@@ -273,43 +276,68 @@ fn permute_first_four_branches(state: &mut [[u32; 8]; 5]) {
   }
 }
 
-pub fn hash512(data: &[u8]) -> [u8; 64] {
-  let mut state: [[u32; 8]; 5] = IV;
-
-  let (blocks, tail) = data.as_chunks::<BLOCK>();
-  for block in blocks {
-    inject_message(&mut state, &load_block_words(block));
-    permute_state(&mut state);
-  }
-
-  let mut block: [u8; BLOCK] = zero_extend(tail);
-  block[tail.len()] = 0x80;
-
-  let mut out = [0u8; 64];
-  let mut final_round = 0;
-  while final_round < 3 {
-    inject_message(&mut state, &load_block_words(&block));
-    permute_state(&mut state);
-    if final_round == 0 {
-      block = [0u8; BLOCK];
-    } else if final_round == 1 {
-      write_output_half(&state, &mut out[..32]);
-    } else {
-      write_output_half(&state, &mut out[32..]);
-    }
-    final_round += 1;
-  }
-
-  out
+/// The five branch states.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct Core {
+  state: [[u32; 8]; 5],
 }
+
+impl Compress<BLOCK> for Core {
+  #[inline(always)]
+  fn compress(&mut self, block: &[u8; BLOCK]) {
+    inject_message(&mut self.state, &load_block_words(block));
+    permute_state(&mut self.state);
+  }
+}
+
+/// Streaming Luffa-512.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Luffa512 {
+  core: Core,
+  buffer: Buffer<BLOCK>,
+}
+
+impl Default for Luffa512 {
+  #[inline]
+  fn default() -> Self {
+    Self {
+      core: Core { state: IV },
+      buffer: Buffer::new(),
+    }
+  }
+}
+
+impl Update for Luffa512 {
+  #[inline]
+  fn update(&mut self, data: &[u8]) {
+    self.buffer.update(data, &mut self.core);
+  }
+}
+
+impl FixedOutput for Luffa512 {
+  fn finalize_into(mut self, out: &mut Output<Self>) {
+    // The padding block is the marker byte and zeroes. Two blank injections
+    // then each drain one half of the digest.
+    self.core.compress(self.buffer.pad(0x80));
+    let state = &mut self.core.state;
+    inject_message(state, &[0u32; 8]);
+    permute_state(state);
+    write_output_half(state, &mut out[..32]);
+    inject_message(state, &[0u32; 8]);
+    permute_state(state);
+    write_output_half(state, &mut out[32..]);
+  }
+}
+
+impl_digest!(Luffa512, U64);
 
 #[cfg(test)]
 mod tests {
-  use super::hash512;
-  use crate::tests::run_nist_kat;
+  use super::Luffa512;
+  use crate::tests::run_nist_kat_chunked;
 
   #[test]
   fn nist_kat() {
-    run_nist_kat("luffa", hash512);
+    run_nist_kat_chunked::<Luffa512>("luffa");
   }
 }

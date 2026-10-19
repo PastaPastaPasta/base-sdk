@@ -78,6 +78,7 @@ pub mod __private {
   pub use crate::groestl::Groestl512;
   pub use crate::jh::Jh512;
   pub use crate::keccak::Keccak512;
+  pub use crate::luffa::Luffa512;
   pub use crate::skein::Skein512;
 
   pub mod cubehash {
@@ -85,9 +86,6 @@ pub mod __private {
   }
   pub mod echo {
     pub use crate::echo::hash512;
-  }
-  pub mod luffa {
-    pub use crate::luffa::hash512;
   }
   pub mod shavite {
     pub use crate::shavite::hash512;
@@ -103,6 +101,7 @@ use digest::Digest;
 use groestl::Groestl512;
 use jh::Jh512;
 use keccak::Keccak512;
+use luffa::Luffa512;
 use skein::Skein512;
 
 /// Computes the Dash proof-of-work hash.
@@ -116,7 +115,7 @@ pub fn hash(data: &[u8]) -> [u8; 32] {
   let h = Skein512::digest(h);
   let h = Jh512::digest(h);
   let h = Keccak512::digest(h);
-  let h = luffa::hash512(&h);
+  let h = Luffa512::digest(h);
   let h = cubehash::hash512(&h);
   let h = shavite::hash512(&h);
   let h = simd::hash512(&h);
