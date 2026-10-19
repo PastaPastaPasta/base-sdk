@@ -81,6 +81,10 @@ macro_rules! define_p2p {
         $se_variant:ident => $se_cmd:ident $se_wire:literal $(@ $se_sid:literal)?
       ),* $(,)?
     }
+    // Short IDs the V2 tables hold without a message.
+    unassigned {
+      $( $u_sid:literal ),* $(,)?
+    }
   ) => {
     impl CommandString {
       $(
@@ -102,6 +106,15 @@ macro_rules! define_p2p {
     }
 
     impl ShortId {
+      /// Every short ID the V2 tables hold, assigned or not.
+      pub(crate) const TABLE: &'static [u8] = &[
+        $( $( $p_sid, )? )*
+        $( $( $pe_sid, )? )*
+        $( $( $s_sid, )? )*
+        $( $( $se_sid, )? )*
+        $( $u_sid, )*
+      ];
+
       /// Resolves the short ID to its command name, if one is assigned.
       pub const fn to_command_str(self) -> Option<&'static str> {
         match self.0 {
