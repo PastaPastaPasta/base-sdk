@@ -26,6 +26,11 @@ test:
     cargo test --locked --workspace
     RUSTFLAGS="" cargo test --locked --workspace --features dash-pow/portable
 
+# Reduce the AFL++ queue of `target` into its committed corpus
+reduce crate target:
+    {{ python }} ../contrib/reduce_corpora.py --queue {{ ramdisk }}/out/{{ target }}/default/queue \
+      --binary {{ ramdisk }}/target/release/{{ target }} --corpus {{ crate }}/corpora/{{ target }}
+
 # Fuzz `target` of `dash-<crate>-fuzz` with AFL++ in a ramdisk
 [private]
 run crate target *args: mount-ramdisk

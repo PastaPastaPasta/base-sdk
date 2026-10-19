@@ -72,59 +72,72 @@ mod tests;
 mod util;
 
 #[doc(hidden)]
+pub mod __deps {
+  pub use digest;
+}
+
+#[doc(hidden)]
 pub mod __private {
-  pub mod blake {
-    pub use crate::blake::hash512;
-  }
-  pub mod bmw {
-    pub use crate::bmw::hash512;
-  }
-  pub mod cubehash {
-    pub use crate::cubehash::hash512;
-  }
-  pub mod echo {
-    pub use crate::echo::hash512;
-  }
-  pub mod groestl {
-    pub use crate::groestl::hash512;
-  }
-  pub mod jh {
-    pub use crate::jh::hash512;
-  }
-  pub mod keccak {
-    pub use crate::keccak::hash512;
-  }
-  pub mod luffa {
-    pub use crate::luffa::hash512;
-  }
-  pub mod shavite {
-    pub use crate::shavite::hash512;
-  }
-  pub mod simd {
-    pub use crate::simd::hash512;
-  }
-  pub mod skein {
-    pub use crate::skein::hash512;
+  pub use crate::blake::Blake512;
+  pub use crate::bmw::Bmw512;
+  pub use crate::cubehash::CubeHash512;
+  pub use crate::echo::Echo512;
+  pub use crate::groestl::Groestl512;
+  pub use crate::jh::Jh512;
+  pub use crate::keccak::Keccak512;
+  pub use crate::luffa::Luffa512;
+  pub use crate::shavite::Shavite512;
+  pub use crate::simd::Simd512;
+  pub use crate::skein::Skein512;
+}
+
+use crate::blake::Blake512;
+use crate::bmw::Bmw512;
+use crate::cubehash::CubeHash512;
+use crate::echo::Echo512;
+use crate::groestl::Groestl512;
+use crate::jh::Jh512;
+use crate::keccak::Keccak512;
+use crate::luffa::Luffa512;
+use crate::shavite::Shavite512;
+use crate::simd::Simd512;
+use crate::skein::Skein512;
+use crate::util::impl_digest;
+
+use digest::{Digest, FixedOutput, Output, Update};
+
+/// Streaming Dash proof-of-work hash.
+///
+/// Blake absorbs the message as it arrives. BMW through Echo each hash the
+/// previous digest at finalization. The 256-bit digest is little-endian,
+/// matching the consensus byte order of a block hash.
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+pub struct X11 {
+  blake: Blake512,
+}
+
+impl Update for X11 {
+  #[inline]
+  fn update(&mut self, data: &[u8]) {
+    Update::update(&mut self.blake, data);
   }
 }
 
-/// Computes the Dash proof-of-work hash.
-///
-/// The digest is little-endian, matching the consensus byte order of a
-/// block hash.
-pub fn hash(data: &[u8]) -> [u8; 32] {
-  let h = blake::hash512(data);
-  let h = bmw::hash512(&h);
-  let h = groestl::hash512(&h);
-  let h = skein::hash512(&h);
-  let h = jh::hash512(&h);
-  let h = keccak::hash512(&h);
-  let h = luffa::hash512(&h);
-  let h = cubehash::hash512(&h);
-  let h = shavite::hash512(&h);
-  let h = simd::hash512(&h);
-  let h = echo::hash512(&h);
-  let mut out = [0u8; 32];
-  out.copy_from_slice(&h[..32]);
-  out
+impl FixedOutput for X11 {
+  fn finalize_into(self, out: &mut Output<Self>) {
+    let h = self.blake.finalize_fixed();
+    let h = Bmw512::digest(h);
+    let h = Groestl512::digest(h);
+    let h = Skein512::digest(h);
+    let h = Jh512::digest(h);
+    let h = Keccak512::digest(h);
+    let h = Luffa512::digest(h);
+    let h = CubeHash512::digest(h);
+    let h = Shavite512::digest(h);
+    let h = Simd512::digest(h);
+    let h = Echo512::digest(h);
+    out.copy_from_slice(&h[..32]);
+  }
 }
+
+impl_digest!(X11, U32);

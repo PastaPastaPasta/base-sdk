@@ -6,11 +6,11 @@
 
 //! Differential fuzz target for Keccak (pre-SHA3 variant).
 
-use dash_pow::__private::keccak;
-use dash_pow_fuzz::{assert_same, sph};
+use dash_pow::__private::Keccak512;
+use dash_pow_fuzz::{assert_input, sph};
 
 fn main() {
   afl::fuzz!(|data: &[u8]| {
-    assert_same("keccak", keccak::hash512, sph::keccak, data);
+    assert_input::<Keccak512, _>("keccak", sph::keccak, data);
   });
 }

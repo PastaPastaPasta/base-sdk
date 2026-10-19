@@ -6,11 +6,11 @@
 
 //! Differential fuzz target for Blake.
 
-use dash_pow::__private::blake;
-use dash_pow_fuzz::{assert_same, sph};
+use dash_pow::__private::Blake512;
+use dash_pow_fuzz::{assert_input, sph};
 
 fn main() {
   afl::fuzz!(|data: &[u8]| {
-    assert_same("blake", blake::hash512, sph::blake, data);
+    assert_input::<Blake512, _>("blake", sph::blake, data);
   });
 }

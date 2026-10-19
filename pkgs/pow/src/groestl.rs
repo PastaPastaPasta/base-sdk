@@ -8,8 +8,10 @@
 
 use crate::aes::sub_shift as aes_sub_shift;
 use crate::consts::groestl::{BLOCK, IV_ROWS, RC_P, RC_Q, ROUNDS, SUBSH_P, SUBSH_Q};
-use crate::util::memops::zero_extend;
+use crate::util::buffer::{Buffer, Compress};
+use crate::util::{impl_digest, impl_hash};
 
+use digest::{FixedOutput, Output, Update};
 use wide::{i8x16, u8x16};
 
 /// One row of the byte-sliced state, a byte per column.
@@ -245,48 +247,82 @@ fn output_transform(chaining_value: &mut [Row; 8]) {
   *chaining_value = xor_rows(chaining_value, &state);
 }
 
-pub fn hash512(data: &[u8]) -> [u8; 64] {
-  let mut chaining_value = IV_ROWS.map(Row::new);
-
-  let mut block_count = 0u64;
-  let (blocks, tail) = data.as_chunks::<BLOCK>();
-  for block in blocks {
-    compress_block(&mut chaining_value, block);
-    block_count = block_count.wrapping_add(1);
-  }
-
-  let used = tail.len();
-  let mut pad: [u8; 2 * BLOCK] = zero_extend(tail);
-  pad[used] = 0x80;
-
-  let pad_len = if used < 120 {
-    block_count = block_count.wrapping_add(1);
-    BLOCK
-  } else {
-    block_count = block_count.wrapping_add(2);
-    2 * BLOCK
-  };
-
-  pad[pad_len - 8..pad_len].copy_from_slice(&block_count.to_be_bytes());
-
-  for block in pad[..pad_len].as_chunks::<BLOCK>().0 {
-    compress_block(&mut chaining_value, block);
-  }
-
-  output_transform(&mut chaining_value);
-
-  let mut out = [0u8; 64];
-  extract_right_half(&chaining_value, &mut out);
-  out
+/// Chaining value and block count.
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct Core {
+  h: [Row; 8],
+  blocks: u64,
 }
+
+impl Compress<BLOCK> for Core {
+  #[inline(always)]
+  fn compress(&mut self, block: &[u8; BLOCK]) {
+    compress_block(&mut self.h, block);
+    self.blocks = self.blocks.wrapping_add(1);
+  }
+}
+
+impl_hash!(Core, [h], [blocks]);
+
+/// Streaming Groestl-512.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Groestl512 {
+  core: Core,
+  buffer: Buffer<BLOCK>,
+}
+
+impl Default for Groestl512 {
+  #[inline]
+  fn default() -> Self {
+    Self {
+      core: Core {
+        h: IV_ROWS.map(Row::new),
+        blocks: 0,
+      },
+      buffer: Buffer::new(),
+    }
+  }
+}
+
+impl Update for Groestl512 {
+  #[inline]
+  fn update(&mut self, data: &[u8]) {
+    self.buffer.update(data, &mut self.core);
+  }
+}
+
+impl FixedOutput for Groestl512 {
+  fn finalize_into(mut self, out: &mut Output<Self>) {
+    let remaining = self.buffer.len();
+    // The last eight bytes hold the total block count, padding included, so
+    // a tail reaching byte 120 spills into a second block.
+    let block = self.buffer.pad(0x80);
+    if remaining < 120 {
+      block[120..].copy_from_slice(&self.core.blocks.wrapping_add(1).to_be_bytes());
+      self.core.compress(block);
+    } else {
+      self.core.compress(block);
+      let mut last = [0u8; BLOCK];
+      last[120..].copy_from_slice(&self.core.blocks.wrapping_add(1).to_be_bytes());
+      self.core.compress(&last);
+    }
+    output_transform(&mut self.core.h);
+
+    let mut digest = [0u8; 64];
+    extract_right_half(&self.core.h, &mut digest);
+    out.copy_from_slice(&digest);
+  }
+}
+
+impl_digest!(Groestl512, U64);
 
 #[cfg(test)]
 mod tests {
-  use super::hash512;
-  use crate::tests::run_nist_kat;
+  use super::Groestl512;
+  use crate::tests::run_nist_kat_chunked;
 
   #[test]
   fn nist_kat() {
-    run_nist_kat("groestl", hash512);
+    run_nist_kat_chunked::<Groestl512>("groestl");
   }
 }

@@ -6,11 +6,11 @@
 
 //! Differential fuzz target for CubeHash.
 
-use dash_pow::__private::cubehash;
-use dash_pow_fuzz::{assert_same, sph};
+use dash_pow::__private::CubeHash512;
+use dash_pow_fuzz::{assert_input, sph};
 
 fn main() {
   afl::fuzz!(|data: &[u8]| {
-    assert_same("cubehash", cubehash::hash512, sph::cubehash, data);
+    assert_input::<CubeHash512, _>("cubehash", sph::cubehash, data);
   });
 }

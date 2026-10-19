@@ -7,8 +7,11 @@
 //! JH-512 hash function.
 
 use crate::consts::jh::{BLOCK, IV, ROUND_CONSTS};
-use crate::util::memops::{load_u64_le, store_u64_le, zero_extend};
+use crate::util::buffer::{Buffer, Compress};
+use crate::util::memops::{load_u64_le, store_u64_le};
+use crate::util::{impl_digest, impl_hash};
 
+use digest::{FixedOutput, Output, Update};
 use wide::u32x4;
 
 /// One 128-bit JH row, stored as four 32-bit lanes.
@@ -228,40 +231,84 @@ fn load_block_words(buf: &[u8]) -> [u64; 8] {
   core::array::from_fn(|i| load_u64_le(buf, i))
 }
 
-pub fn hash512(data: &[u8]) -> [u8; 64] {
-  let mut state = IV.map(row_from_u64_pair);
-  let (blocks, tail) = data.as_chunks::<BLOCK>();
-  for block in blocks {
-    compress(&mut state, &load_block_words(block));
-  }
-
-  // A partial tail takes the padding bit and leaves the length to a block of
-  // its own. Without a tail, padding and length share one block.
-  let mut buf: [u8; BLOCK] = zero_extend(tail);
-  buf[tail.len()] = 0x80;
-  if !tail.is_empty() {
-    compress(&mut state, &load_block_words(&buf));
-    buf = [0u8; BLOCK];
-  }
-  buf[56..].copy_from_slice(&((data.len() as u64) << 3).to_be_bytes());
-  compress(&mut state, &load_block_words(&buf));
-
-  let mut out = [0u8; 64];
-  let mut row = 0;
-  while row < 4 {
-    store_row(&mut out, row, state[row + 4]);
-    row += 1;
-  }
-  out
+/// State and block count.
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct Core {
+  state: State,
+  blocks: u64,
 }
+
+impl Compress<BLOCK> for Core {
+  #[inline(always)]
+  fn compress(&mut self, block: &[u8; BLOCK]) {
+    compress(&mut self.state, &load_block_words(block));
+    self.blocks = self.blocks.wrapping_add(1);
+  }
+}
+
+impl_hash!(Core, [state], [blocks]);
+
+/// Streaming JH-512.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Jh512 {
+  core: Core,
+  buffer: Buffer<BLOCK>,
+}
+
+impl Default for Jh512 {
+  #[inline]
+  fn default() -> Self {
+    Self {
+      core: Core {
+        state: IV.map(row_from_u64_pair),
+        blocks: 0,
+      },
+      buffer: Buffer::new(),
+    }
+  }
+}
+
+impl Update for Jh512 {
+  #[inline]
+  fn update(&mut self, data: &[u8]) {
+    self.buffer.update(data, &mut self.core);
+  }
+}
+
+impl FixedOutput for Jh512 {
+  fn finalize_into(mut self, out: &mut Output<Self>) {
+    let remaining = self.buffer.len();
+    let bit_len = (self.core.blocks << 9).wrapping_add((remaining as u64) << 3);
+    // A partial tail takes the padding bit and leaves the length to a block of
+    // its own. Without a tail, padding and length share one block.
+    let block = self.buffer.pad(0x80);
+    if remaining == 0 {
+      block[56..].copy_from_slice(&bit_len.to_be_bytes());
+      self.core.compress(block);
+    } else {
+      self.core.compress(block);
+      let mut last = [0u8; BLOCK];
+      last[56..].copy_from_slice(&bit_len.to_be_bytes());
+      self.core.compress(&last);
+    }
+
+    let mut row = 0;
+    while row < 4 {
+      store_row(out, row, self.core.state[row + 4]);
+      row += 1;
+    }
+  }
+}
+
+impl_digest!(Jh512, U64);
 
 #[cfg(test)]
 mod tests {
-  use super::hash512;
-  use crate::tests::run_nist_kat;
+  use super::Jh512;
+  use crate::tests::run_nist_kat_chunked;
 
   #[test]
   fn nist_kat() {
-    run_nist_kat("jh", hash512);
+    run_nist_kat_chunked::<Jh512>("jh");
   }
 }

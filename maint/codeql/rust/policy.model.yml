@@ -4,9 +4,10 @@ extensions:
   #
   # Available policies:
   #   `enforced`    subject to the codec and declaration ordering rules
+  #   `no-derive`   no derivations expected
   #   `no-serde`    carries no `serde` feature
   #   `opaque`      single-field wrappers hide their contents
-  #   `private`     holds no public API, no derivations expected
+  #   `private`     holds no public API
   #   `unencodable` able to derive `Unencodable`, codec coverage expected
   - addsTo:
       pack: base-sdk/codeql-rust
@@ -14,12 +15,13 @@ extensions:
     data:
       # | name               | policies                 |
       # | ------------------ | ------------------------ |
-      - ["dash-dev",           "private"]
+      - ["dash-dev",           "private, no-derive"]
       - ["dash-num",           "enforced"]
       - ["dash-p2p-core",      "enforced, unencodable"]
       - ["dash-params",        "no-serde"]
       - ["dash-pkc",           "enforced, unencodable, opaque"]
       - ["dash-pow",           "no-serde"]
+      - ["dash-pow-fuzz",      "no-serde"]
       - ["dash-primitives",    "enforced, unencodable"]
       - ["dash-script",        "enforced, unencodable"]
       - ["dash-types-marker",  ""]
@@ -47,6 +49,8 @@ extensions:
       - ["dash-pkc",         "__deps",    "secp256k1",         ""]
       - ["dash-pkc",         "__deps",    "subtle",            ""]
       - ["dash-pkc",         "__deps",    "zeroize",           ""]
+      # Emits types relying on traits defined by a dependency, part of public API
+      - ["dash-pow",         "__deps",    "digest",            ""]
       # `dash-pkc` names its hashes after the curve, the alias is the public API
       - ["dash-primitives",  "",          "dash_pkc",          "__EddsaPkHash"]
       # Workaround for the orphan rule, not part of public API

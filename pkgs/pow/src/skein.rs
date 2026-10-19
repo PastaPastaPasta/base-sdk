@@ -7,8 +7,12 @@
 //! Skein-512 hash function.
 
 use crate::consts::skein::{BLOCK, IV, NW};
-use crate::util::memops::{digest_from_u64_le, load_u64_le, zero_extend};
+use crate::util::buffer::{Buffer, Compress};
+use crate::util::impl_digest;
+use crate::util::memops::{digest_from_u64_le, load_u64_le};
 use crate::util::threefish::encrypt;
+
+use digest::{FixedOutput, Output, Update};
 
 /// UBI type code for message blocks.
 const TYPE_MSG: u64 = 48;
@@ -77,38 +81,6 @@ fn ubi(state: &mut Chaining, plaintext: &BlockWords, tweak: UbiTweak) {
   }
 }
 
-/// Hashes the message stream as one UBI message stream.
-fn hash_message_blocks(state: &mut Chaining, data: &[u8]) {
-  let mut blocks = 0u64;
-
-  // The last block carries the final flag even when it is full, so it is
-  // split off before the loop. An empty message still has one final block.
-  let (body, tail) = data.split_at(data.len().saturating_sub(1) / BLOCK * BLOCK);
-
-  // UBI counts bytes, not blocks. The tweak position is the total number
-  // of message bytes seen after each block.
-  for block in body.as_chunks::<BLOCK>().0 {
-    let tweak = UbiTweak {
-      position: (blocks + 1) << 6,
-      kind: TYPE_MSG,
-      first: blocks == 0,
-      final_block: false,
-    };
-    ubi(state, &load_block(block), tweak);
-    blocks += 1;
-  }
-
-  let remaining = tail.len();
-  let last: [u8; BLOCK] = zero_extend(tail);
-  let tweak = UbiTweak {
-    position: (blocks << 6).wrapping_add(remaining as u64),
-    kind: TYPE_MSG,
-    first: blocks == 0,
-    final_block: true,
-  };
-  ubi(state, &load_block(&last), tweak);
-}
-
 /// Runs the UBI output step and leaves the digest in `state`.
 ///
 /// Skein treats output generation as a separate UBI stream with its own
@@ -125,20 +97,82 @@ fn output_block(state: &mut Chaining) {
   ubi(state, &zero, tweak);
 }
 
-pub fn hash512(data: &[u8]) -> [u8; 64] {
-  let mut state = IV;
-  hash_message_blocks(&mut state, data);
-  output_block(&mut state);
-  digest_from_u64_le(&state)
+/// Chaining value and byte count.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct Core {
+  h: Chaining,
+  /// Bytes compressed so far.
+  position: u64,
 }
+
+impl Core {
+  /// Applies one message block, counting its `bytes`.
+  #[inline(always)]
+  fn ubi(&mut self, block: &[u8; BLOCK], bytes: u64, final_block: bool) {
+    let tweak = UbiTweak {
+      position: self.position.wrapping_add(bytes),
+      kind: TYPE_MSG,
+      first: self.position == 0,
+      final_block,
+    };
+    self.position = tweak.position;
+    ubi(&mut self.h, &load_block(block), tweak);
+  }
+}
+
+impl Compress<BLOCK> for Core {
+  #[inline(always)]
+  fn compress(&mut self, block: &[u8; BLOCK]) {
+    self.ubi(block, BLOCK as u64, false);
+  }
+}
+
+/// Streaming Skein-512.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Skein512 {
+  core: Core,
+  /// The last block is flagged rather than followed by padding, so a full
+  /// block waits in the buffer until a byte follows it.
+  buffer: Buffer<BLOCK>,
+}
+
+impl Default for Skein512 {
+  #[inline]
+  fn default() -> Self {
+    Self {
+      core: Core { h: IV, position: 0 },
+      buffer: Buffer::new(),
+    }
+  }
+}
+
+impl Update for Skein512 {
+  #[inline]
+  fn update(&mut self, data: &[u8]) {
+    self.buffer.update_lagging(data, &mut self.core);
+  }
+}
+
+impl FixedOutput for Skein512 {
+  fn finalize_into(mut self, out: &mut Output<Self>) {
+    // UBI counts bytes, so the tweak position of the last block is the
+    // message length whatever its zero padding.
+    let remaining = self.buffer.len() as u64;
+    self.core.ubi(self.buffer.zero_padded(), remaining, true);
+    output_block(&mut self.core.h);
+    out.copy_from_slice(&digest_from_u64_le(&self.core.h));
+  }
+}
+
+impl_digest!(Skein512, U64);
 
 #[cfg(test)]
 mod tests {
-  use super::hash512;
-  use crate::tests::run_nist_kat;
+  use super::Skein512;
+  use crate::tests::run_nist_kat_chunked;
 
   #[test]
   fn nist_kat() {
-    run_nist_kat("skein", hash512);
+    run_nist_kat_chunked::<Skein512>("skein");
   }
 }

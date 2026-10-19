@@ -7,7 +7,11 @@
 //! Keccak-512 hash function.
 
 use crate::consts::keccak::{RATE, RC, ROTC};
-use crate::util::memops::{digest_from_u64_le, zero_extend};
+use crate::util::buffer::{Buffer, Compress};
+use crate::util::impl_digest;
+use crate::util::memops::digest_from_u64_le;
+
+use digest::{FixedOutput, Output, Update};
 
 /// Applies one round of the permutation, reading from `src` and writing to
 /// `dst`.
@@ -119,29 +123,64 @@ fn absorb(state: &mut [u64; 25], block: &[u8; RATE]) {
   }
 }
 
-pub fn hash512(data: &[u8]) -> [u8; 64] {
-  let mut state = [0u64; 25];
-  let (blocks, tail) = data.as_chunks::<RATE>();
-  for block in blocks {
-    absorb(&mut state, block);
-    keccak_f1600(&mut state);
-  }
-
-  let mut last: [u8; RATE] = zero_extend(tail);
-  last[tail.len()] = 0x01;
-  last[RATE - 1] |= 0x80;
-  absorb(&mut state, &last);
-  keccak_f1600(&mut state);
-  digest_from_u64_le(&state)
+/// The sponge state.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct Core {
+  state: [u64; 25],
 }
+
+impl Compress<RATE> for Core {
+  #[inline(always)]
+  fn compress(&mut self, block: &[u8; RATE]) {
+    absorb(&mut self.state, block);
+    keccak_f1600(&mut self.state);
+  }
+}
+
+/// Streaming Keccak-512.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Keccak512 {
+  core: Core,
+  buffer: Buffer<RATE>,
+}
+
+impl Default for Keccak512 {
+  #[inline]
+  fn default() -> Self {
+    Self {
+      core: Core { state: [0; 25] },
+      buffer: Buffer::new(),
+    }
+  }
+}
+
+impl Update for Keccak512 {
+  #[inline]
+  fn update(&mut self, data: &[u8]) {
+    self.buffer.update(data, &mut self.core);
+  }
+}
+
+impl FixedOutput for Keccak512 {
+  fn finalize_into(mut self, out: &mut Output<Self>) {
+    // The 0x01 domain byte follows the message and 0x80 ends the rate block.
+    // A tail one byte short of the rate puts both on the same byte.
+    let block = self.buffer.pad(0x01);
+    block[RATE - 1] |= 0x80;
+    self.core.compress(block);
+    out.copy_from_slice(&digest_from_u64_le(&self.core.state));
+  }
+}
+
+impl_digest!(Keccak512, U64);
 
 #[cfg(test)]
 mod tests {
-  use super::hash512;
-  use crate::tests::run_nist_kat;
+  use super::Keccak512;
+  use crate::tests::run_nist_kat_chunked;
 
   #[test]
   fn nist_kat() {
-    run_nist_kat("keccak", hash512);
+    run_nist_kat_chunked::<Keccak512>("keccak");
   }
 }

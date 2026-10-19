@@ -8,8 +8,11 @@
 
 use crate::consts::cubehash::{BLOCK, IV};
 use crate::util::arx::rotl_u32x4;
-use crate::util::memops::{digest_from_u32_le, load_u32_le, zero_extend};
+use crate::util::buffer::{Buffer, Compress};
+use crate::util::memops::{digest_from_u32_le, load_u32_le};
+use crate::util::{impl_digest, impl_hash};
 
+use digest::{FixedOutput, Output, Update};
 use wide::u32x4;
 
 /// Four neighbouring state words packed into one group.
@@ -129,52 +132,78 @@ fn absorb_block(state: &mut [U32x4; 8], block: &[u8]) {
   absorb_words(state, lo, hi);
 }
 
-pub fn hash512(data: &[u8]) -> [u8; 64] {
-  let mut words = IV;
-  let mut state = [
-    load_vec(&words, 0),
-    load_vec(&words, 1),
-    load_vec(&words, 2),
-    load_vec(&words, 3),
-    load_vec(&words, 4),
-    load_vec(&words, 5),
-    load_vec(&words, 6),
-    load_vec(&words, 7),
-  ];
-
-  let (blocks, tail) = data.as_chunks::<BLOCK>();
-  for block in blocks {
-    absorb_block(&mut state, block);
-  }
-
-  // Pad the final block: append `0x80`, fill with zeros.
-  let mut last: [u8; BLOCK] = zero_extend(tail);
-  last[tail.len()] = 0x80;
-  absorb_block(&mut state, &last);
-
-  // Finalization: xor 1 into the last state word, then run ten more
-  // 16-round sets.
-  state[7] ^= U32x4::new([0, 0, 0, 1]);
-  let mut i = 0;
-  while i < 10 {
-    sixteen_rounds(&mut state);
-    i += 1;
-  }
-
-  store_vec(&mut words, 0, state[0]);
-  store_vec(&mut words, 1, state[1]);
-  store_vec(&mut words, 2, state[2]);
-  store_vec(&mut words, 3, state[3]);
-  digest_from_u32_le(&words)
+/// The 32-word state.
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct Core {
+  state: [U32x4; 8],
 }
+
+impl Compress<BLOCK> for Core {
+  #[inline(always)]
+  fn compress(&mut self, block: &[u8; BLOCK]) {
+    absorb_block(&mut self.state, block);
+  }
+}
+
+impl_hash!(Core, [state], []);
+
+/// Streaming CubeHash-16/32-512.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct CubeHash512 {
+  core: Core,
+  buffer: Buffer<BLOCK>,
+}
+
+impl Default for CubeHash512 {
+  #[inline]
+  fn default() -> Self {
+    Self {
+      core: Core {
+        state: core::array::from_fn(|index| load_vec(&IV, index)),
+      },
+      buffer: Buffer::new(),
+    }
+  }
+}
+
+impl Update for CubeHash512 {
+  #[inline]
+  fn update(&mut self, data: &[u8]) {
+    self.buffer.update(data, &mut self.core);
+  }
+}
+
+impl FixedOutput for CubeHash512 {
+  fn finalize_into(mut self, out: &mut Output<Self>) {
+    self.core.compress(self.buffer.pad(0x80));
+
+    // The finalization flag goes into word 31, the last lane of `state[7]`.
+    let state = &mut self.core.state;
+    state[7] ^= U32x4::new([0, 0, 0, 1]);
+    let mut i = 0;
+    while i < 10 {
+      sixteen_rounds(state);
+      i += 1;
+    }
+
+    let mut words = [0u32; 32];
+    store_vec(&mut words, 0, state[0]);
+    store_vec(&mut words, 1, state[1]);
+    store_vec(&mut words, 2, state[2]);
+    store_vec(&mut words, 3, state[3]);
+    out.copy_from_slice(&digest_from_u32_le(&words));
+  }
+}
+
+impl_digest!(CubeHash512, U64);
 
 #[cfg(test)]
 mod tests {
-  use super::hash512;
-  use crate::tests::run_nist_kat;
+  use super::CubeHash512;
+  use crate::tests::run_nist_kat_chunked;
 
   #[test]
   fn nist_kat() {
-    run_nist_kat("cubehash", hash512);
+    run_nist_kat_chunked::<CubeHash512>("cubehash");
   }
 }

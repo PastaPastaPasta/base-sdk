@@ -27,6 +27,8 @@ private predicate encloses(string crate, File f) {
     crate = packageName(path.regexpCapture(".*/pkgs/([^/]+)/.*", 1))
     or
     crate = packageName(path.regexpCapture(".*/pkgs/([^/]+/[^/]+)/.*", 1))
+    or
+    crate = packageName(path.regexpCapture(".*/fuzz/([^/]+)/.*", 1)) + "-fuzz"
   )
 }
 
@@ -61,6 +63,9 @@ predicate isOpaqueCrate(File f) { hasPolicy(f, "opaque") }
 
 /** Holds if file `f` is in a crate with no public API. */
 predicate isPrivateCrate(File f) { hasPolicy(f, "private") }
+
+/** Holds if file `f` is in a crate with no derivations expected. */
+predicate isNoDeriveCrate(File f) { hasPolicy(f, "no-derive") }
 
 /** Holds if file `f` is in a crate that can derive `Unencodable`. */
 predicate isUnencodableCrate(File f) { hasPolicy(f, "unencodable") }

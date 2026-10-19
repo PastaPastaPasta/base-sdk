@@ -7,10 +7,14 @@
 //! Shared utilities.
 
 pub(crate) mod arx;
+pub(crate) mod buffer;
+mod macros;
 pub(crate) mod math;
 #[allow(dead_code, reason = "contains unopinionated general helpers that may never see use")]
 pub(crate) mod memops;
 pub(crate) mod threefish;
+
+pub(crate) use macros::{impl_digest, impl_hash};
 
 #[cfg(test)]
 #[inline]
