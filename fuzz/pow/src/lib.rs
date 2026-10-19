@@ -136,7 +136,7 @@ mod tests {
   use super::*;
 
   use dash_pow::__private::{
-    cubehash, echo, shavite, simd, Blake512, Bmw512, Groestl512, Jh512, Keccak512, Luffa512, Skein512,
+    echo, shavite, simd, Blake512, Bmw512, CubeHash512, Groestl512, Jh512, Keccak512, Luffa512, Skein512,
   };
   use rstest::rstest;
 
@@ -185,7 +185,7 @@ mod tests {
       let (ours, theirs): (Digest, Digest) = match self {
         Self::Blake => (digest512::<Blake512>, sph::blake),
         Self::Bmw => (digest512::<Bmw512>, sph::bmw),
-        Self::CubeHash => (cubehash::hash512, sph::cubehash),
+        Self::CubeHash => (digest512::<CubeHash512>, sph::cubehash),
         Self::Echo => (echo::hash512, sph::echo),
         Self::Groestl => (digest512::<Groestl512>, sph::groestl),
         Self::Jh => (digest512::<Jh512>, sph::jh),
