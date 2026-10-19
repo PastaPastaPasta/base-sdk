@@ -67,6 +67,7 @@ BOOST_AUTO_TEST_CASE(block_check_shapes)
              {{{{0}, 0, MaxBlockSigOps() + 1, 0}}, 0},
              {{{{0}, 0, 20000, 0}, {{1}, 0, 20001, 0}}, 0},
              {{{{0}, 0, MaxBlockSigOps() + 1, 0}, {{1, 1}, 0, 0, 0}}, 0},
+             {{{{0, 1}, 0, 0, 0}}, 0},
          }) {
         std::vector<BlockTxShape> txs{s.txs};
         const auto size = [&] { return ::GetSerializeSize(BuildBlock(txs), PROTOCOL_VERSION); };
@@ -128,5 +129,8 @@ BOOST_AUTO_TEST_CASE(block_check_shapes)
     { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 20000, "pad": 0 }, { "inputs": [1], "lock_time": 0, "sigops": 20001, "pad": 0 }], "merkle_root": "7e66e22bf7ebe801285245d69c419e142d5b36ad51c132e0a1685dd7d1089863", "size": 40210, "reason": "bad-blk-sigops" },
     // The transaction checks run before the signature operation count.
     { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 40001, "pad": 0 }, { "inputs": [1, 1], "lock_time": 0, "sigops": 0, "pad": 0 }], "merkle_root": "55a30aa7bfdf66caa7c06f9e8d5a66d15a84442558ec9aa41b0d29d25f2eaac5", "size": 40249, "reason": "bad-txns-inputs-duplicate" },
+    // A first transaction with two inputs and a null first prevout is not a
+    // coinbase.
+    { "txs": [{ "inputs": [0, 1], "lock_time": 0, "sigops": 0, "pad": 0 }], "merkle_root": "f298c50ccc8d18ffbe3d25c8aa68e1aff2efb405937d64ae8779b283d96166e7", "size": 184, "reason": "bad-cb-missing" },
   ],
 }
