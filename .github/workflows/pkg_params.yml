@@ -20,3 +20,8 @@ jobs:
       package: dash-params
       package_dir: params
     secrets: inherit
+
+  bazel:
+    uses: ./.github/workflows/build_bazel.yml
+    with:
+      package_dir: params
