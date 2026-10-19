@@ -30,7 +30,7 @@ use dash_types::type_id::Unencodable;
 pub use addr::{Addr, AddrV2Entry, AddrV2Msg, TimestampedAddr};
 pub use blocks::SendCmpct;
 pub use coinjoin::SendDsq;
-pub use gov::GovSync;
+pub use gov::{GovSync, GovSyncStatusCount};
 pub use headers::{GetHeaders, Headers};
 pub use headers2::{CompressionState, GetHeaders2, Headers2};
 pub use inv::{GetData, Inv, InvType, Inventory, NotFound};
@@ -68,6 +68,8 @@ define_p2p! {
     Headers2(Headers2) => HEADERS2 "headers2" @ 165,
     /// Governance sync request.
     GovSync(GovSync) => GOVSYNC "govsync" @ 140,
+    /// Sync status count.
+    Ssc(GovSyncStatusCount) => SSC "ssc" @ 139,
     /// Governance object.
     GovObj(GovObject) => GOVOBJ "govobj" @ 141,
     /// Governance vote.
@@ -148,8 +150,6 @@ define_p2p! {
     Dstx => DSTX "dstx" @ 137,
     /// CoinJoin: queue entry.
     Dsq => DSQ "dsq" @ 138,
-    /// Sync status count.
-    Ssc => SSC "ssc" @ 139,
     /// LLMQ: final commitment.
     QfCommit => QFCOMMIT "qfcommit" @ 146,
     /// LLMQ: contribution.

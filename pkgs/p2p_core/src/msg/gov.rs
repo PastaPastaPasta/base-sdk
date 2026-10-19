@@ -4,7 +4,7 @@
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
 
-//! Governance sync request message.
+//! Governance sync messages.
 
 use crate::codec::codec_p2p;
 use crate::prelude::*;
@@ -27,3 +27,35 @@ pub struct GovSync {
 }
 
 codec_p2p!(GovSync { hash, bloom_filter });
+
+/// Tells how many items of a kind the sender is about to announce.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
+#[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
+pub struct GovSyncStatusCount {
+  /// The kind of item announced.
+  pub item_id: i32,
+  /// The number of items announced.
+  pub count: i32,
+}
+
+codec_p2p!(GovSyncStatusCount { item_id, count });
+
+#[cfg(all(test, feature = "serde"))]
+mod tests {
+  use super::*;
+  use crate::{CommandString, P2pMsg};
+
+  use dash_dev::{assert_serde_rt, check_wire, Corpus};
+  use rstest::rstest;
+
+  #[rstest]
+  fn corpus_ssc() {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "gov");
+    let items = corpus.entries::<GovSyncStatusCount>("ssc", |raw, details, label| {
+      check_wire(raw, details, label);
+      let decoded = P2pMsg::decode_payload(&CommandString::SSC, raw);
+      assert_eq!(decoded, Ok(P2pMsg::Ssc(*details)), "{label}: dispatch");
+    });
+    assert_serde_rt("ssc", &items);
+  }
+}
