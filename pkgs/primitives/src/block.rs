@@ -14,7 +14,7 @@ use bitcoin_hashes::sha256d;
 use dash_num::{make_hash, Arith256, CompactTarget, Hash256};
 use dash_pow::__deps::digest::Digest;
 use dash_pow::X11;
-use dash_types::codec::BaseCodec;
+use dash_types::codec::{self, BaseCodec};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{ArrayBuf, Checkable, Hashable, Numeric};
 
@@ -148,8 +148,9 @@ impl Checkable for Block {
       return Some(BlockInvalid::DuplicateTransactions);
     }
 
-    if self.transactions.is_empty() {
-      return Some(BlockInvalid::BadBlockLength { size: 0 });
+    let size = codec::encoded_size(self);
+    if self.transactions.is_empty() || size > MAX_DIP0001_BLOCK_SIZE {
+      return Some(BlockInvalid::BadBlockLength { size });
     }
 
     if !self.transactions[0].is_coinbase() {

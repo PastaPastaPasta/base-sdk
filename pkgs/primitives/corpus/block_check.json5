@@ -75,6 +75,11 @@ BOOST_AUTO_TEST_CASE(block_check_shapes)
              {{{{0}, 0, 0, 0}, {{1}, 0, 0, 0}, {{2}, 0, 0, 0}, {{3}, 0, 0, 0}, {{4}, 0, 0, 0}, {{5}, 0, 0, 0}, {{4}, 0, 0, 0}, {{5}, 0, 0, 0}}, 0},
              {{{{1}, 0, 0, 0}, {{1}, 0, 0, 0}}, 0},
              {{{{0}, 0, 0, 0}, {{1, 1}, 0, 0, 0}, {{1, 1}, 0, 0, 0}}, 0},
+             {{{{0}, 0, 0, 0}, {{1}, 0, 0, 900000}, {{2}, 0, 0, 900000}}, MaxBlockSize()},
+             {{{{0}, 0, 0, 0}, {{1}, 0, 0, 900000}, {{2}, 0, 0, 900000}}, MaxBlockSize() + 1},
+             {{{{1}, 0, 0, 0}, {{2}, 0, 0, 900000}, {{3}, 0, 0, 900000}}, MaxBlockSize() + 1},
+             {{{{0}, 0, 0, 0}, {{1}, 0, 0, 900000}, {{1, 1}, 0, 0, 900000}}, MaxBlockSize() + 1},
+             {{{{0}, 0, 0, 0}, {{1}, 0, 0, 600000}, {{2}, 0, 0, 600000}, {{2}, 0, 0, 600000}}, MaxBlockSize() + 1},
          }) {
         std::vector<BlockTxShape> txs{s.txs};
         const auto size = [&] { return ::GetSerializeSize(BuildBlock(txs), PROTOCOL_VERSION); };
@@ -156,5 +161,15 @@ BOOST_AUTO_TEST_CASE(block_check_shapes)
     // Copies that are not siblings leave the duplicate inputs to the
     // transaction check.
     { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [1, 1], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [1, 1], "lock_time": 0, "sigops": 0, "pad": 0 }], "merkle_root": "34c4aabd2abeca7c487bb5d32499bfe058aa39cb34f17c83fa5625c052521429", "size": 349, "reason": "bad-txns-inputs-duplicate" },
+    // A block of exactly 2,000,000 bytes, the size limit, passes.
+    { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 0, "pad": 199721 }, { "inputs": [1], "lock_time": 0, "sigops": 0, "pad": 900000 }, { "inputs": [2], "lock_time": 0, "sigops": 0, "pad": 900000 }], "merkle_root": "4a1b77076c19ac432085ef65b7fbe28df049da0262654c5e01bb168ffd8d380d", "size": 2000000, "reason": "" },
+    // A block one byte above the size limit.
+    { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 0, "pad": 199722 }, { "inputs": [1], "lock_time": 0, "sigops": 0, "pad": 900000 }, { "inputs": [2], "lock_time": 0, "sigops": 0, "pad": 900000 }], "merkle_root": "3797d82d646442259bb72c775c22f28c83c22a168c53347b995808d6d772164e", "size": 2000001, "reason": "bad-blk-length" },
+    // The size is checked before the coinbase checks.
+    { "txs": [{ "inputs": [1], "lock_time": 0, "sigops": 0, "pad": 199722 }, { "inputs": [2], "lock_time": 0, "sigops": 0, "pad": 900000 }, { "inputs": [3], "lock_time": 0, "sigops": 0, "pad": 900000 }], "merkle_root": "127ec3277ad19d51f2d2df80b7a7ab6d21d58b4852bbb6537dbb0f2778f72117", "size": 2000001, "reason": "bad-blk-length" },
+    // The size is checked before the transaction checks.
+    { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 0, "pad": 199681 }, { "inputs": [1], "lock_time": 0, "sigops": 0, "pad": 900000 }, { "inputs": [1, 1], "lock_time": 0, "sigops": 0, "pad": 900000 }], "merkle_root": "ba07b035801669886f79cfa68471382d364132c0941e588fee82b2cfd18a186f", "size": 2000001, "reason": "bad-blk-length" },
+    // The mutation check runs before the size check.
+    { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 0, "pad": 199656 }, { "inputs": [1], "lock_time": 0, "sigops": 0, "pad": 600000 }, { "inputs": [2], "lock_time": 0, "sigops": 0, "pad": 600000 }, { "inputs": [2], "lock_time": 0, "sigops": 0, "pad": 600000 }], "merkle_root": "61a04aac6a1cf6a65764a53e6ee30b222d484e6824a99235ee73f87118d4dce1", "size": 2000001, "reason": "bad-txns-duplicate" },
   ],
 }
