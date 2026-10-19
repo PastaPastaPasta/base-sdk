@@ -43,6 +43,8 @@ reviews:
     - "!**/*.json"
     - "!**/*.json5"
     - "!**/*.lock"
+    - "!**/fuzz/*/corpora/**"
+    - "!**/fuzz/dicts/**"
   poem: false
   pre_merge_checks:
     docstrings:
