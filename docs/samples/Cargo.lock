@@ -237,6 +237,7 @@ dependencies = [
 name = "dash-pow"
 version = "0.0.0"
 dependencies = [
+ "digest",
  "wide",
 ]
 

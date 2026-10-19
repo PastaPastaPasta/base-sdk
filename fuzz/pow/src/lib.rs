@@ -6,8 +6,16 @@
 
 //! Differential checks of `dash-pow` against the sphlib reference.
 
+use digest::consts::U64;
+use digest::OutputSizeUser;
+
 /// A 512-bit digest function.
 pub type Digest = fn(&[u8]) -> [u8; 64];
+
+/// Hashes `data` with the `dash-pow` stage `D` in one update.
+pub fn digest512<D: digest::Digest + OutputSizeUser<OutputSize = U64>>(data: &[u8]) -> [u8; 64] {
+  D::digest(data).into()
+}
 
 macro_rules! reference {
   ($($stage:ident => $symbol:ident),* $(,)?) => {
@@ -127,7 +135,7 @@ pub fn assert_same_x11(data: &[u8]) {
 mod tests {
   use super::*;
 
-  use dash_pow::__private::{blake, bmw, cubehash, echo, groestl, jh, keccak, luffa, shavite, simd, skein};
+  use dash_pow::__private::{bmw, cubehash, echo, groestl, jh, keccak, luffa, shavite, simd, skein, Blake512};
   use rstest::rstest;
 
   use std::fs;
@@ -173,7 +181,7 @@ mod tests {
     /// Asserts the stage agrees with sphlib on `data` placed at `offset`.
     fn assert_same_at(self, data: &[u8], offset: usize) {
       let (ours, theirs): (Digest, Digest) = match self {
-        Self::Blake => (blake::hash512, sph::blake),
+        Self::Blake => (digest512::<Blake512>, sph::blake),
         Self::Bmw => (bmw::hash512, sph::bmw),
         Self::CubeHash => (cubehash::hash512, sph::cubehash),
         Self::Echo => (echo::hash512, sph::echo),

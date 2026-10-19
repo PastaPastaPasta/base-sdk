@@ -529,6 +529,7 @@ name = "dash-pow"
 version = "0.0.0"
 dependencies = [
  "dash-dev",
+ "digest",
  "divan",
  "hex-conservative 1.3.0",
  "rstest",

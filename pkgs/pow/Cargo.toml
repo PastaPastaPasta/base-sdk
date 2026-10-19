@@ -19,6 +19,7 @@ full = ["std"]
 portable = []
 
 [dependencies]
+digest = { workspace = true }
 wide = { workspace = true }
 
 [dev-dependencies]

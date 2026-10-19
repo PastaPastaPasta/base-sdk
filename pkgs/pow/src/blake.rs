@@ -7,7 +7,11 @@
 //! Blake-512 hash function.
 
 use crate::consts::blake::{BLOCK, CB, IV, SIGMA};
-use crate::util::memops::{digest_from_u64_le, load_u64_le, store_u64_le, zero_extend};
+use crate::util::buffer::{Buffer, Compress};
+use crate::util::impl_digest;
+use crate::util::memops::load_u64_le;
+
+use digest::{FixedOutput, Output, Update};
 
 /// Compresses one 128-byte block into the chaining state.
 ///
@@ -72,71 +76,94 @@ fn load_message(block: &[u8]) -> [u64; 16] {
   core::array::from_fn(|i| load_u64_le(block, i).swap_bytes())
 }
 
-/// Runs the full hash and returns the internal 8-word state.
-#[inline(always)]
-fn hash_to_state(data: &[u8]) -> [u64; 8] {
-  let mut h = IV;
-  let mut t0: u64 = 0;
-  let mut t1: u64 = 0;
-
-  let (blocks, tail) = data.as_chunks::<BLOCK>();
-  for block in blocks {
-    advance_counter(&mut t0, &mut t1);
-    compress(&mut h, &load_message(block), t0, t1);
-  }
-
-  let remaining = tail.len();
-  let bit_len = (remaining as u64) * 8;
-  let tl = t0.wrapping_add(bit_len);
-  let th = if bit_len > 0 && tl < t0 { t1.wrapping_add(1) } else { t1 };
-
-  if remaining == 0 {
-    t0 = 0xffff_ffff_ffff_fc00;
-    t1 = 0xffff_ffff_ffff_ffff;
-  } else if t0 == 0 {
-    t0 = 0xffff_ffff_ffff_fc00u64.wrapping_add(bit_len);
-    t1 = t1.wrapping_sub(1);
-  } else {
-    t0 = t0.wrapping_sub(1024 - bit_len);
-  }
-
-  let mut pad: [u8; 2 * BLOCK] = zero_extend(tail);
-  pad[remaining] = 0x80;
-
-  if remaining <= 111 {
-    pad[111] |= 0x01;
-    store_u64_le(&mut pad, 14, th.swap_bytes());
-    store_u64_le(&mut pad, 15, tl.swap_bytes());
-    advance_counter(&mut t0, &mut t1);
-    compress(&mut h, &load_message(&pad[..BLOCK]), t0, t1);
-  } else {
-    advance_counter(&mut t0, &mut t1);
-    compress(&mut h, &load_message(&pad[..BLOCK]), t0, t1);
-
-    t0 = 0xffff_ffff_ffff_fc00;
-    t1 = 0xffff_ffff_ffff_ffff;
-    let mut fin = [0u8; BLOCK];
-    fin[111] = 0x01;
-    store_u64_le(&mut fin, 14, th.swap_bytes());
-    store_u64_le(&mut fin, 15, tl.swap_bytes());
-    advance_counter(&mut t0, &mut t1);
-    compress(&mut h, &load_message(&fin), t0, t1);
-  }
-
-  h
+/// Chaining value and the 128-bit count of bits compressed so far.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct Core {
+  h: [u64; 8],
+  t0: u64,
+  t1: u64,
 }
 
-pub fn hash512(data: &[u8]) -> [u8; 64] {
-  digest_from_u64_le(&hash_to_state(data).map(u64::swap_bytes))
+impl Compress<BLOCK> for Core {
+  #[inline(always)]
+  fn compress(&mut self, block: &[u8; BLOCK]) {
+    advance_counter(&mut self.t0, &mut self.t1);
+    compress(&mut self.h, &load_message(block), self.t0, self.t1);
+  }
 }
+
+/// Streaming Blake-512.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Blake512 {
+  core: Core,
+  buffer: Buffer<BLOCK>,
+}
+
+impl Default for Blake512 {
+  #[inline]
+  fn default() -> Self {
+    Self {
+      core: Core { h: IV, t0: 0, t1: 0 },
+      buffer: Buffer::new(),
+    }
+  }
+}
+
+impl Update for Blake512 {
+  #[inline]
+  fn update(&mut self, data: &[u8]) {
+    self.buffer.update(data, &mut self.core);
+  }
+}
+
+impl FixedOutput for Blake512 {
+  fn finalize_into(mut self, out: &mut Output<Self>) {
+    let remaining = self.buffer.len();
+    let bit_len = (remaining as u64) * 8;
+    let tl = self.core.t0.wrapping_add(bit_len);
+    let th = if tl < bit_len {
+      self.core.t1.wrapping_add(1)
+    } else {
+      self.core.t1
+    };
+    // A block holding message bits is counted with the total length. One
+    // holding only padding is counted as zero.
+    let (t0, t1) = if remaining == 0 { (0, 0) } else { (tl, th) };
+
+    // The 0x80 terminator, the 0x01 marker and the 128-bit big-endian length
+    // fit after a tail ending by byte 111. Longer tails spill into a second
+    // block carrying only the marker and the length.
+    let h = &mut self.core.h;
+    let block = self.buffer.pad(0x80);
+    if remaining <= 111 {
+      block[111] |= 0x01;
+      block[112..120].copy_from_slice(&th.to_be_bytes());
+      block[120..].copy_from_slice(&tl.to_be_bytes());
+      compress(h, &load_message(block), t0, t1);
+    } else {
+      compress(h, &load_message(block), t0, t1);
+      let mut last = [0u8; BLOCK];
+      last[111] = 0x01;
+      last[112..120].copy_from_slice(&th.to_be_bytes());
+      last[120..].copy_from_slice(&tl.to_be_bytes());
+      compress(h, &load_message(&last), 0, 0);
+    }
+
+    for (bytes, word) in out.chunks_exact_mut(8).zip(h) {
+      bytes.copy_from_slice(&word.to_be_bytes());
+    }
+  }
+}
+
+impl_digest!(Blake512, U64);
 
 #[cfg(test)]
 mod tests {
-  use super::hash512;
-  use crate::tests::run_nist_kat;
+  use super::Blake512;
+  use crate::tests::run_nist_kat_chunked;
 
   #[test]
   fn nist_kat() {
-    run_nist_kat("blake", hash512);
+    run_nist_kat_chunked::<Blake512>("blake");
   }
 }

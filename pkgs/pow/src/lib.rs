@@ -73,9 +73,8 @@ mod util;
 
 #[doc(hidden)]
 pub mod __private {
-  pub mod blake {
-    pub use crate::blake::hash512;
-  }
+  pub use crate::blake::Blake512;
+
   pub mod bmw {
     pub use crate::bmw::hash512;
   }
@@ -108,12 +107,15 @@ pub mod __private {
   }
 }
 
+use blake::Blake512;
+use digest::Digest;
+
 /// Computes the Dash proof-of-work hash.
 ///
 /// The digest is little-endian, matching the consensus byte order of a
 /// block hash.
 pub fn hash(data: &[u8]) -> [u8; 32] {
-  let h = blake::hash512(data);
+  let h = Blake512::digest(data);
   let h = bmw::hash512(&h);
   let h = groestl::hash512(&h);
   let h = skein::hash512(&h);
