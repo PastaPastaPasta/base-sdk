@@ -16,6 +16,7 @@ mod inv;
 mod mn_list;
 mod ping;
 mod quorum_sigs;
+mod tx_reconcile;
 mod version;
 
 use crate::command::CommandString;
@@ -36,6 +37,7 @@ pub use inv::{GetData, Inv, InvType, Inventory, NotFound};
 pub use mn_list::{DeletedQuorum, GetMnListDiff, MnListDiff, MnListDiffPayload, QuorumClSig, SimplifiedMnListEntry};
 pub use ping::{Ping, Pong};
 pub use quorum_sigs::QSendRecSigs;
+pub use tx_reconcile::SendTxRcncl;
 pub use version::{ServiceFlags, UserAgent, UserAgentTooLong, Version, VersionAddr};
 
 define_p2p! {
@@ -80,6 +82,8 @@ define_p2p! {
     QSendRecSigs(QSendRecSigs) => QSENDRECSIGS "qsendrecsigs" @ 145,
     /// BIP152: signal compact block support.
     SendCmpct(SendCmpct) => SENDCMPCT "sendcmpct" @ 20,
+    /// BIP330: transaction reconciliation.
+    SendTxRcncl(SendTxRcncl) => SENDTXRCNCL "sendtxrcncl",
   }
 
   parsed_empty {
@@ -126,8 +130,6 @@ define_p2p! {
     GetCFCheckpt => GETCFCHECKPT "getcfcheckpt" @ 26,
     /// Compact filter checkpoints.
     CFCheckpt => CFCHECKPT "cfcheckpt" @ 27,
-    /// BIP330: transaction reconciliation.
-    SendTxRcncl => SENDTXRCNCL "sendtxrcncl",
     /// Spork broadcast/request.
     Spork => SPORK "spork" @ 128,
     /// CoinJoin: accept denomination.
