@@ -19,11 +19,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `BlsSecretKey::sign_message`, `BlsSkShare::sign_message`, `BlsPublicKey::verify_message`,
   `BlsSignature::{fast,secure}_verify_aggregates_message`, `BlsSignature::verify_aggregates_messages` and
   `BlsScheme::plaintext_msg`, taking a message of any length. The legacy scheme signs the message's SHA-256 digest.
+- `is_canonical::<S>()` on `BlsPkBytes`, `BlsSigBytes` and `BlsSkBytes`, behind the `bls` feature. It rejects bytes
+  that decode under scheme `S` only after masking, or not at all. Null bytes count as canonical.
 
 ### Changed
 
 - **The minimum supported Rust version is raised from 1.85 to 1.89.**
 - **`bls` requires ADX on x86_64 unless `portable` is enabled.**
+- Decoding `BlsIesMultiBytes` rejects more than `MAX_IES_RECIPIENTS` ciphertexts, the most any operation accepts.
 - `BlsSecretKey::sign`, `BlsSkShare::sign`, `BlsPublicKey::verify` and `BlsSignature::{fast,secure}_verify_aggregates`
   gain a `_digest` suffix and take a 32-byte hashed message. `BlsSignature::verify_aggregates` is renamed to
   `verify_aggregates_digests` and takes `&[[u8; 32]]`. `BlsScheme::msg_ref` is renamed to `digest_msg`, and

@@ -128,6 +128,34 @@ pub fn read_bytes<'a>(data: &mut &'a [u8], n: usize) -> Result<&'a [u8], DecodeE
   Ok(head)
 }
 
+/// Reads a CompactSize-prefixed vector of at most `limit` elements. The count
+/// is checked before any element is decoded or allocated.
+///
+/// # Errors
+///
+/// Returns the errors of [`CompactSize::decode_len`] and `T::decode`.
+pub fn decode_vec<T: BaseCodec>(data: &mut &[u8], limit: usize) -> Result<Vec<T>, DecodeError> {
+  let count = CompactSize::decode_len(data, limit)?;
+  decode_elements(data, count)
+}
+
+/// Decodes `count` elements, reserving in batches so that the reservation
+/// stays within one batch of the elements decoded.
+fn decode_elements<T: BaseCodec>(data: &mut &[u8], count: usize) -> Result<Vec<T>, DecodeError> {
+  let batch = MAX_VECTOR_ALLOCATE / core::mem::size_of::<T>().max(1);
+  let mut items = Vec::new();
+  let mut allocated = 0usize;
+  for _ in 0..count {
+    if items.len() == allocated {
+      // `reserve` may grow the capacity past the batch.
+      allocated = count.min(allocated + batch);
+      items.reserve_exact(allocated - items.len());
+    }
+    items.push(T::decode(data)?);
+  }
+  Ok(items)
+}
+
 /// Append-only byte buffer used by [`BaseCodec::encode`].
 pub trait EncodeBuf {
   /// Appends a single byte.
@@ -246,17 +274,11 @@ impl BaseCodec for i64 {
   }
 }
 
+/// A non-zero byte other than `1` re-encodes as `1`, so such input does not
+/// round-trip.
 impl BaseCodec for bool {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let byte = take::<1>(data)?[0];
-    match byte {
-      0 => Ok(false),
-      1 => Ok(true),
-      _ => Err(DecodeError::InvalidValue {
-        expected: vec![0, 1],
-        actual: u64::from(byte),
-      }),
-    }
+    Ok(take::<1>(data)?[0] != 0)
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
@@ -276,19 +298,7 @@ impl<const N: usize> BaseCodec for [u8; N] {
 
 impl<T: BaseCodec> BaseCodec for Vec<T> {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let count = CompactSize::decode_len(data)?;
-    let batch = MAX_VECTOR_ALLOCATE / core::mem::size_of::<T>().max(1);
-    let mut items = Vec::new();
-    let mut allocated = 0usize;
-    for _ in 0..count {
-      if items.len() == allocated {
-        // `reserve` may grow the capacity past the batch.
-        allocated = count.min(allocated + batch);
-        items.reserve_exact(allocated - items.len());
-      }
-      items.push(T::decode(data)?);
-    }
-    Ok(items)
+    decode_vec(data, crate::MAX_SER_SIZE)
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
@@ -347,7 +357,7 @@ impl<T: Codec> __CodecMarker for T {}
 
 #[cfg(test)]
 mod tests {
-  use super::DecodeError;
+  use super::{decode_vec, BaseCodec, DecodeError};
   use crate::prelude::*;
   use crate::{VecDecoder, VecEncoder};
 
@@ -385,6 +395,49 @@ mod tests {
     let lifted: DecodeError<SampleError> = err.lift();
     assert_eq!(lifted.to_string(), before);
     assert!(!matches!(lifted, DecodeError::DecError(_)));
+  }
+
+  #[rstest]
+  #[case::zero(0x00, false)]
+  #[case::one(0x01, true)]
+  #[case::two(0x02, true)]
+  #[case::high(0x80, true)]
+  #[case::max(0xFF, true)]
+  fn bool_decodes_any_non_zero_byte_as_true(#[case] byte: u8, #[case] value: bool) {
+    let mut cursor: &[u8] = &[byte];
+    assert_eq!(bool::decode(&mut cursor), Ok(value));
+    assert!(cursor.is_empty());
+  }
+
+  #[rstest]
+  #[case::false_(false, 0x00)]
+  #[case::true_(true, 0x01)]
+  fn bool_encodes_as_zero_or_one(#[case] value: bool, #[case] byte: u8) {
+    let mut buf = Vec::new();
+    value.encode(&mut buf);
+    assert_eq!(buf, [byte]);
+  }
+
+  #[rstest]
+  fn bool_rejects_empty_input() {
+    assert!(matches!(bool::decode(&mut &[][..]), Err(DecodeError::Eof { .. })));
+  }
+
+  #[rstest]
+  #[case::empty(&[0x00], Ok(vec![]))]
+  #[case::below(&[0x01, 0x0A, 0x00], Ok(vec![10]))]
+  #[case::at_limit(&[0x02, 0x0A, 0x00, 0x0B, 0x00], Ok(vec![10, 11]))]
+  #[case::past_limit(&[0x03, 0x0A, 0x00], Err(DecodeError::CompactSizeExceedsLimit { limit: 2, value: 3 }))]
+  #[case::short_element(&[0x02, 0x0A, 0x00, 0x0B], Err(DecodeError::Eof { needed: 2, remaining: 1 }))]
+  fn decode_vec_bounds_the_count(#[case] wire: &[u8], #[case] expected: Result<Vec<u16>, DecodeError>) {
+    assert_eq!(decode_vec::<u16>(&mut &*wire, 2), expected);
+  }
+
+  #[rstest]
+  fn decode_vec_stops_after_the_value() {
+    let mut cursor: &[u8] = &[0x01, 0xAA, 0xFF];
+    assert_eq!(decode_vec::<u8>(&mut cursor, 1), Ok(vec![0xAA]));
+    assert_eq!(cursor, [0xFF]);
   }
 
   /// Consumes the whole cursor, so `end()` sees no trailing bytes.

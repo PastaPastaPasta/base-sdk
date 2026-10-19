@@ -39,11 +39,15 @@ cfg_if::cfg_if! {
     #[allow(unused_macros, reason = "used by feature-gated submodules")]
     mod adapters;
     mod compact;
+    mod sealed {
+      /// Sealing marker for traits only this crate implements.
+      pub trait Sealed {}
+    }
 
     pub mod codec;
     pub mod type_id;
 
-    pub use compact::CompactSize;
+    pub use compact::{CompactSize, CompactUint};
     pub use entity::{VecDecoder, VecEncoder, MAX_SER_SIZE};
     pub use secret::{ArrDecoder, ArrEncoder, ArrayBuf, MAX_ARR_SIZE};
   }

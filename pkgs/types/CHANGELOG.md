@@ -17,10 +17,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `CompactSize::decode_unbounded`, which decodes a value read as a number rather than a size, such as service flags,
   without the `MAX_SER_SIZE` range check.
 - `CompactSize::decode_len`, which decodes a length or count prefix range-checked as by `CompactSize::decode` and
-  bounded by the remaining input.
+  bounded by a caller limit and the remaining input.
 - `Signable`, a trait for consensus types that hold a signature. `Signable::payload` returns the 32-byte digest the
   key signs, `Signable::set_signature` stores a signature only if it verifies against the supplied key and
   `Signable::reset_signature` removes it.
+- `CompactSize::decode_as`, with the sealed `CompactUint` trait, for CompactSize-encoded integer fields bounded by both
+  `MAX_SER_SIZE` and their type.
+- `codec::decode_vec`, which reads a CompactSize-prefixed vector and rejects a count above a caller limit before any
+  element is decoded or allocated.
 
 ### Changed
 
@@ -47,6 +51,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Decoding `Vec<T>`, `String` and script buffers reports a length prefix past the remaining input as
   `DecodeError::Eof` rather than as `CompactSizeExceedsLimit`.
 - Decoding `Vec<T>` reserves each batch exactly rather than growing its capacity geometrically past the batch.
+- **`bool` decodes any non-zero byte as `true` instead of rejecting bytes above `1`.** Encoding still writes `0` or
+  `1`, so a decoded byte above `1` does not round-trip.
 
 ### Removed
 

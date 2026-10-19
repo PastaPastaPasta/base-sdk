@@ -202,6 +202,13 @@ impl BlsPkBytes {
   pub fn to<S: BlsScheme>(&self) -> Result<BlsPublicKey<S>, BlsError> {
     BlsPublicKey::try_from(self)
   }
+
+  /// Whether `S` decodes the bytes to a key that re-encodes to them.
+  ///
+  /// Null bytes pass, so pair with [`is_null`](Self::is_null) to require a key.
+  pub fn is_canonical<S: BlsScheme>(&self) -> bool {
+    self.is_null() || self.to::<S>().is_ok_and(|pk| pk.to_bytes() == *self.as_bytes())
+  }
 }
 
 type_cvrt!(for[S: BlsScheme] TryFrom<BlsPublicKey<S>> for G1, BlsError, |pk| {
@@ -476,6 +483,54 @@ mod tests {
       BlsPublicKey::<BlsScChia>::from_bytes(&marker).is_err(),
       "bits 6 and 7 together mark infinity, which the decoder rejects"
     );
+  }
+
+  fn assert_pk_bytes_canonical<S: BlsScheme>() {
+    let clean = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap().public_key().to_bytes();
+    assert!(BlsPkBytes::from_bytes(clean).is_canonical::<S>());
+    assert!(BlsPkBytes::from_bytes([0u8; 48]).is_canonical::<S>());
+
+    let mut infinity = [0u8; 48];
+    infinity[0] = 0xc0;
+    assert!(!BlsPkBytes::from_bytes(infinity).is_canonical::<S>());
+  }
+
+  #[rstest]
+  #[case::chia(assert_pk_bytes_canonical::<BlsScChia>)]
+  #[case::ietf(assert_pk_bytes_canonical::<BlsScIetf>)]
+  fn pk_bytes_canonical_keys_and_null(#[case] assertion: fn()) {
+    assertion();
+  }
+
+  /// The Chia decoder masks stray bits, so only `is_canonical` tells a masked
+  /// encoding apart.
+  #[rstest]
+  #[case::bit_five(0x20)]
+  #[case::bit_six(0x40)]
+  fn chia_pk_bytes_with_stray_bits_are_not_canonical(#[case] stray: u8) {
+    let clean = BlsSecretKey::<BlsScChia>::from_ikm(&RSEED[0])
+      .unwrap()
+      .public_key()
+      .to_bytes();
+    // A set sign bit would turn `0x40` into the infinity marker `0xc0`.
+    assert_eq!(clean[0] & 0x80, 0);
+    let mut mutated = clean;
+    mutated[0] |= stray;
+
+    assert!(BlsPublicKey::<BlsScChia>::from_bytes(&mutated).is_ok());
+    assert!(!BlsPkBytes::from_bytes(mutated).is_canonical::<BlsScChia>());
+  }
+
+  fn assert_pk_bytes_not_canonical<S: BlsScheme>(encoded: [u8; 48]) {
+    assert!(!BlsPkBytes::from_bytes(encoded).is_canonical::<S>());
+  }
+
+  #[rstest]
+  #[case::chia_x_eq_prime(assert_pk_bytes_not_canonical::<BlsScChia>, G1_X_EQ_PRIME_CHIA)]
+  #[case::ietf_x_eq_prime(assert_pk_bytes_not_canonical::<BlsScIetf>, ietf_g1_encoding(G1_X_EQ_PRIME_CHIA))]
+  #[case::ietf_off_subgroup(assert_pk_bytes_not_canonical::<BlsScIetf>, G1_OFF_SUBGROUP_IETF)]
+  fn pk_bytes_undecodable_are_not_canonical(#[case] assertion: fn([u8; 48]), #[case] encoded: [u8; 48]) {
+    assertion(encoded);
   }
 
   /// The same G1 point encodes differently under the two schemes, and each

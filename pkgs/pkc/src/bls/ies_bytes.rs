@@ -21,7 +21,7 @@ use dash_types::codec::{read_bytes, BaseCodec, DecodeError, EncodeBuf};
 #[cfg(feature = "codec")]
 use dash_types::type_id::TypeId;
 #[cfg(feature = "codec")]
-use dash_types::{impl_type, CompactSize, Numeric};
+use dash_types::{impl_type, CompactSize, Numeric, MAX_SER_SIZE};
 #[cfg(feature = "codec")]
 use dash_types::{Checkable, Hashable};
 use hex_conservative::DisplayHex;
@@ -48,7 +48,7 @@ impl BaseCodec for BlsIesBlobBytes {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let ephemeral_pk = BlsPkBytes::decode(data)?;
     let iv_seed = <[u8; IV_SEED_LEN]>::decode(data)?;
-    let len = CompactSize::decode_len(data)?;
+    let len = CompactSize::decode_len(data, MAX_SER_SIZE)?;
     Ok(Self {
       ephemeral_pk,
       iv_seed,
@@ -157,10 +157,10 @@ impl BaseCodec for BlsIesMultiBytes {
 
     // Each element is a `Vec` far wider than the length prefix that admitted it
     // so capacity is grown against content, not reserved.
-    let count = CompactSize::decode_len(data)?;
+    let count = CompactSize::decode_len(data, MAX_IES_RECIPIENTS)?;
     let mut blobs = Vec::new();
     for _ in 0..count {
-      let len = CompactSize::decode_len(data)?;
+      let len = CompactSize::decode_len(data, MAX_SER_SIZE)?;
       blobs.push(read_bytes(data, len)?.to_vec());
     }
 

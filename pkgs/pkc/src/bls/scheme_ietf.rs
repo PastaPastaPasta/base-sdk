@@ -8,10 +8,11 @@
 
 use super::error::BlsError;
 use super::group::{G1Affine, G2Affine, G1, G2};
-use super::scheme_ops::{sealed::Sealed, verify_ok, BlsScheme};
+use super::scheme_ops::{verify_ok, BlsScheme};
 use super::schemes::BlsScIetf;
 use super::sig_id::BlsSigId;
 use crate::prelude::*;
+use crate::sealed::Sealed;
 
 use blst::min_pk::{AggregatePublicKey, AggregateSignature, PublicKey, SecretKey, Signature};
 use zeroize::Zeroizing;
