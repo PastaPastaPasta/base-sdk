@@ -28,8 +28,7 @@ pub enum P2pDecodeError {
   /// V2 contents end before the message type does.
   #[error("missing command")]
   MissingCommand,
-  /// A command its transport refuses, per [`CommandString::is_valid_v1`] or
-  /// [`CommandString::is_valid_v2`].
+  /// A command that fails [`CommandString::is_valid_v2`].
   #[error(fmt = fmt_invalid_command)]
   InvalidCommand {
     /// The command as received.
@@ -46,7 +45,8 @@ pub enum P2pDecodeError {
   PayloadTooLarge {
     /// The message's command.
     command: CommandString,
-    /// Size of the payload, or of the whole contents for V2, in bytes.
+    /// Size of the payload, or of the whole contents for `decode_v2`, in
+    /// bytes.
     size: usize,
     /// Maximum allowed size, in bytes.
     max: usize,

@@ -21,6 +21,20 @@ fn decode_errors_are_typed(#[case] payload: &[u8], #[case] err: DecodeError) {
 }
 
 #[rstest]
+#[case::empty(*b"\0\0\0\0\0\0\0\0\0\0\0\0", true)]
+#[case::del(*b"pi\x7fng\0\0\0\0\0\0\0", true)]
+#[case::control(*b"pi\x1fng\0\0\0\0\0\0\0", false)]
+#[case::high(*b"pi\x80ng\0\0\0\0\0\0\0", false)]
+#[case::inner_nul(*b"pi\0ng\0\0\0\0\0\0\0", false)]
+#[case::padding(*b"ping\0\0\0\0\0\0\0\x01", false)]
+fn commands_follow_the_v2_rule(#[case] bytes: [u8; 12], #[case] valid: bool) {
+  let cmd = CommandString::from_bytes(bytes);
+  let invalid = Err(P2pDecodeError::InvalidCommand { command: cmd });
+  assert_eq!(cmd.is_valid_v2(), valid);
+  assert_eq!(P2pMsg::decode_payload(&cmd, &[]) == invalid, !valid);
+}
+
+#[rstest]
 fn oversized_commands_are_escaped() {
   let cmd = CommandString::from_bytes(*b"pi\nng\0\0\0\0\0\0\0");
   assert_eq!(

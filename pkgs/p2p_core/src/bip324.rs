@@ -37,8 +37,8 @@ const MAX_V2_CONTENTS: usize = 1 + 12 + MAX_P2P_PAYLOAD_SIZE;
 /// Decodes V2 message contents into a `P2pMsg`.
 ///
 /// The size bound applies to the whole contents and comes before any check
-/// of the type, so a short-ID payload may be 12 bytes larger than a V1
-/// payload.
+/// of the type. A short-ID payload may thus be 12 bytes larger than a
+/// long-format payload.
 ///
 /// # Errors
 ///
