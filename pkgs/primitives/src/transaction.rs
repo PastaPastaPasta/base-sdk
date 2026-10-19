@@ -7,6 +7,7 @@
 //! Dash transaction with version/type packing and optional extra payload for
 //! special transactions.
 
+use crate::block::MAX_LEGACY_BLOCK_SIZE;
 use crate::prelude::*;
 use crate::sptx::{PayloadError, PayloadInvalid, TxType};
 use crate::{codec_type, hash_impl};
@@ -243,6 +244,11 @@ impl Checkable for Transaction {
     }
     if !allows_empty_vout && self.outputs.is_empty() {
       return Some(TxInvalid::EmptyOutputs);
+    }
+
+    let size = codec::encoded_size(self);
+    if size > MAX_LEGACY_BLOCK_SIZE {
+      return Some(TxInvalid::Oversize { size });
     }
 
     if !self.has_extra_payload() && !self.extra_payload.is_empty() {
