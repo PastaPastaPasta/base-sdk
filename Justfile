@@ -11,6 +11,7 @@ mod num "pkgs/num/mod.just"
 mod params "pkgs/params/mod.just"
 mod pkc "pkgs/pkc/mod.just"
 mod pow "pkgs/pow/mod.just"
+mod primitives "pkgs/primitives/mod.just"
 mod script "pkgs/script/mod.just"
 mod types "pkgs/types/mod.just"
 
