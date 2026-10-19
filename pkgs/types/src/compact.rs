@@ -160,16 +160,17 @@ impl CompactSize {
   }
 
   /// Decodes a length or count prefix, range-checked as by
-  /// [`CompactSize::decode`] and bounded by the bytes left after it.
+  /// [`CompactSize::decode`] and bounded by `limit` and the remaining input.
   ///
   /// The input bound assumes each element takes at least one byte.
   ///
   /// # Errors
   ///
-  /// Returns [`DecodeError::Eof`] for a value past the remaining input, and
+  /// Returns [`DecodeError::CompactSizeExceedsLimit`] for a value above
+  /// `limit`, [`DecodeError::Eof`] for a value past the remaining input, and
   /// the errors of [`CompactSize::decode`].
-  pub fn decode_len(data: &mut &[u8]) -> Result<usize, DecodeError> {
-    let len = Self::decode(data)?.into_len(MAX_SER_SIZE)?;
+  pub fn decode_len(data: &mut &[u8], limit: usize) -> Result<usize, DecodeError> {
+    let len = Self::decode(data)?.into_len(limit)?;
     crate::codec::ensure(data, len)?;
     Ok(len)
   }
@@ -228,7 +229,7 @@ mod tests {
   use super::CompactSize;
   use crate::codec::{BaseCodec, DecodeError};
   use crate::prelude::*;
-  use crate::Numeric;
+  use crate::{Numeric, MAX_SER_SIZE};
 
   use rstest::*;
 
@@ -304,7 +305,7 @@ mod tests {
   fn decode_len_admits_lengths_within_the_input(#[case] value: u64, #[case] remaining: usize) {
     let wire = prefixed(value, remaining);
     let mut cursor = wire.as_slice();
-    assert_eq!(CompactSize::decode_len(&mut cursor), Ok(value as usize));
+    assert_eq!(CompactSize::decode_len(&mut cursor, MAX_SER_SIZE), Ok(value as usize));
     assert_eq!(cursor.len(), remaining, "decode_len consumes only the prefix");
   }
 
@@ -315,7 +316,7 @@ mod tests {
   fn decode_len_reports_eof_past_the_input(#[case] value: u64, #[case] remaining: usize) {
     let wire = prefixed(value, remaining);
     assert_eq!(
-      CompactSize::decode_len(&mut wire.as_slice()),
+      CompactSize::decode_len(&mut wire.as_slice(), MAX_SER_SIZE),
       Err(DecodeError::Eof {
         needed: value as usize,
         remaining
@@ -330,7 +331,7 @@ mod tests {
   #[case::u64_max(u64::MAX)]
   fn decode_len_range_checks_before_the_input_bound(#[case] value: u64) {
     assert_eq!(
-      CompactSize::decode_len(&mut prefixed(value, 1).as_slice()),
+      CompactSize::decode_len(&mut prefixed(value, 1).as_slice(), MAX_SER_SIZE),
       Err(DecodeError::CompactSizeExceedsLimit {
         limit: crate::MAX_SER_SIZE,
         value,
@@ -347,6 +348,23 @@ mod tests {
     CompactSize::new(value).encode(&mut wire);
     let expected = expected.map_err(|(limit, value)| DecodeError::CompactSizeExceedsLimit { limit, value });
     assert_eq!(CompactSize::decode_as::<u8>(&mut wire.as_slice()), expected);
+  }
+
+  /// The caller limit, like the range check, runs before the input bound.
+  #[rstest]
+  #[case::at_limit(2, 2, Ok(2))]
+  #[case::past_limit(3, 3, Err(DecodeError::CompactSizeExceedsLimit { limit: 2, value: 3 }))]
+  #[case::past_limit_and_input(0xFFFF, 0, Err(DecodeError::CompactSizeExceedsLimit { limit: 2, value: 0xFFFF }))]
+  #[case::past_input(2, 1, Err(DecodeError::Eof { needed: 2, remaining: 1 }))]
+  fn decode_len_bounds_the_value_by_the_limit(
+    #[case] value: u64,
+    #[case] remaining: usize,
+    #[case] expected: Result<usize, DecodeError>,
+  ) {
+    assert_eq!(
+      CompactSize::decode_len(&mut prefixed(value, remaining).as_slice(), 2),
+      expected
+    );
   }
 
   #[rstest]

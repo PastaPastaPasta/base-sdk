@@ -14,7 +14,7 @@ use crate::prelude::*;
 use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::Numeric;
-use dash_types::{enum_map, impl_num, impl_type, Checkable, CompactSize};
+use dash_types::{enum_map, impl_num, impl_type, Checkable, CompactSize, MAX_SER_SIZE};
 
 use core::fmt;
 
@@ -287,11 +287,11 @@ impl_type!(NetInfoV2);
 impl BaseCodec for NetInfoV2 {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let version = u8::decode(data)?;
-    let purpose_count = CompactSize::decode_len(data)?;
+    let purpose_count = CompactSize::decode_len(data, MAX_SER_SIZE)?;
     let mut entries = Vec::with_capacity(purpose_count);
     for _ in 0..purpose_count {
       let purpose = NIPurpose::from_base(u8::decode(data)?);
-      let entry_count = CompactSize::decode_len(data)?;
+      let entry_count = CompactSize::decode_len(data, MAX_SER_SIZE)?;
       let mut group = Vec::with_capacity(entry_count);
       for _ in 0..entry_count {
         group.push(NIEntry::decode(data)?);

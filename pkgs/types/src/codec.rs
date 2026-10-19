@@ -285,7 +285,7 @@ impl<const N: usize> BaseCodec for [u8; N] {
 
 impl<T: BaseCodec> BaseCodec for Vec<T> {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let count = CompactSize::decode_len(data)?;
+    let count = CompactSize::decode_len(data, crate::MAX_SER_SIZE)?;
     decode_elements(data, count)
   }
 
