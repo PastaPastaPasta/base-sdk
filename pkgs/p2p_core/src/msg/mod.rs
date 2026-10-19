@@ -7,6 +7,7 @@
 //! P2P message types and dispatch.
 
 mod addr;
+mod coinjoin;
 mod gov;
 mod headers;
 mod headers2;
@@ -24,6 +25,7 @@ use dash_primitives::{GovObject, GovVote};
 use dash_types::type_id::Unencodable;
 
 pub use addr::{Addr, AddrV2Entry, AddrV2Msg, TimestampedAddr};
+pub use coinjoin::SendDsq;
 pub use gov::GovSync;
 pub use headers::{GetHeaders, Headers};
 pub use headers2::{CompressionState, GetHeaders2, Headers2};
@@ -68,6 +70,8 @@ define_p2p! {
     GetMnListDiff(GetMnListDiff) => GETMNLISTD "getmnlistd" @ 143,
     /// MN list diff.
     MnListDiff(MnListDiff) => MNLISTDIFF "mnlistdiff" @ 144,
+    /// Signal CoinJoin queue relay.
+    SendDsq(SendDsq) => SENDDSQ "senddsq" @ 130,
   }
 
   parsed_empty {
@@ -185,8 +189,6 @@ define_p2p! {
     Mempool => MEMPOOL "mempool" @ 15,
     /// Request active sporks.
     GetSporks => GETSPORKS "getsporks" @ 129,
-    /// Signal CoinJoin queue relay.
-    SendDsq => SENDDSQ "senddsq" @ 130,
     /// LLMQ: send recovered signatures.
     QSendRecSigs => QSENDRECSIGS "qsendrecsigs" @ 145,
     /// LLMQ: watch quorums.
