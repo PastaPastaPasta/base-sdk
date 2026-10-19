@@ -14,6 +14,7 @@ mod headers2;
 mod inv;
 mod mn_list;
 mod ping;
+mod quorum_sigs;
 mod version;
 
 use crate::command::CommandString;
@@ -32,6 +33,7 @@ pub use headers2::{CompressionState, GetHeaders2, Headers2};
 pub use inv::{GetData, Inv, InvType, Inventory, NotFound};
 pub use mn_list::{DeletedQuorum, GetMnListDiff, MnListDiff, MnListDiffPayload, QuorumClSig, SimplifiedMnListEntry};
 pub use ping::{Ping, Pong};
+pub use quorum_sigs::QSendRecSigs;
 pub use version::{ServiceFlags, UserAgent, UserAgentTooLong, Version, VersionAddr};
 
 define_p2p! {
@@ -72,6 +74,8 @@ define_p2p! {
     MnListDiff(MnListDiff) => MNLISTDIFF "mnlistdiff" @ 144,
     /// Signal CoinJoin queue relay.
     SendDsq(SendDsq) => SENDDSQ "senddsq" @ 130,
+    /// LLMQ: send recovered signatures.
+    QSendRecSigs(QSendRecSigs) => QSENDRECSIGS "qsendrecsigs" @ 145,
   }
 
   parsed_empty {
@@ -189,8 +193,6 @@ define_p2p! {
     Mempool => MEMPOOL "mempool" @ 15,
     /// Request active sporks.
     GetSporks => GETSPORKS "getsporks" @ 129,
-    /// LLMQ: send recovered signatures.
-    QSendRecSigs => QSENDRECSIGS "qsendrecsigs" @ 145,
     /// LLMQ: watch quorums.
     QWatch => QWATCH "qwatch" @ 151,
   }
