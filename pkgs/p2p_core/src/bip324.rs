@@ -13,7 +13,7 @@ use crate::prelude::*;
 use crate::short_id::ShortId;
 use crate::P2pDecodeError;
 
-use dash_types::codec::take;
+use dash_types::codec::BaseCodec;
 
 /// Encodes a `P2pMsg` into V2 framed bytes.
 pub fn encode_v2(msg: &P2pMsg, buf: &mut Vec<u8>) {
@@ -48,11 +48,10 @@ const MAX_V2_CONTENTS: usize = 1 + 12 + MAX_P2P_PAYLOAD_SIZE;
 /// decoding the message.
 pub fn decode_v2(contents: &[u8]) -> Result<P2pMsg, P2pDecodeError> {
   let mut payload = contents;
-  let [short_id] = take(&mut payload).map_err(|_| P2pDecodeError::MissingCommand)?;
+  let short_id = u8::decode(&mut payload).map_err(|_| P2pDecodeError::MissingCommand)?;
   let id = ShortId(short_id);
   let cmd = if id == ShortId::LONG_FORMAT {
-    let bytes = take(&mut payload).map_err(|_| P2pDecodeError::MissingCommand)?;
-    Some(CommandString::from_bytes(bytes))
+    Some(CommandString::decode(&mut payload).map_err(|_| P2pDecodeError::MissingCommand)?)
   } else if id.is_in_table() {
     Some(id.to_command().unwrap_or(CommandString::from_static("")))
   } else {
