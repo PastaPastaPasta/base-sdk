@@ -8,6 +8,7 @@ export RUSTDOCFLAGS := "-D warnings"
 
 mod fuzz "fuzz/mod.just"
 mod num "pkgs/num/mod.just"
+mod p2p_core "pkgs/p2p_core/mod.just"
 mod params "pkgs/params/mod.just"
 mod pkc "pkgs/pkc/mod.just"
 mod pow "pkgs/pow/mod.just"
