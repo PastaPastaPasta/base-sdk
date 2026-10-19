@@ -55,4 +55,45 @@ BOOST_AUTO_TEST_CASE(sendcmpct_payloads)
       }
     },
   },
+/*
+BOOST_AUTO_TEST_CASE(getblocks_payloads)
+{
+    const uint256 genesis{Params().GenesisBlock().GetHash()};
+    for (const auto& [have, stop] : std::vector<std::pair<std::vector<uint256>, uint256>>{
+             {{}, uint256{}}, {{genesis}, uint256{}}, {{uint256::ONE, genesis}, genesis}}) {
+        const auto msg{CNetMsgMaker{PROTOCOL_VERSION}.Make(NetMsgType::GETBLOCKS, CBlockLocator{std::vector<uint256>{have}}, stop)};
+        std::printf("    \"locator%zu\": {\n      \"raw\": \"%s\",\n      \"details\": {\n"
+                    "        \"version\": %d,\n        \"locator_hashes\": [",
+                    have.size(), HexStr(msg.data).c_str(), PROTOCOL_VERSION);
+        for (size_t i = 0; i < have.size(); ++i) std::printf("%s\"%s\"", i ? ", " : "", have[i].ToString().c_str());
+        std::printf("],\n        \"hash_stop\": \"%s\"\n      }\n    },\n", stop.ToString().c_str());
+    }
+}
+*/
+  "getblocks": {
+    "locator0": {
+      "raw": "62120100000000000000000000000000000000000000000000000000000000000000000000",
+      "details": {
+        "version": 70242,
+        "locator_hashes": [],
+        "hash_stop": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    "locator1": {
+      "raw": "62120100012e3df23eec5cd6a86edd509539028e2c3a3dc05315eb28f2baa43218ca0800000000000000000000000000000000000000000000000000000000000000000000",
+      "details": {
+        "version": 70242,
+        "locator_hashes": ["000008ca1832a4baf228eb1553c03d3a2c8e02399550dd6ea8d65cec3ef23d2e"],
+        "hash_stop": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    "locator2": {
+      "raw": "621201000201000000000000000000000000000000000000000000000000000000000000002e3df23eec5cd6a86edd509539028e2c3a3dc05315eb28f2baa43218ca0800002e3df23eec5cd6a86edd509539028e2c3a3dc05315eb28f2baa43218ca080000",
+      "details": {
+        "version": 70242,
+        "locator_hashes": ["0000000000000000000000000000000000000000000000000000000000000001", "000008ca1832a4baf228eb1553c03d3a2c8e02399550dd6ea8d65cec3ef23d2e"],
+        "hash_stop": "000008ca1832a4baf228eb1553c03d3a2c8e02399550dd6ea8d65cec3ef23d2e"
+      }
+    },
+  },
 }

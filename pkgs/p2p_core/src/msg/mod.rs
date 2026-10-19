@@ -28,7 +28,7 @@ use dash_primitives::{GovObject, GovVote};
 use dash_types::type_id::Unencodable;
 
 pub use addr::{Addr, AddrV2Entry, AddrV2Msg, TimestampedAddr};
-pub use blocks::SendCmpct;
+pub use blocks::{GetBlocks, SendCmpct};
 pub use coinjoin::SendDsq;
 pub use gov::{GovSync, GovSyncStatusCount};
 pub use headers::{GetHeaders, Headers};
@@ -60,6 +60,8 @@ define_p2p! {
     NotFound(NotFound) => NOTFOUND "notfound" @ 17,
     /// Request block headers.
     GetHeaders(GetHeaders) => GETHEADERS "getheaders" @ 12,
+    /// Request block hashes.
+    GetBlocks(GetBlocks) => GETBLOCKS "getblocks" @ 9,
     /// Block headers.
     Headers(Headers) => HEADERS "headers" @ 13,
     /// Request compressed block headers.
@@ -112,8 +114,6 @@ define_p2p! {
     FilterAdd => FILTERADD "filteradd" @ 6,
     /// BIP37: load bloom filter.
     FilterLoad => FILTERLOAD "filterload" @ 8,
-    /// Request block hashes.
-    GetBlocks => GETBLOCKS "getblocks" @ 9,
     /// BIP152: request compact block transactions.
     GetBlockTxn => GETBLOCKTXN "getblocktxn" @ 10,
     /// BIP37: filtered block.
