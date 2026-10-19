@@ -6,11 +6,11 @@
 
 //! Differential fuzz target for Groestl.
 
-use dash_pow::__private::groestl;
-use dash_pow_fuzz::{assert_same, sph};
+use dash_pow::__private::Groestl512;
+use dash_pow_fuzz::{assert_same, digest512, sph};
 
 fn main() {
   afl::fuzz!(|data: &[u8]| {
-    assert_same("groestl", groestl::hash512, sph::groestl, data);
+    assert_same("groestl", digest512::<Groestl512>, sph::groestl, data);
   });
 }

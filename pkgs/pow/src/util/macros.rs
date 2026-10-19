@@ -32,3 +32,17 @@ macro_rules! impl_digest {
   };
 }
 pub(crate) use impl_digest;
+
+/// Implements `Hash` for a core holding arrays of `wide` vectors, which lack
+/// `Hash`, by hashing each vector as its lanes.
+macro_rules! impl_hash {
+  ($ty:ty, [$($vectors:ident),*], [$($words:ident),*]) => {
+    impl ::core::hash::Hash for $ty {
+      fn hash<H: ::core::hash::Hasher>(&self, state: &mut H) {
+        $(::core::hash::Hash::hash(&self.$vectors.map(|vector| vector.to_array()), state);)*
+        $(::core::hash::Hash::hash(&self.$words, state);)*
+      }
+    }
+  };
+}
+pub(crate) use impl_hash;

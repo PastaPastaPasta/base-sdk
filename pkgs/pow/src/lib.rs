@@ -75,15 +75,13 @@ mod util;
 pub mod __private {
   pub use crate::blake::Blake512;
   pub use crate::bmw::Bmw512;
+  pub use crate::groestl::Groestl512;
 
   pub mod cubehash {
     pub use crate::cubehash::hash512;
   }
   pub mod echo {
     pub use crate::echo::hash512;
-  }
-  pub mod groestl {
-    pub use crate::groestl::hash512;
   }
   pub mod jh {
     pub use crate::jh::hash512;
@@ -108,6 +106,7 @@ pub mod __private {
 use blake::Blake512;
 use bmw::Bmw512;
 use digest::Digest;
+use groestl::Groestl512;
 
 /// Computes the Dash proof-of-work hash.
 ///
@@ -116,7 +115,7 @@ use digest::Digest;
 pub fn hash(data: &[u8]) -> [u8; 32] {
   let h = Blake512::digest(data);
   let h = Bmw512::digest(h);
-  let h = groestl::hash512(&h);
+  let h = Groestl512::digest(h);
   let h = skein::hash512(&h);
   let h = jh::hash512(&h);
   let h = keccak::hash512(&h);

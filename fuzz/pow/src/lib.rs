@@ -135,7 +135,7 @@ pub fn assert_same_x11(data: &[u8]) {
 mod tests {
   use super::*;
 
-  use dash_pow::__private::{cubehash, echo, groestl, jh, keccak, luffa, shavite, simd, skein, Blake512, Bmw512};
+  use dash_pow::__private::{cubehash, echo, jh, keccak, luffa, shavite, simd, skein, Blake512, Bmw512, Groestl512};
   use rstest::rstest;
 
   use std::fs;
@@ -185,7 +185,7 @@ mod tests {
         Self::Bmw => (digest512::<Bmw512>, sph::bmw),
         Self::CubeHash => (cubehash::hash512, sph::cubehash),
         Self::Echo => (echo::hash512, sph::echo),
-        Self::Groestl => (groestl::hash512, sph::groestl),
+        Self::Groestl => (digest512::<Groestl512>, sph::groestl),
         Self::Jh => (jh::hash512, sph::jh),
         Self::Keccak => (keccak::hash512, sph::keccak),
         Self::Luffa => (luffa::hash512, sph::luffa),
