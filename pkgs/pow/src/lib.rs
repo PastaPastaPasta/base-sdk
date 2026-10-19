@@ -72,6 +72,11 @@ mod tests;
 mod util;
 
 #[doc(hidden)]
+pub mod __deps {
+  pub use digest;
+}
+
+#[doc(hidden)]
 pub mod __private {
   pub use crate::blake::Blake512;
   pub use crate::bmw::Bmw512;
@@ -86,36 +91,53 @@ pub mod __private {
   pub use crate::skein::Skein512;
 }
 
-use blake::Blake512;
-use bmw::Bmw512;
-use cubehash::CubeHash512;
-use digest::Digest;
-use echo::Echo512;
-use groestl::Groestl512;
-use jh::Jh512;
-use keccak::Keccak512;
-use luffa::Luffa512;
-use shavite::Shavite512;
-use simd::Simd512;
-use skein::Skein512;
+use crate::blake::Blake512;
+use crate::bmw::Bmw512;
+use crate::cubehash::CubeHash512;
+use crate::echo::Echo512;
+use crate::groestl::Groestl512;
+use crate::jh::Jh512;
+use crate::keccak::Keccak512;
+use crate::luffa::Luffa512;
+use crate::shavite::Shavite512;
+use crate::simd::Simd512;
+use crate::skein::Skein512;
+use crate::util::impl_digest;
 
-/// Computes the Dash proof-of-work hash.
+use digest::{Digest, FixedOutput, Output, Update};
+
+/// Streaming Dash proof-of-work hash.
 ///
-/// The digest is little-endian, matching the consensus byte order of a
-/// block hash.
-pub fn hash(data: &[u8]) -> [u8; 32] {
-  let h = Blake512::digest(data);
-  let h = Bmw512::digest(h);
-  let h = Groestl512::digest(h);
-  let h = Skein512::digest(h);
-  let h = Jh512::digest(h);
-  let h = Keccak512::digest(h);
-  let h = Luffa512::digest(h);
-  let h = CubeHash512::digest(h);
-  let h = Shavite512::digest(h);
-  let h = Simd512::digest(h);
-  let h = Echo512::digest(h);
-  let mut out = [0u8; 32];
-  out.copy_from_slice(&h[..32]);
-  out
+/// Blake absorbs the message as it arrives. BMW through Echo each hash the
+/// previous digest at finalization. The 256-bit digest is little-endian,
+/// matching the consensus byte order of a block hash.
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+pub struct X11 {
+  blake: Blake512,
 }
+
+impl Update for X11 {
+  #[inline]
+  fn update(&mut self, data: &[u8]) {
+    Update::update(&mut self.blake, data);
+  }
+}
+
+impl FixedOutput for X11 {
+  fn finalize_into(self, out: &mut Output<Self>) {
+    let h = self.blake.finalize_fixed();
+    let h = Bmw512::digest(h);
+    let h = Groestl512::digest(h);
+    let h = Skein512::digest(h);
+    let h = Jh512::digest(h);
+    let h = Keccak512::digest(h);
+    let h = Luffa512::digest(h);
+    let h = CubeHash512::digest(h);
+    let h = Shavite512::digest(h);
+    let h = Simd512::digest(h);
+    let h = Echo512::digest(h);
+    out.copy_from_slice(&h[..32]);
+  }
+}
+
+impl_digest!(X11, U32);

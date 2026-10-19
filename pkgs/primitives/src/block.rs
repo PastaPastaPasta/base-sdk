@@ -12,7 +12,8 @@ use crate::{codec_base, codec_type, hash_impl};
 
 use bitcoin_hashes::sha256d;
 use dash_num::{make_hash, Arith256, CompactTarget, Hash256};
-use dash_pow::hash as pow_hash;
+use dash_pow::__deps::digest::Digest;
+use dash_pow::X11;
 use dash_types::codec::BaseCodec;
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{ArrayBuf, Checkable, Hashable, Numeric};
@@ -73,7 +74,8 @@ impl Hashable for BlockHeader {
   fn hash(&self) -> BlockHash {
     let mut buf = ArrayBuf::<80>::new();
     self.encode(&mut buf);
-    BlockHash::from(pow_hash(&buf.into_array()))
+    let digest: [u8; 32] = X11::digest(buf.into_array()).into();
+    BlockHash::from(digest)
   }
 }
 

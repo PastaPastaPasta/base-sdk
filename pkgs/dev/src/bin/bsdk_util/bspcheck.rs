@@ -146,6 +146,8 @@ mod genesis {
   use crate::Application;
 
   use dash_num::Hash256;
+  use dash_pow::__deps::digest::Digest;
+  use dash_pow::X11;
   use dash_primitives::BlockHash;
   use dash_types::codec::DecodeError;
 
@@ -160,7 +162,8 @@ mod genesis {
         },
       });
     }
-    let genesis_hash = BlockHash::from(dash_pow::hash(&data[..80]));
+    let genesis: [u8; 32] = X11::digest(&data[..80]).into();
+    let genesis_hash = BlockHash::from(genesis);
     let expected_hash = BlockHash::from(expected);
     if genesis_hash != expected_hash {
       return Err(BootstrapError::GenesisAnchor {

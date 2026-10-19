@@ -6,7 +6,7 @@
 
 //! Proof of work total and constituent benchmarks.
 
-use dash_pow::{__private as pow_crate, hash as pow_hash};
+use dash_pow::{__private as pow_crate, X11};
 use digest::Digest;
 use divan::{black_box, Bencher};
 
@@ -34,7 +34,9 @@ mod pow {
   #[divan::bench(args = [32, 80, 128, 512, 1024, 2048])]
   fn hash(bencher: Bencher, n: usize) {
     let input = vec![0u8; n];
-    bencher.counter(1u32).bench(|| black_box(pow_hash(black_box(&input))));
+    bencher
+      .counter(1u32)
+      .bench(|| black_box(X11::digest(black_box(&input))));
   }
 }
 

@@ -48,6 +48,8 @@ extensions:
       - ["dash-pkc",         "__deps",    "secp256k1",         ""]
       - ["dash-pkc",         "__deps",    "subtle",            ""]
       - ["dash-pkc",         "__deps",    "zeroize",           ""]
+      # Emits types relying on traits defined by a dependency, part of public API
+      - ["dash-pow",         "__deps",    "digest",            ""]
       # `dash-pkc` names its hashes after the curve, the alias is the public API
       - ["dash-primitives",  "",          "dash_pkc",          "__EddsaPkHash"]
       # Workaround for the orphan rule, not part of public API

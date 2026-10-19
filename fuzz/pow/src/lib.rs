@@ -6,6 +6,7 @@
 
 //! Differential checks of `dash-pow` against the sphlib reference.
 
+use dash_pow::X11;
 use digest::consts::U64;
 use digest::OutputSizeUser;
 
@@ -118,7 +119,7 @@ pub fn assert_same_x11_at(data: &[u8], offset: usize) {
   let (buffer, start) = misalign(data, offset);
   let shifted = &buffer[start..start + data.len()];
   assert_eq!(
-    dash_pow::hash(shifted),
+    <[u8; 32]>::from(<X11 as digest::Digest>::digest(shifted)),
     x11(shifted),
     "x11 differs on {} bytes at offset {offset}",
     data.len(),
