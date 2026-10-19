@@ -7,10 +7,10 @@
 //! Differential fuzz target for JH.
 
 use dash_pow::__private::Jh512;
-use dash_pow_fuzz::{assert_same, digest512, sph};
+use dash_pow_fuzz::{assert_input, sph};
 
 fn main() {
   afl::fuzz!(|data: &[u8]| {
-    assert_same("jh", digest512::<Jh512>, sph::jh, data);
+    assert_input::<Jh512, _>("jh", sph::jh, data);
   });
 }

@@ -21,6 +21,7 @@ extensions:
       - ["dash-params",        "no-serde"]
       - ["dash-pkc",           "enforced, unencodable, opaque"]
       - ["dash-pow",           "no-serde"]
+      - ["dash-pow-fuzz",      "no-serde"]
       - ["dash-primitives",    "enforced, unencodable"]
       - ["dash-script",        "enforced, unencodable"]
       - ["dash-types-marker",  ""]

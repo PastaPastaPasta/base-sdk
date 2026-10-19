@@ -7,10 +7,10 @@
 //! Differential fuzz target for SIMD.
 
 use dash_pow::__private::Simd512;
-use dash_pow_fuzz::{assert_same, digest512, sph};
+use dash_pow_fuzz::{assert_input, sph};
 
 fn main() {
   afl::fuzz!(|data: &[u8]| {
-    assert_same("simd", digest512::<Simd512>, sph::simd, data);
+    assert_input::<Simd512, _>("simd", sph::simd, data);
   });
 }

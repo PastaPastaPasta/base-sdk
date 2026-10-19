@@ -27,6 +27,8 @@ private predicate encloses(string crate, File f) {
     crate = packageName(path.regexpCapture(".*/pkgs/([^/]+)/.*", 1))
     or
     crate = packageName(path.regexpCapture(".*/pkgs/([^/]+/[^/]+)/.*", 1))
+    or
+    crate = packageName(path.regexpCapture(".*/fuzz/([^/]+)/.*", 1)) + "-fuzz"
   )
 }
 

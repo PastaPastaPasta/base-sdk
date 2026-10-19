@@ -7,10 +7,10 @@
 //! Differential fuzz target for ECHO.
 
 use dash_pow::__private::Echo512;
-use dash_pow_fuzz::{assert_same, digest512, sph};
+use dash_pow_fuzz::{assert_input, sph};
 
 fn main() {
   afl::fuzz!(|data: &[u8]| {
-    assert_same("echo", digest512::<Echo512>, sph::echo, data);
+    assert_input::<Echo512, _>("echo", sph::echo, data);
   });
 }
