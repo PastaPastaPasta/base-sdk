@@ -404,6 +404,23 @@ def _anchor_faults(cargo: str, repo_root: Path) -> list[tuple[str, ...]]:
   return rows
 
 
+def _annotated(repo_root: Path) -> dict[str, set[str]]:
+  """Return the features each 'crate.annotation' in 'MODULE.bazel' adds."""
+  source = (repo_root / "MODULE.bazel").read_text(encoding="utf-8")
+  added: dict[str, set[str]] = {}
+  for node in ast.walk(ast.parse(source, "MODULE.bazel")):
+    if not (
+      isinstance(node, ast.Call)
+      and isinstance(node.func, ast.Attribute)
+      and node.func.attr == "annotation"
+    ):
+      continue
+    kwargs = {k.arg: ast.literal_eval(k.value) for k in node.keywords}
+    features = set(kwargs.get("crate_features", []))
+    added.setdefault(kwargs["crate"], set()).update(features)
+  return added
+
+
 def _check_graph(repo_root: Path) -> int | None:
   """Hold Bazel's crates and their features to cargo's; None without a tool."""
   try:
@@ -417,6 +434,11 @@ def _check_graph(repo_root: Path) -> int | None:
     return None
 
   theirs = _bazel_crates(bazel, repo_root)
+  # An annotation adds a feature cargo never resolves, so it is set aside.
+  annotated = _annotated(repo_root)
+  for (name, version), features in theirs.items():
+    if version != "":
+      features -= annotated.get(name, set())
   built = sorted(name for name, version in theirs if version == "")
 
   # What the mapped crates reach with the anchor's features is the floor Bazel

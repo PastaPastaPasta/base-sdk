@@ -31,6 +31,14 @@ crate.from_cargo(
         "x86_64-unknown-linux-gnu",
     ],
 )
+
+# rules_rust hides the target flags from build scripts, so `blst` would probe
+# the builder's CPU for ADX. The x86_64 floor includes ADX, and other targets
+# ignore the feature.
+crate.annotation(
+    crate = "blst",
+    crate_features = ["force-adx"],
+)
 use_repo(crate, "crates")
 
 # Its extension reads its own `MODULE.bazel`, which the lockfile records under

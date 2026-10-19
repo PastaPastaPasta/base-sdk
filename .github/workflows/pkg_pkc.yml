@@ -20,3 +20,8 @@ jobs:
       package: dash-pkc
       package_dir: pkc
     secrets: inherit
+
+  bazel:
+    uses: ./.github/workflows/build_bazel.yml
+    with:
+      package_dir: pkc

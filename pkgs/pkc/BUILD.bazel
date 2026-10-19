@@ -1,0 +1,19 @@
+load("//bazel:rust.bzl", "dash_rust_library")
+
+dash_rust_library(
+    name = "dash-pkc",
+    crate_features = [
+        "bls",
+        "codec",
+        "default",
+        "ecdsa",
+        "eddsa",
+        "full",
+        "serde",
+        "std",
+    ],
+    deps = [
+        "//pkgs/num:dash-num",
+        "//pkgs/types:dash-types",
+    ],
+)
