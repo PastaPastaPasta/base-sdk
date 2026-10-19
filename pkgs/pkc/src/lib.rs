@@ -25,6 +25,11 @@ compile_error!("dash-pkc requires ADX with `bls`, build with `-C target-feature=
 mod aes_cbc;
 #[allow(unused_imports, reason = "ergonomic shim, exports may be unused")]
 mod prelude;
+#[cfg(feature = "bls")]
+mod sealed {
+  /// Sealing marker for traits only this crate implements.
+  pub trait Sealed {}
+}
 #[cfg(test)]
 mod tests;
 

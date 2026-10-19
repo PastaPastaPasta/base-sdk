@@ -12,9 +12,10 @@ use super::curve_consts::HALF_P;
 use super::error::BlsError;
 use super::group::{G1Affine, G2Affine, Point, G1, G2};
 use super::scalar::FR_BITS;
-use super::scheme_ops::{sealed::Sealed, BlsScheme};
+use super::scheme_ops::BlsScheme;
 use super::schemes::BlsScChia;
 use crate::prelude::*;
+use crate::sealed::Sealed;
 
 use blst::min_pk;
 use sha2::{Digest, Sha256};

@@ -14,6 +14,7 @@ use super::schemes::BlsSchemeId;
 use super::{BlsDhBytes, BlsShareId};
 use crate::aes_cbc::{self, AES_BLOCK_LEN, AES_KEY_LEN};
 use crate::prelude::*;
+use crate::sealed::Sealed;
 
 use blst::BLST_ERROR;
 use ff::Field;
@@ -37,15 +38,9 @@ pub(crate) fn verify_ok(result: BLST_ERROR) -> Result<(), BlsError> {
   }
 }
 
-/// Keeps [`BlsScheme`] sealed to types defined in this crate.
-pub(crate) mod sealed {
-  /// Sealing marker for [`BlsScheme`](super::BlsScheme).
-  pub trait Sealed {}
-}
-
 /// BLS operations tied to a specific scheme.
 #[doc(hidden)]
-pub trait BlsScheme: BlsSchemeId + sealed::Sealed + Sized {
+pub trait BlsScheme: BlsSchemeId + Sealed + Sized {
   /// Inner secret key representation.
   type InnerSk: Clone + Send + Sync;
   /// Inner public key representation.
