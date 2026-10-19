@@ -9,6 +9,7 @@ export RUSTDOCFLAGS := "-D warnings"
 mod fuzz "fuzz/mod.just"
 mod num "pkgs/num/mod.just"
 mod pkc "pkgs/pkc/mod.just"
+mod pow "pkgs/pow/mod.just"
 mod types "pkgs/types/mod.just"
 
 import "bazel/mod.just"
