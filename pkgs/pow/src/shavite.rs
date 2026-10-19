@@ -8,8 +8,11 @@
 
 use crate::aes::{block_from_words, round_nk, words_from_block, Block};
 use crate::consts::shavite::{BLOCK, IV};
-use crate::util::memops::{digest_from_u32_le, load_u32_le, zero_extend};
+use crate::util::buffer::{Buffer, Compress};
+use crate::util::impl_digest;
+use crate::util::memops::{digest_from_u32_le, load_u32_le};
 
+use digest::{FixedOutput, Output, Update};
 use wide::u32x4;
 
 const SCHEDULE_BUNDLES: usize = 112;
@@ -209,7 +212,9 @@ fn rotate_columns(state: &mut State) {
 }
 
 /// Runs the SHAvite-3-512 compression function.
-#[inline(always)]
+// Inlined at every call site, the compression runs slower, so all callers
+// share one copy.
+#[inline(never)]
 fn compress_block(chaining_value: &mut State, msg: &[u8; BLOCK], counter: u128) {
   let schedule = expand_round_keys(msg, counter);
   compress_schedule(chaining_value, &schedule);
@@ -246,48 +251,79 @@ fn compress_schedule(chaining_value: &mut State, schedule: &[Bundle; SCHEDULE_BU
   }
 }
 
-fn hash_to_words(data: &[u8]) -> State {
-  let mut chaining_value = IV;
-  let mut counter = 0u128;
-
-  let (blocks, tail) = data.as_chunks::<BLOCK>();
-  for block in blocks {
-    counter = counter.wrapping_add(1024);
-    compress_block(&mut chaining_value, block, counter);
-  }
-
-  let used = tail.len();
-  counter = counter.wrapping_add(used as u128 * 8);
-  let saved_counter = counter;
-
-  let mut block: [u8; BLOCK] = zero_extend(tail);
-  block[used] = 0x80;
-  if used == 0 {
-    counter = 0;
-  } else if used >= 110 {
-    compress_block(&mut chaining_value, &block, counter);
-    block = [0u8; BLOCK];
-    counter = 0;
-  }
-
-  block[110..126].copy_from_slice(&saved_counter.to_le_bytes());
-  block[126..].copy_from_slice(&512u16.to_le_bytes());
-  compress_block(&mut chaining_value, &block, counter);
-
-  chaining_value
+/// Chaining value and HAIFA bit counter.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct Core {
+  h: State,
+  counter: u128,
 }
 
-pub fn hash512(data: &[u8]) -> [u8; 64] {
-  digest_from_u32_le(&hash_to_words(data))
+impl Compress<BLOCK> for Core {
+  #[inline(always)]
+  fn compress(&mut self, block: &[u8; BLOCK]) {
+    self.counter = self.counter.wrapping_add(1024);
+    compress_block(&mut self.h, block, self.counter);
+  }
 }
+
+/// Streaming SHAvite-3-512.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Shavite512 {
+  core: Core,
+  buffer: Buffer<BLOCK>,
+}
+
+impl Default for Shavite512 {
+  #[inline]
+  fn default() -> Self {
+    Self {
+      core: Core { h: IV, counter: 0 },
+      buffer: Buffer::new(),
+    }
+  }
+}
+
+impl Update for Shavite512 {
+  #[inline]
+  fn update(&mut self, data: &[u8]) {
+    self.buffer.update(data, &mut self.core);
+  }
+}
+
+impl FixedOutput for Shavite512 {
+  fn finalize_into(mut self, out: &mut Output<Self>) {
+    let used = self.buffer.len();
+    let total = self.core.counter.wrapping_add(used as u128 * 8);
+    let h = &mut self.core.h;
+
+    // HAIFA keys each block with the bits counted so far and a block made
+    // only of padding with zero. The 128-bit count and the 16-bit digest
+    // length take the last 18 bytes, so a tail past byte 109 spills over.
+    let mut counter = total;
+    let block = self.buffer.pad(0x80);
+    if used == 0 {
+      counter = 0;
+    } else if used >= 110 {
+      compress_block(h, block, counter);
+      *block = [0u8; BLOCK];
+      counter = 0;
+    }
+    block[110..126].copy_from_slice(&total.to_le_bytes());
+    block[126..].copy_from_slice(&512u16.to_le_bytes());
+    compress_block(h, block, counter);
+    out.copy_from_slice(&digest_from_u32_le(h));
+  }
+}
+
+impl_digest!(Shavite512, U64);
 
 #[cfg(test)]
 mod tests {
-  use super::hash512;
-  use crate::tests::run_nist_kat;
+  use super::Shavite512;
+  use crate::tests::run_nist_kat_chunked;
 
   #[test]
   fn nist_kat() {
-    run_nist_kat("shavite", hash512);
+    run_nist_kat_chunked::<Shavite512>("shavite");
   }
 }

@@ -46,7 +46,7 @@ bench_algo!(groestl => pow_crate::Groestl512::digest);
 bench_algo!(jh => pow_crate::Jh512::digest);
 bench_algo!(keccak => pow_crate::Keccak512::digest);
 bench_algo!(luffa => pow_crate::Luffa512::digest);
-bench_algo!(shavite => pow_crate::shavite::hash512);
+bench_algo!(shavite => pow_crate::Shavite512::digest);
 bench_algo!(simd => pow_crate::simd::hash512);
 bench_algo!(skein => pow_crate::Skein512::digest);
 

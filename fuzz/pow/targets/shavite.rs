@@ -6,11 +6,11 @@
 
 //! Differential fuzz target for SHAvite.
 
-use dash_pow::__private::shavite;
-use dash_pow_fuzz::{assert_same, sph};
+use dash_pow::__private::Shavite512;
+use dash_pow_fuzz::{assert_same, digest512, sph};
 
 fn main() {
   afl::fuzz!(|data: &[u8]| {
-    assert_same("shavite", shavite::hash512, sph::shavite, data);
+    assert_same("shavite", digest512::<Shavite512>, sph::shavite, data);
   });
 }
