@@ -32,7 +32,7 @@ pub fn encode_v2(msg: &P2pMsg, buf: &mut Vec<u8>) {
 }
 
 /// The type byte, a 12-byte command and a [`MAX_P2P_PAYLOAD_SIZE`] payload.
-const MAX_V2_CONTENTS: usize = 1 + 12 + MAX_P2P_PAYLOAD_SIZE;
+const MAX_V2_CONTENTS_SIZE: usize = 1 + 12 + MAX_P2P_PAYLOAD_SIZE;
 
 /// Decodes V2 message contents into a `P2pMsg`.
 ///
@@ -58,11 +58,11 @@ pub fn decode_v2(contents: &[u8]) -> Result<P2pMsg, P2pDecodeError> {
     None
   };
 
-  if contents.len() > MAX_V2_CONTENTS {
+  if contents.len() > MAX_V2_CONTENTS_SIZE {
     return Err(P2pDecodeError::PayloadTooLarge {
       command: cmd.unwrap_or(CommandString::from_static("")),
       size: contents.len(),
-      max: MAX_V2_CONTENTS,
+      max: MAX_V2_CONTENTS_SIZE,
     });
   }
   let cmd = cmd.ok_or(P2pDecodeError::UnknownShortId { id: short_id })?;

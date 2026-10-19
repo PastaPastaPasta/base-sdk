@@ -15,16 +15,17 @@ use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
 use dash_types::CompactSize;
 
-/// Smallest `headers` entry, an 80-byte header and a one-byte tx count.
-const MIN_HEADERS_ENTRY: usize = 81;
+/// Size of the smallest `headers` entry, an 80-byte header and a one-byte
+/// tx count.
+const MIN_HEADERS_SIZE: usize = 81;
 
-/// Reads an entry count of at most `limit`.
+/// Reads an entry count of at most `max_count`.
 ///
-/// A count the remaining input cannot hold at `min_entry` bytes each is
+/// A count the remaining input cannot hold at `min_size` bytes each is
 /// [`DecodeError::Eof`], reported before anything is allocated for it.
-pub(super) fn decode_count(data: &mut &[u8], limit: usize, min_entry: usize) -> Result<usize, DecodeError> {
-  let count = CompactSize::decode(data)?.into_len(limit)?;
-  codec::ensure(data, count * min_entry)?;
+pub(super) fn decode_count(data: &mut &[u8], max_count: usize, min_size: usize) -> Result<usize, DecodeError> {
+  let count = CompactSize::decode(data)?.into_len(max_count)?;
+  codec::ensure(data, count * min_size)?;
   Ok(count)
 }
 
@@ -61,7 +62,7 @@ impl_p2p!(Headers);
 
 impl BaseCodec for Headers {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let count = decode_count(data, Self::MAX_COUNT, MIN_HEADERS_ENTRY)?;
+    let count = decode_count(data, Self::MAX_COUNT, MIN_HEADERS_SIZE)?;
     let mut headers = Vec::with_capacity(count);
     for _ in 0..count {
       headers.push(BlockHeader {
@@ -107,12 +108,12 @@ mod tests {
 
   #[rstest]
   fn counts_past_the_input_fail_before_any_header() {
-    let payload = [&[2][..], &[0; MIN_HEADERS_ENTRY]].concat();
+    let payload = [&[2][..], &[0; MIN_HEADERS_SIZE]].concat();
     assert_eq!(
       Headers::decode(&mut &payload[..]),
       Err(DecodeError::Eof {
-        needed: 2 * MIN_HEADERS_ENTRY,
-        remaining: MIN_HEADERS_ENTRY,
+        needed: 2 * MIN_HEADERS_SIZE,
+        remaining: MIN_HEADERS_SIZE,
       })
     );
   }

@@ -16,9 +16,9 @@ use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{CompactSize, Hashable};
 
-/// Smallest compressed header, made of flags, a merkle root, a time delta
-/// and a nonce.
-const MIN_HEADERS2_ENTRY: usize = 39;
+/// Size of the smallest compressed header, made of flags, a merkle root, a
+/// time delta and a nonce.
+const MIN_HEADERS2_SIZE: usize = 39;
 
 /// Maximum entries in the MRU version cache.
 const MAX_VERSION_CACHE: usize = 7;
@@ -257,7 +257,7 @@ impl_p2p!(Headers2);
 
 impl BaseCodec for Headers2 {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let count = decode_count(data, Self::MAX_COUNT, MIN_HEADERS2_ENTRY)?;
+    let count = decode_count(data, Self::MAX_COUNT, MIN_HEADERS2_SIZE)?;
     let mut state = CompressionState::new();
     let mut headers = Vec::with_capacity(count);
     for _ in 0..count {
@@ -347,12 +347,12 @@ mod tests {
 
   #[rstest]
   fn counts_past_the_input_fail_before_any_header() {
-    let payload = [&[2][..], &[0; MIN_HEADERS2_ENTRY]].concat();
+    let payload = [&[2][..], &[0; MIN_HEADERS2_SIZE]].concat();
     assert_eq!(
       Headers2::decode(&mut &payload[..]),
       Err(DecodeError::Eof {
-        needed: 2 * MIN_HEADERS2_ENTRY,
-        remaining: MIN_HEADERS2_ENTRY,
+        needed: 2 * MIN_HEADERS2_SIZE,
+        remaining: MIN_HEADERS2_SIZE,
       })
     );
   }
