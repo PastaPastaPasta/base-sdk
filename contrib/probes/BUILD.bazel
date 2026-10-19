@@ -4,6 +4,7 @@ load("@rules_cc//cc:defs.bzl", "cc_binary")
 # against whatever the host provides, so they are skipped instead.
 PINNED_SYSROOT = select({
     "@platforms//os:linux": [],
+    "@platforms//os:osx": [],
     "//conditions:default": ["@platforms//:incompatible"],
 })
 

@@ -8,6 +8,11 @@ build --symlink_prefix=.cache/bazel-
 # also configure whatever compiler the host offers.
 common --repo_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
 
+# The oldest macOS the artifacts run on. Bazel otherwise passes the host's
+# own version, which then varies with the builder.
+build --host_macos_minimum_os=14.0
+build --macos_minimum_os=14.0
+
 # Only `just zglock` rewrites the lock; a stale one fails everywhere else, so
 # no host Bazel can quietly change what CI then trusts.
 common --lockfile_mode=error

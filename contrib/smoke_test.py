@@ -22,6 +22,7 @@ import contextlib
 import dataclasses
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -41,7 +42,11 @@ from common import (
 GREETING = "Hello, world!"
 
 # Host systems whose sysroot Bazel pins; the probes build on these alone.
-_PINNED_SYSROOTS = ("Linux",)
+_PINNED_SYSROOTS = ("Darwin", "Linux")
+
+# Where Bazel pins the macOS deployment target and the SDK it builds with.
+_MACOS_MIN_RE = re.compile(r"^build\s+--macos_minimum_os=(\S+)$", re.MULTILINE)
+_MACOS_SDK_RE = re.compile(r'^\s+sdk_version = "([^"]+)",$', re.MULTILINE)
 
 # Lines of a failed Bazel build shown beneath the report.
 LOG_TAIL = 20
@@ -335,11 +340,23 @@ def bazel(report: Report, root: Path) -> None:
       print(f"    {line}", file=sys.stderr)
     return
 
-  if platform.system() not in _PINNED_SYSROOTS:
-    report.add("bazel host", "-", "skipped, no pinned sysroot")
-    return
+  want = host_kind()
+  if want.fmt == "Mach-O":
+    want = Kind(want.fmt, want.arch, *macos_pins(root))
   for lang, probe in probes.items():
-    report.greets("bazel host", lang, probe, host_kind())
+    report.greets("bazel host", lang, probe, want)
+
+
+def macos_pins(root: Path) -> tuple[str, str]:
+  """Return the deployment target and SDK version Bazel pins for macOS."""
+  bazelrc = (root / ".bazelrc").read_text(encoding="utf-8")
+  darwin = (root / "bazel" / "darwin.MODULE.bazel").read_text(encoding="utf-8")
+  minos = _MACOS_MIN_RE.search(bazelrc)
+  sdk = _MACOS_SDK_RE.search(darwin)
+  return (
+    minos.group(1) if minos else "unpinned",
+    sdk.group(1) if sdk else "unpinned",
+  )
 
 
 def main() -> int:
