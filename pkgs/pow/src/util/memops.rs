@@ -160,6 +160,12 @@ pub(crate) fn load_u64s_le<const N: usize>(buf: &[u8]) -> [u64; N] {
   core::array::from_fn(|i| load_u64_le(buf, i))
 }
 
+/// Reads `N` big-endian `u64` words from the start of `buf`.
+#[inline]
+pub(crate) fn load_u64s_be<const N: usize>(buf: &[u8]) -> [u64; N] {
+  core::array::from_fn(|i| load_u64_be(buf, i))
+}
+
 /// Reads `N` little-endian `u32` words from the start of `buf`.
 #[inline]
 pub(crate) fn load_u32s_le<const N: usize>(buf: &[u8]) -> [u32; N] {
