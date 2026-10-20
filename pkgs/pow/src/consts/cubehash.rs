@@ -6,6 +6,8 @@
 
 //! CubeHash-16/32-512 constants.
 
+use crate::util::const_array;
+
 /// Block size in bytes.
 pub(crate) const BLOCK: usize = 32;
 
@@ -13,43 +15,37 @@ pub(crate) const BLOCK: usize = 32;
 // index `16d + 8i + 4j + 2k + l`. A round adds the lower half into the upper
 // half, rotates, swaps an axis and xors, twice over with rotations 7 and 11.
 //
-// `add_rotate` and `xor_phase` take index tables, so the axis swaps fold into
-// the operand positions. Phase 1 of the even round is the identity and its
-// phase 2 add carries the i and j swaps.
-static ADD2_SRC: [usize; 16] = [8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7];
-#[rustfmt::skip]
-static ADD2_DST: [usize; 16] = [ 2,  3,  0,  1,  6,  7,  4,  5, 10, 11,  8,  9, 14, 15, 12, 13];
+// The swaps flip i then j in the lower half and k then l in the upper half.
+// Each table flips the indices of the swaps in effect for its half.
 
-/// Phase 2 xor of the even round, carrying the k and l swaps.
-#[rustfmt::skip]
-static XOR2_DST: [usize; 16] = [12, 13, 14, 15,  8,  9, 10, 11,  4,  5,  6,  7,  0,  1,  2,  3];
-#[rustfmt::skip]
-static XOR2_SRC: [usize; 16] = [ 2,  3,  0,  1,  6,  7,  4,  5, 10, 11,  8,  9, 14, 15, 12, 13];
+/// Phase 2 add of the even round, after the i and k swaps.
+static ADD2_SRC: [usize; 16] = xor_mask(8);
+static ADD2_DST: [usize; 16] = xor_mask(2);
 
-/// Phase 1 add of the odd round, carrying the swaps the even round deferred.
-#[rustfmt::skip]
-static ODD_ADD1_SRC: [usize; 16] = [12, 13, 14, 15,  8,  9, 10, 11,  4,  5,  6,  7,  0,  1,  2,  3];
-#[rustfmt::skip]
-static ODD_ADD1_DST: [usize; 16] = [ 3,  2,  1,  0,  7,  6,  5,  4, 11, 10,  9,  8, 15, 14, 13, 12];
+/// Phase 2 xor of the even round, after the j swap joins i in the lower half.
+static XOR2_DST: [usize; 16] = xor_mask(12);
+static XOR2_SRC: [usize; 16] = xor_mask(2);
 
-/// Phase 1 xor of the odd round.
-#[rustfmt::skip]
-static ODD_XOR1_DST: [usize; 16] = [ 4,  5,  6,  7,  0,  1,  2,  3, 12, 13, 14, 15,  8,  9, 10, 11];
-#[rustfmt::skip]
-static ODD_XOR1_SRC: [usize; 16] = [ 3,  2,  1,  0,  7,  6,  5,  4, 11, 10,  9,  8, 15, 14, 13, 12];
+/// Phase 1 add of the odd round, after the l swap joins k in the upper half.
+static ODD_ADD1_SRC: [usize; 16] = xor_mask(12);
+static ODD_ADD1_DST: [usize; 16] = xor_mask(3);
 
-/// Phase 2 add of the odd round, after which the xor restores the identity
-/// layout.
-#[rustfmt::skip]
-static ODD_ADD2_SRC: [usize; 16] = [ 4,  5,  6,  7,  0,  1,  2,  3, 12, 13, 14, 15,  8,  9, 10, 11];
-#[rustfmt::skip]
-static ODD_ADD2_DST: [usize; 16] = [ 1,  0,  3,  2,  5,  4,  7,  6,  9,  8, 11, 10, 13, 12, 15, 14];
+/// Phase 1 xor of the odd round, after a second i swap cancels the first.
+static ODD_XOR1_DST: [usize; 16] = xor_mask(4);
+static ODD_XOR1_SRC: [usize; 16] = xor_mask(3);
 
-/// Phase 2 xor of the odd round, which lands in the identity layout.
-#[rustfmt::skip]
-static ODD_XOR2_DST: [usize; 16] = [ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15];
-#[rustfmt::skip]
-static ODD_XOR2_SRC: [usize; 16] = [ 1,  0,  3,  2,  5,  4,  7,  6,  9,  8, 11, 10, 13, 12, 15, 14];
+/// Phase 2 add of the odd round, after a second k swap cancels the first.
+static ODD_ADD2_SRC: [usize; 16] = xor_mask(4);
+static ODD_ADD2_DST: [usize; 16] = xor_mask(1);
+
+/// Upper source of the odd round's phase 2 xor, after a second j swap clears
+/// the lower half. The final l swap then clears the upper half.
+static ODD_XOR2_SRC: [usize; 16] = xor_mask(1);
+
+/// Index permutation `n -> n ^ mask`, flipping the coordinates set in `mask`.
+const fn xor_mask(mask: usize) -> [usize; 16] {
+  const_array!(0; 16; |n| n ^ mask)
+}
 
 /// Runs `upper[dst[n]] += lower[src[n]]; lower[src[n]] <<<= rot` for every `n`.
 const fn add_rotate(s: &mut [u32; 32], rot: u32, src: &[usize; 16], dst: &[usize; 16]) {
@@ -70,9 +66,8 @@ const fn xor_phase(s: &mut [u32; 32], dst: &[usize; 16], src: &[usize; 16]) {
   }
 }
 
-/// Identity permutation for phase-1 of even rounds.
-#[rustfmt::skip]
-static IDENTITY: [usize; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+/// Identity permutation, for a half with no swap in effect.
+static IDENTITY: [usize; 16] = xor_mask(0);
 
 /// Applies one pair of CubeHash rounds (even + odd) in place.
 ///
@@ -88,7 +83,7 @@ pub(super) const fn round_pair(s: &mut [u32; 32]) {
   add_rotate(s, 7, &ODD_ADD1_SRC, &ODD_ADD1_DST);
   xor_phase(s, &ODD_XOR1_DST, &ODD_XOR1_SRC);
   add_rotate(s, 11, &ODD_ADD2_SRC, &ODD_ADD2_DST);
-  xor_phase(s, &ODD_XOR2_DST, &ODD_XOR2_SRC);
+  xor_phase(s, &IDENTITY, &ODD_XOR2_SRC);
 }
 
 /// CubeHash-16/32-512 IV, const-derived from parameters.
