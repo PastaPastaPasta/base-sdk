@@ -15,7 +15,7 @@ This crate supplies the wide blob and arithmetic types used by the Dash Base SDK
 To import `dash-num` to your project, add the following to the `[dependencies]` section in `Cargo.toml`
 
 ```toml
-dash-num = "0.1.0-beta"
+dash-num = "0.2.0-beta"
 ```
 
 To use an unpublished revision of this crate, identify the commit hash to pin against and use the following replacing

@@ -33,7 +33,7 @@ base58ck = { workspace = true, optional = true, features = ["alloc"] }
 bitcoin_hashes = { workspace = true, features = ["alloc"] }
 blst = { version = "0.3", default-features = false, optional = true }
 cfg-if = "1"
-dash-num = { version = "0.1.0-beta", path = "../num", default-features = false }
+dash-num = { version = "0.2.0-beta", path = "../num", default-features = false }
 dash-types = { version = "0.2.0-beta", path = "../types", default-features = false }
 ed25519-dalek = { version = "3", default-features = false, features = [
   "fast",

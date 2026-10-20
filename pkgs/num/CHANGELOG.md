@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.0-beta] - 2026-10-20
+
 ### Added
 
 - `CompactTarget::block_proof`, the work contributed by a block with that target, zero for negative, overflowing or
@@ -39,5 +41,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Initial release.
 
-[unreleased]: https://github.com/dashpay/base-sdk/compare/dash-num-0.1.0-beta...HEAD
+[unreleased]: https://github.com/dashpay/base-sdk/compare/dash-num-0.2.0-beta...HEAD
+[0.2.0-beta]: https://github.com/dashpay/base-sdk/compare/dash-num-0.1.0-beta...dash-num-0.2.0-beta
 [0.1.0-beta]: https://github.com/dashpay/base-sdk/releases/tag/dash-num-0.1.0-beta
