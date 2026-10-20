@@ -9,6 +9,11 @@ imported as needed.
 
 <!-- [include:README.md:crate-info] -->
 
+## System Requirements
+
+Some crates rely on instruction set extensions that set hardware minimums for the architectures listed below.
+<!-- [include:pkgs/pow/README.md:sysinfo] -->
+
 ## Is the SDK a full node?
 
 The Base SDK is not a full node implementation nor does it intend to be. `no_std` + `alloc` restricts I/O and networking
