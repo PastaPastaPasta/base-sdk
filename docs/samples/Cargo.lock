@@ -304,7 +304,7 @@ dependencies = [
 
 [[package]]
 name = "dash-types"
-version = "0.1.0-beta"
+version = "0.2.0-beta"
 dependencies = [
  "base58ck",
  "bitcoin-consensus-encoding",

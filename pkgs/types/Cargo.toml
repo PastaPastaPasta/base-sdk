@@ -1,6 +1,6 @@
 [package]
 name = "dash-types"
-version = "0.1.0-beta"
+version = "0.2.0-beta"
 description = "Fixed-width and buffered type (de)serialization for the Dash Base SDK"
 keywords = ["base-sdk", "dash", "dashcore", "dashpay"]
 categories = [

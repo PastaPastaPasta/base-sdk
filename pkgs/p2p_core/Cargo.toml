@@ -44,7 +44,7 @@ dash-pkc = { version = "0.1.0-beta", path = "../pkc", features = ["codec"] }
 dash-script = { version = "0.0.0", path = "../script" }
 dash-params = { version = "0.0.0", path = "../params" }
 dash-primitives = { version = "0.0.0", path = "../primitives" }
-dash-types = { version = "0.1.0-beta", path = "../types", default-features = false, features = [
+dash-types = { version = "0.2.0-beta", path = "../types", default-features = false, features = [
   "codec",
 ] }
 serde = { workspace = true, features = [

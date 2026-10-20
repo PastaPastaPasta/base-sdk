@@ -52,7 +52,7 @@ serde = [
 ambassador = { workspace = true }
 bitcoin-consensus-encoding = { workspace = true, optional = true }
 bitcoin-internals = { workspace = true }
-dash-types = { version = "0.1.0-beta", path = "../types", default-features = false }
+dash-types = { version = "0.2.0-beta", path = "../types", default-features = false }
 delegate = { workspace = true }
 hex-conservative = { workspace = true }
 serde = { workspace = true, features = [
