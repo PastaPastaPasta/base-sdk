@@ -7,7 +7,8 @@
 // @ts-check
 
 // Syncs pull request topic labels with the project board buckets, with the
-// board as the source of truth. Boards and topics come from `board.json`.
+// board as the source of truth. Boards and topics come from `board.json`, which maps each board
+// bucket to its label.
 
 const fs = require("node:fs");
 const path = require("node:path");
@@ -136,11 +137,11 @@ async function settle(write, core, what) {
 }
 
 // Creates missing topic labels. GitHub label names are case-insensitive, so a
-// label differing only in case is renamed to the topic.
-async function mintLabels(github, owner, repo, topics, core) {
+// label differing only in case is renamed to the topic label.
+async function mintLabels(github, owner, repo, topicLabels, core) {
   const labels = await github.paginate(github.rest.issues.listLabelsForRepo, { owner, repo, per_page: 100 });
   const held = new Map(labels.map((l) => [l.name.toLowerCase(), l.name]));
-  for (const name of topics) {
+  for (const name of topicLabels) {
     const present = held.get(name.toLowerCase());
     if (present === name) {
       continue;
@@ -170,14 +171,16 @@ module.exports = async ({ github, context, core }) => {
 
   // Allowed order breaks ties between boards.
   const config = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
-  const topics = new Set(config.topics);
+  const topics = new Set(Object.keys(config.topics));
+  const labelOf = new Map(Object.entries(config.topics));
+  const bucketOf = new Map(Object.entries(config.topics).map(([bucket, label]) => [label, bucket]));
   const boards = [];
   for (const entry of config.projects.allow) {
     const project = { ...config.projects.defaults, ...entry };
     boards.push(await readBoard(token, project, topics, `${owner}/${repo}`, core));
   }
 
-  await mintLabels(github, owner, repo, topics, core);
+  await mintLabels(github, owner, repo, [...labelOf.values()], core);
 
   // Apply board buckets to labels for all pull requests, open or not.
   const settled = new Map();
@@ -194,14 +197,15 @@ module.exports = async ({ github, context, core }) => {
         continue;
       }
       settled.set(number, bucket);
-      if (!labels.includes(bucket)) {
-        const call = github.rest.issues.addLabels({ owner, repo, issue_number: number, labels: [bucket] });
+      const label = labelOf.get(bucket);
+      if (!labels.includes(label)) {
+        const call = github.rest.issues.addLabels({ owner, repo, issue_number: number, labels: [label] });
         if (await settle(call, core, `PR #${number}`)) {
-          core.info(`PR #${number}: labelled ${bucket}`);
+          core.info(`PR #${number}: labelled ${label}`);
         }
       }
       for (const name of labels) {
-        if (name !== bucket && topics.has(name)) {
+        if (name !== label && bucketOf.has(name)) {
           const call = github.rest.issues.removeLabel({ owner, repo, issue_number: number, name });
           if (await settle(call, core, `PR #${number} label ${name}`)) {
             core.info(`PR #${number}: pruned ${name}`);
@@ -217,8 +221,8 @@ module.exports = async ({ github, context, core }) => {
     if (unbucketed.length === 0) {
       continue;
     }
-    const held = pr.labels.map((l) => l.name).filter((n) => topics.has(n));
-    const topic = settled.get(pr.number) ?? (held.length === 1 ? held[0] : undefined);
+    const held = pr.labels.map((l) => l.name).filter((n) => bucketOf.has(n));
+    const topic = settled.get(pr.number) ?? (held.length === 1 ? bucketOf.get(held[0]) : undefined);
     if (topic === undefined) {
       core.warning(`PR #${pr.number} is unbucketed and names ${held.length} topics`);
       continue;

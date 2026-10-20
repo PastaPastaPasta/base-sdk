@@ -9,13 +9,13 @@
       { "number": 14 }
     ]
   },
-  "topics": [
-    "Build/CI",
-    "Codec",
-    "Crypto",
-    "Documentation",
-    "FFI",
-    "P2P",
-    "Primitives"
-  ]
+  "topics": {
+    "Build/CI": "Build/CI",
+    "Codec": "Codec",
+    "Crypto": "Crypto",
+    "Documentation": "Documentation",
+    "FFI": "FFI",
+    "P2P": "P2P",
+    "Primitives": "Primitives"
+  }
 }
