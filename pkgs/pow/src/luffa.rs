@@ -20,72 +20,65 @@ use wide::u32x4;
 
 type WordVec = u32x4;
 
+/// Applies the 4-input bitslice S-box in place to four words or vectors.
+macro_rules! sub_crumb {
+  ($x0:expr, $x1:expr, $x2:expr, $x3:expr) => {{
+    let saved = $x0;
+    $x0 |= $x1;
+    $x2 ^= $x3;
+    $x1 = !$x1;
+    $x0 ^= $x3;
+    $x3 &= saved;
+    $x1 ^= $x3;
+    $x3 ^= $x2;
+    $x2 &= $x0;
+    $x0 = !$x0;
+    $x2 ^= $x1;
+    $x1 |= $x3;
+    let mixed = saved ^ $x1;
+    $x3 ^= $x2;
+    $x2 &= $x1;
+    $x1 ^= $x0;
+    $x0 = mixed;
+  }};
+}
+
+/// Applies the rotation-based diffusion in place to a low and a high word or
+/// vector, rotating with `$rotl`.
+macro_rules! mix_word {
+  ($low:expr, $high:expr, $rotl:expr) => {{
+    $high ^= $low;
+    $low = $rotl($low, 2) ^ $high;
+    $high = $rotl($high, 14) ^ $low;
+    $low = $rotl($low, 10) ^ $high;
+    $high = $rotl($high, 1);
+  }};
+}
+
 /// Applies the 4-input bitslice S-box to four selected words.
 #[cfg_attr(not(debug_assertions), inline(always))]
 fn apply_sub_crumb(words: &mut [u32; 8], a: usize, b: usize, c: usize, d: usize) {
   let (mut x0, mut x1, mut x2, mut x3) = (words[a], words[b], words[c], words[d]);
-  let saved_x0 = x0;
-  x0 |= x1;
-  x2 ^= x3;
-  x1 = !x1;
-  x0 ^= x3;
-  x3 &= saved_x0;
-  x1 ^= x3;
-  x3 ^= x2;
-  x2 &= x0;
-  x0 = !x0;
-  x2 ^= x1;
-  x1 |= x3;
-  let mixed_x0 = saved_x0 ^ x1;
-  x3 ^= x2;
-  x2 &= x1;
-  x1 ^= x0;
-  words[a] = mixed_x0;
-  words[b] = x1;
-  words[c] = x2;
-  words[d] = x3;
+  sub_crumb!(x0, x1, x2, x3);
+  (words[a], words[b], words[c], words[d]) = (x0, x1, x2, x3);
 }
 
 /// Applies the 4-input bitslice S-box to four word-position vectors.
 #[cfg_attr(not(debug_assertions), inline(always))]
 fn apply_sub_crumb_vec(a0: &mut WordVec, a1: &mut WordVec, a2: &mut WordVec, a3: &mut WordVec) {
-  let saved_a0 = *a0;
-  *a0 |= *a1;
-  *a2 ^= *a3;
-  *a1 = !*a1;
-  *a0 ^= *a3;
-  *a3 &= saved_a0;
-  *a1 ^= *a3;
-  *a3 ^= *a2;
-  *a2 &= *a0;
-  *a0 = !*a0;
-  *a2 ^= *a1;
-  *a1 |= *a3;
-  let mixed_a0 = saved_a0 ^ *a1;
-  *a3 ^= *a2;
-  *a2 &= *a1;
-  *a1 ^= *a0;
-  *a0 = mixed_a0;
+  sub_crumb!(*a0, *a1, *a2, *a3);
 }
 
 /// Applies the rotation-based diffusion between one low word and one high word.
 #[cfg_attr(not(debug_assertions), inline(always))]
 fn apply_mix_word(words: &mut [u32; 8], low: usize, high: usize) {
-  words[high] ^= words[low];
-  words[low] = words[low].rotate_left(2) ^ words[high];
-  words[high] = words[high].rotate_left(14) ^ words[low];
-  words[low] = words[low].rotate_left(10) ^ words[high];
-  words[high] = words[high].rotate_left(1);
+  mix_word!(words[low], words[high], u32::rotate_left);
 }
 
 /// Applies the rotation-based diffusion to two word-position vectors.
 #[cfg_attr(not(debug_assertions), inline(always))]
 fn apply_mix_word_vec(low: &mut WordVec, high: &mut WordVec) {
-  *high ^= *low;
-  *low = rotl_u32x4(*low, 2) ^ *high;
-  *high = rotl_u32x4(*high, 14) ^ *low;
-  *low = rotl_u32x4(*low, 10) ^ *high;
-  *high = rotl_u32x4(*high, 1);
+  mix_word!(*low, *high, rotl_u32x4);
 }
 
 /// Applies the `M2` feedback step.
