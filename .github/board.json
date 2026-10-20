@@ -10,12 +10,12 @@
     ]
   },
   "topics": {
-    "Build/CI": "Build/CI",
-    "Codec": "Codec",
-    "Crypto": "Crypto",
-    "Documentation": "Documentation",
-    "FFI": "FFI",
-    "P2P": "P2P",
-    "Primitives": "Primitives"
+    "Build/CI": "topic:Build/CI",
+    "Codec": "topic:Codec",
+    "Crypto": "topic:Crypto",
+    "Documentation": "topic:Docs",
+    "FFI": "topic:Bazel/FFI",
+    "P2P": "topic:P2P",
+    "Primitives": "topic:Primitives"
   }
 }
