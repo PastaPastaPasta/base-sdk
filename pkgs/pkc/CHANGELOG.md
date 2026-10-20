@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.0-beta] - 2026-10-20
+
 ### Added
 
 - `Bls{Public,Secret}Key::negate`, `BlsSecretKey::mul_tweak`, `EcdsaPublicKey::negate` and `EcdsaSecretKey::mul_tweak`.
@@ -66,5 +68,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Initial release.
 
-[unreleased]: https://github.com/dashpay/base-sdk/compare/dash-pkc-0.1.0-beta...HEAD
+[unreleased]: https://github.com/dashpay/base-sdk/compare/dash-pkc-0.2.0-beta...HEAD
+[0.2.0-beta]: https://github.com/dashpay/base-sdk/compare/dash-pkc-0.1.0-beta...dash-pkc-0.2.0-beta
 [0.1.0-beta]: https://github.com/dashpay/base-sdk/releases/tag/dash-pkc-0.1.0-beta

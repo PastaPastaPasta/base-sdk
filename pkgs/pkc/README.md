@@ -28,7 +28,7 @@ consensus-stable types, including
 To import `dash-pkc` to your project, add the following to the `[dependencies]` section in `Cargo.toml`
 
 ```toml
-dash-pkc = "0.1.0-beta"
+dash-pkc = "0.2.0-beta"
 ```
 
 To use an unpublished revision of this crate, identify the commit hash to pin against and use the following replacing

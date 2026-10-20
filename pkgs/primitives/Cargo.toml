@@ -43,7 +43,7 @@ bitcoin-primitives = { workspace = true, features = ["alloc"] }
 bitcoin_hashes = { workspace = true, features = ["alloc"] }
 bitcoin-units = { workspace = true, features = ["alloc"] }
 dash-num = { version = "0.2.0-beta", path = "../num", features = ["codec"] }
-dash-pkc = { version = "0.1.0-beta", path = "../pkc", default-features = false, features = [
+dash-pkc = { version = "0.2.0-beta", path = "../pkc", default-features = false, features = [
   "bls",
   "codec",
   "ecdsa",
