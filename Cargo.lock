@@ -447,7 +447,7 @@ dependencies = [
 
 [[package]]
 name = "dash-num"
-version = "0.1.0-beta"
+version = "0.2.0-beta"
 dependencies = [
  "ambassador",
  "bitcoin-consensus-encoding",
@@ -497,7 +497,7 @@ dependencies = [
 
 [[package]]
 name = "dash-pkc"
-version = "0.1.0-beta"
+version = "0.2.0-beta"
 dependencies = [
  "aes",
  "base58ck",
@@ -574,7 +574,7 @@ dependencies = [
 
 [[package]]
 name = "dash-types"
-version = "0.1.0-beta"
+version = "0.2.0-beta"
 dependencies = [
  "base58ck",
  "bitcoin-consensus-encoding",

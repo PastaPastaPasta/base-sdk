@@ -19,7 +19,7 @@ for the Base SDK's higher level types, including
 To import `dash-types` to your project, add the following to the `[dependencies]` section in `Cargo.toml`
 
 ```toml
-dash-types = "0.1.0-beta"
+dash-types = "0.2.0-beta"
 ```
 
 To use an unpublished revision of this crate, identify the commit hash to pin against and use the following replacing
