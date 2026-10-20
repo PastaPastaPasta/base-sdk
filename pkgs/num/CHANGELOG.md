@@ -27,16 +27,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   rejected with `ParseHexError::OddLength` or `ParseHexError::InvalidLength`.
 - The `serde` feature no longer implies `codec`. `CompactTarget` implements `Serialize` and `Deserialize` without
   `codec`. Callers that relied on `serde` to enable `codec` must enable it explicitly.
+- `Arith256::to_f64` rounds like the reference implementation. It was one ULP off on roughly 1% of inputs.
 
 ### Removed
 
 - `ParseHexError` has moved to `dash-types` as `dash_types::ParseHexError`.
 - The `dash_types::Numeric` re-export in favour of a wholesale crate re-export. `dash_num::Numeric` imports must switch
   to `dash_num::__deps::dash_types::Numeric` or depend on `dash-types` directly.
-
-### Fixed
-
-- `Arith256::to_f64` rounds like the reference implementation. It was one ULP off on roughly 1% of inputs.
 
 ## [0.1.0-beta] - 2026-09-14
 

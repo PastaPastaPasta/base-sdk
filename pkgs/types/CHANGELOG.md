@@ -53,17 +53,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Decoding `Vec<T>` reserves each batch exactly rather than growing its capacity geometrically past the batch.
 - **`bool` decodes any non-zero byte as `true` instead of rejecting bytes above `1`.** Encoding still writes `0` or
   `1`, so a decoded byte above `1` does not round-trip.
-
-### Removed
-
-- The `codec::Checkable` and `codec::Hashable` compatibility aliases in favour of exports from the crate root.
-
-### Fixed
-
 - Decoding `Vec<T>`, `String` and script buffers rejects a length prefix above `MAX_SER_SIZE` even when enough bytes
   remain.
 - `serialize::utf8_lossy`'s serializer and deserializer arms were not in sync, writing valid UTF-8 as a string for
   machine-readable formats but expecting byte buffers when reading, failing round trips. This has since been resolved.
+
+### Removed
+
+- The `codec::Checkable` and `codec::Hashable` compatibility aliases in favour of exports from the crate root.
 
 ## [0.1.0-beta] - 2026-09-14
 

@@ -51,9 +51,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `BlsPkBytes`, `BlsSkBytes`, `BlsSigBytes`, `BlsPkHash`, `BlsDhBytes`, `BlsIesBlobBytes` and `BlsIesMultiBytes` drop
   their scheme parameter. Callers remove the type argument and pick the scheme when they convert with `to::<S>()`.
 - `EcdsaRecSigBytes::from_raw` is renamed to `from_bytes`, with unchanged behaviour.
-
-### Fixed
-
 - Decoding `BlsIes{Blob,Multi}Bytes`, and so `BlsIes{Blob,Multi}`, rejects a ciphertext length, blob count or blob
   length above `MAX_SER_SIZE` even when enough bytes remain, and reports one past the remaining input as
   `DecodeError::Eof`.
