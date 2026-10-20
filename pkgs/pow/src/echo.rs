@@ -13,7 +13,7 @@ use crate::aes::{block_from_words, round, round_nk, words_from_block, Block};
 use crate::consts::echo::BLOCK;
 use crate::util::buffer::{Buffer, Compress};
 use crate::util::impl_digest;
-use crate::util::memops::{digest_from_u32_le, load_u32_le};
+use crate::util::memops::{digest_from_u32_le, load_u32s_le};
 
 use digest::{FixedOutput, Output, Update};
 use wide::{i8x16, u32x4};
@@ -143,7 +143,7 @@ fn compress_words(chaining_value: &mut ChainingValue, block: &BlockWords, counte
 /// Runs the compression function on one 1024-bit block.
 #[cfg_attr(not(debug_assertions), inline(always))]
 fn compress_block(chaining_value: &mut ChainingValue, block: &[u8; BLOCK], counter: Counter) {
-  let words = core::array::from_fn(|word| load_u32_le(block, word));
+  let words = load_u32s_le(block);
   compress_words(chaining_value, &words, counter);
 }
 
