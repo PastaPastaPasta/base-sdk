@@ -47,28 +47,28 @@ coverage:
 flags:
   dash-num:
     paths: [pkgs/num/]
-    carryforward: false
+    carryforward: true
   dash-script:
     paths: [pkgs/script/]
-    carryforward: false
+    carryforward: true
   dash-p2p-core:
     paths: [pkgs/p2p_core/]
-    carryforward: false
+    carryforward: true
   dash-params:
     paths: [pkgs/params/]
-    carryforward: false
+    carryforward: true
   dash-pkc:
     paths: [pkgs/pkc/]
-    carryforward: false
+    carryforward: true
   dash-pow:
     paths: [pkgs/pow/]
-    carryforward: false
+    carryforward: true
   dash-primitives:
     paths: [pkgs/primitives/]
-    carryforward: false
+    carryforward: true
   dash-types:
     paths: [pkgs/types/, pkgs/types/marker/]
-    carryforward: false
+    carryforward: true
 ignore:
   - "**/bench/**"
   - "**/corpus/**"
