@@ -37,7 +37,7 @@ This crate is `#![no_std]` + `alloc` by default.
 
 | Feature | Default | Description |
 | ------- | ------- | ----------- |
-| `codec` | :white_check_mark: | Enables support for encoding and decoding types using [`bitcoin-consensus-encoding`](https://docs.rs/bitcoin-consensus-encoding) |
+| `codec` | ✅ | Enables support for encoding and decoding types using [`bitcoin-consensus-encoding`](https://docs.rs/bitcoin-consensus-encoding) |
 | `full` | | Enables all features and `std` support. |
 | `serde` | | Enables support for encoding and decoding types using [`serde`](https://github.com/serde-rs/serde). |
 
