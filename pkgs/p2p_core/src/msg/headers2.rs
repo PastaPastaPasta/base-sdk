@@ -334,6 +334,32 @@ mod tests {
   }
 
   #[rstest]
+  fn a_full_batch_of_minimal_entries_decodes() {
+    let mut prev_hash = BlockHash::from_lendian([0; 32]);
+    let headers = (0..Headers2::MAX_COUNT as u32)
+      .map(|i| {
+        let header = BlockHeader {
+          version: 0x2000_0000,
+          prev_hash,
+          merkle_root: MerkleRoot::from_lendian([1; 32]),
+          time: 1_700_000_000 + i,
+          bits: 0x1e0f_ffff,
+          nonce: i,
+        };
+        prev_hash = header.hash();
+        header
+      })
+      .collect();
+    let msg = Headers2 { headers };
+    let mut buf = Vec::new();
+    msg.encode(&mut buf);
+    assert_eq!(buf.len(), 3 + 81 + 7_999 * 39);
+    let mut data = &buf[..];
+    assert_eq!(Headers2::decode(&mut data), Ok(msg));
+    assert!(data.is_empty());
+  }
+
+  #[rstest]
   fn counts_past_the_limit_fail_before_any_header() {
     let payload = [0xfd, 0x41, 0x1f];
     assert_eq!(
