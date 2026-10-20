@@ -71,21 +71,6 @@ pub(crate) const fn store_u64_le(buf: &mut [u8], i: usize, v: u64) {
   buf[off + 7] = b[7];
 }
 
-/// Writes a big-endian `u64` into `buf` at byte offset `i * 8`.
-#[inline]
-pub(crate) const fn store_u64_be(buf: &mut [u8], i: usize, v: u64) {
-  let off = i * 8;
-  let b = v.to_be_bytes();
-  buf[off] = b[0];
-  buf[off + 1] = b[1];
-  buf[off + 2] = b[2];
-  buf[off + 3] = b[3];
-  buf[off + 4] = b[4];
-  buf[off + 5] = b[5];
-  buf[off + 6] = b[6];
-  buf[off + 7] = b[7];
-}
-
 /// Writes the first sixteen words little-endian into a digest.
 #[inline]
 pub(crate) fn digest_from_u32_le<const N: usize>(words: &[u32; N]) -> [u8; 64] {
@@ -104,27 +89,6 @@ pub(crate) fn digest_from_u64_le<const N: usize>(words: &[u64; N]) -> [u8; 64] {
   let mut out = [0u8; 64];
   for (bytes, word) in out.chunks_exact_mut(8).zip(words) {
     bytes.copy_from_slice(&word.to_le_bytes());
-  }
-  out
-}
-
-/// Copies `bytes` into the start of a zeroed `N`-byte buffer.
-#[inline]
-pub(crate) fn zero_extend<const N: usize>(bytes: &[u8]) -> [u8; N] {
-  let mut out = [0u8; N];
-  out[..bytes.len()].copy_from_slice(bytes);
-  out
-}
-
-/// Copies `N` bytes from `src` starting at `offset` into a fixed-size array,
-/// avoiding range-based slice indexing which is not yet const-stable.
-#[inline]
-pub(crate) const fn extract<const N: usize>(src: &[u8], offset: usize) -> [u8; N] {
-  let mut out = [0u8; N];
-  let mut i = 0;
-  while i < N {
-    out[i] = src[offset + i];
-    i += 1;
   }
   out
 }
