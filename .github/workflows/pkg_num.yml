@@ -4,12 +4,13 @@ on:
   workflow_dispatch:
   push:
     paths: &paths
-      - pkgs/num/**
+      - .cargo/nextest.toml
+      - .github/workflows/build_msrv.yml
+      - .github/workflows/pkg_num.yml
       - Cargo.lock
       - Cargo.toml
-      - .github/workflows/pkg_num.yml
-      - .github/workflows/build_stable.yml
       - contrib/nix/**
+      - pkgs/num/**
       - pyproject.toml
       - rust-toolchain.toml
       - uv.lock
@@ -21,8 +22,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  stable:
-    uses: ./.github/workflows/build_stable.yml
+  msrv:
+    uses: ./.github/workflows/build_msrv.yml
     with:
       package: dash-num
       package_dir: num
+    secrets: inherit

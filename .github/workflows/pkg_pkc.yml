@@ -4,14 +4,15 @@ on:
   workflow_dispatch:
   push:
     paths: &paths
-      - pkgs/pkc/**
-      - pkgs/num/**
-      - pkgs/types/**
+      - .cargo/nextest.toml
+      - .github/workflows/build_msrv.yml
+      - .github/workflows/pkg_pkc.yml
       - Cargo.lock
       - Cargo.toml
-      - .github/workflows/pkg_pkc.yml
-      - .github/workflows/build_stable.yml
       - contrib/nix/**
+      - pkgs/num/**
+      - pkgs/pkc/**
+      - pkgs/types/**
       - pyproject.toml
       - rust-toolchain.toml
       - uv.lock
@@ -23,8 +24,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  stable:
-    uses: ./.github/workflows/build_stable.yml
+  msrv:
+    uses: ./.github/workflows/build_msrv.yml
     with:
       package: dash-pkc
       package_dir: pkc
+    secrets: inherit
