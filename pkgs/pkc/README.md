@@ -51,7 +51,7 @@ This crate is `#![no_std]` + `alloc` by default.
 | Feature | Default | Description |
 | ------- | ------- | ----------- |
 | `bls` | | Enables support for BLS12-381 operations backed by [`blst`](https://docs.rs/blst). Byte types are available without enabling this feature. |
-| `codec` | :white_check_mark: | Enables support for encoding and decoding types using [`bitcoin-consensus-encoding`](https://docs.rs/bitcoin-consensus-encoding) |
+| `codec` | ✅ | Enables support for encoding and decoding types using [`bitcoin-consensus-encoding`](https://docs.rs/bitcoin-consensus-encoding) |
 | `ecdsa` | | Enables secp256k1 operations backed by [`rust-secp256k1`](https://docs.rs/secp256k1). Byte types are available without enabling this feature. |
 | `eddsa` | | Enables ed25519 operations backed by [`ed25519-dalek`](https://docs.rs/ed25519-dalek). Byte types are available without enabling this feature. |
 | `full` | | Enables all features and `std` support. |

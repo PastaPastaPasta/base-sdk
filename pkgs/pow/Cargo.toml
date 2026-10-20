@@ -1,6 +1,19 @@
 [package]
 name = "dash-pow"
-version = "0.0.0"
+version = "0.1.0-beta"
+description = "Proof of Work hash primitive for the Dash Base SDK"
+keywords = ["base-sdk", "dash", "dashcore", "dashpay", "x11"]
+categories = [
+  "cryptography",
+  "cryptography::cryptocurrencies",
+  "no-std",
+  "wasm",
+]
+exclude = [
+  "bench",
+  "corpus",
+  "tests",
+]
 readme = "README.md"
 authors.workspace = true
 edition.workspace = true
@@ -13,9 +26,14 @@ rust-version.workspace = true
 bench = false
 
 [features]
-default = []
-std = ["wide/std"]
-full = ["std"]
+default = ["portable"]
+std = [
+  "wide/std",
+]
+
+full = [
+  "std",
+]
 portable = []
 
 [dependencies]
@@ -23,7 +41,7 @@ digest = { workspace = true }
 wide = { workspace = true }
 
 [dev-dependencies]
-dash-dev = { version = "0.0.0", path = "../dev", features = ["full"] }
+dash-dev = { path = "../dev", features = ["full"] }
 divan = { workspace = true }
 hex-conservative = { workspace = true }
 rstest = { workspace = true }

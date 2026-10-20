@@ -48,7 +48,7 @@ dash-pkc = { version = "0.2.0-beta", path = "../pkc", default-features = false, 
   "codec",
   "ecdsa",
 ] }
-dash-pow = { version = "0.0.0", path = "../pow" }
+dash-pow = { version = "0.1.0-beta", path = "../pow", default-features = false }
 dash-script = { version = "0.0.0", path = "../script" }
 dash-types = { version = "0.2.0-beta", path = "../types", default-features = false, features = [
   "bitcoin-primitives",
