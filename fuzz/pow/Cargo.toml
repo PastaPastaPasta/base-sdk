@@ -14,7 +14,7 @@ doctest = false
 
 [dependencies]
 afl = "0.18.2"
-dash-pow = { version = "0.0.0", path = "../../pkgs/pow" }
+dash-pow = { version = "0.1.0-beta", path = "../../pkgs/pow", default-features = false }
 digest = { version = "0.11.3", default-features = false }
 
 [build-dependencies]
