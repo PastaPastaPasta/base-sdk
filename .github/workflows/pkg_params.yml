@@ -4,15 +4,16 @@ on:
   workflow_dispatch:
   push:
     paths: &paths
-      - pkgs/params/**
-      - pkgs/num/**
-      - pkgs/primitives/**
-      - pkgs/script/**
+      - .cargo/nextest.toml
+      - .github/workflows/build_msrv.yml
+      - .github/workflows/pkg_params.yml
       - Cargo.lock
       - Cargo.toml
-      - .github/workflows/pkg_params.yml
-      - .github/workflows/build_stable.yml
       - contrib/nix/**
+      - pkgs/num/**
+      - pkgs/params/**
+      - pkgs/primitives/**
+      - pkgs/script/**
       - pyproject.toml
       - rust-toolchain.toml
       - uv.lock
@@ -24,8 +25,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  stable:
-    uses: ./.github/workflows/build_stable.yml
+  msrv:
+    uses: ./.github/workflows/build_msrv.yml
     with:
       package: dash-params
       package_dir: params
+    secrets: inherit
