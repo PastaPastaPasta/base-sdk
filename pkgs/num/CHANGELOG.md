@@ -21,13 +21,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - **The minimum supported Rust version is raised from 1.85 to 1.89.**
-- `HashBlob`, `make_hash!` types and `Arith256` serialize as their little-endian storage bytes for machine-readable
-  formats, JSON retains hex encoded big-endian string encoding.
-- `CompactTarget::from_str` requires exactly 8 hex digits, optionally `0x`/`0X`-prefixed. Shorter input is now
-  rejected with `ParseHexError::OddLength` or `ParseHexError::InvalidLength`.
-- The `serde` feature no longer implies `codec`. `CompactTarget` implements `Serialize` and `Deserialize` without
+- **`HashBlob`, `make_hash!` types and `Arith256` serialize as their little-endian storage bytes for machine-readable
+  formats.** JSON retains the hex-encoded big-endian string.
+- **The `serde` feature no longer implies `codec`.** `CompactTarget` implements `Serialize` and `Deserialize` without
   `codec`. Callers that relied on `serde` to enable `codec` must enable it explicitly.
-- `Arith256::to_f64` rounds like the reference implementation. It was one ULP off on roughly 1% of inputs.
+- `CompactTarget::from_str` requires exactly 8 hex digits, optionally `0x`/`0X`-prefixed. Shorter input is rejected
+  with `ParseHexError::OddLength` or `ParseHexError::InvalidLength`.
+- `Arith256::to_f64` rounds like the reference implementation, where it was one ULP off on roughly 1% of inputs.
 
 ### Removed
 

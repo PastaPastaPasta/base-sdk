@@ -26,36 +26,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **The minimum supported Rust version is raised from 1.85 to 1.89.**
 - **`bls` requires ADX on x86_64 unless `portable` is enabled.**
-- Decoding `BlsIesMultiBytes` rejects more than `MAX_IES_RECIPIENTS` ciphertexts, the most any operation accepts.
-- `BlsSecretKey::sign`, `BlsSkShare::sign`, `BlsPublicKey::verify` and `BlsSignature::{fast,secure}_verify_aggregates`
-  gain a `_digest` suffix and take a 32-byte hashed message. `BlsSignature::verify_aggregates` is renamed to
-  `verify_aggregates_digests` and takes `&[[u8; 32]]`. `BlsScheme::msg_ref` is renamed to `digest_msg`, and
-  `BlsScheme::Msg` is passed by value as `Msg<'a>`.
-- `EcdsaSecretKey::sign` and `EcdsaPublicKey::verify` are renamed to `sign_digest` and `verify_digest`.
-  `EddsaSecretKey::sign` and `EddsaPublicKey::verify` are renamed to `sign_message` and `verify_message`.
-- `BlsScheme::sk_to_bytes` returns `Zeroizing<[u8; 32]>` instead of a bare array. Code that binds the result as
-  `[u8; 32]` must dereference it.
-- `EcdsaSecretKey::negate` takes `&self` and returns the negated key as `Result<Self, EcdsaError>` instead of negating
-  in place and returning `()`, matching the other tweaks. A call that drops the return value still compiles, warned of
-  only by `unused_must_use`, but leaves the key as it was. Callers must bind the result, e.g. `sk = sk.negate()?`.
-- The following types serialize as raw bytes for machine-readable formats, following changes to `dash-types` and
+- **Signing and verification methods are renamed to name their input.**
+  - `BlsSecretKey::sign`, `BlsSkShare::sign`, `BlsPublicKey::verify` and
+    `BlsSignature::{fast,secure}_verify_aggregates` gain a `_digest` suffix and take a 32-byte hashed message.
+  - `BlsSignature::verify_aggregates` is renamed to `verify_aggregates_digests` and takes `&[[u8; 32]]`.
+  - `BlsScheme::msg_ref` is renamed to `digest_msg`, and `BlsScheme::Msg` is passed by value as `Msg<'a>`.
+  - `EcdsaSecretKey::sign` and `EcdsaPublicKey::verify` are renamed to `sign_digest` and `verify_digest`.
+  - `EddsaSecretKey::sign` and `EddsaPublicKey::verify` are renamed to `sign_message` and `verify_message`.
+- **`EcdsaSecretKey::negate` takes `&self` and returns the negated key as `Result<Self, EcdsaError>`.** It previously
+  negated in place and returned `()`, and now matches the other tweaks. A call that drops the return value still
+  compiles, though warned if `unused_must_use` is enabled, but would otherwise leave the key as-is. Callers must bind
+  the result, e.g. `sk = sk.negate()?`.
+- **`EcdsaPublicKey::verify_digest` normalizes S before verifying**, so a high-S signature verifies like its low-S
+  twin. Callers refusing malleable signatures should check with `EcdsaSignature::is_low_s`.
+- **`BlsPkBytes`, `BlsSkBytes`, `BlsSigBytes`, `BlsPkHash`, `BlsDhBytes`, `BlsIesBlobBytes` and `BlsIesMultiBytes` drop
+  their scheme parameter.** Callers drop the type argument and define the scheme when they exercise the operational
+  type with `to::<S>()`.
+- **The following types serialize as raw bytes for machine-readable formats**, following changes to `dash-types` and
   `dash-num`. JSON and other human-readable formats are unaffected by this change.
 
   `BlsPkBytes`, `BlsSigBytes`, `BlsPkHash`, `BlsShareId`, `BlsIes{Blob,Multi}Bytes`, `BlsPublicKey`, `BlsSignature`,
   `Bls{Pk,Sig}Share`, `BlsIes{Blob,Multi}`, `EcdsaPkBytes`, `EcdsaSigBytes`, `EcdsaRecSigBytes`, `EcdsaPkHash`,
   `EcdsaPublicKey`, `EcdsaSignature`, `EcdsaRecSignature`, `EddsaPkBytes`, `EddsaSigBytes`, `EddsaPkHash`,
   `EddsaPublicKey`, `EddsaSignature`.
-- The `serde` feature no longer implies `codec`. `BlsIes{Blob,Multi}` and `BlsIes{Blob,Multi}Bytes` serialize as
-  their wire image and implement `Serialize` and `Deserialize` only with both features. Callers that relied on `serde`
-  to enable `codec` must enable it explicitly.
-- `BlsPkBytes`, `BlsSkBytes`, `BlsSigBytes`, `BlsPkHash`, `BlsDhBytes`, `BlsIesBlobBytes` and `BlsIesMultiBytes` drop
-  their scheme parameter. Callers remove the type argument and pick the scheme when they convert with `to::<S>()`.
-- `EcdsaRecSigBytes::from_raw` is renamed to `from_bytes`, with unchanged behaviour.
-- Decoding `BlsIes{Blob,Multi}Bytes`, and so `BlsIes{Blob,Multi}`, rejects a ciphertext length, blob count or blob
-  length above `MAX_SER_SIZE` even when enough bytes remain, and reports one past the remaining input as
-  `DecodeError::Eof`.
-- `EcdsaPublicKey::verify_digest` normalizes S before verifying, so a high-S signature verifies like its low-S twin.
-  Callers refusing malleable signatures check `EcdsaSignature::is_low_s`.
+- **The `serde` feature no longer implies `codec`.** `BlsIes{Blob,Multi}` and `BlsIes{Blob,Multi}Bytes` serialize as
+  their wire image and implement `Serialize` and `Deserialize` only with `serde` and `codec` enabled, serving as the exception.
+
+  - Callers that relied on `serde`
+    to enable `codec` must enable it explicitly.
+- Decoding `BlsIes{Blob,Multi}Bytes` (and by extension `BlsIes{Blob,Multi}`), enforces limits on lengths and counts.
+  - A ciphertext length, blob count or blob length above `MAX_SER_SIZE` is rejected even when enough bytes remain.
+  - A value past the remaining input is reported as `DecodeError::Eof`.
+  - `BlsIesMultiBytes` rejects more than `MAX_IES_RECIPIENTS` ciphertexts.
+- `BlsScheme::sk_to_bytes` returns `Zeroizing<[u8; 32]>` instead of a bare array. Code that binds the result as
+  `[u8; 32]` must dereference it.
+- `EcdsaRecSigBytes::from_raw` is renamed to `from_bytes`.
 
 ## [0.1.0-beta] - 2026-09-15
 
