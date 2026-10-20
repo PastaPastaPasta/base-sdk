@@ -14,6 +14,8 @@ on:
     secrets:
       CACHIX_AUTH_TOKEN:
         required: false
+      CODECOV_TOKEN:
+        required: false
 
 permissions:
   contents: read
@@ -22,6 +24,8 @@ jobs:
   build:
     name: Build and test
     runs-on: ubuntu-24.04-arm
+    env:
+      HAS_CODECOV: ${{ secrets.CODECOV_TOKEN != '' }}
 
     defaults:
       run:
@@ -92,6 +96,29 @@ jobs:
         run: |
           "$CARGO" hack -p ${{ inputs.package }} --exclude-features default --each-feature nextest run --config-file .cargo/nextest.toml --no-tests=warn
           "$CARGO" hack -p ${{ inputs.package }} --exclude-features default --each-feature test --doc
+
+      - name: Test package (with coverage)
+        run: |
+          "$CARGO" llvm-cov clean --workspace
+          "$CARGO" llvm-cov --no-report nextest --config-file .cargo/nextest.toml --package ${{ inputs.package }} --features full
+          "$CARGO" llvm-cov report --lcov --output-path lcov.info
+
+      - name: Upload coverage to Codecov
+        if: env.HAS_CODECOV == 'true'
+        uses: codecov/codecov-action@v5
+        with:
+          files: lcov.info
+          flags: ${{ inputs.package }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() && env.HAS_CODECOV == 'true' && hashFiles('target/nextest/default/junit.xml') != '' }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: target/nextest/default/junit.xml
+          report_type: test_results
+          flags: ${{ inputs.package }}
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Sanity check benchmarks
         run: '"$CARGO" hack -p ${{ inputs.package }} --exclude-features default --each-feature test --benches'
