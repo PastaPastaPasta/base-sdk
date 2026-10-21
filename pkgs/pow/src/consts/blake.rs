@@ -36,7 +36,8 @@ pub(crate) static CB: [u64; 16] = [
   0x0801f2e2858efc16, 0x636920d871574e69,
 ];
 
-/// Message-word permutation schedule (10 unique rows, then rows 0..6 again for rounds 10..15).
+/// Message-word permutation schedule, ten distinct rows followed by rows
+/// `0..6` again for rounds `10..16`.
 #[rustfmt::skip]
 pub(crate) static SIGMA: [[usize; 16]; 16] = [
   [ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15],

@@ -9,7 +9,8 @@
 /// Block size in bytes.
 pub(crate) const BLOCK: usize = 128;
 
-/// SHAvite-512 IV.
+/// SHAvite-3-512 IV, C_512 applied twice, first to zero for the master IV and
+/// then to the length block (SHAvite-3 Sections 3.3 and 4.2.4).
 #[rustfmt::skip]
 pub(crate) static IV: [u32; 16] = [
   0x72fccdd8, 0x79ca4727, 0x128a077b, 0x40d55aec,

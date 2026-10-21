@@ -19,9 +19,9 @@ use digest::{FixedOutput, Output, Update};
 /// Applies one round of the permutation, reading from `src` and writing to
 /// `dst`.
 ///
-/// Each output row is computed independently with only five temporaries,
-/// reducing register pressure compared to materializing all 25 B-values. State
-/// layout: `a[x + 5*y]` for x, y in {0, 1, 2, 3, 4}.
+/// Each output row is computed with only five temporaries, which keeps the
+/// register pressure below that of materializing all 25 B-values. The state
+/// holds lane `(x, y)` at `a[x + 5 * y]`.
 #[cfg_attr(not(debug_assertions), inline(always))]
 fn round_to(src: &[u64; 25], dst: &mut [u64; 25], rc: u64) {
   // theta
@@ -37,9 +37,9 @@ fn round_to(src: &[u64; 25], dst: &mut [u64; 25], rc: u64) {
   let d3 = c2 ^ c4.rotate_left(1);
   let d4 = c3 ^ c0.rotate_left(1);
 
-  // theta + rho + pi + chi + iota, row by row
-  // Each block: read 5 source lanes (fusing theta), apply rho+pi
-  // rotations, then chi directly into dst. Only 5 B-values live at once.
+  // Each block below reads five source lanes with theta applied, rotates
+  // them for rho and pi, then writes chi straight into `dst`. Iota only
+  // touches lane 0, so the first block alone adds `rc`.
   {
     let b0 = src[0] ^ d0;
     let b1 = (src[6] ^ d1).rotate_left(ROTC[6]);
@@ -104,7 +104,7 @@ fn round_to(src: &[u64; 25], dst: &mut [u64; 25], rc: u64) {
 
 /// Applies the permutation in place.
 ///
-/// Two full state buffers keep the round body simple: one round reads from
+/// Two full state buffers keep the round body simple. One round reads from
 /// `state`, the next reads from `alt`, and the final result ends back in
 /// `state`.
 #[cfg_attr(not(debug_assertions), inline(always))]
