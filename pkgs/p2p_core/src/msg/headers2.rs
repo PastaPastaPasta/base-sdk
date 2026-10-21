@@ -6,6 +6,7 @@
 
 //! Compressed header messages.
 
+use super::headers::{decode_count, Headers};
 use crate::codec::{codec_p2p, impl_p2p};
 use crate::prelude::*;
 use crate::version::ProtocolVersion;
@@ -15,8 +16,9 @@ use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{CompactSize, Hashable};
 
-/// Maximum headers per message.
-const MAX_HEADERS: usize = 2_000;
+/// Size of the smallest compressed header, made of flags, a merkle root, a
+/// time delta and a nonce.
+const MIN_HEADERS2_SIZE: usize = 39;
 
 /// Maximum entries in the MRU version cache.
 const MAX_VERSION_CACHE: usize = 7;
@@ -255,7 +257,7 @@ impl_p2p!(Headers2);
 
 impl BaseCodec for Headers2 {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let count = CompactSize::decode(data)?.into_len(MAX_HEADERS)?;
+    let count = decode_count(data, Self::MAX_COUNT, MIN_HEADERS2_SIZE)?;
     let mut state = CompressionState::new();
     let mut headers = Vec::with_capacity(count);
     for _ in 0..count {
@@ -275,11 +277,27 @@ impl BaseCodec for Headers2 {
 
 hash_impl!(Headers2);
 
+impl Headers2 {
+  /// The most headers a `headers2` message carries.
+  pub const MAX_COUNT: usize = 8_000;
+
+  /// The most headers a peer may send in one `headers2` message, given the
+  /// protocol version both peers share.
+  pub fn max_count(common: ProtocolVersion) -> usize {
+    if common >= ProtocolVersion::INCREASE_MAX_HEADERS2 {
+      Self::MAX_COUNT
+    } else {
+      Headers::MAX_COUNT
+    }
+  }
+}
+
 #[cfg(all(test, feature = "serde"))]
 mod tests {
   use super::*;
 
   use dash_dev::{assert_serde_rt, check_wire, Corpus};
+  use dash_types::Numeric;
   use rstest::rstest;
 
   #[rstest]
@@ -294,5 +312,81 @@ mod tests {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "headers2");
     let items = corpus.entries::<Headers2>("headers2", check_wire);
     assert_serde_rt("headers2", &items);
+  }
+
+  #[rstest]
+  fn counts_past_the_headers_limit_decode() {
+    let headers = (0..)
+      .take(Headers::MAX_COUNT + 1)
+      .map(|i| BlockHeader {
+        version: 0x2000_0000,
+        prev_hash: BlockHash::from_lendian([0; 32]),
+        merkle_root: MerkleRoot::from_lendian([1; 32]),
+        time: 1_700_000_000 + i,
+        bits: 0x1e0f_ffff,
+        nonce: i,
+      })
+      .collect();
+    let msg = Headers2 { headers };
+    let mut buf = Vec::new();
+    msg.encode(&mut buf);
+    assert_eq!(Headers2::decode(&mut &buf[..]), Ok(msg));
+  }
+
+  #[rstest]
+  fn a_full_batch_of_minimal_entries_decodes() {
+    let mut prev_hash = BlockHash::from_lendian([0; 32]);
+    let headers = (0..Headers2::MAX_COUNT as u32)
+      .map(|i| {
+        let header = BlockHeader {
+          version: 0x2000_0000,
+          prev_hash,
+          merkle_root: MerkleRoot::from_lendian([1; 32]),
+          time: 1_700_000_000 + i,
+          bits: 0x1e0f_ffff,
+          nonce: i,
+        };
+        prev_hash = header.hash();
+        header
+      })
+      .collect();
+    let msg = Headers2 { headers };
+    let mut buf = Vec::new();
+    msg.encode(&mut buf);
+    assert_eq!(buf.len(), 3 + 81 + 7_999 * 39);
+    let mut data = &buf[..];
+    assert_eq!(Headers2::decode(&mut data), Ok(msg));
+    assert!(data.is_empty());
+  }
+
+  #[rstest]
+  fn counts_past_the_limit_fail_before_any_header() {
+    let payload = [0xfd, 0x41, 0x1f];
+    assert_eq!(
+      Headers2::decode(&mut &payload[..]),
+      Err(DecodeError::CompactSizeExceedsLimit {
+        limit: Headers2::MAX_COUNT,
+        value: 8_001,
+      })
+    );
+  }
+
+  #[rstest]
+  fn counts_past_the_input_fail_before_any_header() {
+    let payload = [&[2][..], &[0; MIN_HEADERS2_SIZE]].concat();
+    assert_eq!(
+      Headers2::decode(&mut &payload[..]),
+      Err(DecodeError::Eof {
+        needed: 2 * MIN_HEADERS2_SIZE,
+        remaining: MIN_HEADERS2_SIZE,
+      })
+    );
+  }
+
+  #[rstest]
+  #[case::below(70234, 2_000)]
+  #[case::at(70235, 8_000)]
+  fn max_count_follows_the_common_version(#[case] common: i32, #[case] max: usize) {
+    assert_eq!(Headers2::max_count(ProtocolVersion(common)), max);
   }
 }

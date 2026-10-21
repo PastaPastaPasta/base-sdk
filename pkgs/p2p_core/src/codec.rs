@@ -6,8 +6,8 @@
 
 //! Codec helpers for P2P message types.
 
-/// Maximum buffered P2P message payload.
-pub(crate) const MAX_P2P_PAYLOAD_SIZE: usize = 3_145_728;
+/// Largest P2P message payload, in bytes.
+pub const MAX_P2P_PAYLOAD_SIZE: usize = 3_145_728;
 
 /// Generates `Encode` + `Decode` with P2P payload size limit.
 macro_rules! impl_p2p {

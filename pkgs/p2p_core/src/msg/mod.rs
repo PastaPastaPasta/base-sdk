@@ -192,4 +192,11 @@ define_p2p! {
     /// LLMQ: watch quorums.
     QWatch => QWATCH "qwatch" @ 151,
   }
+
+  unassigned {
+    // `feefilter`, which Dash does not implement.
+    5,
+    // Assigned in BIP324, not implemented.
+    29, 30, 31, 32,
+  }
 }

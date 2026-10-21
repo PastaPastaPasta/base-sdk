@@ -1,0 +1,347 @@
+//
+// Transport vectors. Generated with the reference implementation
+// (dashpay/dash v24.0.0-rc.3, 0364ed626e).
+//
+// Each section comes with the program used to generate the vectors.
+//
+// To run a program, paste it at the end of the `net_tests` suite in
+// `src/test/net_tests.cpp` at the specified revision, build it with
+// `make -C src test/test_dash` and run
+// `./src/test/test_dash --run_test=net_tests/<name>`. The output should match
+// the section.
+//
+
+{
+/*
+BOOST_AUTO_TEST_CASE(transport_v2)
+{
+    using namespace std::literals;
+    const auto send = [](Span<const uint8_t> contents) {
+        V2TransportTester tester(true);
+        auto ret = tester.Interact();
+        BOOST_REQUIRE(ret && ret->empty());
+        tester.SendKey();
+        tester.SendGarbage();
+        tester.ReceiveKey();
+        tester.SendGarbageTerm();
+        tester.SendVersion();
+        ret = tester.Interact();
+        BOOST_REQUIRE(ret && ret->empty());
+        tester.ReceiveGarbage();
+        tester.ReceiveVersion();
+        tester.SendPacket(contents);
+        ret = tester.Interact();
+        if (!ret) return "disconnect";
+        BOOST_REQUIRE(ret->size() == 1);
+        return (*ret)[0] ? "accept" : "reject";
+    };
+    const auto long_form = [](std::string_view name) {
+        std::vector<uint8_t> prefix(1 + CMessageHeader::COMMAND_SIZE);
+        std::copy(name.begin(), name.end(), prefix.begin() + 1);
+        return prefix;
+    };
+    std::vector<std::pair<std::vector<uint8_t>, size_t>> cases;
+    for (const auto name : {"ping"sv, "abcdefghijkl"sv, ""sv, "pi\x7fng"sv, "pi\x1fng"sv, "pi\x80ng"sv,
+                            "pi\0ng"sv, "ping\0\0\0\0\0\0\0\x01"sv}) {
+        cases.emplace_back(long_form(name), 1 + CMessageHeader::COMMAND_SIZE);
+    }
+    for (const size_t len : {size_t{0}, size_t{1}, CMessageHeader::COMMAND_SIZE}) {
+        cases.emplace_back(std::vector<uint8_t>(std::min<size_t>(len, 1)), len);
+    }
+    for (int id = 1; id <= 0xff; ++id) {
+        cases.emplace_back(std::vector<uint8_t>{static_cast<uint8_t>(id)}, 1);
+    }
+    const size_t max_contents{1 + CMessageHeader::COMMAND_SIZE + MAX_PROTOCOL_MESSAGE_LENGTH};
+    for (const size_t len : {max_contents, max_contents + 1}) {
+        cases.emplace_back(std::vector<uint8_t>{21}, len);
+        cases.emplace_back(std::vector<uint8_t>{0xff}, len);
+    }
+    for (const size_t len : {max_contents, max_contents + 1}) {
+        cases.emplace_back(long_form("ping"sv), len);
+        cases.emplace_back(long_form("pi\0ng"sv), len);
+    }
+    for (const auto& [prefix, len] : cases) {
+        std::vector<uint8_t> contents{prefix};
+        contents.resize(len);
+        std::printf("    { \"prefix\": \"%s\", \"len\": %zu, \"result\": \"%s\" },\n", HexStr(prefix).c_str(), len,
+                    send(contents));
+    }
+}
+*/
+  "v2": [
+    { "prefix": "0070696e670000000000000000", "len": 13, "result": "accept" },
+    { "prefix": "006162636465666768696a6b6c", "len": 13, "result": "accept" },
+    { "prefix": "00000000000000000000000000", "len": 13, "result": "accept" },
+    { "prefix": "0070697f6e6700000000000000", "len": 13, "result": "accept" },
+    { "prefix": "0070691f6e6700000000000000", "len": 13, "result": "reject" },
+    { "prefix": "007069806e6700000000000000", "len": 13, "result": "reject" },
+    { "prefix": "007069006e6700000000000000", "len": 13, "result": "reject" },
+    { "prefix": "0070696e670000000000000001", "len": 13, "result": "reject" },
+    { "prefix": "", "len": 0, "result": "reject" },
+    { "prefix": "00", "len": 1, "result": "reject" },
+    { "prefix": "00", "len": 12, "result": "reject" },
+    { "prefix": "01", "len": 1, "result": "accept" },
+    { "prefix": "02", "len": 1, "result": "accept" },
+    { "prefix": "03", "len": 1, "result": "accept" },
+    { "prefix": "04", "len": 1, "result": "accept" },
+    { "prefix": "05", "len": 1, "result": "accept" },
+    { "prefix": "06", "len": 1, "result": "accept" },
+    { "prefix": "07", "len": 1, "result": "accept" },
+    { "prefix": "08", "len": 1, "result": "accept" },
+    { "prefix": "09", "len": 1, "result": "accept" },
+    { "prefix": "0a", "len": 1, "result": "accept" },
+    { "prefix": "0b", "len": 1, "result": "accept" },
+    { "prefix": "0c", "len": 1, "result": "accept" },
+    { "prefix": "0d", "len": 1, "result": "accept" },
+    { "prefix": "0e", "len": 1, "result": "accept" },
+    { "prefix": "0f", "len": 1, "result": "accept" },
+    { "prefix": "10", "len": 1, "result": "accept" },
+    { "prefix": "11", "len": 1, "result": "accept" },
+    { "prefix": "12", "len": 1, "result": "accept" },
+    { "prefix": "13", "len": 1, "result": "accept" },
+    { "prefix": "14", "len": 1, "result": "accept" },
+    { "prefix": "15", "len": 1, "result": "accept" },
+    { "prefix": "16", "len": 1, "result": "accept" },
+    { "prefix": "17", "len": 1, "result": "accept" },
+    { "prefix": "18", "len": 1, "result": "accept" },
+    { "prefix": "19", "len": 1, "result": "accept" },
+    { "prefix": "1a", "len": 1, "result": "accept" },
+    { "prefix": "1b", "len": 1, "result": "accept" },
+    { "prefix": "1c", "len": 1, "result": "accept" },
+    { "prefix": "1d", "len": 1, "result": "accept" },
+    { "prefix": "1e", "len": 1, "result": "accept" },
+    { "prefix": "1f", "len": 1, "result": "accept" },
+    { "prefix": "20", "len": 1, "result": "accept" },
+    { "prefix": "21", "len": 1, "result": "reject" },
+    { "prefix": "22", "len": 1, "result": "reject" },
+    { "prefix": "23", "len": 1, "result": "reject" },
+    { "prefix": "24", "len": 1, "result": "reject" },
+    { "prefix": "25", "len": 1, "result": "reject" },
+    { "prefix": "26", "len": 1, "result": "reject" },
+    { "prefix": "27", "len": 1, "result": "reject" },
+    { "prefix": "28", "len": 1, "result": "reject" },
+    { "prefix": "29", "len": 1, "result": "reject" },
+    { "prefix": "2a", "len": 1, "result": "reject" },
+    { "prefix": "2b", "len": 1, "result": "reject" },
+    { "prefix": "2c", "len": 1, "result": "reject" },
+    { "prefix": "2d", "len": 1, "result": "reject" },
+    { "prefix": "2e", "len": 1, "result": "reject" },
+    { "prefix": "2f", "len": 1, "result": "reject" },
+    { "prefix": "30", "len": 1, "result": "reject" },
+    { "prefix": "31", "len": 1, "result": "reject" },
+    { "prefix": "32", "len": 1, "result": "reject" },
+    { "prefix": "33", "len": 1, "result": "reject" },
+    { "prefix": "34", "len": 1, "result": "reject" },
+    { "prefix": "35", "len": 1, "result": "reject" },
+    { "prefix": "36", "len": 1, "result": "reject" },
+    { "prefix": "37", "len": 1, "result": "reject" },
+    { "prefix": "38", "len": 1, "result": "reject" },
+    { "prefix": "39", "len": 1, "result": "reject" },
+    { "prefix": "3a", "len": 1, "result": "reject" },
+    { "prefix": "3b", "len": 1, "result": "reject" },
+    { "prefix": "3c", "len": 1, "result": "reject" },
+    { "prefix": "3d", "len": 1, "result": "reject" },
+    { "prefix": "3e", "len": 1, "result": "reject" },
+    { "prefix": "3f", "len": 1, "result": "reject" },
+    { "prefix": "40", "len": 1, "result": "reject" },
+    { "prefix": "41", "len": 1, "result": "reject" },
+    { "prefix": "42", "len": 1, "result": "reject" },
+    { "prefix": "43", "len": 1, "result": "reject" },
+    { "prefix": "44", "len": 1, "result": "reject" },
+    { "prefix": "45", "len": 1, "result": "reject" },
+    { "prefix": "46", "len": 1, "result": "reject" },
+    { "prefix": "47", "len": 1, "result": "reject" },
+    { "prefix": "48", "len": 1, "result": "reject" },
+    { "prefix": "49", "len": 1, "result": "reject" },
+    { "prefix": "4a", "len": 1, "result": "reject" },
+    { "prefix": "4b", "len": 1, "result": "reject" },
+    { "prefix": "4c", "len": 1, "result": "reject" },
+    { "prefix": "4d", "len": 1, "result": "reject" },
+    { "prefix": "4e", "len": 1, "result": "reject" },
+    { "prefix": "4f", "len": 1, "result": "reject" },
+    { "prefix": "50", "len": 1, "result": "reject" },
+    { "prefix": "51", "len": 1, "result": "reject" },
+    { "prefix": "52", "len": 1, "result": "reject" },
+    { "prefix": "53", "len": 1, "result": "reject" },
+    { "prefix": "54", "len": 1, "result": "reject" },
+    { "prefix": "55", "len": 1, "result": "reject" },
+    { "prefix": "56", "len": 1, "result": "reject" },
+    { "prefix": "57", "len": 1, "result": "reject" },
+    { "prefix": "58", "len": 1, "result": "reject" },
+    { "prefix": "59", "len": 1, "result": "reject" },
+    { "prefix": "5a", "len": 1, "result": "reject" },
+    { "prefix": "5b", "len": 1, "result": "reject" },
+    { "prefix": "5c", "len": 1, "result": "reject" },
+    { "prefix": "5d", "len": 1, "result": "reject" },
+    { "prefix": "5e", "len": 1, "result": "reject" },
+    { "prefix": "5f", "len": 1, "result": "reject" },
+    { "prefix": "60", "len": 1, "result": "reject" },
+    { "prefix": "61", "len": 1, "result": "reject" },
+    { "prefix": "62", "len": 1, "result": "reject" },
+    { "prefix": "63", "len": 1, "result": "reject" },
+    { "prefix": "64", "len": 1, "result": "reject" },
+    { "prefix": "65", "len": 1, "result": "reject" },
+    { "prefix": "66", "len": 1, "result": "reject" },
+    { "prefix": "67", "len": 1, "result": "reject" },
+    { "prefix": "68", "len": 1, "result": "reject" },
+    { "prefix": "69", "len": 1, "result": "reject" },
+    { "prefix": "6a", "len": 1, "result": "reject" },
+    { "prefix": "6b", "len": 1, "result": "reject" },
+    { "prefix": "6c", "len": 1, "result": "reject" },
+    { "prefix": "6d", "len": 1, "result": "reject" },
+    { "prefix": "6e", "len": 1, "result": "reject" },
+    { "prefix": "6f", "len": 1, "result": "reject" },
+    { "prefix": "70", "len": 1, "result": "reject" },
+    { "prefix": "71", "len": 1, "result": "reject" },
+    { "prefix": "72", "len": 1, "result": "reject" },
+    { "prefix": "73", "len": 1, "result": "reject" },
+    { "prefix": "74", "len": 1, "result": "reject" },
+    { "prefix": "75", "len": 1, "result": "reject" },
+    { "prefix": "76", "len": 1, "result": "reject" },
+    { "prefix": "77", "len": 1, "result": "reject" },
+    { "prefix": "78", "len": 1, "result": "reject" },
+    { "prefix": "79", "len": 1, "result": "reject" },
+    { "prefix": "7a", "len": 1, "result": "reject" },
+    { "prefix": "7b", "len": 1, "result": "reject" },
+    { "prefix": "7c", "len": 1, "result": "reject" },
+    { "prefix": "7d", "len": 1, "result": "reject" },
+    { "prefix": "7e", "len": 1, "result": "reject" },
+    { "prefix": "7f", "len": 1, "result": "reject" },
+    { "prefix": "80", "len": 1, "result": "accept" },
+    { "prefix": "81", "len": 1, "result": "accept" },
+    { "prefix": "82", "len": 1, "result": "accept" },
+    { "prefix": "83", "len": 1, "result": "accept" },
+    { "prefix": "84", "len": 1, "result": "accept" },
+    { "prefix": "85", "len": 1, "result": "accept" },
+    { "prefix": "86", "len": 1, "result": "accept" },
+    { "prefix": "87", "len": 1, "result": "accept" },
+    { "prefix": "88", "len": 1, "result": "accept" },
+    { "prefix": "89", "len": 1, "result": "accept" },
+    { "prefix": "8a", "len": 1, "result": "accept" },
+    { "prefix": "8b", "len": 1, "result": "accept" },
+    { "prefix": "8c", "len": 1, "result": "accept" },
+    { "prefix": "8d", "len": 1, "result": "accept" },
+    { "prefix": "8e", "len": 1, "result": "accept" },
+    { "prefix": "8f", "len": 1, "result": "accept" },
+    { "prefix": "90", "len": 1, "result": "accept" },
+    { "prefix": "91", "len": 1, "result": "accept" },
+    { "prefix": "92", "len": 1, "result": "accept" },
+    { "prefix": "93", "len": 1, "result": "accept" },
+    { "prefix": "94", "len": 1, "result": "accept" },
+    { "prefix": "95", "len": 1, "result": "accept" },
+    { "prefix": "96", "len": 1, "result": "accept" },
+    { "prefix": "97", "len": 1, "result": "accept" },
+    { "prefix": "98", "len": 1, "result": "accept" },
+    { "prefix": "99", "len": 1, "result": "accept" },
+    { "prefix": "9a", "len": 1, "result": "accept" },
+    { "prefix": "9b", "len": 1, "result": "accept" },
+    { "prefix": "9c", "len": 1, "result": "accept" },
+    { "prefix": "9d", "len": 1, "result": "accept" },
+    { "prefix": "9e", "len": 1, "result": "accept" },
+    { "prefix": "9f", "len": 1, "result": "accept" },
+    { "prefix": "a0", "len": 1, "result": "accept" },
+    { "prefix": "a1", "len": 1, "result": "accept" },
+    { "prefix": "a2", "len": 1, "result": "accept" },
+    { "prefix": "a3", "len": 1, "result": "accept" },
+    { "prefix": "a4", "len": 1, "result": "accept" },
+    { "prefix": "a5", "len": 1, "result": "accept" },
+    { "prefix": "a6", "len": 1, "result": "accept" },
+    { "prefix": "a7", "len": 1, "result": "accept" },
+    { "prefix": "a8", "len": 1, "result": "accept" },
+    { "prefix": "a9", "len": 1, "result": "reject" },
+    { "prefix": "aa", "len": 1, "result": "reject" },
+    { "prefix": "ab", "len": 1, "result": "reject" },
+    { "prefix": "ac", "len": 1, "result": "reject" },
+    { "prefix": "ad", "len": 1, "result": "reject" },
+    { "prefix": "ae", "len": 1, "result": "reject" },
+    { "prefix": "af", "len": 1, "result": "reject" },
+    { "prefix": "b0", "len": 1, "result": "reject" },
+    { "prefix": "b1", "len": 1, "result": "reject" },
+    { "prefix": "b2", "len": 1, "result": "reject" },
+    { "prefix": "b3", "len": 1, "result": "reject" },
+    { "prefix": "b4", "len": 1, "result": "reject" },
+    { "prefix": "b5", "len": 1, "result": "reject" },
+    { "prefix": "b6", "len": 1, "result": "reject" },
+    { "prefix": "b7", "len": 1, "result": "reject" },
+    { "prefix": "b8", "len": 1, "result": "reject" },
+    { "prefix": "b9", "len": 1, "result": "reject" },
+    { "prefix": "ba", "len": 1, "result": "reject" },
+    { "prefix": "bb", "len": 1, "result": "reject" },
+    { "prefix": "bc", "len": 1, "result": "reject" },
+    { "prefix": "bd", "len": 1, "result": "reject" },
+    { "prefix": "be", "len": 1, "result": "reject" },
+    { "prefix": "bf", "len": 1, "result": "reject" },
+    { "prefix": "c0", "len": 1, "result": "reject" },
+    { "prefix": "c1", "len": 1, "result": "reject" },
+    { "prefix": "c2", "len": 1, "result": "reject" },
+    { "prefix": "c3", "len": 1, "result": "reject" },
+    { "prefix": "c4", "len": 1, "result": "reject" },
+    { "prefix": "c5", "len": 1, "result": "reject" },
+    { "prefix": "c6", "len": 1, "result": "reject" },
+    { "prefix": "c7", "len": 1, "result": "reject" },
+    { "prefix": "c8", "len": 1, "result": "reject" },
+    { "prefix": "c9", "len": 1, "result": "reject" },
+    { "prefix": "ca", "len": 1, "result": "reject" },
+    { "prefix": "cb", "len": 1, "result": "reject" },
+    { "prefix": "cc", "len": 1, "result": "reject" },
+    { "prefix": "cd", "len": 1, "result": "reject" },
+    { "prefix": "ce", "len": 1, "result": "reject" },
+    { "prefix": "cf", "len": 1, "result": "reject" },
+    { "prefix": "d0", "len": 1, "result": "reject" },
+    { "prefix": "d1", "len": 1, "result": "reject" },
+    { "prefix": "d2", "len": 1, "result": "reject" },
+    { "prefix": "d3", "len": 1, "result": "reject" },
+    { "prefix": "d4", "len": 1, "result": "reject" },
+    { "prefix": "d5", "len": 1, "result": "reject" },
+    { "prefix": "d6", "len": 1, "result": "reject" },
+    { "prefix": "d7", "len": 1, "result": "reject" },
+    { "prefix": "d8", "len": 1, "result": "reject" },
+    { "prefix": "d9", "len": 1, "result": "reject" },
+    { "prefix": "da", "len": 1, "result": "reject" },
+    { "prefix": "db", "len": 1, "result": "reject" },
+    { "prefix": "dc", "len": 1, "result": "reject" },
+    { "prefix": "dd", "len": 1, "result": "reject" },
+    { "prefix": "de", "len": 1, "result": "reject" },
+    { "prefix": "df", "len": 1, "result": "reject" },
+    { "prefix": "e0", "len": 1, "result": "reject" },
+    { "prefix": "e1", "len": 1, "result": "reject" },
+    { "prefix": "e2", "len": 1, "result": "reject" },
+    { "prefix": "e3", "len": 1, "result": "reject" },
+    { "prefix": "e4", "len": 1, "result": "reject" },
+    { "prefix": "e5", "len": 1, "result": "reject" },
+    { "prefix": "e6", "len": 1, "result": "reject" },
+    { "prefix": "e7", "len": 1, "result": "reject" },
+    { "prefix": "e8", "len": 1, "result": "reject" },
+    { "prefix": "e9", "len": 1, "result": "reject" },
+    { "prefix": "ea", "len": 1, "result": "reject" },
+    { "prefix": "eb", "len": 1, "result": "reject" },
+    { "prefix": "ec", "len": 1, "result": "reject" },
+    { "prefix": "ed", "len": 1, "result": "reject" },
+    { "prefix": "ee", "len": 1, "result": "reject" },
+    { "prefix": "ef", "len": 1, "result": "reject" },
+    { "prefix": "f0", "len": 1, "result": "reject" },
+    { "prefix": "f1", "len": 1, "result": "reject" },
+    { "prefix": "f2", "len": 1, "result": "reject" },
+    { "prefix": "f3", "len": 1, "result": "reject" },
+    { "prefix": "f4", "len": 1, "result": "reject" },
+    { "prefix": "f5", "len": 1, "result": "reject" },
+    { "prefix": "f6", "len": 1, "result": "reject" },
+    { "prefix": "f7", "len": 1, "result": "reject" },
+    { "prefix": "f8", "len": 1, "result": "reject" },
+    { "prefix": "f9", "len": 1, "result": "reject" },
+    { "prefix": "fa", "len": 1, "result": "reject" },
+    { "prefix": "fb", "len": 1, "result": "reject" },
+    { "prefix": "fc", "len": 1, "result": "reject" },
+    { "prefix": "fd", "len": 1, "result": "reject" },
+    { "prefix": "fe", "len": 1, "result": "reject" },
+    { "prefix": "ff", "len": 1, "result": "reject" },
+    { "prefix": "15", "len": 3145741, "result": "accept" },
+    { "prefix": "ff", "len": 3145741, "result": "reject" },
+    { "prefix": "15", "len": 3145742, "result": "disconnect" },
+    { "prefix": "ff", "len": 3145742, "result": "disconnect" },
+    { "prefix": "0070696e670000000000000000", "len": 3145741, "result": "accept" },
+    { "prefix": "007069006e6700000000000000", "len": 3145741, "result": "reject" },
+    { "prefix": "0070696e670000000000000000", "len": 3145742, "result": "disconnect" },
+    { "prefix": "007069006e6700000000000000", "len": 3145742, "result": "disconnect" },
+  ],
+}
