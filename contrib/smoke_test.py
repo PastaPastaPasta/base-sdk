@@ -11,17 +11,32 @@
 
 Usage:
 
-  nix develop ./contrib/nix#dev --command ./contrib/smoke_test.py [DIR]
+  nix develop ./contrib/nix#dev --command ./contrib/smoke_test.py
+  ./contrib/smoke_test.py --keep /tmp/smoke
 """
 
 from __future__ import annotations
 
+import argparse
+import contextlib
+import dataclasses
 import os
-import shutil
+import platform
 import subprocess
 import sys
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
+
+import lief
+from common import (
+  RETCODE_ERR,
+  RETCODE_PASS,
+  format_table,
+)
+
+# What every host binary prints.
+GREETING = "Hello, world!"
 
 # Programs every toolchain builds, beside this script.
 PROBES = Path(__file__).resolve().parent / "probes"
@@ -29,113 +44,249 @@ PROBES = Path(__file__).resolve().parent / "probes"
 # Rust needs nothing beyond its own standard library to greet.
 HELLO_RS = 'fn main() { println!("Hello, world!"); }\n'
 
-# Targets the devshell may carry drivers for.
+# LIEF reads no WebAssembly, which is told apart by its magic and version.
+WASM_PREAMBLE = b"\0asm\x01\0\0\0"
+
+# Seconds a build or a probe may run before it counts as hung.
+TIMEOUT = 120
+
+# Each target the devshell may carry drivers for, with the format and
+# architecture its binaries must have.
+#
+# Mach-O minimums come from the environment.
 TARGETS = [
-  "aarch64-apple-darwin",
-  "x86_64-apple-darwin",
-  "aarch64-unknown-linux-gnu",
-  "x86_64-unknown-linux-gnu",
-  "x86_64-pc-windows-gnu",
-  "wasm32-unknown-unknown",
+  ("aarch64-apple-darwin", "Mach-O", "arm64"),
+  ("x86_64-apple-darwin", "Mach-O", "x86_64"),
+  ("aarch64-unknown-linux-gnu", "ELF", "arm64"),
+  ("x86_64-unknown-linux-gnu", "ELF", "x86_64"),
+  ("x86_64-pc-windows-gnu", "PE", "x86_64"),
+  ("wasm32-unknown-unknown", "wasm", "wasm32"),
 ]
 
-# `--macho` is a `llvm-objdump` flag, the GNU equivalent is unsupported.
-OBJDUMP = shutil.which("llvm-objdump") or shutil.which("objdump")
+
+@dataclass(frozen=True)
+class Kind:
+  """The format, architecture and Mach-O minimum of a binary."""
+
+  fmt: str
+  arch: str
+  minos: str | None = None
+
+  def __str__(self) -> str:
+    minos = f", minos {self.minos}" if self.minos else ""
+    return f"{self.fmt} {self.arch}{minos}"
+
+  def satisfies(self, want: Kind) -> bool:
+    """Return whether this binary is what *want* asks for."""
+    same = (self.fmt, self.arch) == (want.fmt, want.arch)
+    return same and want.minos in (None, self.minos)
+
+  @staticmethod
+  def of(path: Path) -> Kind | None:
+    """Return the format and architecture *path* carries, or None."""
+    try:
+      with path.open("rb") as f:
+        if f.read(len(WASM_PREAMBLE)) == WASM_PREAMBLE:
+          return Kind("wasm", "wasm32")
+    except OSError:
+      return None
+
+    binary = lief.parse(str(path))
+    if binary is None:
+      return None
+    fmt = binary.format.name.replace("MACHO", "Mach-O")
+    arch = binary.abstract.header.architecture.name.lower()
+    minos = None
+    if isinstance(binary, lief.MachO.Binary) and binary.has_build_version:
+      minos = _version(binary.build_version.minos)
+    return Kind(fmt, arch, minos)
 
 
-def say(name: str, lang: str, result: str) -> None:
-  print(f"  {name:<26} {lang:<4} {result}")
+def _version(parts: list[int]) -> str:
+  """Return a Mach-O `major.minor.patch` version, dropping a zero patch."""
+  major, minor, patch = parts
+  return f"{major}.{minor}" + (f".{patch}" if patch else "")
 
 
-def produced(binary: Path) -> list[Path]:
-  return sorted(binary.parent.glob(binary.name + "*"))
+class Report:
+  """Collects one row per binary and whether every row passed."""
 
+  def __init__(self) -> None:
+    self.rows: list[tuple[str, str, str]] = []
+    self.failed = False
 
-def minos(found: list[Path]) -> str:
-  if OBJDUMP is None:
-    return ""
-  result = subprocess.run(  # noqa: S603
-    [OBJDUMP, "--macho", "--private-headers", *map(str, found)],
-    capture_output=True,
-    check=False,
-    text=True,
-  )
-  for line in result.stdout.splitlines():
-    fields = line.split()
-    if len(fields) > 1 and fields[0] == "minos":
-      return fields[1]
-  return ""
+  def add(self, name: str, lang: str, result: str, *, ok: bool = True) -> None:
+    self.rows.append((name, lang, result if ok else f"FAILED, {result}"))
+    self.failed |= not ok
 
-
-def describe(found: list[Path]) -> str:
-  result = subprocess.run(  # noqa: S603
-    ["file", "-b", *map(str, found)],  # noqa: S607
-    capture_output=True,
-    check=False,
-    text=True,
-  )
-  lines = result.stdout.splitlines()
-  return lines[0] if lines else ""
-
-
-def attempt(
-  out: Path, name: str, lang: str, argv: list[str], src: str = "hello"
-) -> bool:
-  binary = out / f"{name}.{lang}"
-  source = out / f"{src}.{lang}"
-  want = os.environ.get("MACOSX_DEPLOYMENT_TARGET", "")
-  if not argv[0]:
-    say(name, lang, "skipped")
-    return True
-  for stale in produced(binary):
-    stale.unlink()
-  built = subprocess.run(  # noqa: S603
-    [*argv, str(source), "-o", str(binary)], check=False
-  )
-  found = produced(binary)
-  if built.returncode != 0 or not found:
-    say(name, lang, "FAILED")
+  def held(
+    self, name: str, lang: str, path: Path, want: Kind, *, note: str = ""
+  ) -> bool:
+    """Record whether the binary at *path*, or with a suffix, is *want*."""
+    found = next(iter(_outputs(path)), None)
+    got = Kind.of(found) if found is not None else None
+    if got is None:
+      self.add(name, lang, "nothing recognisable was built", ok=False)
+    elif not got.satisfies(want):
+      self.add(name, lang, f"{got}, wanted {want}", ok=False)
+    else:
+      self.add(name, lang, f"{got}{note}")
+      return True
     return False
-  # An unreadable load command is a failure, not a reason to skip the check.
-  if name.endswith("-apple-darwin"):
-    got = minos(found)
-    if not want or got != want:
-      wanted = want or "<unset>"
-      say(name, lang, f"FAILED, minos {got or 'unknown'}, wanted {wanted}")
-      return False
-  say(name, lang, describe(found) or "built")
-  return True
+
+  def greets(self, name: str, lang: str, path: Path, want: Kind) -> None:
+    """Record whether the host binary at *path* is *want* and greets."""
+    try:
+      result = _run([str(path)])
+    except (OSError, subprocess.TimeoutExpired) as exc:
+      self.add(name, lang, _unfinished(exc), ok=False)
+      return
+    if result.returncode != 0:
+      self.add(name, lang, f"exited with {result.returncode}", ok=False)
+      return
+    if result.stdout.strip() != GREETING:
+      self.add(name, lang, "no greeting", ok=False)
+      return
+    self.held(name, lang, path, want, note=", ran")
+
+
+class Builder:
+  """Builds the probes into one directory and records each result."""
+
+  def __init__(self, report: Report, out: Path) -> None:
+    self.report = report
+    self.out = out
+    self.src = {
+      "c": PROBES / "hello.c",
+      "cpp": PROBES / "hello.cpp",
+      "rs": out / "hello.rs",
+      "free": PROBES / "free.c",
+    }
+    self.src["rs"].write_text(HELLO_RS, encoding="utf-8")
+
+  def build(self, name: str, lang: str, argv: list[str]) -> Path | None:
+    """Return the binary *argv* built, or None after recording why not."""
+    binary = self.out / f"{name}.{lang}"
+    for stale in _outputs(binary):
+      stale.unlink()
+    try:
+      result = _run([*argv, "-o", str(binary)])
+    except (OSError, subprocess.TimeoutExpired) as exc:
+      self.report.add(name, lang, _unfinished(exc), ok=False)
+      return None
+    if result.returncode != 0:
+      last = result.stderr.strip().splitlines()
+      self.report.add(name, lang, last[-1] if last else "no output", ok=False)
+      return None
+    return binary
+
+  def host(self) -> None:
+    """Build with the host compilers, then run what they built."""
+    want = host_kind()
+    for lang, compiler in (
+      ("c", os.environ.get("CC", "cc")),
+      ("cpp", os.environ.get("CXX", "c++")),
+      ("rs", "rustc"),
+    ):
+      binary = self.build("host", lang, [compiler, str(self.src[lang])])
+      if binary is not None:
+        self.report.greets("host", lang, binary, want)
+
+  def target(self, triple: str, want: Kind) -> None:
+    """Build with the drivers the devshell carries for *triple*."""
+    key = triple.replace("-", "_")
+    cc = os.environ.get(f"CC_{key}")
+    cxx = os.environ.get(f"CXX_{key}")
+    if want.fmt == "Mach-O":
+      minos = os.environ.get("MACOSX_DEPLOYMENT_TARGET")
+      if cc and not minos:
+        self.report.add(triple, "all", "no MACOSX_DEPLOYMENT_TARGET", ok=False)
+        return
+      want = dataclasses.replace(want, minos=minos)
+
+    rs = str(self.src["rs"])
+    # wasm32 has no libc to greet through, so it builds a bare object.
+    if want.fmt == "wasm":
+      free = str(self.src["free"])
+      langs = [("c", [cc, "-c", free] if cc else None), ("cpp", None)]
+      # rustc links wasm32 with its own rust-lld, so it needs no driver.
+      rust = ["rustc", f"--target={triple}", rs]
+    else:
+      langs = [
+        ("c", [cc, str(self.src["c"])] if cc else None),
+        ("cpp", [cxx, str(self.src["cpp"])] if cxx else None),
+      ]
+      rust = None
+      if cc:
+        rust = ["rustc", f"--target={triple}", f"-Clinker={cc}", rs]
+
+    for lang, argv in [*langs, ("rs", rust)]:
+      if argv is None:
+        self.report.add(triple, lang, "skipped")
+        continue
+      binary = self.build(triple, lang, argv)
+      if binary is not None:
+        self.report.held(triple, lang, binary, want)
+
+
+def _run(argv: list[str]) -> subprocess.CompletedProcess[str]:
+  return subprocess.run(  # noqa: S603
+    argv, capture_output=True, check=False, text=True, timeout=TIMEOUT
+  )
+
+
+def _unfinished(exc: OSError | subprocess.TimeoutExpired) -> str:
+  """Return why a command never finished, for its report row."""
+  if isinstance(exc, subprocess.TimeoutExpired):
+    return f"timed out after {TIMEOUT}s"
+  return f"could not run, {(exc.strerror or str(exc)).lower()}"
+
+
+def _outputs(binary: Path) -> list[Path]:
+  """Return *binary* and any file a driver named after it plus a suffix."""
+  return sorted(
+    p
+    for p in binary.parent.glob(binary.name + "*")
+    if p.name == binary.name or p.name.startswith(binary.name + ".")
+  )
+
+
+def host_kind() -> Kind:
+  """Return what a binary built for the host is."""
+  machine = platform.machine().lower()
+  machine = {"aarch64": "arm64", "amd64": "x86_64"}.get(machine, machine)
+  fmt = "Mach-O" if platform.system() == "Darwin" else "ELF"
+  return Kind(fmt, machine)
 
 
 def main() -> int:
-  out = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(tempfile.mkdtemp())
-  out.mkdir(parents=True, exist_ok=True)
-  for name in ("hello.c", "hello.cpp", "free.c"):
-    shutil.copy(PROBES / name, out)
-  (out / "hello.rs").write_text(HELLO_RS, encoding="utf-8")
+  parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+  parser.add_argument(
+    "--keep",
+    type=Path,
+    metavar="DIR",
+    help="build into DIR and keep it, instead of a temporary directory",
+  )
+  args = parser.parse_args()
+  lief.logging.disable()
 
-  ok = True
-  ok &= attempt(out, "host", "c", [os.environ.get("CC", "cc")])
-  ok &= attempt(out, "host", "cpp", [os.environ.get("CXX", "c++")])
-  ok &= attempt(out, "host", "rs", ["rustc"])
+  report = Report()
+  scratch = (
+    contextlib.nullcontext(str(args.keep))
+    if args.keep
+    else tempfile.TemporaryDirectory(prefix="smoke-")
+  )
+  with scratch as where:
+    # Absolute, so running a host binary never searches PATH.
+    out = Path(where).resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    builder = Builder(report, out)
+    builder.host()
+    for triple, fmt, arch in TARGETS:
+      builder.target(triple, Kind(fmt, arch))
+    print(format_table(("target", "lang", "result"), report.rows))
 
-  for target in TARGETS:
-    key = target.replace("-", "_")
-    driver = os.environ.get(f"CC_{key}", "")
-    rust = "rustc" if driver else ""
-    linker = driver
-    if target.startswith("wasm32-"):
-      # rustc links wasm32 with its own rust-lld.
-      rust = "rustc"
-      linker = ""
-      ok &= attempt(out, target, "c", [driver, "-c"], src="free")
-    else:
-      ok &= attempt(out, target, "c", [driver])
-    ok &= attempt(out, target, "cpp", [os.environ.get(f"CXX_{key}", "")])
-    flags = [f"-Clinker={linker}"] if linker else []
-    ok &= attempt(out, target, "rs", [rust, f"--target={target}", *flags])
-
-  return 0 if ok else 1
+  return RETCODE_ERR if report.failed else RETCODE_PASS
 
 
 if __name__ == "__main__":
