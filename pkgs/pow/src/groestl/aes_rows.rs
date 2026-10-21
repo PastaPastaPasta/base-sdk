@@ -1,25 +1,20 @@
 //
-// Copyright (c) 2007-2010, Projet RNRT SAPHIR
 // Copyright (c) 2026-present, The Dash Core developers
 // SPDX-License-Identifier: MIT
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
-// Adapted from sphlib, written by Thomas Pornin <thomas.pornin@cryptolog.com>
 // Adapted from SUPERCOP (aesni-intr), by Matusiewicz, Roland and Schläffer
 //
 
-//! Groestl-512 hash function.
+//! Row-first Groestl-512 backend, one AES SubBytes per row vector.
 
 use crate::aes::sub_shift as aes_sub_shift;
-use crate::consts::groestl::{BLOCK, IV_ROWS, RC_P, RC_Q, ROUNDS, SUBSH_P, SUBSH_Q};
-use crate::util::buffer::{Buffer, Compress};
-use crate::util::{impl_digest, impl_hash};
+use crate::consts::groestl::{BLOCK, RC_P, RC_Q, ROUNDS, SUBSH_P, SUBSH_Q};
 
-use digest::{FixedOutput, Output, Update};
 use wide::{i8x16, u8x16};
 
 /// One row of the byte-sliced state, a byte per column.
-type Row = u8x16;
+pub(super) type Row = u8x16;
 
 /// Multiplies each byte by `x` in `GF(2^8)`.
 ///
@@ -200,7 +195,7 @@ fn load_block(block: &[u8; BLOCK]) -> [Row; 8] {
 
 /// Extracts columns 8 through 15 as the 512-bit output digest.
 #[inline(always)]
-fn extract_right_half(rows: &[Row; 8], out: &mut [u8; 64]) {
+pub(super) fn extract_right_half(rows: &[Row; 8], out: &mut [u8; 64]) {
   let mut col = 8;
   while col < 16 {
     let offset = (col - 8) * 8;
@@ -238,95 +233,15 @@ fn compress_rows(chaining_value: &mut [Row; 8], message: &[Row; 8]) {
 
 /// Computes `H = H ^ P(H ^ M) ^ Q(M)`.
 #[inline(always)]
-fn compress_block(chaining_value: &mut [Row; 8], block: &[u8; BLOCK]) {
+pub(super) fn compress_block(chaining_value: &mut [Row; 8], block: &[u8; BLOCK]) {
   let message = load_block(block);
   compress_rows(chaining_value, &message);
 }
 
 /// Computes `H = H ^ P(H)` before the final digest extraction.
 #[inline(always)]
-fn output_transform(chaining_value: &mut [Row; 8]) {
+pub(super) fn output_transform(chaining_value: &mut [Row; 8]) {
   let mut state = *chaining_value;
   perm_p(&mut state);
   *chaining_value = xor_rows(chaining_value, &state);
-}
-
-/// Chaining value and block count.
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct Core {
-  h: [Row; 8],
-  blocks: u64,
-}
-
-impl Compress<BLOCK> for Core {
-  #[inline(always)]
-  fn compress(&mut self, block: &[u8; BLOCK]) {
-    compress_block(&mut self.h, block);
-    self.blocks = self.blocks.wrapping_add(1);
-  }
-}
-
-impl_hash!(Core, [h], [blocks]);
-
-/// Streaming Groestl-512.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Groestl512 {
-  core: Core,
-  buffer: Buffer<BLOCK>,
-}
-
-impl Default for Groestl512 {
-  #[inline]
-  fn default() -> Self {
-    Self {
-      core: Core {
-        h: IV_ROWS.map(Row::new),
-        blocks: 0,
-      },
-      buffer: Buffer::new(),
-    }
-  }
-}
-
-impl Update for Groestl512 {
-  #[inline]
-  fn update(&mut self, data: &[u8]) {
-    self.buffer.update(data, &mut self.core);
-  }
-}
-
-impl FixedOutput for Groestl512 {
-  fn finalize_into(mut self, out: &mut Output<Self>) {
-    let remaining = self.buffer.len();
-    // The last eight bytes hold the total block count, padding included, so
-    // a tail reaching byte 120 spills into a second block.
-    let block = self.buffer.pad(0x80);
-    if remaining < 120 {
-      block[120..].copy_from_slice(&self.core.blocks.wrapping_add(1).to_be_bytes());
-      self.core.compress(block);
-    } else {
-      self.core.compress(block);
-      let mut last = [0u8; BLOCK];
-      last[120..].copy_from_slice(&self.core.blocks.wrapping_add(1).to_be_bytes());
-      self.core.compress(&last);
-    }
-    output_transform(&mut self.core.h);
-
-    let mut digest = [0u8; 64];
-    extract_right_half(&self.core.h, &mut digest);
-    out.copy_from_slice(&digest);
-  }
-}
-
-impl_digest!(Groestl512, U64);
-
-#[cfg(test)]
-mod tests {
-  use super::Groestl512;
-  use crate::tests::run_nist_kat_chunked;
-
-  #[test]
-  fn nist_kat() {
-    run_nist_kat_chunked::<Groestl512>("groestl");
-  }
 }
