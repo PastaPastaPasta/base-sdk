@@ -235,9 +235,15 @@ impl fmt::Display for Block {
 #[expect(clippy::panic, clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
+  use crate::sptx::TxType;
+  use crate::transaction::{OutPoint, TxIn, TxOut};
 
+  use bitcoin_primitives::script::{ScriptPubKeyBuf, ScriptSigBuf};
+  use bitcoin_units::Amount;
   use dash_dev::{assert_serde_rt, check_wire, Corpus};
+  use dash_script::Opcode;
   use rstest::rstest;
+  use serde::Deserialize;
 
   #[rstest]
   fn corpus_block() {
@@ -254,5 +260,78 @@ mod tests {
       assert!(!mutated, "{label}: merkle mutated");
     });
     assert_serde_rt("blocks", &items);
+  }
+
+  #[derive(Deserialize)]
+  struct TxShape {
+    inputs: Vec<u8>,
+    lock_time: u32,
+    sigops: usize,
+    pad: usize,
+  }
+
+  impl TxShape {
+    fn build(&self) -> Transaction {
+      let inputs = self.inputs.iter().enumerate().map(|(i, &seed)| TxIn {
+        prevout: OutPoint {
+          hash: TxHash::from_lendian([seed; 32]),
+          index: if seed == 0 { u32::MAX } else { 0 },
+        },
+        script_sig: ScriptSigBuf::from_bytes(vec![0; if i == 0 { 2 } else { 0 }]),
+        sequence: u32::MAX,
+      });
+      let mut script = vec![Opcode::CheckSig.to_base(); self.sigops];
+      script.resize(self.sigops + self.pad, 0);
+      Transaction {
+        version: 3,
+        tx_type: TxType::Spend,
+        inputs: inputs.collect(),
+        outputs: vec![TxOut {
+          value: Amount::from_sat(1).unwrap(),
+          script_pubkey: ScriptPubKeyBuf::from_bytes(script),
+        }],
+        lock_time: self.lock_time,
+        extra_payload: vec![],
+      }
+    }
+  }
+
+  #[derive(Deserialize)]
+  struct CheckVector {
+    txs: Vec<TxShape>,
+    merkle_root: MerkleRoot,
+    size: usize,
+    reason: String,
+  }
+
+  fn reason(result: Option<BlockInvalid>) -> String {
+    match result {
+      None => String::new(),
+      Some(BlockInvalid::Transaction { error, .. }) => crate::transaction::tests::reason(Some(error)),
+      Some(error) => error.to_string().split(':').next().unwrap_or_default().into(),
+    }
+  }
+
+  #[rstest]
+  fn check_matches_vectors() {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "block_check");
+    for (i, v) in corpus.vectors::<CheckVector>("check").into_iter().enumerate() {
+      let mut block = Block {
+        header: BlockHeader {
+          bits: 0x207f_ffff,
+          ..BlockHeader::default()
+        },
+        transactions: v.txs.iter().map(TxShape::build).collect(),
+      };
+      block.header.merkle_root = block.merkle().0;
+      assert_eq!(block.header.merkle_root, v.merkle_root, "vector {i}");
+      while block.check() == Some(BlockInvalid::BadProofOfWork) {
+        block.header.nonce += 1;
+      }
+      let mut buf = Vec::new();
+      block.encode(&mut buf);
+      assert_eq!(buf.len(), v.size, "vector {i}");
+      assert_eq!(reason(block.check()), v.reason, "vector {i}");
+    }
   }
 }

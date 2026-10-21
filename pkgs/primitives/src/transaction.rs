@@ -391,7 +391,7 @@ impl fmt::Display for Transaction {
 
 #[cfg(all(test, feature = "serde"))]
 #[expect(clippy::unwrap_used, reason = "test code")]
-mod tests {
+pub(crate) mod tests {
   use super::*;
 
   use dash_dev::{assert_serde_rt, check_tx, Corpus};
@@ -448,7 +448,7 @@ mod tests {
 
   /// Payload checks run after every check the vectors cover, so payload
   /// errors count as a pass.
-  fn reason(result: Option<TxInvalid>) -> String {
+  pub(crate) fn reason(result: Option<TxInvalid>) -> String {
     match result {
       None | Some(TxInvalid::PayloadDecode(_) | TxInvalid::PayloadCheck(_)) => String::new(),
       Some(error) => error.to_string().split(':').next().unwrap_or_default().into(),
