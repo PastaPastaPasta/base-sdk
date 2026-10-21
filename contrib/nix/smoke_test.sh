@@ -4,10 +4,9 @@ set -uo pipefail
 
 out="${1:-$(mktemp -d)}"
 mkdir -p "${out}"
-printf '#include <stdio.h>\nint main(void) { puts("Hello, world!"); return 0; }\n' > "${out}/hello.c"
-printf '#include <iostream>\nint main() { std::cout << "Hello, world!\\n"; }\n' > "${out}/hello.cpp"
+probes="$(dirname "${BASH_SOURCE[0]}")/../probes"
+cp -- "${probes}/hello.c" "${probes}/hello.cpp" "${probes}/free.c" "${out}/"
 printf 'fn main() { println!("Hello, world!"); }\n' > "${out}/hello.rs"
-printf 'int add(int a, int b) { return a + b; }\n' > "${out}/free.c"
 
 status=0
 
