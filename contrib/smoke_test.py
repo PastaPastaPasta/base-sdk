@@ -189,8 +189,11 @@ class Builder:
       self.report.add(name, lang, _unfinished(exc), ok=False)
       return None
     if result.returncode != 0:
-      last = result.stderr.strip().splitlines()
-      self.report.add(name, lang, last[-1] if last else "no output", ok=False)
+      # The first error names the cause; the drivers' last line rarely does.
+      lines = result.stderr.strip().splitlines()
+      cause = next((ln for ln in lines if "error" in ln), None)
+      cause = cause or (lines[-1] if lines else "no output")
+      self.report.add(name, lang, cause, ok=False)
       return None
     return binary
 
