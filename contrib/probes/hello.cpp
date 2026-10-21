@@ -33,7 +33,13 @@ bool say(const std::string& text)
   if (mach_task_self() == MACH_PORT_NULL) {
     return false;
   }
-  dispatch_queue_t queue = dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0);
+  // Checking for a release past the deployment target calls into
+  // compiler-rt, which the SDK does not ship.
+  qos_class_t qos = QOS_CLASS_DEFAULT;
+  if (__builtin_available(macOS 15.0, *)) {
+    qos = QOS_CLASS_USER_INITIATED;
+  }
+  dispatch_queue_t queue = dispatch_get_global_queue(qos, 0);
   dispatch_semaphore_t done = dispatch_semaphore_create(0);
   dispatch_data_t data = dispatch_data_create(text.data(), text.size(), queue, DISPATCH_DATA_DESTRUCTOR_DEFAULT);
   __block bool failed = true;

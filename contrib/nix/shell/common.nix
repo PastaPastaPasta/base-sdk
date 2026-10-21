@@ -4,6 +4,7 @@
   pkgs,
   lib,
   inputs,
+  llvm,
   root,
   unstable,
 }:
@@ -13,7 +14,7 @@ let
   commonTargets = [ "wasm32-unknown-unknown" ];
 
   cxx = import ../mods/cxx.nix {
-    inherit pkgs lib;
+    inherit pkgs lib llvm;
     xcodeSdk = import ../mods/xcode_sdk.nix { inherit pkgs; };
   };
 

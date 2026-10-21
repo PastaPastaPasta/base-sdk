@@ -3,15 +3,14 @@
 {
   pkgs,
   lib,
+  llvm,
   xcodeSdk ? null,
 }:
 
 let
-  llvm = pkgs.llvmPackages_20;
-
   # clang -print-resource-dir names the main output, but the builtin headers are
   # split into .lib, so the flag has to be passed explicitly.
-  resourceDir = "${llvm.clang-unwrapped.lib}/lib/clang/20";
+  resourceDir = "${import ./compiler_rt.nix { inherit pkgs llvm; }}/lib/clang/20";
 
   # --ld-path names lld directly, where -fuse-ld=lld would find the nixpkgs
   # bintools wrapper on PATH. Mach-O needs ld64.
@@ -208,7 +207,7 @@ in
   # Adding clang to packages would not displace the cc-wrapper the default
   # stdenv puts on PATH, so the shell is built against this stdenv instead.
   compiler = {
-    stdenv = llvm.stdenv;
+    stdenv = pkgs.overrideCC pkgs.stdenv llvm.clang;
     packages = [ llvm.bintools ];
   };
 

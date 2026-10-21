@@ -8,6 +8,8 @@
 
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 
+    nixpkgs-llvm.url = "github:NixOS/nixpkgs/3e2cf88148e732abc1d259286123e06a9d8c964a";
+
     pyproject-build-systems = {
       url = "github:pyproject-nix/build-system-pkgs";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -35,6 +37,7 @@
   outputs =
     {
       nixpkgs,
+      nixpkgs-llvm,
       nixpkgs-unstable,
       rust-overlay,
       ...
@@ -63,18 +66,24 @@
               inherit system;
               config.allowUnfree = true;
             };
+            llvm = (import nixpkgs-llvm { inherit system; }).llvmPackages_20;
           }
         );
     in
     {
       devShells = eachSystem (
-        { pkgs, unstable }:
+        {
+          pkgs,
+          unstable,
+          llvm,
+        }:
         let
           ctx = import ./shell/common.nix {
             inherit
               pkgs
               lib
               inputs
+              llvm
               unstable
               ;
             root = ../..;
