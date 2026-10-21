@@ -16,3 +16,6 @@ trim_trailing_whitespace = false
 
 [Justfile]
 indent_size = 4
+
+[{*.bzl,BUILD.bazel,MODULE.bazel}]
+indent_size = 4

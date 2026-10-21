@@ -100,6 +100,33 @@ cargo install --locked cargo-deny
 sudo dnf install -y cargo-deny git just nodejs24
 ```
 
+## Bazel
+
+> [!NOTE]
+> Bazel isn't installed directly. Instead, [Bazelisk](https://github.com/bazelbuild/bazelisk) is installed as `bazel`,
+> which uses the version pinned by [`.bazelversion`](../.bazelversion). It is accompanied by
+> [buildifier](https://github.com/bazelbuild/buildtools), used to lint Starlark (the DSL used by Bazel) files.
+
+<!-- pyml disable-next-line no-duplicate-heading -->
+### macOS (with [Homebrew](https://brew.sh/))
+
+> [!WARNING]
+> `bazelisk` conflicts with the `bazel` formula. If the latter has been installed, it must be uninstalled first.
+
+```bash
+brew install bazelisk buildifier
+```
+
+<!-- pyml disable-next-line no-duplicate-heading -->
+### Linux/WSL
+
+Neither Bazelisk nor buildifier are available in official Debian or Fedora repositories. Both are published to the npm
+registry and can be installed with the `npm` CLI tool (a part of Node.js, an existing dependency).
+
+```bash
+npm install -g @bazel/bazelisk @bazel/buildifier
+```
+
 <!-- [end:setup] -->
 
 <!-- [start:bisect] -->

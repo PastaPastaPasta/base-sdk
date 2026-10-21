@@ -12,6 +12,7 @@
 compose [
   (cxx.forTargets crossTargets)
   (cxx.forWasm commonTargets)
+  mods.bazel
   mods.codeql
   mods.cxx
   mods.fhs

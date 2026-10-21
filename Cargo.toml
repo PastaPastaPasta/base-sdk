@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "meta/bazel",
   "meta/dev",
   "pkgs/num",
   "pkgs/params",

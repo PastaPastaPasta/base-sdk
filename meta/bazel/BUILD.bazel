@@ -1,0 +1,5 @@
+# Exported for crate_universe, which resolves the crate graph from it.
+exports_files(
+    ["Cargo.toml"],
+    visibility = ["//visibility:public"],
+)

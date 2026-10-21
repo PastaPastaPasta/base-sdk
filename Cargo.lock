@@ -425,6 +425,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "dash-meta-bazel"
+version = "0.0.0"
+
+[[package]]
 name = "dash-num"
 version = "0.2.0-beta"
 dependencies = [

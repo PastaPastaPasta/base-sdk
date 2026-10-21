@@ -1,0 +1,4 @@
+module(
+    name = "dash_base_sdk",
+    version = "0.0.0",
+)
