@@ -98,6 +98,9 @@ pub enum BlockInvalid {
   /// Computed merkle root does not match the header.
   #[error("bad-merkle-root")]
   BadMerkleRoot,
+  /// `bad-txns-duplicate`
+  #[error("bad-txns-duplicate")]
+  DuplicateTransactions,
   /// `bad-blk-length`
   #[error("bad-blk-length: {size} bytes")]
   BadBlockLength { size: usize },
@@ -137,9 +140,12 @@ impl Checkable for Block {
       return Some(BlockInvalid::BadProofOfWork);
     }
 
-    let (root, _mutated) = self.merkle();
+    let (root, mutated) = self.merkle();
     if root != self.header.merkle_root {
       return Some(BlockInvalid::BadMerkleRoot);
+    }
+    if mutated {
+      return Some(BlockInvalid::DuplicateTransactions);
     }
 
     if self.transactions.is_empty() {
