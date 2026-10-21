@@ -7,7 +7,7 @@
 //! Codec traits and helpers.
 
 use crate::prelude::*;
-use crate::type_id::TypeId;
+use crate::type_id::{TypeId, Unencodable};
 use crate::{CompactSize, Hashable};
 
 use core::convert::Infallible;
@@ -173,6 +173,27 @@ impl EncodeBuf for Vec<u8> {
   fn extend_from_slice(&mut self, data: &[u8]) {
     self.extend_from_slice(data);
   }
+}
+
+/// An encode target that counts the bytes written instead of storing them.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Unencodable)]
+struct ByteCount(usize);
+
+impl EncodeBuf for ByteCount {
+  fn push(&mut self, _byte: u8) {
+    self.0 += 1;
+  }
+
+  fn extend_from_slice(&mut self, data: &[u8]) {
+    self.0 += data.len();
+  }
+}
+
+/// Returns the size of the wire encoding of `value`.
+pub fn encoded_size<E>(value: &impl BaseCodec<E>) -> usize {
+  let mut size = ByteCount::default();
+  value.encode(&mut size);
+  size.0
 }
 
 /// The widest wire image a type's buffering decoder will accept.
@@ -357,7 +378,7 @@ impl<T: Codec> __CodecMarker for T {}
 
 #[cfg(test)]
 mod tests {
-  use super::{decode_vec, BaseCodec, DecodeError};
+  use super::{decode_vec, encoded_size, BaseCodec, DecodeError};
   use crate::prelude::*;
   use crate::{VecDecoder, VecEncoder};
 
@@ -438,6 +459,18 @@ mod tests {
     let mut cursor: &[u8] = &[0x01, 0xAA, 0xFF];
     assert_eq!(decode_vec::<u8>(&mut cursor, 1), Ok(vec![0xAA]));
     assert_eq!(cursor, [0xFF]);
+  }
+
+  #[rstest]
+  #[case::empty(0, 1)]
+  #[case::one_byte_count(252, 253)]
+  #[case::three_byte_count(253, 256)]
+  fn encoded_size_counts_the_wire_encoding(#[case] len: usize, #[case] size: usize) {
+    let value = vec![0u8; len];
+    let mut buf = Vec::new();
+    value.encode(&mut buf);
+    assert_eq!(buf.len(), size);
+    assert_eq!(encoded_size(&value), size);
   }
 
   /// Consumes the whole cursor, so `end()` sees no trailing bytes.
