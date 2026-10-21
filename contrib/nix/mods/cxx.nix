@@ -84,7 +84,7 @@ let
   darwinFlags =
     _:
     [
-      "-isysroot ${xcodeSdk}"
+      "-isysroot ${xcodeSdk.sysroot}"
       "-nostdlibinc"
       "-iwithsysroot/usr/include"
       "-iframeworkwithsysroot/System/Library/Frameworks"
@@ -224,8 +224,9 @@ in
       # both are set shell-wide rather than per target. A native macOS build
       # has to resolve against the same pinned SDK as a cross target.
       darwin = lib.optionalAttrs (lib.any (t: (defFor t).kind == "darwin") targets) {
+        MACOS_SDK_VERSION = xcodeSdk.sdkVersion;
         MACOSX_DEPLOYMENT_TARGET = xcodeSdk.minVersion;
-        SDKROOT = "${xcodeSdk}";
+        SDKROOT = xcodeSdk.sysroot;
       };
     in
     {

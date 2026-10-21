@@ -51,9 +51,8 @@ WASM_PREAMBLE = b"\0asm\x01\0\0\0"
 TIMEOUT = 120
 
 # Each target the devshell may carry drivers for, with the format and
-# architecture its binaries must have.
-#
-# Mach-O minimums come from the environment.
+# architecture its binaries must have. Mach-O versions come from the
+# environment.
 TARGETS = [
   ("aarch64-apple-darwin", "Mach-O", "arm64"),
   ("x86_64-apple-darwin", "Mach-O", "x86_64"),
@@ -66,20 +65,23 @@ TARGETS = [
 
 @dataclass(frozen=True)
 class Kind:
-  """The format, architecture and Mach-O minimum of a binary."""
+  """The format, architecture and Mach-O versions of a binary."""
 
   fmt: str
   arch: str
   minos: str | None = None
+  sdk: str | None = None
 
   def __str__(self) -> str:
     minos = f", minos {self.minos}" if self.minos else ""
-    return f"{self.fmt} {self.arch}{minos}"
+    sdk = f", sdk {self.sdk}" if self.sdk else ""
+    return f"{self.fmt} {self.arch}{minos}{sdk}"
 
   def satisfies(self, want: Kind) -> bool:
     """Return whether this binary is what *want* asks for."""
     same = (self.fmt, self.arch) == (want.fmt, want.arch)
-    return same and want.minos in (None, self.minos)
+    minos = want.minos in (None, self.minos)
+    return same and minos and want.sdk in (None, self.sdk)
 
   @staticmethod
   def of(path: Path) -> Kind | None:
@@ -96,16 +98,28 @@ class Kind:
       return None
     fmt = binary.format.name.replace("MACHO", "Mach-O")
     arch = binary.abstract.header.architecture.name.lower()
-    minos = None
+    minos = sdk = None
     if isinstance(binary, lief.MachO.Binary) and binary.has_build_version:
       minos = _version(binary.build_version.minos)
-    return Kind(fmt, arch, minos)
+      sdk = _version(binary.build_version.sdk)
+    return Kind(fmt, arch, minos, sdk)
 
 
 def _version(parts: list[int]) -> str:
   """Return a Mach-O `major.minor.patch` version, dropping a zero patch."""
   major, minor, patch = parts
   return f"{major}.{minor}" + (f".{patch}" if patch else "")
+
+
+def _canonical(version: str | None) -> str | None:
+  """Return *version* as `_version` spells it, so `14` matches `14.0`."""
+  if not version:
+    return None
+  try:
+    parts = [int(part) for part in version.split(".")]
+  except ValueError:
+    return version
+  return _version([*parts, 0, 0][:3])
 
 
 class Report:
@@ -198,11 +212,14 @@ class Builder:
     cc = os.environ.get(f"CC_{key}")
     cxx = os.environ.get(f"CXX_{key}")
     if want.fmt == "Mach-O":
-      minos = os.environ.get("MACOSX_DEPLOYMENT_TARGET")
-      if cc and not minos:
-        self.report.add(triple, "all", "no MACOSX_DEPLOYMENT_TARGET", ok=False)
+      minos = _canonical(os.environ.get("MACOSX_DEPLOYMENT_TARGET"))
+      # Set only when clang reads the version from `SDKSettings.json`.
+      sdk = _canonical(os.environ.get("MACOS_SDK_VERSION"))
+      if (cc or cxx) and not (minos and sdk):
+        unset = "MACOSX_DEPLOYMENT_TARGET" if not minos else "MACOS_SDK_VERSION"
+        self.report.add(triple, "all", f"no {unset}", ok=False)
         return
-      want = dataclasses.replace(want, minos=minos)
+      want = dataclasses.replace(want, minos=minos, sdk=sdk)
 
     rs = str(self.src["rs"])
     # wasm32 has no libc to greet through, so it builds a bare object.
