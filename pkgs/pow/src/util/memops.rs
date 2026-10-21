@@ -6,6 +6,8 @@
 
 //! Load, store and (un)pack operations.
 
+use crate::util::const_array;
+
 /// Reads a little-endian `u32` from `buf` at byte offset `i * 4`.
 #[inline]
 pub(crate) const fn load_u32_le(buf: &[u8], i: usize) -> u32 {
@@ -96,26 +98,13 @@ pub(crate) fn digest_from_u64_le<const N: usize>(words: &[u64; N]) -> [u8; 64] {
 /// Packs 64 nibbles into 32 bytes, high nibble first.
 #[inline]
 pub(crate) const fn pack_nibbles(nib: &[u8; 64]) -> [u8; 32] {
-  let mut out = [0u8; 32];
-  let mut i = 0;
-  while i < 32 {
-    out[i] = (nib[2 * i] << 4) | nib[2 * i + 1];
-    i += 1;
-  }
-  out
+  const_array!(0; 32; |i| (nib[2 * i] << 4) | nib[2 * i + 1])
 }
 
 /// Unpacks 32 bytes into 64 nibbles, high nibble first.
 #[inline]
 pub(crate) const fn unpack_nibbles(bytes: &[u8; 32]) -> [u8; 64] {
-  let mut out = [0u8; 64];
-  let mut i = 0;
-  while i < 32 {
-    out[2 * i] = bytes[i] >> 4;
-    out[2 * i + 1] = bytes[i] & 0xF;
-    i += 1;
-  }
-  out
+  const_array!(0; 64; |i| if i % 2 == 0 { bytes[i / 2] >> 4 } else { bytes[i / 2] & 0xF })
 }
 
 /// Reads `N` little-endian `u64` words from the start of `buf`.
