@@ -34,6 +34,10 @@ services:
       nix_daemon:
         condition: "service_healthy"
     init: true
+    # `fhs-run` uses bubblewrap, which needs user namespaces and unmasked procfs generally denied by Docker by default.
+    security_opt:
+      - "seccomp=unconfined"
+      - "systempaths=unconfined"
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     environment:
       NIX_REMOTE: "daemon"

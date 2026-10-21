@@ -26,7 +26,7 @@ if ! git rev-parse --git-dir > /dev/null 2>&1; then
 fi
 
 if (( $# > 0 )); then
-  exec nix develop ./contrib/nix#dev --command "$@"
+  exec nix develop ./contrib/nix#dev --command fhs-run "$@"
 else
-  exec nix develop ./contrib/nix#dev
+  exec nix develop ./contrib/nix#dev --command fhs-run bash
 fi

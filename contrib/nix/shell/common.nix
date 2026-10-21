@@ -90,6 +90,7 @@ in
   mods = lib.mapAttrs (name: m: m // { _name = name; }) {
     codeql = import ../mods/codeql.nix { inherit pkgs unstable; };
     cxx = cxx.compiler;
+    fhs = import ../mods/fhs.nix { inherit pkgs lib; };
     nixpkgs = import ../mods/nixpkgs.nix { inherit pkgs; };
     python = import ../mods/python.nix {
       inherit pkgs lib;
