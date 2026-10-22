@@ -298,7 +298,8 @@ pub trait NITrait: fmt::Display {
   /// Returns the primary service if available.
   fn primary(&self) -> Option<ServiceV2>;
 
-  /// Returns `true` when this value carries no addresses.
+  /// Returns `true` for the unset legacy service, or an extended value of the
+  /// current version with no groups.
   fn is_empty(&self) -> bool;
 
   /// Returns `true` if entries exist for the given purpose.
@@ -496,7 +497,7 @@ impl NITrait for NetInfoV2 {
   }
 
   fn is_empty(&self) -> bool {
-    self.groups.iter().all(|(_, group)| group.is_empty())
+    self.version == Self::CURRENT_VERSION && self.groups.is_empty()
   }
 
   fn has_entries(&self, purpose: NIPurpose) -> bool {
@@ -1154,6 +1155,13 @@ mod tests {
     assert!(!valid_v2().is_empty());
     assert!(valid_v2().has_entries(NIPurpose::CoreP2p));
     assert!(valid_v2().stores_platform());
+  }
+
+  #[rstest]
+  #[case::no_groups(vec![])]
+  #[case::empty_group(vec![(NIPurpose::CoreP2p, vec![])])]
+  fn trait_v2_version_0_not_empty(#[case] entries: Vec<(NIPurpose, Vec<NIEntry>)>) {
+    assert!(!NetInfoV2::new(0, entries).is_empty());
   }
 
   #[rstest]
