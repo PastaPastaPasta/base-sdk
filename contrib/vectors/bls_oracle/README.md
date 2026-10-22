@@ -4,9 +4,10 @@
 for signing, verification, aggregation, threshold sharing, IES and a regtest DKG. The inputs are chosen here; every
 output, verdict and decode outcome is Core's, read through the consensus oracle's `oracle_bls_exec` (ABI 14), a script
 of BLS operations over registers holding Core's objects. `relic.json5` needs ABI 19, which adds element operations,
-relic's error code after each operation and the log of relic calls Core made. `PROVENANCE.md` in the corpus directory
-names the Core commit, the archive, the command and the sha256 of each file; `pkgs/pkc/tests/bls_oracle.rs` checks every
-file against `dash_pkc::bls::core` and the typed API, and fails when a file and `PROVENANCE.md` disagree.
+relic's error code after each operation and the log of relic calls Core made; `arith.json5` needs ABI 26's pair and
+in-place flags. `PROVENANCE.md` in the corpus directory names the Core commit, the archive, the command and the sha256
+of each file; `pkgs/pkc/tests/bls_oracle.rs` checks every file against `dash_pkc::bls::core` and the typed API, and
+fails when a file and `PROVENANCE.md` disagree.
 
 | File | Role |
 |---|---|
