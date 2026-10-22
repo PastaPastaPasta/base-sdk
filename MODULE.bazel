@@ -2,3 +2,11 @@ module(
     name = "dash_base_sdk",
     version = "0.0.0",
 )
+
+# Its extension reads its own `MODULE.bazel`, which the lockfile records under
+# the in-tree output base. Marking it reproducible keeps the checkout path out.
+single_version_override(
+    module_name = "pybind11_bazel",
+    patch_strip = 1,
+    patches = ["//bazel/patches:pybind11_bazel-reproducible.patch"],
+)
