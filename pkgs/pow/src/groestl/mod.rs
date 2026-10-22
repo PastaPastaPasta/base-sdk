@@ -6,9 +6,17 @@
 
 //! Groestl-512 hash function.
 
-mod aes_rows;
 mod common;
 
-use self::aes_rows as backend;
+use crate::aes::{hardware_aes, software_aes};
+
+software_aes! {
+  mod aes_cols;
+  use self::aes_cols as backend;
+}
+hardware_aes! {
+  mod aes_rows;
+  use self::aes_rows as backend;
+}
 
 pub use self::common::Groestl512;

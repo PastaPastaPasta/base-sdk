@@ -19,17 +19,49 @@ pub(crate) mod scalar;
 pub(crate) use self::aarch64::{round, sub_shift};
 #[cfg(all(target_arch = "x86_64", not(feature = "portable")))]
 pub(crate) use self::amd64::{round, sub_shift};
-#[cfg(any(
-  feature = "portable",
-  not(any(all(target_arch = "aarch64", target_endian = "little"), target_arch = "x86_64"))
-))]
-pub(crate) use self::scalar::{round_block as round, sub_shift_block as sub_shift};
 
 use wide::bytemuck::cast;
 use wide::{u32x4, u8x16};
 
+/// Compiles the items only where the AES rounds run in software.
+macro_rules! software_aes {
+  ($($item:item)*) => {
+    $(
+      #[cfg(any(
+        feature = "portable",
+        not(any(all(target_arch = "aarch64", target_endian = "little"), target_arch = "x86_64"))
+      ))]
+      $item
+    )*
+  };
+}
+pub(crate) use software_aes;
+
+/// Compiles the items only where the AES rounds run in hardware.
+macro_rules! hardware_aes {
+  ($($item:item)*) => {
+    $(
+      #[cfg(not(any(
+        feature = "portable",
+        not(any(all(target_arch = "aarch64", target_endian = "little"), target_arch = "x86_64"))
+      )))]
+      $item
+    )*
+  };
+}
+pub(crate) use hardware_aes;
+
 /// One 128-bit AES state, byte `4 * column + row`.
 pub(crate) type Block = u8x16;
+
+software_aes! {
+  /// Runs the T-table round on a block.
+  #[inline]
+  pub(crate) fn round(state: Block, key: Block) -> Block {
+    let words = scalar::round(&words_from_block(state).to_array(), &words_from_block(key).to_array());
+    block_from_words(u32x4::new(words))
+  }
+}
 
 /// Runs one AES round with an all-zero round key.
 #[inline(always)]
@@ -58,8 +90,6 @@ pub(crate) fn words_from_block(block: Block) -> u32x4 {
 
 #[cfg(test)]
 mod tests {
-  use super::consts::{SBOX, T};
-  use super::scalar::{round_block, sub_shift_block};
   use super::*;
 
   const STATE: [u32; 4] = [0x01020304, 0x05060708, 0x090a0b0c, 0x0d0e0f10];
@@ -67,6 +97,14 @@ mod tests {
 
   fn block(words: [u32; 4]) -> Block {
     block_from_words(u32x4::new(words))
+  }
+
+  /// Runs the T-table round on a block.
+  fn scalar_round(state: Block, key: Block) -> Block {
+    block(scalar::round(
+      &words_from_block(state).to_array(),
+      &words_from_block(key).to_array(),
+    ))
   }
 
   /// AES round on an all-zero state and key.
@@ -84,42 +122,45 @@ mod tests {
     );
   }
 
-  /// The scalar T-table round agrees with its definition.
-  #[test]
-  fn spot_check_impl() {
-    let (state, key) = (STATE, KEY);
-    let column = |c: usize| {
-      key[c]
-        ^ T[0][(state[c] & 0xFF) as usize]
-        ^ T[1][((state[(c + 1) % 4] >> 8) & 0xFF) as usize]
-        ^ T[2][((state[(c + 2) % 4] >> 16) & 0xFF) as usize]
-        ^ T[3][((state[(c + 3) % 4] >> 24) & 0xFF) as usize]
-    };
-    assert_eq!(
-      scalar::round(&state, &key),
-      [column(0), column(1), column(2), column(3)]
-    );
-  }
-
   /// The active backend agrees with the scalar round.
   #[test]
   fn round_matches_scalar() {
-    assert_eq!(round(block(STATE), block(KEY)), round_block(block(STATE), block(KEY)));
+    assert_eq!(round(block(STATE), block(KEY)), scalar_round(block(STATE), block(KEY)));
     assert_eq!(
       words_from_block(round_nk(block(STATE))).to_array(),
       scalar::round(&STATE, &[0; 4])
     );
   }
 
-  /// The active backend agrees with the scalar SubBytes and ShiftRows.
-  #[test]
-  fn sub_shift_matches_scalar() {
-    let input = Block::new([
-      0x00, 0x01, 0x53, 0xFF, 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80, 0x90, 0xA0, 0xB0, 0xC0,
-    ]);
-    assert_eq!(sub_shift(input), sub_shift_block(input));
-    // Row 0 does not shift, so byte 0 is the S-box of byte 0.
-    assert_eq!(sub_shift(input).to_array()[0], SBOX[0]);
+  hardware_aes! {
+    use hex_conservative::hex;
+
+    /// Source byte of each ShiftRows output byte in the column-major state.
+    const SHIFT_ROWS: [usize; 16] = {
+      let mut source = [0; 16];
+      let mut dst = 0;
+      while dst < 16 {
+        let (row, col) = (dst % 4, dst / 4);
+        source[dst] = 4 * ((col + row) % 4) + row;
+        dst += 1;
+      }
+      source
+    };
+
+    /// Runs SubBytes and ShiftRows on a block byte by byte.
+    fn scalar_sub_shift(state: Block) -> Block {
+      let bytes = state.to_array();
+      Block::new(core::array::from_fn(|dst| super::consts::SBOX[bytes[SHIFT_ROWS[dst]] as usize]))
+    }
+
+    /// The hardware backend agrees with the scalar SubBytes and ShiftRows.
+    #[test]
+    fn sub_shift_matches_scalar() {
+      let input = Block::new(hex!("000153ff102030405060708090a0b0c0"));
+      assert_eq!(sub_shift(input), scalar_sub_shift(input));
+      // Row 0 does not shift, so byte 0 is the S-box of byte 0.
+      assert_eq!(sub_shift(input).to_array()[0], super::consts::SBOX[0]);
+    }
   }
 
   /// Words land in the block little-endian, word 0 first.

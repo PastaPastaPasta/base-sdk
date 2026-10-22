@@ -10,16 +10,18 @@
 //! Streaming Groestl-512 over the selected backend.
 
 use super::backend;
-use crate::consts::groestl::{BLOCK, IV_ROWS};
+use crate::consts::groestl::BLOCK;
 use crate::util::buffer::{Buffer, Compress};
-use crate::util::{impl_digest, impl_hash};
+use crate::util::impl_digest;
 
 use digest::{FixedOutput, Output, Update};
+
+use core::hash::{Hash, Hasher};
 
 /// Chaining value and block count.
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct Core {
-  h: [backend::Row; 8],
+  h: backend::State,
   blocks: u64,
 }
 
@@ -31,7 +33,12 @@ impl Compress<BLOCK> for Core {
   }
 }
 
-impl_hash!(Core, [h], [blocks]);
+impl Hash for Core {
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    backend::hashable(&self.h).hash(state);
+    self.blocks.hash(state);
+  }
+}
 
 /// Streaming Groestl-512.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -45,7 +52,7 @@ impl Default for Groestl512 {
   fn default() -> Self {
     Self {
       core: Core {
-        h: IV_ROWS.map(backend::Row::new),
+        h: backend::IV,
         blocks: 0,
       },
       buffer: Buffer::new(),
@@ -76,10 +83,7 @@ impl FixedOutput for Groestl512 {
       self.core.compress(&last);
     }
     backend::output_transform(&mut self.core.h);
-
-    let mut digest = [0u8; 64];
-    backend::extract_right_half(&self.core.h, &mut digest);
-    out.copy_from_slice(&digest);
+    out.copy_from_slice(&backend::digest(&self.core.h));
   }
 }
 
