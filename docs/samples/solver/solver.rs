@@ -50,7 +50,10 @@ fn build_coinbase(script_sig: Vec<u8>, script_pubkey: Vec<u8>, amount_duffs: &st
       ScriptSigBuf::from_bytes(script_sig),
       0xFFFF_FFFF,
     )],
-    vec![TxOut::new(value, ScriptPubKeyBuf::from_bytes(script_pubkey))],
+    vec![TxOut::new(
+      value.to_signed(),
+      ScriptPubKeyBuf::from_bytes(script_pubkey),
+    )],
     0,
     Vec::new(),
   ))

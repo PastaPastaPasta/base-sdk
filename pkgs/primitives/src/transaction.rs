@@ -14,7 +14,7 @@ use crate::{codec_type, hash_impl};
 
 use bitcoin_hashes::sha256d;
 use bitcoin_primitives::script::{ScriptPubKeyBuf, ScriptSigBuf};
-use bitcoin_units::Amount;
+use bitcoin_units::SignedAmount;
 use dash_num::make_hash;
 use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
@@ -96,9 +96,9 @@ impl_new! {
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct TxOut {
   /// Output value in duffs.
-  #[cfg_attr(feature = "serde", serde(with = "crate::serialize::amount"))]
+  #[cfg_attr(feature = "serde", serde(with = "bitcoin_units::amount::serde::as_sat"))]
   #[getset(get_copy = "pub")]
-  value: Amount,
+  value: SignedAmount,
   /// Locking script.
   #[cfg_attr(feature = "serde", serde(rename = "scriptPubKey"))]
   #[getset(get = "pub")]
@@ -110,10 +110,10 @@ impl_type!(TxOut);
 
 impl BaseCodec for TxOut {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let raw = u64::decode(data)?;
-    let value = Amount::from_sat(raw).map_err(|_| DecodeError::InvalidValue {
-      expected: vec![Amount::MAX_MONEY.to_sat()],
-      actual: raw,
+    let raw = i64::decode(data)?;
+    let value = SignedAmount::from_sat(raw).map_err(|_| DecodeError::InvalidValue {
+      expected: vec![SignedAmount::MAX_MONEY.to_sat().cast_unsigned()],
+      actual: raw.cast_unsigned(),
     })?;
     Ok(Self {
       value,
@@ -150,12 +150,12 @@ pub enum TxInvalid {
   /// `bad-txns-payload-oversize`
   #[error("bad-txns-payload-oversize: {size} bytes")]
   PayloadOversize { size: usize },
-  /// `bad-txns-vout-toolarge`
-  #[error("bad-txns-vout-toolarge: output {index} value {value}")]
-  OutputTooLarge { index: usize, value: u64 },
+  /// `bad-txns-vout-negative`
+  #[error("bad-txns-vout-negative: output {index} value {value}")]
+  OutputNegative { index: usize, value: i64 },
   /// `bad-txns-txouttotal-toolarge`
   #[error("bad-txns-txouttotal-toolarge: {total}")]
-  OutputTotalTooLarge { total: u64 },
+  OutputTotalTooLarge { total: i64 },
   /// `bad-txns-inputs-duplicate`
   #[error("bad-txns-inputs-duplicate: {outpoint}")]
   DuplicateInputs { outpoint: OutPoint },
@@ -275,17 +275,23 @@ impl Checkable for Transaction {
       });
     }
 
-    let max_money = bitcoin_units::Amount::MAX_MONEY.to_sat();
-    let mut total: u64 = 0;
+    let mut total = SignedAmount::ZERO;
     for (i, output) in self.outputs.iter().enumerate() {
-      let sat = output.value.to_sat();
-      if sat > max_money {
-        return Some(TxInvalid::OutputTooLarge { index: i, value: sat });
+      let value = output.value;
+      if value.is_negative() {
+        return Some(TxInvalid::OutputNegative {
+          index: i,
+          value: value.to_sat(),
+        });
       }
-      total = total.saturating_add(sat);
-      if total > max_money {
-        return Some(TxInvalid::OutputTotalTooLarge { total });
-      }
+      total = match total.checked_add(value) {
+        Some(sum) => sum,
+        None => {
+          return Some(TxInvalid::OutputTotalTooLarge {
+            total: total.to_sat() + value.to_sat(),
+          })
+        }
+      };
     }
 
     // Duplicate inputs (CVE-2018-17144).
@@ -429,7 +435,7 @@ pub(crate) mod tests {
     tx_type: u16,
     inputs: Vec<u8>,
     script_sig: usize,
-    values: Vec<u64>,
+    values: Vec<i64>,
     pad: usize,
     payload: usize,
     size: usize,
@@ -447,7 +453,7 @@ pub(crate) mod tests {
         sequence: u32::MAX,
       });
       let outputs = self.values.iter().enumerate().map(|(i, &value)| TxOut {
-        value: Amount::from_sat(value).unwrap(),
+        value: SignedAmount::from_sat(value).unwrap(),
         script_pubkey: ScriptPubKeyBuf::from_bytes(vec![0; if i == 0 { self.pad } else { 0 }]),
       });
       Transaction {
@@ -480,5 +486,37 @@ pub(crate) mod tests {
       assert_eq!(buf.len(), v.size, "vector {i}");
       assert_eq!(reason(tx.check()), v.reason, "vector {i}");
     }
+  }
+
+  #[rstest]
+  #[case::negative(&[-1], 0)]
+  #[case::after_valid(&[1, -1], 1)]
+  #[case::total_in_range(&[SignedAmount::MAX_MONEY.to_sat(), -1], 1)]
+  fn check_negative_output(#[case] values: &[i64], #[case] index: usize) {
+    let input = TxIn::new(
+      OutPoint::new(TxHash::from_lendian([1; 32]), 0),
+      ScriptSigBuf::new(),
+      u32::MAX,
+    );
+    let outputs = values
+      .iter()
+      .map(|&value| TxOut::new(SignedAmount::from_sat(value).unwrap(), ScriptPubKeyBuf::new()))
+      .collect();
+    let tx = Transaction::new(3, TxType::Spend, vec![input], outputs, 0, Vec::new());
+    let value = values[index];
+    assert_eq!(tx.check(), Some(TxInvalid::OutputNegative { index, value }));
+  }
+
+  #[rstest]
+  #[case::lowest(-SignedAmount::MAX_MONEY.to_sat(), true)]
+  #[case::highest(SignedAmount::MAX_MONEY.to_sat(), true)]
+  #[case::below_range(-SignedAmount::MAX_MONEY.to_sat() - 1, false)]
+  #[case::above_range(SignedAmount::MAX_MONEY.to_sat() + 1, false)]
+  #[case::i64_min(i64::MIN, false)]
+  #[case::i64_max(i64::MAX, false)]
+  fn decode_output_value(#[case] value: i64, #[case] decodes: bool) {
+    let mut raw = value.to_le_bytes().to_vec();
+    raw.push(0);
+    assert_eq!(TxOut::decode(&mut &raw[..]).is_ok(), decodes);
   }
 }
