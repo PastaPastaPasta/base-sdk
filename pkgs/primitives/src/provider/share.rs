@@ -78,7 +78,7 @@ pub struct CollateralShare {
 }
 
 /// Reads a payout script, which must pay to a key hash or a script hash.
-fn payee(script: &ScriptPubKeyBuf) -> Option<Recipient> {
+pub(super) fn payee(script: &ScriptPubKeyBuf) -> Option<Recipient> {
   Recipient::from_script(script.as_bytes())
     .filter(|recipient| matches!(recipient, Recipient::PubKeyHash(_) | Recipient::ScriptHash(_)))
 }

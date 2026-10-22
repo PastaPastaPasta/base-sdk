@@ -72,6 +72,8 @@ predicate isSecretType(TypeItem t) {
       // and amounts.
       "PayoutShare",
       "CollateralShare",
+      // A share's reward update holds a public script and signature.
+      "ProUpShareTx",
       // Serde artifact to deserialize a tagged enum.
       "__Seed"
     ]
