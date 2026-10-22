@@ -53,3 +53,6 @@ test:
     {{ each }} test --doc
     cargo doc --workspace --no-deps --features full
     {{ each }} test --benches
+
+zbuild *flags:
+    bazel build {{ flags }} //...
