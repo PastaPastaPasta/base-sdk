@@ -99,6 +99,19 @@ impl BlsElem<G1, BLS_PK_LEN> {
       BlsArith::Relic(_) => self.to_bytes(BlsSchemeKind::Basic),
     }
   }
+
+  /// The wrapper `DHKeyExchange` leaves (`bls.cpp:208-220`) for a secret
+  /// key's stored bytes `k`, at most `r` as [`Self::mul_secret`] needs:
+  /// that product with [`Self::secret_basic`]'s bytes, so that on a Group
+  /// element only blst's constant-time code sees the secret multiple.
+  /// [`Self::mul`] and the `From` conversion are for public scalars
+  /// (BS11a-3 D34).
+  #[cfg_attr(not(test), expect(dead_code, reason = "BS11b's DHKeyExchange"))]
+  pub(crate) fn mul_secret_value(&self, k: &[u8; 32]) -> BlsValue<G1, BLS_PK_LEN> {
+    let product = self.mul_secret(k);
+    let basic = product.secret_basic();
+    product.into_value(basic)
+  }
 }
 
 impl<K: BlsWirePoint<N>, const N: usize> Clone for BlsElem<K, N> {
@@ -355,6 +368,10 @@ macro_rules! impl_elem {
       /// `operator*` by the 32-byte big-endian scalar `k` (`g*_mul` of
       /// `bn_read_bin`), always `BASIC`. Core reduces k modulo r first
       /// unless it fits a digit.
+      ///
+      /// Variable-time on every element, so for public scalars only; a
+      /// secret key's product is the crate's `mul_secret_value` (BS11a-3
+      /// D34).
       #[must_use]
       pub fn mul(&self, k: &[u8; 32]) -> Self {
         let k = Bn::from_bendian(k);
@@ -396,13 +413,29 @@ macro_rules! impl_elem {
         }
       }
 
-      /// `SerializeToArray(scheme == Legacy)`.
+      /// `SerializeToArray(scheme == Legacy)`. Variable-time on every
+      /// element, so not for a secret multiple (BS11a-3 D34).
       pub fn to_bytes(&self, scheme: BlsSchemeKind) -> [u8; $len] {
         <$group>::encode(&self.basic(), scheme)
       }
 
       fn basic(&self) -> [u8; $len] {
         $basic(self.engine(1).write_bin())
+      }
+
+      /// A valid wrapper holding the element, whose basic serialization is
+      /// `basic`.
+      fn into_value(self, basic: [u8; $len]) -> BlsValue<$group, $len> {
+        match self.0 {
+          BlsArith::Group { point, tag } => {
+            let repr = match tag {
+              Coord::Basic => BlsRepr::Basic,
+              Coord::Projc => BlsRepr::Projc,
+            };
+            BlsValue::with_element(basic, BlsPoint::Usable(point.to_affine()), repr)
+          }
+          BlsArith::Relic(e) => BlsValue::with_element(basic, $point(&e), BlsRepr::Relic(Box::new(e))),
+        }
       }
 
       /// The span `AggregateInsecure` (`schemes.cpp:176-192`): `None` for an
@@ -443,20 +476,13 @@ macro_rules! impl_elem {
     }
 
     /// A valid wrapper holding the element, as `AggregateInsecure` and an
-    /// in-place operation's success leave it (BS11a-3 D9).
+    /// in-place operation's success leave it (BS11a-3 D9). Its
+    /// serialization is variable-time, so it is for public scalars' products
+    /// (BS11a-3 D34).
     impl From<BlsElem<$group, $len>> for BlsValue<$group, $len> {
       fn from(elem: BlsElem<$group, $len>) -> Self {
         let basic = elem.basic();
-        match elem.0 {
-          BlsArith::Group { point, tag } => {
-            let repr = match tag {
-              Coord::Basic => BlsRepr::Basic,
-              Coord::Projc => BlsRepr::Projc,
-            };
-            Self::with_element(basic, BlsPoint::Usable(point.to_affine()), repr)
-          }
-          BlsArith::Relic(e) => Self::with_element(basic, $point(&e), BlsRepr::Relic(Box::new(e))),
-        }
+        elem.into_value(basic)
       }
     }
 
@@ -718,6 +744,37 @@ mod tests {
     let e = Pk::from_impl(&legacy_pk(&G1_OFF_SUBGROUP_CHIA)).mul_secret(&scalar(7));
     assert!(e.__is_relic());
     assert_eq!(e.secret_basic(), e.to_bytes(BASIC));
+  }
+
+  /// The constant-time DH wrapper is the `From` wrapper of `mul`'s product,
+  /// on Group keys (`BASIC`, `PROJC` and the infinity) and on off-subgroup
+  /// and Exotic ones.
+  #[test]
+  fn secret_values_are_the_products_wrappers() {
+    let mut r_minus_one = GROUP_ORDER;
+    r_minus_one[31] -= 1;
+    let keys = [
+      g1(),
+      g1().add(&g1()),
+      Pk::default(),
+      Pk::from_impl(&legacy_pk(&G1_OFF_SUBGROUP_CHIA)),
+      Pk::from_impl(&legacy_pk(&ZZ_X1)),
+    ];
+    assert!(keys[3].__is_relic() && keys[4].__is_relic());
+    for pk in &keys {
+      for k in [scalar(0), scalar(1), scalar(7), r_minus_one, GROUP_ORDER] {
+        let ct = pk.mul_secret_value(&k);
+        let vt = PkValue::from(pk.mul(&k));
+        assert_eq!(ct, vt);
+        assert_eq!(
+          core::mem::discriminant(ct.parts().2),
+          core::mem::discriminant(vt.parts().2)
+        );
+        assert!(ct.is_valid() && ct.core_eq(&vt));
+        assert_eq!(ct.to_bytes(LEGACY), vt.to_bytes(LEGACY));
+        assert_eq!(ct.to_bytes(BASIC), vt.to_bytes(BASIC));
+      }
+    }
   }
 
   #[test]
