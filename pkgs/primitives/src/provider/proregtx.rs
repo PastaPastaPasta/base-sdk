@@ -6,8 +6,8 @@
 
 //! ProRegTx registration payload (type 1).
 
-use super::{CollateralSig, ProTxVersion};
-use crate::codec::impl_payload;
+use super::{CollateralShare, CollateralSig, JoinSig, PayoutShare, ProTxVersion};
+use crate::codec::{decode_items, decode_list, encode_items, encode_list, impl_payload};
 use crate::prelude::*;
 use crate::provider::PlatformNodeId;
 use crate::sign::{message_digest, unsigned_digest, verify_compact};
@@ -33,7 +33,7 @@ use core::fmt;
 ///
 /// - v1: LegacyBLS
 /// - v2: BasicBLS
-/// - v3: ExtAddr (extended network info)
+/// - v3: ExtAddr (extended network info, owner payouts, collateral shares)
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
@@ -68,9 +68,24 @@ pub struct ProRegTx {
   /// Operator reward in basis points (0-10000).
   #[getset(get_copy = "pub")]
   operator_reward: u16,
-  /// Payout script.
+  /// Payout script (version < 3 only).
   #[getset(get = "pub")]
   script_payout: ScriptPubKeyBuf,
+  /// Owner payouts (version 3).
+  #[getset(get = "pub")]
+  payouts: Vec<PayoutShare>,
+  /// Collateral shares, empty unless the collateral is shared (version 3).
+  #[getset(get = "pub")]
+  shares: Vec<CollateralShare>,
+  /// Consent signatures, one per share in share order (version 3).
+  #[getset(get = "pub")]
+  join_sigs: Vec<JoinSig>,
+  /// Early dissolution period in blocks (version 3).
+  #[getset(get_copy = "pub")]
+  early_period_blocks: u32,
+  /// Early dissolution penalty in duffs (version 3).
+  #[getset(get_copy = "pub")]
+  early_penalty: i64,
   /// Hash of all inputs.
   #[getset(get_copy = "pub")]
   inputs_hash: InputsHash,
@@ -134,7 +149,19 @@ impl BaseCodec for ProRegTx {
     let pub_key_operator = BlsPkBytes::decode(data)?;
     let key_id_voting = PubKeyHash::decode(data)?;
     let operator_reward = u16::decode(data)?;
-    let script_payout = ScriptPubKeyBuf::decode(data)?;
+    let (script_payout, payouts) = if version >= ProTxVersion::ExtAddr {
+      (ScriptPubKeyBuf::new(), decode_list(data)?)
+    } else {
+      (ScriptPubKeyBuf::decode(data)?, Vec::new())
+    };
+    let (shares, join_sigs, early_period_blocks, early_penalty) = if version >= ProTxVersion::ExtAddr {
+      let count = u8::decode(data)?;
+      let shares = decode_items(data, count)?;
+      let join_sigs = decode_items(data, count)?;
+      (shares, join_sigs, u32::decode(data)?, i64::decode(data)?)
+    } else {
+      (Vec::new(), Vec::new(), 0, 0)
+    };
     let inputs_hash = InputsHash::decode(data)?;
     let (platform_node_id, platform_p2p_port, platform_http_port) = if mn_type == MnType::Evo {
       let node_id = PlatformNodeId::decode(data)?;
@@ -159,6 +186,11 @@ impl BaseCodec for ProRegTx {
       key_id_voting,
       operator_reward,
       script_payout,
+      payouts,
+      shares,
+      join_sigs,
+      early_period_blocks,
+      early_penalty,
       inputs_hash,
       platform_node_id,
       platform_p2p_port,
@@ -186,7 +218,17 @@ impl BaseCodec for ProRegTx {
     self.pub_key_operator.encode(buf);
     self.key_id_voting.encode(buf);
     self.operator_reward.encode(buf);
-    self.script_payout.encode(buf);
+    if self.version >= ProTxVersion::ExtAddr {
+      encode_list(&self.payouts, buf);
+      // The signatures reuse the share count, so a signature list of another
+      // length does not read back.
+      encode_list(&self.shares, buf);
+      encode_items(&self.join_sigs, buf);
+      self.early_period_blocks.encode(buf);
+      self.early_penalty.encode(buf);
+    } else {
+      self.script_payout.encode(buf);
+    }
     self.inputs_hash.encode(buf);
     if self.mn_type == MnType::Evo {
       self.platform_node_id.unwrap_or_default().encode(buf);
@@ -327,6 +369,11 @@ impl ProRegTx {
     key_id_voting: PubKeyHash,
     operator_reward: u16,
     script_payout: ScriptPubKeyBuf,
+    payouts: Vec<PayoutShare>,
+    shares: Vec<CollateralShare>,
+    join_sigs: Vec<JoinSig>,
+    early_period_blocks: u32,
+    early_penalty: i64,
     inputs_hash: InputsHash,
     platform_node_id: Option<PlatformNodeId>,
     platform_p2p_port: Option<u16>,
@@ -344,6 +391,11 @@ impl ProRegTx {
       key_id_voting,
       operator_reward,
       script_payout,
+      payouts,
+      shares,
+      join_sigs,
+      early_period_blocks,
+      early_penalty,
       inputs_hash,
       platform_node_id,
       platform_p2p_port,
