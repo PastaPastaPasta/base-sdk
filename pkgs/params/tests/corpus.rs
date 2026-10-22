@@ -260,13 +260,15 @@ impl From<&ConsensusParams> for ConsensusVector {
 #[serde(deny_unknown_fields)]
 struct DeploymentsVector {
   test_dummy: DeploymentVector,
+  v24: DeploymentVector,
 }
 
 impl From<&Bip9Deployments> for DeploymentsVector {
   fn from(deployments: &Bip9Deployments) -> Self {
-    let Bip9Deployments { test_dummy, v24: _ } = *deployments;
+    let Bip9Deployments { test_dummy, v24 } = *deployments;
     Self {
       test_dummy: DeploymentVector::from(&test_dummy),
+      v24: DeploymentVector::from(&v24),
     }
   }
 }

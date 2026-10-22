@@ -125,8 +125,8 @@ pub static PARAMS: ChainParams = ChainParams {
         use_ehf: false,
       },
       v24: Bip9Deployment {
-        bit: 12,
-        start_time: Bip9Deployment::NEVER_ACTIVE,
+        bit: 13,
+        start_time: 1_790_208_000, // 2026-09-24T00:00:00Z
         timeout: Bip9Deployment::NO_TIMEOUT,
         min_activation_height: BlockHeight::from_u32(0),
         window_size: 100,
