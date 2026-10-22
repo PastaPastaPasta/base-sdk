@@ -21,7 +21,7 @@ use wide::u32x4;
 type WordVec = u32x4;
 
 /// Applies the 4-input bitslice S-box to four selected words.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn apply_sub_crumb(words: &mut [u32; 8], a: usize, b: usize, c: usize, d: usize) {
   let (mut x0, mut x1, mut x2, mut x3) = (words[a], words[b], words[c], words[d]);
   let saved_x0 = x0;
@@ -47,7 +47,7 @@ fn apply_sub_crumb(words: &mut [u32; 8], a: usize, b: usize, c: usize, d: usize)
 }
 
 /// Applies the 4-input bitslice S-box to four word-position vectors.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn apply_sub_crumb_vec(a0: &mut WordVec, a1: &mut WordVec, a2: &mut WordVec, a3: &mut WordVec) {
   let saved_a0 = *a0;
   *a0 |= *a1;
@@ -69,7 +69,7 @@ fn apply_sub_crumb_vec(a0: &mut WordVec, a1: &mut WordVec, a2: &mut WordVec, a3:
 }
 
 /// Applies the rotation-based diffusion between one low word and one high word.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn apply_mix_word(words: &mut [u32; 8], low: usize, high: usize) {
   words[high] ^= words[low];
   words[low] = words[low].rotate_left(2) ^ words[high];
@@ -79,7 +79,7 @@ fn apply_mix_word(words: &mut [u32; 8], low: usize, high: usize) {
 }
 
 /// Applies the rotation-based diffusion to two word-position vectors.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn apply_mix_word_vec(low: &mut WordVec, high: &mut WordVec) {
   *high ^= *low;
   *low = rotl_u32x4(*low, 2) ^ *high;
@@ -89,7 +89,7 @@ fn apply_mix_word_vec(low: &mut WordVec, high: &mut WordVec) {
 }
 
 /// Applies the `M2` feedback step.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn apply_m2(dst: &mut [u32; 8], src: &[u32; 8]) {
   let feedback = src[7];
   dst[0] = feedback;
@@ -102,13 +102,13 @@ fn apply_m2(dst: &mut [u32; 8], src: &[u32; 8]) {
   dst[7] = src[6];
 }
 
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn apply_m2_in_place(words: &mut [u32; 8]) {
   let saved = *words;
   apply_m2(words, &saved);
 }
 
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn xor_words(dst: &mut [u32; 8], src: &[u32; 8]) {
   let mut i = 0;
   while i < 8 {
@@ -128,7 +128,7 @@ fn write_output_half(state: &[[u32; 8]; 5], out: &mut [u8]) {
 }
 
 /// Injects one message block into the five branches.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn inject_message(state: &mut [[u32; 8]; 5], msg: &[u32; 8]) {
   let [mut b0, mut b1, mut b2, mut b3, mut b4] = *state;
 
@@ -199,7 +199,7 @@ fn tweak_branches(state: &mut [[u32; 8]; 5]) {
 }
 
 /// Runs the 8-round branch permutation.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn permute_branch(words: &mut [u32; 8], rc0: &[u32; 8], rc4: &[u32; 8]) {
   let mut round = 0;
   while round < 8 {
@@ -216,14 +216,14 @@ fn permute_branch(words: &mut [u32; 8], rc0: &[u32; 8], rc4: &[u32; 8]) {
 }
 
 /// Runs the 8-round permutation on all five branches.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn permute_state(state: &mut [[u32; 8]; 5]) {
   tweak_branches(state);
   permute_first_four_branches(state);
   permute_branch(&mut state[4], &RC[4][0], &RC[4][1]);
 }
 
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn load_block_words(buf: &[u8]) -> [u32; 8] {
   core::array::from_fn(|i| load_u32_le(buf, i).swap_bytes())
 }
@@ -286,7 +286,7 @@ struct Core {
 }
 
 impl Compress<BLOCK> for Core {
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   fn compress(&mut self, block: &[u8; BLOCK]) {
     inject_message(&mut self.state, &load_block_words(block));
     permute_state(&mut self.state);

@@ -53,13 +53,13 @@ pub(super) type State = [u64; 16];
 pub(super) static IV: State = crate::consts::groestl::IV;
 
 /// Returns the state, which `Hash` accepts as is.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 pub(super) fn hashable(state: &State) -> State {
   *state
 }
 
 /// Runs SubBytes, ShiftBytes and MixBytes with eight lookups per column.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn round(state: &State, shift: &[usize; 8]) -> State {
   macro_rules! lookup {
     ($col:literal, $row:literal) => {
@@ -84,7 +84,7 @@ fn round(state: &State, shift: &[usize; 8]) -> State {
 }
 
 /// Applies the `P` permutation.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn perm_p(state: &mut State) {
   let mut round_index = 0;
   while round_index < ROUNDS {
@@ -99,7 +99,7 @@ fn perm_p(state: &mut State) {
 }
 
 /// Applies the `Q` permutation.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn perm_q(state: &mut State) {
   let mut round_index = 0;
   while round_index < ROUNDS {
@@ -114,7 +114,7 @@ fn perm_q(state: &mut State) {
 }
 
 /// Computes `H = H ^ P(H ^ M) ^ Q(M)`.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 pub(super) fn compress_block(chaining_value: &mut State, block: &[u8; BLOCK]) {
   let message: State = load_u64s_le(block);
   let mut p_state: State = core::array::from_fn(|col| chaining_value[col] ^ message[col]);
@@ -129,7 +129,7 @@ pub(super) fn compress_block(chaining_value: &mut State, block: &[u8; BLOCK]) {
 }
 
 /// Computes `H = H ^ P(H)` before the final digest extraction.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 pub(super) fn output_transform(chaining_value: &mut State) {
   let mut state = *chaining_value;
   perm_p(&mut state);
@@ -141,7 +141,7 @@ pub(super) fn output_transform(chaining_value: &mut State) {
 }
 
 /// Extracts columns 8 through 15 as the 512-bit digest.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 pub(super) fn digest(state: &State) -> [u8; 64] {
   let mut out = [0u8; 64];
   for (bytes, col) in out.as_chunks_mut::<8>().0.iter_mut().zip(&state[8..]) {

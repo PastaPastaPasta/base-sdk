@@ -10,20 +10,20 @@ use super::Block;
 
 use core::arch::x86_64::{__m128i, _mm_aesenc_si128, _mm_aesenclast_si128, _mm_setzero_si128};
 
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn to_native(block: Block) -> __m128i {
   // SAFETY: `Block` and `__m128i` are 16 bytes and accept any bit pattern.
   unsafe { core::mem::transmute::<Block, __m128i>(block) }
 }
 
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn from_native(block: __m128i) -> Block {
   // SAFETY: `Block` and `__m128i` are 16 bytes and accept any bit pattern.
   unsafe { core::mem::transmute::<__m128i, Block>(block) }
 }
 
 /// Runs SubBytes, ShiftRows and MixColumns, then xors in `key`.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 pub(crate) fn round(state: Block, key: Block) -> Block {
   // SAFETY: `aes::mod` skips this module under `portable`, and `lib.rs`
   // requires the `aes` target feature otherwise.
@@ -31,7 +31,7 @@ pub(crate) fn round(state: Block, key: Block) -> Block {
 }
 
 /// Runs SubBytes and ShiftRows.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 pub(crate) fn sub_shift(state: Block) -> Block {
   // SAFETY: `aes::mod` skips this module under `portable`, and `lib.rs`
   // requires the `aes` target feature otherwise.

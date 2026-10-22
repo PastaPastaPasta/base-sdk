@@ -28,13 +28,13 @@ type BlockWords = [u32; 32];
 static BIG_SHIFT_ROWS: [usize; 16] = [0, 5, 10, 15, 4, 9, 14, 3, 8, 13, 2, 7, 12, 1, 6, 11];
 
 /// Lays four words out as one grid cell.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn cell(words: AesState) -> Block {
   block_from_words(u32x4::new(words))
 }
 
 /// Builds the 16 round keys used by one substitution step.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn build_sub_word_keys(counter: Counter) -> (Grid, Counter) {
   let mut keys = [Block::splat(0); 16];
   let mut next = counter;
@@ -48,7 +48,7 @@ fn build_sub_word_keys(counter: Counter) -> (Grid, Counter) {
 }
 
 /// Runs the two AES rounds on each grid cell.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn apply_big_sub_words(grid: &mut Grid, round_keys: &Grid) {
   let mut index = 0;
   while index < 16 {
@@ -58,7 +58,7 @@ fn apply_big_sub_words(grid: &mut Grid, round_keys: &Grid) {
 }
 
 /// Rotates the second, third, and fourth grid rows.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn apply_big_shift_rows(grid: &mut Grid) {
   let saved = *grid;
   let mut index = 0;
@@ -69,7 +69,7 @@ fn apply_big_shift_rows(grid: &mut Grid) {
 }
 
 /// Multiplies each byte by `x` in `GF(2^8)`.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn xtime(bytes: Block) -> Block {
   const ZERO: i8x16 = i8x16::splat(0);
   const POLY: Block = Block::splat(0x1B);
@@ -78,7 +78,7 @@ fn xtime(bytes: Block) -> Block {
 }
 
 /// Mixes one column of four AES states in `GF(2^8)`.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn mix_column(grid: &mut Grid, a: usize, b: usize, c: usize, d: usize) {
   let wa = grid[a];
   let wb = grid[b];
@@ -97,7 +97,7 @@ fn mix_column(grid: &mut Grid, a: usize, b: usize, c: usize, d: usize) {
 }
 
 /// Applies the column-mixing step to all four grid columns.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn apply_big_mix_columns(grid: &mut Grid) {
   mix_column(grid, 0, 1, 2, 3);
   mix_column(grid, 4, 5, 6, 7);
@@ -106,7 +106,7 @@ fn apply_big_mix_columns(grid: &mut Grid) {
 }
 
 /// Runs the compression function on one 1024-bit block.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn compress_words(chaining_value: &mut ChainingValue, block: &BlockWords, counter: Counter) {
   // The upper half of the 4x4 grid starts from the chaining value and the
   // lower half from the message block.
@@ -141,7 +141,7 @@ fn compress_words(chaining_value: &mut ChainingValue, block: &BlockWords, counte
 }
 
 /// Runs the compression function on one 1024-bit block.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn compress_block(chaining_value: &mut ChainingValue, block: &[u8; BLOCK], counter: Counter) {
   let words = core::array::from_fn(|word| load_u32_le(block, word));
   compress_words(chaining_value, &words, counter);
@@ -155,7 +155,7 @@ struct Core {
 }
 
 impl Compress<BLOCK> for Core {
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   fn compress(&mut self, block: &[u8; BLOCK]) {
     self.counter = self.counter.wrapping_add(1024);
     compress_block(&mut self.h, block, self.counter);

@@ -65,7 +65,7 @@ impl UbiTweak {
 ///
 /// UBI uses Threefish with the current chaining value as the key. The block
 /// itself is both the plaintext and part of the feedforward step.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn ubi(state: &mut Chaining, plaintext: &BlockWords, tweak: UbiTweak) {
   let mut encrypted = *plaintext;
   encrypt(&mut encrypted, state, &tweak.as_words());
@@ -83,7 +83,7 @@ fn ubi(state: &mut Chaining, plaintext: &BlockWords, tweak: UbiTweak) {
 ///
 /// Skein treats output generation as a separate UBI stream with its own
 /// block type. Skein-512 needs only the first 64 output bytes.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn output_block(state: &mut Chaining) {
   let zero = [0u64; NW];
   let tweak = UbiTweak {
@@ -105,7 +105,7 @@ struct Core {
 
 impl Core {
   /// Applies one message block, counting its `bytes`.
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   fn ubi(&mut self, block: &[u8; BLOCK], bytes: u64, final_block: bool) {
     let tweak = UbiTweak {
       position: self.position.wrapping_add(bytes),
@@ -119,7 +119,7 @@ impl Core {
 }
 
 impl Compress<BLOCK> for Core {
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   fn compress(&mut self, block: &[u8; BLOCK]) {
     self.ubi(block, BLOCK as u64, false);
   }

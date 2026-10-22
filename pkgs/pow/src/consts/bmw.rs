@@ -72,7 +72,7 @@ pub(crate) enum Shift {
 
 impl Shift {
   /// Applies the shift to `word`.
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   pub(crate) const fn apply(self, word: u64) -> u64 {
     match self {
       Self::Left(amount) => word << amount,

@@ -14,7 +14,7 @@ use wide::u32x4;
 pub(super) type Lane = u32x4;
 
 /// Runs SubBytes, ShiftRows and MixColumns, then xors in `key`.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 pub(super) fn round(state: Lane, key: Lane) -> Lane {
   words_from_block(aes_round(block_from_words(state), block_from_words(key)))
 }

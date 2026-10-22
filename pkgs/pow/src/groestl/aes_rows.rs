@@ -41,7 +41,7 @@ static SUBSH_P: [[u8; 16]; 8] = sub_shift_masks(&SHIFT_P);
 static SUBSH_Q: [[u8; 16]; 8] = sub_shift_masks(&SHIFT_Q);
 
 /// Returns the state as plain bytes, which `Hash` accepts.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 pub(super) fn hashable(state: &State) -> [[u8; 16]; 8] {
   state.map(|row| row.to_array())
 }
@@ -50,14 +50,14 @@ pub(super) fn hashable(state: &State) -> [[u8; 16]; 8] {
 ///
 /// Doubling by addition and a sign compare avoid byte shifts, which some
 /// backends lack.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn mul2(row: Row) -> Row {
   let mask = row.cast_signed().simd_lt(i8x16::splat(0)).cast_unsigned();
   (row + row) ^ (mask & Row::splat(0x1B))
 }
 
 /// Applies the byte-sliced MixBytes transform to eight rows.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn mix_bytes(rows: &mut State) {
   let mut a0 = rows[0];
   let mut a1 = rows[1];
@@ -147,12 +147,12 @@ fn mix_bytes(rows: &mut State) {
   rows[7] = b7;
 }
 
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn add_rc_p(rows: &mut State, round: usize) {
   rows[0] ^= Row::new(RC_P[round]);
 }
 
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn add_rc_q(rows: &mut State, round: usize) {
   let ff = Row::splat(0xFF);
   rows[0] ^= ff;
@@ -166,7 +166,7 @@ fn add_rc_q(rows: &mut State, round: usize) {
 }
 
 /// Applies SubBytes and the row shifts with one AES instruction per row.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn sub_shift(rows: &mut State, masks: &[[u8; 16]; 8]) {
   let mut row = 0;
   while row < 8 {
@@ -176,7 +176,7 @@ fn sub_shift(rows: &mut State, masks: &[[u8; 16]; 8]) {
 }
 
 /// Applies the `P` permutation to the current state.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn perm_p(state: &mut State) {
   let mut round = 0;
   while round < ROUNDS {
@@ -188,7 +188,7 @@ fn perm_p(state: &mut State) {
 }
 
 /// Applies the `P` and `Q` permutations in lockstep for one compression.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn perm_pq(p_state: &mut State, q_state: &mut State) {
   let mut round = 0;
   while round < ROUNDS {
@@ -203,7 +203,7 @@ fn perm_pq(p_state: &mut State, q_state: &mut State) {
 }
 
 /// Loads the column-major block into eight row vectors.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn load_block(block: &[u8; BLOCK]) -> State {
   let mut rows = [Row::splat(0); 8];
   let mut row = 0;
@@ -220,7 +220,7 @@ fn load_block(block: &[u8; BLOCK]) -> State {
   rows
 }
 
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn xor_rows(lhs: &State, rhs: &State) -> State {
   [
     lhs[0] ^ rhs[0],
@@ -235,7 +235,7 @@ fn xor_rows(lhs: &State, rhs: &State) -> State {
 }
 
 /// Computes `H = H ^ P(H ^ M) ^ Q(M)`.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn compress_rows(chaining_value: &mut State, message: &State) {
   let mut p_state = xor_rows(chaining_value, message);
   let mut q_state = *message;
@@ -244,14 +244,14 @@ fn compress_rows(chaining_value: &mut State, message: &State) {
 }
 
 /// Computes `H = H ^ P(H ^ M) ^ Q(M)`.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 pub(super) fn compress_block(chaining_value: &mut State, block: &[u8; BLOCK]) {
   let message = load_block(block);
   compress_rows(chaining_value, &message);
 }
 
 /// Computes `H = H ^ P(H)` before the final digest extraction.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 pub(super) fn output_transform(chaining_value: &mut State) {
   let mut state = *chaining_value;
   perm_p(&mut state);
@@ -259,7 +259,7 @@ pub(super) fn output_transform(chaining_value: &mut State) {
 }
 
 /// Extracts columns 8 through 15 as the 512-bit digest.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 pub(super) fn digest(rows: &State) -> [u8; 64] {
   let mut out = [0u8; 64];
   let mut col = 8;

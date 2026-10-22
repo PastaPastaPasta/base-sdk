@@ -40,7 +40,7 @@ impl<const N: usize> Buffer<N> {
   ///
   /// Blocks lying whole in `data` are compressed from `data` itself; only the
   /// partial tail is copied.
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   pub(crate) fn update<C: Compress<N>>(&mut self, mut data: &[u8], core: &mut C) {
     if self.len > 0 {
       let take = (N - self.len).min(data.len());
@@ -65,7 +65,7 @@ impl<const N: usize> Buffer<N> {
   ///
   /// For hashes that flag the last block instead of appending one, the block
   /// in the buffer is only known not to be last once a byte follows it.
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   pub(crate) fn update_lagging<C: Compress<N>>(&mut self, mut data: &[u8], core: &mut C) {
     if data.is_empty() {
       return;
@@ -99,14 +99,14 @@ impl<const N: usize> Buffer<N> {
   /// # Panics
   ///
   /// Panics if the buffered bytes fill the block.
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   pub(crate) fn pad(&mut self, marker: u8) -> &mut [u8; N] {
     self.fill_tail(marker);
     &mut self.block
   }
 
   /// The buffered bytes followed by zeroes up to the block size.
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   pub(crate) fn zero_padded(&mut self) -> &[u8; N] {
     if self.len < N {
       self.fill_tail(0);
@@ -118,7 +118,7 @@ impl<const N: usize> Buffer<N> {
   ///
   /// Whole 64-bit word stores let the compiler fold them into the word loads
   /// of the compression function. Byte stores would stall store forwarding.
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   fn fill_tail(&mut self, marker: u8) {
     const { assert!(N.is_multiple_of(8)) }
     let words = self.block.as_chunks_mut::<8>().0;

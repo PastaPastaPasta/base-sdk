@@ -22,7 +22,7 @@ use digest::{FixedOutput, Output, Update};
 /// Each output row is computed independently with only five temporaries,
 /// reducing register pressure compared to materializing all 25 B-values. State
 /// layout: `a[x + 5*y]` for x, y in {0, 1, 2, 3, 4}.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn round_to(src: &[u64; 25], dst: &mut [u64; 25], rc: u64) {
   // theta
   let c0 = src[0] ^ src[5] ^ src[10] ^ src[15] ^ src[20];
@@ -107,7 +107,7 @@ fn round_to(src: &[u64; 25], dst: &mut [u64; 25], rc: u64) {
 /// Two full state buffers keep the round body simple: one round reads from
 /// `state`, the next reads from `alt`, and the final result ends back in
 /// `state`.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn keccak_f1600(state: &mut [u64; 25]) {
   let mut alt = [0u64; 25];
   let mut i = 0;
@@ -119,7 +119,7 @@ fn keccak_f1600(state: &mut [u64; 25]) {
 }
 
 /// Absorbs one rate-sized block into the first lanes of the state.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn absorb(state: &mut [u64; 25], block: &[u8; RATE]) {
   for (lane, word) in state.iter_mut().zip(block.as_chunks::<8>().0) {
     *lane ^= u64::from_le_bytes(*word);
@@ -133,7 +133,7 @@ struct Core {
 }
 
 impl Compress<RATE> for Core {
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   fn compress(&mut self, block: &[u8; RATE]) {
     absorb(&mut self.state, block);
     keccak_f1600(&mut self.state);

@@ -111,7 +111,7 @@ fn swap_half_words(x: Row) -> Row {
 }
 
 /// Applies the S-box and linear layer to all eight rows.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn apply_round_core(state: &mut State, constants: [u64; 4]) {
   let mut x0 = state[0];
   let mut x1 = state[1];
@@ -157,7 +157,7 @@ fn apply_round_core(state: &mut State, constants: [u64; 4]) {
 /// The const generic `OP` (0-6) selects the bit-group shuffle, so the compiler
 /// dead-code-eliminates the other six `match` arms and the runtime `round % 7`
 /// dispatch disappears entirely.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn apply_swap<const OP: usize>(state: &mut State) {
   const SWAP_WORDS: Row = Row::new([1, 0, 3, 2]);
   const SWAP_DWORDS: Row = Row::new([2, 3, 0, 1]);
@@ -182,7 +182,7 @@ fn apply_swap<const OP: usize>(state: &mut State) {
 /// Unrolled by 7: since 42 / 7 = 6, the swap pattern cycles exactly once per
 /// group.  This eliminates the runtime `round % 7` dispatch (mul + shift
 /// division trick + compare/branch tree ~ 15 insns/round).
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn apply_e8(state: &mut State) {
   let mut group = 0;
   while group < 6 {
@@ -213,7 +213,7 @@ fn store_row(buf: &mut [u8], index: usize, row: Row) {
   store_u64_le(buf, index * 2 + 1, row[1]);
 }
 
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn compress(state: &mut State, block_words: &[u64; 8]) {
   let mut row = 0;
   while row < 4 {
@@ -242,7 +242,7 @@ struct Core {
 }
 
 impl Compress<BLOCK> for Core {
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   fn compress(&mut self, block: &[u8; BLOCK]) {
     compress(&mut self.state, &load_block_words(block));
     self.blocks = self.blocks.wrapping_add(1);
