@@ -22,6 +22,7 @@ import contextlib
 import dataclasses
 import os
 import platform
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -33,10 +34,17 @@ from common import (
   RETCODE_ERR,
   RETCODE_PASS,
   format_table,
+  root_dir,
 )
 
 # What every host binary prints.
 GREETING = "Hello, world!"
+
+# Host systems whose sysroot Bazel pins; the probes build on these alone.
+_PINNED_SYSROOTS = ("Linux",)
+
+# Lines of a failed Bazel build shown beneath the report.
+LOG_TAIL = 20
 
 # Programs every toolchain builds, beside this script.
 PROBES = Path(__file__).resolve().parent / "probes"
@@ -49,6 +57,9 @@ WASM_PREAMBLE = b"\0asm\x01\0\0\0"
 
 # Seconds a build or a probe may run before it counts as hung.
 TIMEOUT = 120
+
+# Seconds a Bazel build may run, long enough to fetch the toolchain cold.
+BAZEL_TIMEOUT = 1800
 
 # Each target the devshell may carry drivers for, with the format and
 # architecture its binaries must have. Mach-O versions come from the
@@ -249,16 +260,27 @@ class Builder:
         self.report.held(triple, lang, binary, want)
 
 
-def _run(argv: list[str]) -> subprocess.CompletedProcess[str]:
+def _run(
+  argv: list[str],
+  cwd: Path | None = None,
+  timeout: int | None = TIMEOUT,
+  env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
   return subprocess.run(  # noqa: S603
-    argv, capture_output=True, check=False, text=True, timeout=TIMEOUT
+    argv,
+    capture_output=True,
+    check=False,
+    cwd=cwd,
+    env=env,
+    text=True,
+    timeout=timeout,
   )
 
 
 def _unfinished(exc: OSError | subprocess.TimeoutExpired) -> str:
   """Return why a command never finished, for its report row."""
   if isinstance(exc, subprocess.TimeoutExpired):
-    return f"timed out after {TIMEOUT}s"
+    return f"timed out after {exc.timeout:g}s"
   return f"could not run, {(exc.strerror or str(exc)).lower()}"
 
 
@@ -277,6 +299,47 @@ def host_kind() -> Kind:
   machine = {"aarch64": "arm64", "amd64": "x86_64"}.get(machine, machine)
   fmt = "Mach-O" if platform.system() == "Darwin" else "ELF"
   return Kind(fmt, machine)
+
+
+def bazel(report: Report, root: Path) -> None:
+  """Build the probes with Bazel, then run what it built for the host."""
+  if shutil.which("bazel") is None:
+    report.add("bazel host", "-", "skipped")
+    return
+  if platform.system() not in _PINNED_SYSROOTS:
+    report.add("bazel host", "-", "skipped, no pinned sysroot")
+    return
+
+  # The probes only count if this build made them.
+  cache = root / ".cache"
+  probes = {
+    lang: cache / "bazel-bin" / "contrib" / "probes" / f"hello_{lang}"
+    for lang in ("c", "cpp")
+  }
+  for stale in probes.values():
+    stale.unlink(missing_ok=True)
+  try:
+    result = _run(
+      ["bazel", "build", "//contrib/probes/..."],
+      cwd=root,
+      timeout=BAZEL_TIMEOUT,
+      # Matches the bazelisk cache 'bazel/mod.just' exports.
+      env={**os.environ, "BAZELISK_HOME": str(cache / "bazelisk")},
+    )
+  except (OSError, subprocess.TimeoutExpired) as exc:
+    report.add("bazel host", "-", _unfinished(exc), ok=False)
+    return
+  if result.returncode != 0:
+    report.add("bazel host", "-", "build failed", ok=False)
+    for line in (result.stdout + result.stderr).splitlines()[-LOG_TAIL:]:
+      print(f"    {line}", file=sys.stderr)
+    return
+
+  if platform.system() not in _PINNED_SYSROOTS:
+    report.add("bazel host", "-", "skipped, no pinned sysroot")
+    return
+  for lang, probe in probes.items():
+    report.greets("bazel host", lang, probe, host_kind())
 
 
 def main() -> int:
@@ -304,6 +367,7 @@ def main() -> int:
     builder.host()
     for triple, fmt, arch in TARGETS:
       builder.target(triple, Kind(fmt, arch))
+    bazel(report, root_dir())
     print(format_table(("target", "lang", "result"), report.rows))
 
   return RETCODE_ERR if report.failed else RETCODE_PASS

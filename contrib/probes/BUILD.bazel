@@ -1,0 +1,21 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+
+# Each target OS whose sysroot Bazel pins. Elsewhere the probes would build
+# against whatever the host provides, so they are skipped instead.
+PINNED_SYSROOT = select({
+    "@platforms//os:linux": [],
+    "//conditions:default": ["@platforms//:incompatible"],
+})
+
+# Probes for `contrib/smoke_test.py`; each greets through OS interfaces.
+cc_binary(
+    name = "hello_c",
+    srcs = ["hello.c"],
+    target_compatible_with = PINNED_SYSROOT,
+)
+
+cc_binary(
+    name = "hello_cpp",
+    srcs = ["hello.cpp"],
+    target_compatible_with = PINNED_SYSROOT,
+)

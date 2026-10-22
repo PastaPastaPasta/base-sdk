@@ -58,10 +58,27 @@ jobs:
         with:
           fetch-depth: 1
 
+      # LLVM alone unpacks to 11 GB on a Linux host.
+      - name: Free disk space
+        if: runner.os == 'Linux'
+        uses: jlumbroso/free-disk-space@v2
+        with:
+          large-packages: false
+
       - name: Install just
         uses: taiki-e/install-action@v2
         with:
           tool: just
+
+      - name: Manage Bazel downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            .cache/bazel/cache/repos
+            .cache/bazelisk
+          key: bazel-repos-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', 'bazel/*.MODULE.bazel') }}
+          restore-keys: |
+            bazel-repos-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Build every target
         run: just ${{ inputs.package_dir }}::zbuild

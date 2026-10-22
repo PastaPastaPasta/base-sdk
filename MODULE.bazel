@@ -3,6 +3,13 @@ module(
     version = "0.0.0",
 )
 
+bazel_dep(name = "platforms", version = "1.1.0")
+bazel_dep(name = "rules_cc", version = "0.2.17")
+bazel_dep(name = "toolchains_llvm", version = "1.8.0")
+
+include("//bazel:linux.MODULE.bazel")
+include("//bazel:llvm.MODULE.bazel")
+
 # Its extension reads its own `MODULE.bazel`, which the lockfile records under
 # the in-tree output base. Marking it reproducible keeps the checkout path out.
 single_version_override(

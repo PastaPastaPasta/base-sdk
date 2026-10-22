@@ -55,3 +55,6 @@ test:
 
 zbuild *flags:
     bazel build {{ flags }} //...
+
+zglock:
+    bazel mod deps --lockfile_mode=update
