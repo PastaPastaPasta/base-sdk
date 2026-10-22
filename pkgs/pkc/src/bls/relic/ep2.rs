@@ -361,6 +361,15 @@ mod tests {
     assert!(!z.cmp(&g) && !g.cmp(&z));
     assert!(z.cmp(&Ep2::INFTY));
     assert_eq!(z.neg(), Ep2::INFTY);
+    // Doubling a Lemma C value (x, 0) gives z = 0 with x != 0. Against a
+    // BASIC operand it normalizes to set_infty, so it equals the affine
+    // (0, 0), and only that.
+    let x = Fp2::new(field::ONE, field::ONE);
+    let d = Ep2::affine(x, Fp2::default(), Coord::Basic).dbl();
+    assert!(d.is_infty() && !d.x.is_zero() && d.coord == Coord::Projc);
+    let origin = Ep2::affine(Fp2::default(), Fp2::default(), Coord::Basic);
+    assert!(d.cmp(&origin) && origin.cmp(&d));
+    assert!(!d.cmp(&g) && !g.cmp(&d));
   }
 
   #[test]

@@ -661,6 +661,42 @@ mod tests {
   }
 
   #[test]
+  fn engine_points_are_classed_as_legacy_decoding_would() {
+    let (one, two) = (Fp::from_u64(1), Fp::from_u64(2));
+    assert!(matches!(g1_point(&Ep::INFTY), BlsPoint::OnCurve(_)));
+    assert!(matches!(g1_point(&g1().engine(1)), BlsPoint::OnCurve(_)));
+    assert!(matches!(
+      g1_point(&Ep::affine(one, one, Coord::Basic)),
+      BlsPoint::Exotic
+    ));
+    // (0, 2) is on the curve, of order 3.
+    assert!(matches!(
+      g1_point(&Ep::affine(Fp::default(), two, Coord::Basic)),
+      BlsPoint::Exotic
+    ));
+    assert!(matches!(g2_point(&g2().engine(1)), BlsPoint::OnCurve(_)));
+    let (one, zero) = (Fp2::from(one), Fp2::default());
+    assert!(matches!(
+      g2_point(&Ep2::affine(one, one, Coord::Basic)),
+      BlsPoint::Exotic
+    ));
+    assert!(matches!(
+      g2_point(&Ep2::affine(zero, zero, Coord::Basic)),
+      BlsPoint::Exotic
+    ));
+  }
+
+  #[test]
+  fn debug_names_the_representation() {
+    assert!(format!("{:?}", g1()).starts_with("BlsElem(Group"));
+    assert!(format!(
+      "{:?}",
+      Sig::from_impl(&SigValue::from_canonical(&G2_OFF_SUBGROUP_CHIA, LEGACY).unwrap_or_else(SigValue::invalid))
+    )
+    .starts_with("BlsElem(Relic"));
+  }
+
+  #[test]
   fn crafted_off_curve_keys_sum_to_an_element_equal_to_everything() {
     let a = Pk::from_impl(&legacy_pk(&ZZ_X1));
     let b = Pk::from_impl(&legacy_pk(&ZZ_X2));

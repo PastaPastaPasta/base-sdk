@@ -231,6 +231,9 @@ mod tests {
     assert!(!sign(fp([0; 6])));
     assert!(sign(-ONE));
     assert!(!sign(ONE));
+    // The boundary: floor(p/2) itself is not above it.
+    assert!(!sign(Fp::from(&HALF_P)));
+    assert!(sign(Fp::from(&HALF_P) + ONE));
   }
 
   #[test]
