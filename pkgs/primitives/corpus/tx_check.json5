@@ -1,0 +1,181 @@
+//
+// Context-free transaction check vectors. Generated with the reference
+// implementation (dashpay/dash v24.0.0-rc.3, 0364ed626e).
+//
+// To run the program, paste it at the end of the `transaction_tests` suite in
+// `src/test/transaction_tests.cpp` at the specified revision, build it with
+// `make -C src test/test_dash` and run
+// `./src/test/test_dash --run_test=transaction_tests/tx_check_shapes`. The
+// output should match the section.
+//
+
+{
+/*
+struct TxShape {
+    uint16_t type;
+    std::vector<uint8_t> inputs;
+    size_t script_sig;
+    std::vector<CAmount> values;
+    size_t payload;
+    size_t target;
+};
+
+static CMutableTransaction BuildTx(const TxShape& s, size_t pad)
+{
+    CMutableTransaction tx;
+    tx.nVersion = 3;
+    tx.nType = s.type;
+    for (const uint8_t seed : s.inputs) {
+        COutPoint prevout;
+        if (seed) {
+            uint256 hash;
+            std::fill(hash.begin(), hash.end(), seed);
+            prevout = COutPoint{hash, 0};
+        }
+        tx.vin.emplace_back(prevout);
+    }
+    if (!tx.vin.empty()) tx.vin[0].scriptSig.resize(s.script_sig);
+    for (const CAmount value : s.values) {
+        tx.vout.emplace_back(value, CScript{});
+    }
+    if (!tx.vout.empty()) tx.vout[0].scriptPubKey.resize(pad);
+    tx.vExtraPayload.resize(s.payload);
+    return tx;
+}
+
+BOOST_AUTO_TEST_CASE(tx_check_shapes)
+{
+    for (const TxShape& s : std::vector<TxShape>{
+             {0, {1}, 0, {1}, 0, 0},
+             {0, {}, 0, {1}, 0, 0},
+             {0, {1}, 0, {}, 0, 0},
+             {0, {}, 0, {}, 0, 0},
+             {6, {}, 0, {}, 0, 0},
+             {7, {}, 0, {}, 0, 0},
+             {9, {}, 0, {1}, 0, 0},
+             {9, {1}, 0, {}, 0, 0},
+             {1, {}, 0, {1}, 0, 0},
+             {1, {1}, 0, {1}, MAX_TX_EXTRA_PAYLOAD, 0},
+             {1, {1}, 0, {1}, MAX_TX_EXTRA_PAYLOAD + 1, 0},
+             {1, {1}, 0, {MAX_MONEY, 1}, MAX_TX_EXTRA_PAYLOAD + 1, 0},
+             {0, {1}, 0, {MAX_MONEY}, 0, 0},
+             {0, {1}, 0, {MAX_MONEY, 1}, 0, 0},
+             {0, {1, 1}, 0, {MAX_MONEY, 1}, 0, 0},
+             {0, {1, 1}, 0, {1}, 0, 0},
+             {0, {1, 2}, 0, {1}, 0, 0},
+             {0, {0, 0}, 0, {1}, 0, 0},
+             {0, {1, 0}, 0, {1}, 0, 0},
+             {0, {0}, 1, {1}, 0, 0},
+             {0, {0}, 2, {1}, 0, 0},
+             {0, {0}, 100, {1}, 0, 0},
+             {0, {0}, 101, {1}, 0, 0},
+             {5, {0}, 0, {1}, 0, 0},
+             {5, {0}, 1, {1}, 0, 0},
+             {5, {0}, 101, {1}, 0, 0},
+             {0, {1}, 0, {1}, 0, MAX_LEGACY_BLOCK_SIZE},
+             {0, {1}, 0, {1}, 0, MAX_LEGACY_BLOCK_SIZE + 1},
+             {0, {}, 0, {1}, 0, MAX_LEGACY_BLOCK_SIZE + 100},
+             {1, {1}, 0, {1}, MAX_TX_EXTRA_PAYLOAD + 1, MAX_LEGACY_BLOCK_SIZE + 1},
+             {0, {1}, 0, {MAX_MONEY, 1}, 0, MAX_LEGACY_BLOCK_SIZE + 1},
+             {0, {1, 1}, 0, {1}, 0, MAX_LEGACY_BLOCK_SIZE + 1},
+             {0, {0, 1}, 0, {1}, 0, 0},
+             {0, {0, 1}, 2, {1}, 0, 0},
+         }) {
+        const auto size = [&](size_t pad) { return ::GetSerializeSize(BuildTx(s, pad), PROTOCOL_VERSION); };
+        size_t pad{0};
+        while (s.target && size(pad) != s.target) {
+            pad = pad + s.target - size(pad);
+        }
+        const CTransaction tx{BuildTx(s, pad)};
+        TxValidationState state;
+        CheckTransaction(tx, state);
+        std::printf("    { \"type\": %u, \"inputs\": [", s.type);
+        for (size_t i = 0; i < s.inputs.size(); ++i) std::printf("%s%u", i ? ", " : "", s.inputs[i]);
+        std::printf("], \"script_sig\": %zu, \"values\": [", s.script_sig);
+        for (size_t i = 0; i < s.values.size(); ++i) std::printf("%s%lld", i ? ", " : "", (long long)s.values[i]);
+        std::printf("], \"pad\": %zu, \"payload\": %zu, \"size\": %zu, \"reason\": \"%s\" },\n", pad, s.payload,
+                    ::GetSerializeSize(tx, PROTOCOL_VERSION), state.GetRejectReason().c_str());
+    }
+}
+*/
+  // Each vector describes a version 3 transaction. `inputs` holds one seed
+  // per input, where 0 is the null outpoint and any other seed spends output
+  // 0 of the hash filled with that byte. Input 0 has a `script_sig` of that
+  // many zero bytes, output 0 has a script of `pad` zero bytes, the other
+  // scripts are empty, and the payload is `payload` zero bytes. `size` is the
+  // serialized size and `reason` the rejection reason, empty when the
+  // transaction passes.
+  "check": [
+    // The smallest spend with one input and one output passes.
+    { "type": 0, "inputs": [1], "script_sig": 0, "values": [1], "pad": 0, "payload": 0, "size": 60, "reason": "" },
+    // No inputs is the first reason checked.
+    { "type": 0, "inputs": [], "script_sig": 0, "values": [1], "pad": 0, "payload": 0, "size": 19, "reason": "bad-txns-vin-empty" },
+    // No outputs, with an input present.
+    { "type": 0, "inputs": [1], "script_sig": 0, "values": [], "pad": 0, "payload": 0, "size": 51, "reason": "bad-txns-vout-empty" },
+    // No inputs and no outputs; the input check runs first.
+    { "type": 0, "inputs": [], "script_sig": 0, "values": [], "pad": 0, "payload": 0, "size": 10, "reason": "bad-txns-vin-empty" },
+    // A quorum commitment (type 6) may have no inputs and no outputs.
+    { "type": 6, "inputs": [], "script_sig": 0, "values": [], "pad": 0, "payload": 0, "size": 11, "reason": "" },
+    // An MNHF signal (type 7) may have no inputs and no outputs.
+    { "type": 7, "inputs": [], "script_sig": 0, "values": [], "pad": 0, "payload": 0, "size": 11, "reason": "" },
+    // An asset unlock (type 9) may have no inputs.
+    { "type": 9, "inputs": [], "script_sig": 0, "values": [1], "pad": 0, "payload": 0, "size": 20, "reason": "" },
+    // An asset unlock still needs an output.
+    { "type": 9, "inputs": [1], "script_sig": 0, "values": [], "pad": 0, "payload": 0, "size": 52, "reason": "bad-txns-vout-empty" },
+    // Other special types, here a provider registration (type 1), need an
+    // input.
+    { "type": 1, "inputs": [], "script_sig": 0, "values": [1], "pad": 0, "payload": 0, "size": 20, "reason": "bad-txns-vin-empty" },
+    // A payload of exactly 10,000 bytes, the payload limit, passes.
+    { "type": 1, "inputs": [1], "script_sig": 0, "values": [1], "pad": 0, "payload": 10000, "size": 10063, "reason": "" },
+    // A payload one byte above the limit.
+    { "type": 1, "inputs": [1], "script_sig": 0, "values": [1], "pad": 0, "payload": 10001, "size": 10064, "reason": "bad-txns-payload-oversize" },
+    // The payload size is checked before the output values.
+    { "type": 1, "inputs": [1], "script_sig": 0, "values": [2100000000000000, 1], "pad": 0, "payload": 10001, "size": 10073, "reason": "bad-txns-payload-oversize" },
+    // One output of exactly the money range passes.
+    { "type": 0, "inputs": [1], "script_sig": 0, "values": [2100000000000000], "pad": 0, "payload": 0, "size": 60, "reason": "" },
+    // Two outputs in range whose total exceeds the money range.
+    { "type": 0, "inputs": [1], "script_sig": 0, "values": [2100000000000000, 1], "pad": 0, "payload": 0, "size": 69, "reason": "bad-txns-txouttotal-toolarge" },
+    // The output total is checked before duplicate inputs.
+    { "type": 0, "inputs": [1, 1], "script_sig": 0, "values": [2100000000000000, 1], "pad": 0, "payload": 0, "size": 110, "reason": "bad-txns-txouttotal-toolarge" },
+    // Two inputs that spend the same outpoint.
+    { "type": 0, "inputs": [1, 1], "script_sig": 0, "values": [1], "pad": 0, "payload": 0, "size": 101, "reason": "bad-txns-inputs-duplicate" },
+    // Two inputs that spend distinct outpoints pass.
+    { "type": 0, "inputs": [1, 2], "script_sig": 0, "values": [1], "pad": 0, "payload": 0, "size": 101, "reason": "" },
+    // Two null prevouts count as duplicates before the null prevout check.
+    { "type": 0, "inputs": [0, 0], "script_sig": 0, "values": [1], "pad": 0, "payload": 0, "size": 101, "reason": "bad-txns-inputs-duplicate" },
+    // A null prevout in a transaction that is not a coinbase.
+    { "type": 0, "inputs": [1, 0], "script_sig": 0, "values": [1], "pad": 0, "payload": 0, "size": 101, "reason": "bad-txns-prevout-null" },
+    // A coinbase script one byte below the minimum of 2 bytes.
+    { "type": 0, "inputs": [0], "script_sig": 1, "values": [1], "pad": 0, "payload": 0, "size": 61, "reason": "bad-cb-length" },
+    // A coinbase script of exactly the minimum passes.
+    { "type": 0, "inputs": [0], "script_sig": 2, "values": [1], "pad": 0, "payload": 0, "size": 62, "reason": "" },
+    // A coinbase script of exactly the maximum of 100 bytes passes.
+    { "type": 0, "inputs": [0], "script_sig": 100, "values": [1], "pad": 0, "payload": 0, "size": 160, "reason": "" },
+    // A coinbase script one byte above the maximum.
+    { "type": 0, "inputs": [0], "script_sig": 101, "values": [1], "pad": 0, "payload": 0, "size": 161, "reason": "bad-cb-length" },
+    // An empty script in a coinbase special transaction (type 5).
+    { "type": 5, "inputs": [0], "script_sig": 0, "values": [1], "pad": 0, "payload": 0, "size": 61, "reason": "bad-cb-length" },
+    // A coinbase special transaction needs only 1 byte of script.
+    { "type": 5, "inputs": [0], "script_sig": 1, "values": [1], "pad": 0, "payload": 0, "size": 62, "reason": "" },
+    // The 100-byte maximum still applies to a coinbase special transaction.
+    { "type": 5, "inputs": [0], "script_sig": 101, "values": [1], "pad": 0, "payload": 0, "size": 162, "reason": "bad-cb-length" },
+    // A transaction of exactly 1,000,000 bytes, the size limit, passes.
+    { "type": 0, "inputs": [1], "script_sig": 0, "values": [1], "pad": 999936, "payload": 0, "size": 1000000, "reason": "" },
+    // A transaction one byte above the size limit.
+    { "type": 0, "inputs": [1], "script_sig": 0, "values": [1], "pad": 999937, "payload": 0, "size": 1000001, "reason": "bad-txns-oversize" },
+    // The empty checks run before the size check.
+    { "type": 0, "inputs": [], "script_sig": 0, "values": [1], "pad": 1000077, "payload": 0, "size": 1000100, "reason": "bad-txns-vin-empty" },
+    // The size is checked before the payload size.
+    { "type": 1, "inputs": [1], "script_sig": 0, "values": [1], "pad": 989933, "payload": 10001, "size": 1000001, "reason": "bad-txns-oversize" },
+    // The size is checked before the output values.
+    { "type": 0, "inputs": [1], "script_sig": 0, "values": [2100000000000000, 1], "pad": 999928, "payload": 0, "size": 1000001, "reason": "bad-txns-oversize" },
+    // The size is checked before duplicate inputs.
+    { "type": 0, "inputs": [1, 1], "script_sig": 0, "values": [1], "pad": 999896, "payload": 0, "size": 1000001, "reason": "bad-txns-oversize" },
+    // Two inputs with a null first prevout are not a coinbase, so the empty
+    // script does not fail the coinbase script length.
+    { "type": 0, "inputs": [0, 1], "script_sig": 0, "values": [1], "pad": 0, "payload": 0, "size": 101, "reason": "bad-txns-prevout-null" },
+    // Two inputs with a null first prevout and a valid coinbase script length
+    // are still not a coinbase.
+    { "type": 0, "inputs": [0, 1], "script_sig": 2, "values": [1], "pad": 0, "payload": 0, "size": 103, "reason": "bad-txns-prevout-null" },
+  ],
+}
