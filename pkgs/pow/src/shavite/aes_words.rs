@@ -9,27 +9,54 @@
 
 //! SHAvite-3-512 AES rounds on plain words, for software AES.
 
-use crate::aes::scalar::round;
+use crate::aes::scalar::round as table_round;
 
-/// Runs one AES round with an all-zero round key on four words.
-#[inline(always)]
-pub(super) fn aes_nk(words: [u32; 4]) -> [u32; 4] {
-  round(&words, &[0; 4])
+use core::ops::{BitXor, BitXorAssign};
+
+/// Four state or key words kept in general registers.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(super) struct Lane([u32; 4]);
+
+impl Lane {
+  /// Builds the lane from four words in order.
+  #[inline(always)]
+  pub(super) const fn new(words: [u32; 4]) -> Self {
+    Self(words)
+  }
+
+  /// Repeats one word four times.
+  #[inline(always)]
+  pub(super) const fn splat(word: u32) -> Self {
+    Self([word; 4])
+  }
+
+  /// Returns the words in order.
+  #[inline(always)]
+  pub(super) const fn to_array(self) -> [u32; 4] {
+    self.0
+  }
 }
 
-/// Runs the four keyed AES rounds of one Feistel half.
-///
-/// Each key after the first enters as the key operand of the round before it.
+impl BitXor for Lane {
+  type Output = Self;
+
+  #[inline(always)]
+  fn bitxor(self, rhs: Self) -> Self {
+    let [a, b, c, d] = self.0;
+    let [e, f, g, h] = rhs.0;
+    Self([a ^ e, b ^ f, c ^ g, d ^ h])
+  }
+}
+
+impl BitXorAssign for Lane {
+  #[inline(always)]
+  fn bitxor_assign(&mut self, rhs: Self) {
+    *self = *self ^ rhs;
+  }
+}
+
+/// Runs SubBytes, ShiftRows and MixColumns, then xors in `key`.
 #[inline(always)]
-pub(super) fn aes_rounds(words: [u32; 4], keys: &[[u32; 4]]) -> [u32; 4] {
-  let mut state = [
-    words[0] ^ keys[0][0],
-    words[1] ^ keys[0][1],
-    words[2] ^ keys[0][2],
-    words[3] ^ keys[0][3],
-  ];
-  state = round(&state, &keys[1]);
-  state = round(&state, &keys[2]);
-  state = round(&state, &keys[3]);
-  round(&state, &[0; 4])
+pub(super) fn round(state: Lane, key: Lane) -> Lane {
+  Lane(table_round(&state.0, &key.0))
 }

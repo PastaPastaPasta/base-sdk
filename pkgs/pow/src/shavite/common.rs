@@ -9,7 +9,7 @@
 
 //! Streaming SHAvite-3-512 over the selected backend.
 
-use super::backend;
+use super::backend::{self, Lane};
 use crate::consts::shavite::{BLOCK, IV};
 use crate::util::buffer::{Buffer, Compress};
 use crate::util::impl_digest;
@@ -17,229 +17,147 @@ use crate::util::memops::{digest_from_u32_le, load_u32_le};
 
 use digest::{FixedOutput, Output, Update};
 
-const SCHEDULE_BUNDLES: usize = 112;
-type Bundle = [u32; 4];
 type State = [u32; 16];
-type BlockWords = [u32; 32];
 
-/// Selects which counter word is injected at one schedule checkpoint.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-enum CounterWord {
-  Counter(usize),
-  InvertedCounter(usize),
-}
+/// Counter words that enter the key schedule at each HAIFA checkpoint. The
+/// last word of every checkpoint enters inverted.
+const INJECTION_WORDS: [[usize; 4]; 4] = [[0, 1, 2, 3], [3, 2, 1, 0], [2, 3, 0, 1], [1, 0, 3, 2]];
 
-/// Schedule bundle that receives one HAIFA counter injection.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-struct CounterInjection {
-  bundle: usize,
-  words: [CounterWord; 4],
-}
-
-const COUNTER_INJECTIONS: [CounterInjection; 4] = [
-  CounterInjection {
-    bundle: 8,
-    words: [
-      CounterWord::Counter(0),
-      CounterWord::Counter(1),
-      CounterWord::Counter(2),
-      CounterWord::InvertedCounter(3),
-    ],
-  },
-  CounterInjection {
-    bundle: 41,
-    words: [
-      CounterWord::Counter(3),
-      CounterWord::Counter(2),
-      CounterWord::Counter(1),
-      CounterWord::InvertedCounter(0),
-    ],
-  },
-  CounterInjection {
-    bundle: 79,
-    words: [
-      CounterWord::Counter(2),
-      CounterWord::Counter(3),
-      CounterWord::Counter(0),
-      CounterWord::InvertedCounter(1),
-    ],
-  },
-  CounterInjection {
-    bundle: 110,
-    words: [
-      CounterWord::Counter(1),
-      CounterWord::Counter(0),
-      CounterWord::Counter(3),
-      CounterWord::InvertedCounter(2),
-    ],
-  },
-];
-
-/// Rotates each 4-word column one step toward the front.
-const COLUMN_ROTATION: [usize; 16] = [12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-
+/// Rotates the four words of one bundle toward the front.
 #[inline(always)]
-const fn rotate_bundle_words(bundle: Bundle) -> Bundle {
-  [bundle[1], bundle[2], bundle[3], bundle[0]]
+fn rotate_words(bundle: Lane) -> Lane {
+  shift_words(bundle, bundle)
 }
 
-/// Reads one counter word according to the schedule descriptor.
+/// Takes the upper three words of `older` and the first word of `newer`.
 #[inline(always)]
-fn counter_word(counter: u128, word: CounterWord) -> u32 {
-  match word {
-    CounterWord::Counter(index) => (counter >> (32 * index)) as u32,
-    CounterWord::InvertedCounter(index) => !(counter >> (32 * index)) as u32,
-  }
+fn shift_words(older: Lane, newer: Lane) -> Lane {
+  let (older, newer) = (older.to_array(), newer.to_array());
+  Lane::new([older[1], older[2], older[3], newer[0]])
 }
 
-/// Expands one 128-byte block into 112 four-word schedule bundles.
+/// Builds the counter injection vector for one checkpoint.
 #[inline(always)]
-fn expand_round_keys_words(msg: &BlockWords, counter: u128) -> [Bundle; SCHEDULE_BUNDLES] {
-  let mut schedule = [[0u32; 4]; SCHEDULE_BUNDLES];
-  let mut bundle = 0;
-  while bundle < 8 {
-    schedule[bundle][0] = msg[bundle * 4];
-    schedule[bundle][1] = msg[bundle * 4 + 1];
-    schedule[bundle][2] = msg[bundle * 4 + 2];
-    schedule[bundle][3] = msg[bundle * 4 + 3];
-    bundle += 1;
-  }
+fn injection(counter: u128, checkpoint: usize) -> Lane {
+  let [a, b, c, d] = INJECTION_WORDS[checkpoint].map(|index| (counter >> (32 * index)) as u32);
+  Lane::new([a, b, c, !d])
+}
 
-  let mut next_injection = 0;
-  bundle = 8;
-  loop {
-    let mut pair = 0;
-    while pair < 8 {
-      // One half of the schedule uses the AES-based recurrence from the
-      // design, with counter words injected at fixed checkpoints.
-      schedule[bundle] = expand_aes_step(&schedule, bundle);
-      if next_injection < COUNTER_INJECTIONS.len() && COUNTER_INJECTIONS[next_injection].bundle == bundle {
-        inject_counter_words(&mut schedule[bundle], counter, COUNTER_INJECTIONS[next_injection]);
-        next_injection += 1;
-      }
-      bundle += 1;
-      pair += 1;
+/// Expands the next eight bundles with the AES recurrence.
+///
+/// `INJ` names the slot that takes the counter injection, or 8 for none.
+#[inline(always)]
+fn expand_aes<const INJ: usize>(window: &mut [Lane; 8], inject: Lane) {
+  let mut previous = window[7];
+  let mut slot = 0;
+  while slot < 8 {
+    let mut next = backend::round(rotate_words(window[slot]), previous);
+    if slot == INJ {
+      next ^= inject;
     }
-
-    if bundle == SCHEDULE_BUNDLES {
-      break;
-    }
-
-    let mut pair = 0;
-    while pair < 8 {
-      // The next half only xors earlier bundles. Grouping the two recurrences
-      // separately keeps the schedule shape visible in the code.
-      schedule[bundle] = expand_linear_step(&schedule, bundle);
-      bundle += 1;
-      pair += 1;
-    }
-  }
-
-  schedule
-}
-
-#[inline(always)]
-fn expand_round_keys(msg: &[u8; BLOCK], counter: u128) -> [Bundle; SCHEDULE_BUNDLES] {
-  let words = core::array::from_fn(|word| load_u32_le(msg, word));
-  expand_round_keys_words(&words, counter)
-}
-
-/// Applies the AES-based bundle step used by the key schedule.
-#[inline(always)]
-fn expand_aes_step(schedule: &[Bundle; SCHEDULE_BUNDLES], bundle: usize) -> Bundle {
-  let expanded = backend::aes_nk(rotate_bundle_words(schedule[bundle - 8]));
-  [
-    expanded[0] ^ schedule[bundle - 1][0],
-    expanded[1] ^ schedule[bundle - 1][1],
-    expanded[2] ^ schedule[bundle - 1][2],
-    expanded[3] ^ schedule[bundle - 1][3],
-  ]
-}
-
-/// Applies the xor-only bundle step used between AES expansion groups.
-#[inline(always)]
-fn expand_linear_step(schedule: &[Bundle; SCHEDULE_BUNDLES], bundle: usize) -> Bundle {
-  [
-    schedule[bundle - 8][0] ^ schedule[bundle - 2][1],
-    schedule[bundle - 8][1] ^ schedule[bundle - 2][2],
-    schedule[bundle - 8][2] ^ schedule[bundle - 2][3],
-    schedule[bundle - 8][3] ^ schedule[bundle - 1][0],
-  ]
-}
-
-/// Injects the HAIFA counter words at one schedule checkpoint.
-#[inline(always)]
-fn inject_counter_words(bundle_words: &mut Bundle, counter: u128, injection: CounterInjection) {
-  let mut word = 0;
-  while word < 4 {
-    bundle_words[word] ^= counter_word(counter, injection.words[word]);
-    word += 1;
+    window[slot] = next;
+    previous = next;
+    slot += 1;
   }
 }
 
-/// Runs the 4-round AES bundle that updates one 4-word half.
+/// Expands the next eight bundles with the xor-only recurrence.
 #[inline(always)]
-fn apply_round_bundle(state: &mut State, left: [usize; 4], right: [usize; 4], keys: &[Bundle]) {
-  // Each bundle reads one 4-word half, runs four keyed AES rounds, then xors
-  // the result into the opposite half in Feistel order.
-  let mixed = backend::aes_rounds(
-    [state[right[0]], state[right[1]], state[right[2]], state[right[3]]],
-    keys,
-  );
-  state[left[0]] ^= mixed[0];
-  state[left[1]] ^= mixed[1];
-  state[left[2]] ^= mixed[2];
-  state[left[3]] ^= mixed[3];
+fn expand_linear(window: &mut [Lane; 8]) {
+  let mut two_back = window[6];
+  let mut one_back = window[7];
+  let mut slot = 0;
+  while slot < 8 {
+    let next = window[slot] ^ shift_words(two_back, one_back);
+    window[slot] = next;
+    two_back = one_back;
+    one_back = next;
+    slot += 1;
+  }
 }
 
-/// Rotates the four columns after one round pair.
+/// Runs the four AES rounds of one Feistel half, the last with a zero key.
 #[inline(always)]
-fn rotate_columns(state: &mut State) {
-  let saved = *state;
-  let mut word = 0;
-  while word < 16 {
-    state[word] = saved[COLUMN_ROTATION[word]];
-    word += 1;
-  }
+fn feistel<const BASE: usize>(source: Lane, window: &[Lane; 8]) -> Lane {
+  let mut lane = backend::round(source ^ window[BASE], window[BASE + 1]);
+  lane = backend::round(lane, window[BASE + 2]);
+  lane = backend::round(lane, window[BASE + 3]);
+  backend::round(lane, Lane::splat(0))
+}
+
+/// Applies both Feistel halves and the column rotation of one round.
+#[inline(always)]
+fn mix_round(state: &mut [Lane; 4], window: &[Lane; 8]) {
+  let left = feistel::<0>(state[1], window);
+  let right = feistel::<4>(state[3], window);
+  state[0] ^= left;
+  state[2] ^= right;
+  *state = [state[3], state[0], state[1], state[2]];
 }
 
 /// Runs the SHAvite-3-512 compression function.
+///
+/// The key schedule recurrence only reaches eight bundles back and the rounds
+/// consume bundles in order, so an eight-bundle window holds the schedule.
 // Inlined at every call site, the compression runs slower, so all callers
 // share one copy.
 #[inline(never)]
 fn compress_block(chaining_value: &mut State, msg: &[u8; BLOCK], counter: u128) {
-  let schedule = expand_round_keys(msg, counter);
-  compress_schedule(chaining_value, &schedule);
-}
+  let mut window: [Lane; 8] = core::array::from_fn(|slot| {
+    Lane::new([
+      load_u32_le(msg, slot * 4),
+      load_u32_le(msg, slot * 4 + 1),
+      load_u32_le(msg, slot * 4 + 2),
+      load_u32_le(msg, slot * 4 + 3),
+    ])
+  });
+  let mut state: [Lane; 4] = core::array::from_fn(|column| {
+    Lane::new([
+      chaining_value[column * 4],
+      chaining_value[column * 4 + 1],
+      chaining_value[column * 4 + 2],
+      chaining_value[column * 4 + 3],
+    ])
+  });
+  let zero = Lane::splat(0);
 
-#[inline(always)]
-fn compress_schedule(chaining_value: &mut State, schedule: &[Bundle; SCHEDULE_BUNDLES]) {
-  let mut state = *chaining_value;
-  let mut bundle = 0;
-  let mut round = 0;
-  while round < 14 {
-    apply_round_bundle(
-      &mut state,
-      [0, 1, 2, 3],
-      [4, 5, 6, 7],
-      &schedule[bundle * 4..bundle * 4 + 4],
-    );
-    bundle += 1;
-    apply_round_bundle(
-      &mut state,
-      [8, 9, 10, 11],
-      [12, 13, 14, 15],
-      &schedule[bundle * 4..bundle * 4 + 4],
-    );
-    bundle += 1;
-    rotate_columns(&mut state);
-    round += 1;
-  }
+  mix_round(&mut state, &window);
+  expand_aes::<0>(&mut window, injection(counter, 0));
+  mix_round(&mut state, &window);
+  expand_linear(&mut window);
+  mix_round(&mut state, &window);
+  expand_aes::<8>(&mut window, zero);
+  mix_round(&mut state, &window);
+  expand_linear(&mut window);
+  mix_round(&mut state, &window);
+  expand_aes::<1>(&mut window, injection(counter, 1));
+  mix_round(&mut state, &window);
+  expand_linear(&mut window);
+  mix_round(&mut state, &window);
+  expand_aes::<8>(&mut window, zero);
+  mix_round(&mut state, &window);
+  expand_linear(&mut window);
+  mix_round(&mut state, &window);
+  expand_aes::<7>(&mut window, injection(counter, 2));
+  mix_round(&mut state, &window);
+  expand_linear(&mut window);
+  mix_round(&mut state, &window);
+  expand_aes::<8>(&mut window, zero);
+  mix_round(&mut state, &window);
+  expand_linear(&mut window);
+  mix_round(&mut state, &window);
+  expand_aes::<6>(&mut window, injection(counter, 3));
+  mix_round(&mut state, &window);
 
-  let mut word = 0;
-  while word < 16 {
-    chaining_value[word] ^= state[word];
-    word += 1;
+  let mut column = 0;
+  while column < 4 {
+    let words = state[column].to_array();
+    let mut word = 0;
+    while word < 4 {
+      chaining_value[column * 4 + word] ^= words[word];
+      word += 1;
+    }
+    column += 1;
   }
 }
 
@@ -311,11 +229,32 @@ impl_digest!(Shavite512, U64);
 
 #[cfg(test)]
 mod tests {
-  use super::Shavite512;
+  use super::{compress_block, Shavite512, BLOCK, IV};
   use crate::tests::run_nist_kat_chunked;
+  use crate::util::memops::digest_from_u32_le;
+
+  use hex_conservative::hex;
 
   #[test]
   fn nist_kat() {
     run_nist_kat_chunked::<Shavite512>("shavite");
+  }
+
+  /// One compression with distinct, nonzero values in all four counter words,
+  /// which no message short enough to hash in a test reaches. The expected
+  /// chaining value is the sphlib compression of this block and counter.
+  #[test]
+  fn compress_counter_words() {
+    let msg: [u8; BLOCK] = core::array::from_fn(|i| (i * 37 + 11) as u8);
+    let counter = u128::from_le_bytes(hex!("67452301efcdab8998badcfe10325476"));
+    let mut chaining_value = IV;
+    compress_block(&mut chaining_value, &msg, counter);
+    assert_eq!(
+      digest_from_u32_le(&chaining_value),
+      hex!(concat!(
+        "c995c5ed14062715e0214c659dd89f922ac00884d0d29db96aff75091ef2fef3",
+        "2351c1cd5029fe24167c12a1312506573ccd2c644642b4134ffea9ed96d93148",
+      ))
+    );
   }
 }
