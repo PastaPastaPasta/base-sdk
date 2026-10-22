@@ -21,7 +21,7 @@ use core::iter;
 const MIN_SHARES: usize = 2;
 
 /// Most shares of a shared collateral, and most owner payouts.
-const MAX_SHARES: usize = 8;
+pub(super) const MAX_SHARES: usize = 8;
 
 /// Smallest part of the owner reward a payout may take, in basis points.
 const MIN_REWARD: u16 = 100;

@@ -240,6 +240,11 @@ rec_sig! {
   JoinSig
 }
 
+rec_sig! {
+  /// Signature of a share owner dissolving a shared masternode.
+  DissolveSig
+}
+
 #[cfg(test)]
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {

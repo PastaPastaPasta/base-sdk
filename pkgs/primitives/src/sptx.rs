@@ -12,7 +12,7 @@ use crate::payload::{
   FinalCommitment, MnHardFork, MnHardForkInvalid,
 };
 use crate::prelude::*;
-use crate::provider::{ProRegTx, ProTxVersion, ProUpRegTx, ProUpRevTx, ProUpServTx};
+use crate::provider::{ProDisTx, ProRegTx, ProTxVersion, ProUpRegTx, ProUpRevTx, ProUpServTx};
 use crate::types::{NIError, NIPurpose, NITrait, NetInfoV2};
 
 use dash_num::make_hash;
@@ -61,6 +61,8 @@ enum_map! {
     AssetLock = 8 => "asset_lock",
     /// Asset unlock: platform to L1 (type 9).
     AssetUnlock = 9 => "asset_unlock",
+    /// Shared masternode dissolution (type 10).
+    ProviderDissolve = 10 => "provider_dissolve",
   }
 }
 
@@ -173,6 +175,9 @@ pub enum ProTxInvalid {
   /// `bad-protx-shares-penalty`
   #[error("bad-protx-shares-penalty: {penalty}")]
   BadEarlyPenalty { penalty: i64 },
+  /// `bad-prodis-sig-count`
+  #[error("bad-prodis-sig-count: {count}")]
+  BadDissolveSigCount { count: usize },
   /// `bad-protx-operator-reward`
   #[error("bad-protx-operator-reward: {reward}")]
   OperatorRewardTooHigh { reward: u16 },
@@ -233,6 +238,8 @@ pub enum SpecialPayload {
   AssetLock(AssetLock),
   /// Asset unlock: Platform to L1 (type 9).
   AssetUnlock(AssetUnlock),
+  /// Shared masternode dissolution (type 10).
+  ProviderDissolve(ProDisTx),
   /// Unrecognized type, stored as raw bytes.
   Unknown {
     /// The transaction type code.
@@ -296,6 +303,7 @@ impl Checkable for SpecialPayload {
       Self::MnhfSignal(p) => p.check().map(PayloadInvalid::MnHardFork),
       Self::AssetLock(p) => p.check().map(PayloadInvalid::AssetLock),
       Self::AssetUnlock(p) => p.check().map(PayloadInvalid::AssetUnlock),
+      Self::ProviderDissolve(p) => p.check().map(PayloadInvalid::ProTx),
       Self::Unknown { .. } => None,
     }
   }
@@ -338,6 +346,7 @@ impl SpecialPayload {
       TxType::MnhfSignal => MnHardFork::decode(data).map(Self::MnhfSignal).map_err(err),
       TxType::AssetLock => AssetLock::decode(data).map(Self::AssetLock).map_err(err),
       TxType::AssetUnlock => AssetUnlock::decode(data).map(Self::AssetUnlock).map_err(err),
+      TxType::ProviderDissolve => ProDisTx::decode(data).map(Self::ProviderDissolve).map_err(err),
       unknown => {
         let bytes = data.to_vec();
         *data = &[];
