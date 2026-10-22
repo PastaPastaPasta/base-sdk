@@ -261,14 +261,20 @@ impl From<&ConsensusParams> for ConsensusVector {
 struct DeploymentsVector {
   test_dummy: DeploymentVector,
   v24: DeploymentVector,
+  evo_shares: DeploymentVector,
 }
 
 impl From<&Bip9Deployments> for DeploymentsVector {
   fn from(deployments: &Bip9Deployments) -> Self {
-    let Bip9Deployments { test_dummy, v24 } = *deployments;
+    let Bip9Deployments {
+      test_dummy,
+      v24,
+      evo_shares,
+    } = *deployments;
     Self {
       test_dummy: DeploymentVector::from(&test_dummy),
       v24: DeploymentVector::from(&v24),
+      evo_shares: DeploymentVector::from(&evo_shares),
     }
   }
 }

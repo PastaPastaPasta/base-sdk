@@ -119,6 +119,7 @@ BOOST_AUTO_TEST_CASE(chain_params)
         std::printf("        \"deployments\": {\n");
         PrintDeployment("test_dummy", consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY]);
         PrintDeployment("v24", consensus.vDeployments[Consensus::DEPLOYMENT_V24]);
+        PrintDeployment("evo_shares", consensus.vDeployments[Consensus::DEPLOYMENT_EVO_SHARES]);
         std::printf("        },\n");
         PrintField(4, "pow_limit", Quoted(consensus.powLimit.GetHex()));
         PrintField(4, "pow_allow_min_difficulty_blocks", Flag(consensus.fPowAllowMinDifficultyBlocks));
@@ -231,6 +232,17 @@ BOOST_AUTO_TEST_CASE(chain_params)
           },
           "v24": {
             "bit": 13,
+            "start_time": -2,
+            "timeout": 9223372036854775807,
+            "min_activation_height": 0,
+            "window_size": 4032,
+            "threshold_start": 3226,
+            "threshold_min": 2420,
+            "falloff_coeff": 5,
+            "use_ehf": true,
+          },
+          "evo_shares": {
+            "bit": 14,
             "start_time": -2,
             "timeout": 9223372036854775807,
             "min_activation_height": 0,
@@ -389,6 +401,17 @@ BOOST_AUTO_TEST_CASE(chain_params)
             "falloff_coeff": 5,
             "use_ehf": true,
           },
+          "evo_shares": {
+            "bit": 14,
+            "start_time": 1790208000,
+            "timeout": 9223372036854775807,
+            "min_activation_height": 0,
+            "window_size": 100,
+            "threshold_start": 80,
+            "threshold_min": 60,
+            "falloff_coeff": 5,
+            "use_ehf": true,
+          },
         },
         "pow_limit": "00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
         "pow_allow_min_difficulty_blocks": true,
@@ -509,6 +532,17 @@ BOOST_AUTO_TEST_CASE(chain_params)
           },
           "v24": {
             "bit": 13,
+            "start_time": 0,
+            "timeout": 9223372036854775807,
+            "min_activation_height": 0,
+            "window_size": 250,
+            "threshold_start": 200,
+            "threshold_min": 150,
+            "falloff_coeff": 5,
+            "use_ehf": true,
+          },
+          "evo_shares": {
+            "bit": 14,
             "start_time": 0,
             "timeout": 9223372036854775807,
             "min_activation_height": 0,
