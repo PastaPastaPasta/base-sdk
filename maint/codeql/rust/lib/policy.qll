@@ -251,6 +251,19 @@ predicate isSuppressed(TypeItem t, string trait) {
   or
   // A type holding one compares through it: suppress Eq and Hash
   hasLazyBlsField(t) and trait = ["Eq", "Hash"]
+  or
+  // BLS elements compare by Dash Core's `operator==`, under which a PROJC
+  // infinity equals every PROJC point, so it is not an equivalence and no
+  // hash can agree with it: suppress Eq, Hash and PartialEq
+  isOpaqueCrate(fileOf(t)) and
+  nameOf(t) = ["BlsArith", "BlsElem"] and
+  trait = ["Eq", "Hash", "PartialEq"]
+  or
+  // relic's points keep non-canonical coordinates, so a hash of them would
+  // not follow the point: suppress Hash
+  isOpaqueCrate(fileOf(t)) and
+  nameOf(t) = ["Ep", "Ep2"] and
+  trait = "Hash"
 }
 
 /** Holds if `t` is exempt from serde derivation requirements. */
