@@ -488,9 +488,10 @@ macro_rules! impl_elem {
 
     impl BlsValue<$group, $len> {
       /// Core's wrapper `operator==`: the same validity, then
-      /// [`BlsElem::core_eq`] of the elements. Unlike `==`, which compares
-      /// what Core serializes and keys its containers by, it is not
-      /// transitive (BS11a-3 D25).
+      /// [`BlsElem::core_eq`] of the elements. It is not transitive, unlike
+      /// `==`, which compares the validity, serialized bytes and held point
+      /// and is finer than Core's container key, the serialization's
+      /// `GetHash()` (BS11a-3 D25).
       pub fn core_eq(&self, other: &Self) -> bool {
         self.is_valid() == other.is_valid()
           && BlsElem::<$group, $len>::from_impl(self).core_eq(&BlsElem::<$group, $len>::from_impl(other))
