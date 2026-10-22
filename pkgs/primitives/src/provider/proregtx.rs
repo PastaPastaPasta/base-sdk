@@ -134,6 +134,14 @@ pub(super) fn check_platform_fields(
   None
 }
 
+/// The address a payout script pays, or the script in hex.
+fn payee_string(script: &ScriptPubKeyBuf, ctx: &AddrParams) -> String {
+  let script = script.as_bytes();
+  Recipient::from_script(script)
+    .and_then(|r| r.to_base58c(ctx))
+    .unwrap_or_else(|| script.to_lower_hex_string())
+}
+
 impl BaseCodec for ProRegTx {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let version = ProTxVersion::decode(data)?;
@@ -248,10 +256,16 @@ impl Signable for ProRegTx {
   type Error = EcdsaError;
 
   fn payload(&self, ctx: &AddrParams) -> Vec<u8> {
-    let payout = self.script_payout.as_bytes();
-    let payout = Recipient::from_script(payout)
-      .and_then(|r| r.to_base58c(ctx))
-      .unwrap_or_else(|| payout.to_lower_hex_string());
+    let payout = if self.version >= ProTxVersion::ExtAddr {
+      let payouts: Vec<String> = self
+        .payouts
+        .iter()
+        .map(|p| format!("{}:{}", payee_string(p.script_payout(), ctx), p.reward()))
+        .collect();
+      payouts.join(",")
+    } else {
+      payee_string(&self.script_payout, ctx)
+    };
     let msg = format!(
       "{payout}|{}|{}|{}|{}",
       self.operator_reward,
@@ -452,7 +466,8 @@ mod tests {
   use super::*;
   use crate::provider::share::tests::script;
 
-  use dash_dev::{assert_serde_rt, check_sptx, Corpus};
+  use dash_dev::{arr_from_hex, assert_serde_rt, check_sptx, Corpus};
+  use dash_params::Network;
   use rstest::rstest;
 
   #[rstest]
@@ -541,5 +556,15 @@ mod tests {
     assert_eq!(ptx.check(), None);
     edit(&mut ptx);
     assert_eq!(ptx.check(), Some(expected));
+  }
+
+  /// The collateral key of regtest registration `e069aa21` signs its two
+  /// payouts. It is the key of output 2 of `d7f51e30` in the same chain.
+  #[rstest]
+  fn collateral_key_signs_payouts() {
+    let ptx = entry("e069aa21a4c70c3cfec548d2fb99004207145cae53c400ae319626c966f471c8");
+    let key = PubKeyHash::from_lendian(arr_from_hex("aa20a04ead2af1a823293452a32c6f5b33caccaa"));
+    assert_eq!(ptx.payouts.len(), 2);
+    assert_eq!(ptx.verify(&key, Network::Regtest.addr()), None);
   }
 }
