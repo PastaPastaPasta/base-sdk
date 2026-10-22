@@ -14,7 +14,7 @@ use crate::version::ProtocolVersion;
 use dash_primitives::{hash_impl, BlockHash, BlockHeader, MerkleRoot};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{impl_new, CompactSize, Hashable};
+use dash_types::{CompactSize, Hashable};
 use getset::{CopyGetters, Getters};
 
 /// Size of the smallest compressed header, made of flags, a merkle root, a
@@ -36,196 +36,138 @@ const FLAG_TIMESTAMP_FULL: u8 = 0b0001_0000;
 // Bit 5: nbits present.
 const FLAG_NBITS: u8 = 0b0010_0000;
 
-/// Stateful compressor/decompressor for a stream of block headers.
-#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, Unencodable)]
+/// A `headers2` entry, kept in the form it took on the wire.
+#[derive(Clone, Copy, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, Unencodable)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
-pub struct CompressionState {
-  /// MRU version cache (front = most recently used).
-  #[getset(get = "pub")]
-  version_cache: Vec<i32>,
-  /// Previous fully-resolved header.
+pub struct CompressedHeader {
+  /// Which fields the entry carries.
   #[getset(get_copy = "pub")]
-  prev_header: Option<BlockHeader>,
-  /// Cached block hash of `prev_header`.
-  #[cfg_attr(feature = "serde", serde(skip))]
-  prev_block_hash: Option<BlockHash>,
+  flags: u8,
+  /// The header, with the fields the entry leaves out restored.
+  #[getset(get = "pub")]
+  header: BlockHeader,
+  /// Time against the entry before, if the entry leaves the time out.
+  #[getset(get_copy = "pub")]
+  time_offset: i16,
 }
 
-impl CompressionState {
-  /// Creates fresh state with an empty cache and no previous header.
-  pub fn new() -> Self {
-    Self {
-      version_cache: Vec::with_capacity(MAX_VERSION_CACHE),
-      prev_header: None,
-      prev_block_hash: None,
-    }
-  }
-
-  /// Returns the block hash of `prev_header`, reusing the cached value if set.
-  pub fn prev_block_hash(&self) -> Option<BlockHash> {
-    self.prev_block_hash.or_else(|| self.prev_header.map(|h| h.hash()))
-  }
-
-  /// Moves the version at `position` to the front of the cache.
-  fn mark_version_mru(&mut self, position: usize) {
-    let v = self.version_cache.remove(position);
-    self.version_cache.insert(0, v);
-  }
-
-  /// Inserts `version` at the front, evicting the oldest if full.
-  fn save_version_mru(&mut self, version: i32) {
-    if self.version_cache.len() >= MAX_VERSION_CACHE {
-      self.version_cache.pop();
-    }
-    self.version_cache.insert(0, version);
-  }
-
-  /// Finds the cache position (0-based) for a version, if cached.
-  fn find_version(&self, version: i32) -> Option<usize> {
-    self.version_cache.iter().position(|&v| v == version)
-  }
-
-  /// Returns cached hash, recomputing from `prev_header` if the cache is cold.
-  fn prev_hash(&mut self) -> Option<BlockHash> {
-    if self.prev_block_hash.is_none() {
-      self.prev_block_hash = self.prev_header.map(|h| h.hash());
-    }
-    self.prev_block_hash
-  }
-
-  /// Decodes one compressed header, advancing the slice and state.
-  pub(crate) fn decode_header(&mut self, sl: &mut &[u8]) -> Result<BlockHeader, DecodeError> {
-    let flags = u8::decode(sl)?;
-    let version_offset = flags & VERSION_OFFSET_MASK;
-
-    let version = if version_offset == 0 {
-      let v = i32::decode(sl)?;
-      self.save_version_mru(v);
-      v
-    } else {
-      let pos = (version_offset - 1) as usize;
-      if pos >= self.version_cache.len() {
-        return Err(DecodeError::InvalidValue {
-          expected: (0..self.version_cache.len() as u64).collect(),
-          actual: pos as u64,
-        });
+impl CompressedHeader {
+  /// Compresses `header` against `prev`, the header before it, and
+  /// `versions`, the versions of recent entries, newest first.
+  fn compress(header: &BlockHeader, prev: Option<&BlockHeader>, versions: &mut Vec<i32>) -> Self {
+    let mut flags = 0;
+    match versions.iter().position(|&v| v == header.version()) {
+      Some(pos) => {
+        flags |= (pos + 1) as u8;
+        versions[..=pos].rotate_right(1);
       }
-      let v = self.version_cache[pos];
-      self.mark_version_mru(pos);
-      v
-    };
-
-    let prev_hash = if flags & FLAG_PREV_HASH != 0 {
-      BlockHash::decode(sl)?
-    } else {
-      self.prev_hash().unwrap_or_default()
-    };
-
-    let merkle_root = MerkleRoot::decode(sl)?;
-
-    let time = if flags & FLAG_TIMESTAMP_FULL != 0 {
-      u32::decode(sl)?
-    } else {
-      let delta = i16::decode(sl)?;
-      match &self.prev_header {
-        Some(prev) => (prev.time() as i64 + delta as i64) as u32,
-        None => delta as u32,
-      }
-    };
-
-    let bits = if flags & FLAG_NBITS != 0 {
-      u32::decode(sl)?
-    } else {
-      match &self.prev_header {
-        Some(prev) => prev.bits(),
-        None => 0,
-      }
-    };
-
-    let nonce = u32::decode(sl)?;
-
-    let header = BlockHeader::new(version, prev_hash, merkle_root, time, bits, nonce);
-    self.prev_block_hash = Some(header.hash());
-    self.prev_header = Some(header);
-    Ok(header)
-  }
-
-  /// Encodes one header in compressed form, advancing the state.
-  pub(crate) fn encode_header(&mut self, header: &BlockHeader, buf: &mut impl EncodeBuf) {
-    let mut flags: u8 = 0;
-
-    let version_offset = match self.find_version(header.version()) {
-      Some(pos) => (pos + 1) as u8,
-      None => 0,
-    };
-    flags |= version_offset & VERSION_OFFSET_MASK;
-
-    let need_prev_hash = match self.prev_hash() {
-      Some(hash) => header.prev_hash() != hash,
-      None => true,
-    };
-    if need_prev_hash {
+      None => save_version(versions, header.version()),
+    }
+    if prev.is_none_or(|prev| header.prev_hash() != prev.hash()) {
       flags |= FLAG_PREV_HASH;
     }
-
-    let time_delta = match &self.prev_header {
-      Some(prev) => {
-        let d = header.time() as i64 - prev.time() as i64;
-        if (i16::MIN as i64..=i16::MAX as i64).contains(&d) {
-          Some(d as i16)
-        } else {
-          None
-        }
+    let step = prev.map(|prev| i64::from(header.time()) - i64::from(prev.time()));
+    let time_offset = match step.and_then(|step| i16::try_from(step).ok()) {
+      Some(offset) => offset,
+      None => {
+        flags |= FLAG_TIMESTAMP_FULL;
+        0
       }
-      None => None,
     };
-    if time_delta.is_none() {
-      flags |= FLAG_TIMESTAMP_FULL;
-    }
-
-    let need_nbits = match &self.prev_header {
-      Some(prev) => header.bits() != prev.bits(),
-      None => true,
-    };
-    if need_nbits {
+    if prev.is_none_or(|prev| header.bits() != prev.bits()) {
       flags |= FLAG_NBITS;
     }
-
-    buf.push(flags);
-
-    if version_offset == 0 {
-      header.version().encode(buf);
-      self.save_version_mru(header.version());
-    } else {
-      let pos = (version_offset - 1) as usize;
-      self.mark_version_mru(pos);
+    Self {
+      flags,
+      header: *header,
+      time_offset,
     }
+  }
 
-    if need_prev_hash {
+  /// Reads an entry, restoring the fields it leaves out from `prev` and
+  /// `versions` as [`Self::compress`] takes them.
+  fn decode_wire(data: &mut &[u8], prev: Option<&BlockHeader>, versions: &mut Vec<i32>) -> Result<Self, DecodeError> {
+    let flags = u8::decode(data)?;
+    let version = if flags & VERSION_OFFSET_MASK == 0 {
+      Some(i32::decode(data)?)
+    } else {
+      None
+    };
+    let prev_hash = if flags & FLAG_PREV_HASH != 0 {
+      BlockHash::decode(data)?
+    } else {
+      prev.map(BlockHeader::hash).unwrap_or_default()
+    };
+    let merkle_root = MerkleRoot::decode(data)?;
+    let (time, time_offset) = if flags & FLAG_TIMESTAMP_FULL != 0 {
+      (u32::decode(data)?, 0)
+    } else {
+      let time_offset = i16::decode(data)?;
+      let time = match prev {
+        Some(prev) => prev.time().wrapping_add_signed(time_offset.into()),
+        None => time_offset as u32,
+      };
+      (time, time_offset)
+    };
+    let bits = if flags & FLAG_NBITS != 0 {
+      u32::decode(data)?
+    } else {
+      prev.map_or(0, BlockHeader::bits)
+    };
+    let nonce = u32::decode(data)?;
+    // The version is restored last, so an entry cut short fails as such
+    // before a version offset past the recent versions does.
+    let version = match version {
+      Some(version) => {
+        save_version(versions, version);
+        version
+      }
+      None => {
+        let pos = usize::from((flags & VERSION_OFFSET_MASK) - 1);
+        if pos >= versions.len() {
+          return Err(DecodeError::InvalidValue {
+            expected: (0..versions.len() as u64).collect(),
+            actual: pos as u64,
+          });
+        }
+        versions[..=pos].rotate_right(1);
+        versions[0]
+      }
+    };
+    Ok(Self {
+      flags,
+      header: BlockHeader::new(version, prev_hash, merkle_root, time, bits, nonce),
+      time_offset,
+    })
+  }
+
+  /// Writes the fields the flags put on the wire.
+  fn encode_wire(&self, buf: &mut impl EncodeBuf) {
+    let header = &self.header;
+    buf.push(self.flags);
+    if self.flags & VERSION_OFFSET_MASK == 0 {
+      header.version().encode(buf);
+    }
+    if self.flags & FLAG_PREV_HASH != 0 {
       header.prev_hash().encode(buf);
     }
-
     header.merkle_root().encode(buf);
-
-    match time_delta {
-      Some(d) => d.encode(buf),
-      None => header.time().encode(buf),
+    if self.flags & FLAG_TIMESTAMP_FULL != 0 {
+      header.time().encode(buf);
+    } else {
+      self.time_offset.encode(buf);
     }
-
-    if need_nbits {
+    if self.flags & FLAG_NBITS != 0 {
       header.bits().encode(buf);
     }
-
     header.nonce().encode(buf);
-    self.prev_block_hash = Some(header.hash());
-    self.prev_header = Some(*header);
   }
 }
 
-impl Default for CompressionState {
-  fn default() -> Self {
-    Self::new()
-  }
+/// Puts `version` first in `versions`, dropping the oldest past the limit.
+fn save_version(versions: &mut Vec<i32>, version: i32) {
+  versions.truncate(MAX_VERSION_CACHE - 1);
+  versions.insert(0, version);
 }
 
 codec_p2p! {
@@ -245,35 +187,37 @@ pub struct GetHeaders2 {
 }
 }
 
-impl_new! {
 /// Response carrying delta-compressed block headers.
 #[derive(Clone, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct Headers2 {
-  /// Fully resolved block headers.
+  /// Entries in chain order.
   #[getset(get = "pub")]
-  headers: Vec<BlockHeader>,
-}
+  headers: Vec<CompressedHeader>,
 }
 
 impl_p2p!(Headers2);
 
 impl BaseCodec for Headers2 {
+  /// Decodes a `headers2`, restoring the fields each entry leaves out from
+  /// the entry before it.
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let count = decode_count(data, Self::MAX_COUNT, MIN_HEADERS2_SIZE)?;
-    let mut state = CompressionState::new();
-    let mut headers = Vec::with_capacity(count);
+    let mut versions = Vec::with_capacity(MAX_VERSION_CACHE);
+    let mut headers: Vec<CompressedHeader> = Vec::with_capacity(count);
     for _ in 0..count {
-      headers.push(state.decode_header(data)?);
+      let entry = CompressedHeader::decode_wire(data, headers.last().map(CompressedHeader::header), &mut versions)?;
+      headers.push(entry);
     }
     Ok(Self { headers })
   }
 
+  /// Encodes a `headers2`, writing each entry in the form it took on the
+  /// wire, so a decoded message encodes back to the same bytes.
   fn encode(&self, buf: &mut impl EncodeBuf) {
     CompactSize::from(self.headers.len()).encode(buf);
-    let mut state = CompressionState::new();
-    for h in &self.headers {
-      state.encode_header(h, buf);
+    for entry in &self.headers {
+      entry.encode_wire(buf);
     }
   }
 }
@@ -293,15 +237,65 @@ impl Headers2 {
       Headers::MAX_COUNT
     }
   }
+
+  /// Compresses `headers` for an announcement, each taken to follow the one
+  /// before it.
+  pub fn announce(headers: &[BlockHeader]) -> Self {
+    let mut versions = Vec::with_capacity(MAX_VERSION_CACHE);
+    let mut prev = None;
+    let headers = headers
+      .iter()
+      .map(|header| {
+        let entry = CompressedHeader::compress(header, prev, &mut versions);
+        prev = Some(header);
+        entry
+      })
+      .collect();
+    Self { headers }
+  }
+
+  /// Block headers in chain order.
+  pub fn block_headers(&self) -> impl ExactSizeIterator<Item = &BlockHeader> {
+    self.headers.iter().map(CompressedHeader::header)
+  }
 }
 
 #[cfg(all(test, feature = "serde"))]
+#[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
 
   use dash_dev::{assert_serde_rt, check_wire, Corpus};
   use dash_types::Numeric;
-  use rstest::rstest;
+  use hex_conservative::decode_to_vec;
+  use rstest::{fixture, rstest};
+  use serde::Deserialize;
+
+  #[derive(Deserialize)]
+  struct HeadersVector {
+    raw: String,
+    headers: Vec<BlockHeader>,
+  }
+
+  /// A chain of `len` headers one second apart, a full `headers2` by default.
+  #[fixture]
+  fn chain(#[default(Headers2::MAX_COUNT)] len: usize) -> Vec<BlockHeader> {
+    let mut prev_hash = BlockHash::from_lendian([0; 32]);
+    (0..len as u32)
+      .map(|i| {
+        let header = BlockHeader::new(
+          0x2000_0000,
+          prev_hash,
+          MerkleRoot::from_lendian([1; 32]),
+          1_700_000_000 + i,
+          0x1e0f_ffff,
+          i,
+        );
+        prev_hash = header.hash();
+        header
+      })
+      .collect()
+  }
 
   #[rstest]
   fn corpus_getheaders2() {
@@ -318,44 +312,31 @@ mod tests {
   }
 
   #[rstest]
-  fn counts_past_the_headers_limit_decode() {
-    let headers = (0..)
-      .take(Headers::MAX_COUNT + 1)
-      .map(|i| {
-        BlockHeader::new(
-          0x2000_0000,
-          BlockHash::from_lendian([0; 32]),
-          MerkleRoot::from_lendian([1; 32]),
-          1_700_000_000 + i,
-          0x1e0f_ffff,
-          i,
-        )
-      })
-      .collect();
-    let msg = Headers2 { headers };
+  fn corpus_uncompress() {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "headers2");
+    for v in corpus.vectors::<HeadersVector>("uncompress") {
+      let raw = decode_to_vec(&v.raw).unwrap();
+      let mut data = &raw[..];
+      let msg = Headers2::decode(&mut data).unwrap();
+      assert!(data.is_empty(), "{}", v.raw);
+      assert_eq!(msg.block_headers().copied().collect::<Vec<_>>(), v.headers);
+      let mut buf = Vec::new();
+      msg.encode(&mut buf);
+      assert_eq!(buf, raw);
+    }
+  }
+
+  #[rstest]
+  fn counts_past_the_headers_limit_decode(#[with(Headers::MAX_COUNT + 1)] chain: Vec<BlockHeader>) {
+    let msg = Headers2::announce(&chain);
     let mut buf = Vec::new();
     msg.encode(&mut buf);
     assert_eq!(Headers2::decode(&mut &buf[..]), Ok(msg));
   }
 
   #[rstest]
-  fn a_full_batch_of_minimal_entries_decodes() {
-    let mut prev_hash = BlockHash::from_lendian([0; 32]);
-    let headers = (0..Headers2::MAX_COUNT as u32)
-      .map(|i| {
-        let header = BlockHeader::new(
-          0x2000_0000,
-          prev_hash,
-          MerkleRoot::from_lendian([1; 32]),
-          1_700_000_000 + i,
-          0x1e0f_ffff,
-          i,
-        );
-        prev_hash = header.hash();
-        header
-      })
-      .collect();
-    let msg = Headers2 { headers };
+  fn a_full_batch_of_minimal_entries_decodes(chain: Vec<BlockHeader>) {
+    let msg = Headers2::announce(&chain);
     let mut buf = Vec::new();
     msg.encode(&mut buf);
     assert_eq!(buf.len(), 3 + 81 + 7_999 * 39);

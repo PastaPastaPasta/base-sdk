@@ -1,3 +1,15 @@
+//
+// Compressed header vectors. The sections that come with a program were
+// generated with the reference implementation (dashpay/dash v24.0.0-rc.3,
+// 0364ed626e).
+//
+// To run a program, paste it at the end of the `net_tests` suite in
+// `src/test/net_tests.cpp` at the specified revision, build it with
+// `make -C src test/test_dash` and run
+// `./src/test/test_dash --run_test=net_tests/<name>`. The output should match
+// the section.
+//
+
 {
   "getheaders2": {
     // Block locator with 33 hashes, hash_stop=zeros (full sync)
@@ -51,12 +63,16 @@
       "details": {
         "headers": [
           {
-            "version": 536870912,
-            "prevHash": "000000000000001a94a4abec8474758d274b208544777173d8bd9ce8fbd26feb",
-            "merkleRoot": "53ab84126ba8fe898ae4f163e5a6aded6925b97a3c5a3ebed5c5d3a25995ef55",
-            "time": 1778264555,
-            "bits": 421963582,
-            "nonce": 3837937772
+            "flags": 56,
+            "header": {
+              "version": 536870912,
+              "prevHash": "000000000000001a94a4abec8474758d274b208544777173d8bd9ce8fbd26feb",
+              "merkleRoot": "53ab84126ba8fe898ae4f163e5a6aded6925b97a3c5a3ebed5c5d3a25995ef55",
+              "time": 1778264555,
+              "bits": 421963582,
+              "nonce": 3837937772
+            },
+            "time_offset": 0
           }
         ]
       }
@@ -67,15 +83,146 @@
       "details": {
         "headers": [
           {
-            "version": 536870912,
-            "prevHash": "000000000000000d35649b332333437adcc12829790a55d0cb95d7679c72212f",
-            "merkleRoot": "22b5029209c7dd76c77dbebb557af4bc00dfc5a133b7ae9cd48a3a2846859f83",
-            "time": 1778264602,
-            "bits": 422153387,
-            "nonce": 4026620048
+            "flags": 56,
+            "header": {
+              "version": 536870912,
+              "prevHash": "000000000000000d35649b332333437adcc12829790a55d0cb95d7679c72212f",
+              "merkleRoot": "22b5029209c7dd76c77dbebb557af4bc00dfc5a133b7ae9cd48a3a2846859f83",
+              "time": 1778264602,
+              "bits": 422153387,
+              "nonce": 4026620048
+            },
+            "time_offset": 0
           }
         ]
       }
     },
   },
+/*
+BOOST_AUTO_TEST_CASE(headers2_uncompress)
+{
+    struct Wire {
+        uint8_t flags;
+        int32_t version;
+        uint32_t time;
+        int16_t time_offset;
+        uint32_t bits;
+    };
+    const CBlockHeader genesis{Params().GenesisBlock().GetBlockHeader()};
+    const auto payload = [&](const std::vector<Wire>& wire) {
+        std::vector<CompressibleBlockHeader> headers;
+        for (const Wire& w : wire) {
+            CompressibleBlockHeader header;
+            CDataStream flags{SER_NETWORK, PROTOCOL_VERSION};
+            flags << w.flags;
+            flags >> header.bit_field;
+            header.nVersion = w.version;
+            header.hashPrevBlock = genesis.GetHash();
+            header.hashMerkleRoot = ArithToUint256(arith_uint256{uint64_t{headers.size() + 1}});
+            header.nTime = w.time;
+            header.time_offset = w.time_offset;
+            header.nBits = w.bits;
+            header.nNonce = headers.size();
+            headers.push_back(header);
+        }
+        return CNetMsgMaker{PROTOCOL_VERSION}.Make(NetMsgType::HEADERS2, headers).data;
+    };
+    const int32_t a{0x20000000};
+    const uint32_t t{genesis.nTime};
+    const uint32_t b{genesis.nBits};
+    const std::vector<std::vector<Wire>> cases{
+        {{0x38, a, t, 0, b}, {0x01, 0, 0, 150, 0}, {0x00, a + 1, 0, -30, 0}, {0x02, 0, 0, 600, 0},
+         {0x20, a + 2, 0, 1, b - 1}, {0x03, 0, 0, 1, 0}},
+        {{0xf8, a, t, 0, b}, {0xc1, 0, 0, 150, 0}, {0x41, 0, 0, 150, 0}},
+        {{0x10, a, t, 0, 0}, {0x01, 0, 0, 150, 0}},
+        {{0x38, a, 5, 0, b}, {0x01, 0, 0, -10, 0}, {0x31, 0, 0xffffffff, 0, b}, {0x01, 0, 0, 1, 0}},
+        {{0x38, a, t, 0, b}, {0x00, a + 1, 0, 1, 0}, {0x00, a + 2, 0, 1, 0}, {0x00, a + 3, 0, 1, 0},
+         {0x00, a + 4, 0, 1, 0}, {0x00, a + 5, 0, 1, 0}, {0x00, a + 6, 0, 1, 0}, {0x00, a + 7, 0, 1, 0},
+         {0x07, 0, 0, 1, 0}, {0x01, 0, 0, 1, 0}},
+    };
+    for (const auto& wire : cases) {
+        const auto raw{payload(wire)};
+        CDataStream stream{raw, SER_NETWORK, PROTOCOL_VERSION};
+        std::vector<CBlockHeader> headers;
+        std::vector<CompressibleBlockHeader> received;
+        std::list<int32_t> last_unique_versions;
+        for (unsigned int n = ReadCompactSize(stream); n > 0; --n) {
+            CompressibleBlockHeader block_header_compressed;
+            stream >> block_header_compressed;
+            block_header_compressed.Uncompress(headers, last_unique_versions);
+            headers.push_back(block_header_compressed);
+            received.push_back(block_header_compressed);
+        }
+        BOOST_CHECK(stream.empty());
+        BOOST_CHECK(CNetMsgMaker{PROTOCOL_VERSION}.Make(NetMsgType::HEADERS2, received).data == raw);
+        std::printf("    {\n      \"raw\": \"%s\",\n      \"headers\": [\n", HexStr(raw).c_str());
+        for (const CBlockHeader& h : headers) {
+            std::printf("        { \"version\": %d, \"prevHash\": \"%s\", \"merkleRoot\": \"%s\", \"time\": %u, "
+                        "\"bits\": %u, \"nonce\": %u },\n",
+                        h.nVersion, h.hashPrevBlock.GetHex().c_str(), h.hashMerkleRoot.GetHex().c_str(), h.nTime,
+                        h.nBits, h.nNonce);
+        }
+        std::printf("      ]\n    },\n");
+    }
+}
+*/
+  // Each vector holds a crafted `headers2` payload and the headers the
+  // reference handler restores from it.
+  "uncompress": [
+    // Offsets pick recent versions and move them first; a time steps back.
+    {
+      "raw": "0638000000202e3df23eec5cd6a86edd509539028e2c3a3dc05315eb28f2baa43218ca0800000100000000000000000000000000000000000000000000000000000000000000b9968054ffff7f200000000001020000000000000000000000000000000000000000000000000000000000000096000100000000010000200300000000000000000000000000000000000000000000000000000000000000e2ff02000000020400000000000000000000000000000000000000000000000000000000000000580203000000200200002005000000000000000000000000000000000000000000000000000000000000000100feff7f2004000000030600000000000000000000000000000000000000000000000000000000000000010005000000",
+      "headers": [
+        { "version": 536870912, "prevHash": "000008ca1832a4baf228eb1553c03d3a2c8e02399550dd6ea8d65cec3ef23d2e", "merkleRoot": "0000000000000000000000000000000000000000000000000000000000000001", "time": 1417713337, "bits": 545259519, "nonce": 0 },
+        { "version": 536870912, "prevHash": "e9a145541846005482aa5daa6838d0ed6ac31df216549523ad9970e51fcf50b2", "merkleRoot": "0000000000000000000000000000000000000000000000000000000000000002", "time": 1417713487, "bits": 545259519, "nonce": 1 },
+        { "version": 536870913, "prevHash": "b73f7167f0ccfded49b6e0d8aa6a1ae45547ef873b336452cebc876e47692ef7", "merkleRoot": "0000000000000000000000000000000000000000000000000000000000000003", "time": 1417713457, "bits": 545259519, "nonce": 2 },
+        { "version": 536870912, "prevHash": "1402864972541ce0025f4e54cf186bc808308145e2d11df4d92c8c5407d7e3a8", "merkleRoot": "0000000000000000000000000000000000000000000000000000000000000004", "time": 1417714057, "bits": 545259519, "nonce": 3 },
+        { "version": 536870914, "prevHash": "189a4fdd3efab1009b3795323fc5f95a1312fcbc2b1bd6e50c18ed024d0cfb96", "merkleRoot": "0000000000000000000000000000000000000000000000000000000000000005", "time": 1417714058, "bits": 545259518, "nonce": 4 },
+        { "version": 536870913, "prevHash": "a3941275ff5a22be4014693d462d1e1294015baa78490c21405e6fe22fe01fc1", "merkleRoot": "0000000000000000000000000000000000000000000000000000000000000006", "time": 1417714059, "bits": 545259518, "nonce": 5 },
+      ]
+    },
+    // Flag bits 6 and 7 carry nothing and are kept.
+    {
+      "raw": "03f8000000202e3df23eec5cd6a86edd509539028e2c3a3dc05315eb28f2baa43218ca0800000100000000000000000000000000000000000000000000000000000000000000b9968054ffff7f2000000000c10200000000000000000000000000000000000000000000000000000000000000960001000000410300000000000000000000000000000000000000000000000000000000000000960002000000",
+      "headers": [
+        { "version": 536870912, "prevHash": "000008ca1832a4baf228eb1553c03d3a2c8e02399550dd6ea8d65cec3ef23d2e", "merkleRoot": "0000000000000000000000000000000000000000000000000000000000000001", "time": 1417713337, "bits": 545259519, "nonce": 0 },
+        { "version": 536870912, "prevHash": "e9a145541846005482aa5daa6838d0ed6ac31df216549523ad9970e51fcf50b2", "merkleRoot": "0000000000000000000000000000000000000000000000000000000000000002", "time": 1417713487, "bits": 545259519, "nonce": 1 },
+        { "version": 536870912, "prevHash": "b73f7167f0ccfded49b6e0d8aa6a1ae45547ef873b336452cebc876e47692ef7", "merkleRoot": "0000000000000000000000000000000000000000000000000000000000000003", "time": 1417713637, "bits": 545259519, "nonce": 2 },
+      ]
+    },
+    // A first header without a previous hash or bits leaves them zero.
+    {
+      "raw": "0210000000200100000000000000000000000000000000000000000000000000000000000000b996805400000000010200000000000000000000000000000000000000000000000000000000000000960001000000",
+      "headers": [
+        { "version": 536870912, "prevHash": "0000000000000000000000000000000000000000000000000000000000000000", "merkleRoot": "0000000000000000000000000000000000000000000000000000000000000001", "time": 1417713337, "bits": 0, "nonce": 0 },
+        { "version": 536870912, "prevHash": "2bdec97fb2bc0813a68117fb053380afd022a74cb83c7a031144e6b1754804fe", "merkleRoot": "0000000000000000000000000000000000000000000000000000000000000002", "time": 1417713487, "bits": 0, "nonce": 1 },
+      ]
+    },
+    // Times wrap around past the largest and below zero.
+    {
+      "raw": "0438000000202e3df23eec5cd6a86edd509539028e2c3a3dc05315eb28f2baa43218ca080000010000000000000000000000000000000000000000000000000000000000000005000000ffff7f2000000000010200000000000000000000000000000000000000000000000000000000000000f6ff01000000310300000000000000000000000000000000000000000000000000000000000000ffffffffffff7f2002000000010400000000000000000000000000000000000000000000000000000000000000010003000000",
+      "headers": [
+        { "version": 536870912, "prevHash": "000008ca1832a4baf228eb1553c03d3a2c8e02399550dd6ea8d65cec3ef23d2e", "merkleRoot": "0000000000000000000000000000000000000000000000000000000000000001", "time": 5, "bits": 545259519, "nonce": 0 },
+        { "version": 536870912, "prevHash": "ef1830a81a67396048e72621a0e5cdfaf49d9ea2b2d2095a47121d56f629f360", "merkleRoot": "0000000000000000000000000000000000000000000000000000000000000002", "time": 4294967291, "bits": 545259519, "nonce": 1 },
+        { "version": 536870912, "prevHash": "a969c344dee043b417a96ff3b5797457400a065f39e37f63ab2bdb139bbf69ad", "merkleRoot": "0000000000000000000000000000000000000000000000000000000000000003", "time": 4294967295, "bits": 545259519, "nonce": 2 },
+        { "version": 536870912, "prevHash": "81b6652c0a1970a1e3e833a7e4212676a1facae57ba40323478fd3cfb425e275", "merkleRoot": "0000000000000000000000000000000000000000000000000000000000000004", "time": 0, "bits": 545259519, "nonce": 3 },
+      ]
+    },
+    // Eight versions in a row drop the first, so offset 7 picks the second.
+    {
+      "raw": "0a38000000202e3df23eec5cd6a86edd509539028e2c3a3dc05315eb28f2baa43218ca0800000100000000000000000000000000000000000000000000000000000000000000b9968054ffff7f200000000000010000200200000000000000000000000000000000000000000000000000000000000000010001000000000200002003000000000000000000000000000000000000000000000000000000000000000100020000000003000020040000000000000000000000000000000000000000000000000000000000000001000300000000040000200500000000000000000000000000000000000000000000000000000000000000010004000000000500002006000000000000000000000000000000000000000000000000000000000000000100050000000006000020070000000000000000000000000000000000000000000000000000000000000001000600000000070000200800000000000000000000000000000000000000000000000000000000000000010007000000070900000000000000000000000000000000000000000000000000000000000000010008000000010a00000000000000000000000000000000000000000000000000000000000000010009000000",
+      "headers": [
+        { "version": 536870912, "prevHash": "000008ca1832a4baf228eb1553c03d3a2c8e02399550dd6ea8d65cec3ef23d2e", "merkleRoot": "0000000000000000000000000000000000000000000000000000000000000001", "time": 1417713337, "bits": 545259519, "nonce": 0 },
+        { "version": 536870913, "prevHash": "e9a145541846005482aa5daa6838d0ed6ac31df216549523ad9970e51fcf50b2", "merkleRoot": "0000000000000000000000000000000000000000000000000000000000000002", "time": 1417713338, "bits": 545259519, "nonce": 1 },
+        { "version": 536870914, "prevHash": "c4acb0c4333f0457c05db8a51a8f5c78c291eb53e119b9521888624ceced8f1b", "merkleRoot": "0000000000000000000000000000000000000000000000000000000000000003", "time": 1417713339, "bits": 545259519, "nonce": 2 },
+        { "version": 536870915, "prevHash": "5dfc7e289b55b51e099fa4e127a492f387d4d56f2d34d5923c7042de9e839707", "merkleRoot": "0000000000000000000000000000000000000000000000000000000000000004", "time": 1417713340, "bits": 545259519, "nonce": 3 },
+        { "version": 536870916, "prevHash": "a0d3b460271b1f8f59a15c8ceee188b9105ec1105d1c82017948cc497be69b91", "merkleRoot": "0000000000000000000000000000000000000000000000000000000000000005", "time": 1417713341, "bits": 545259519, "nonce": 4 },
+        { "version": 536870917, "prevHash": "6898877d2f97cda4d3d13b9bf5fb4946ca0abd250795c96c6e08af683bd0e7d6", "merkleRoot": "0000000000000000000000000000000000000000000000000000000000000006", "time": 1417713342, "bits": 545259519, "nonce": 5 },
+        { "version": 536870918, "prevHash": "d98fea0ad01bcbfd7ffebc82aa6a4ebd930bf80c226b9a9fa4fee14034201ed1", "merkleRoot": "0000000000000000000000000000000000000000000000000000000000000007", "time": 1417713343, "bits": 545259519, "nonce": 6 },
+        { "version": 536870919, "prevHash": "5d2b449dcdf85343cd7385316e4150cde98328ee72c67f5da8538de5a91a6ee7", "merkleRoot": "0000000000000000000000000000000000000000000000000000000000000008", "time": 1417713344, "bits": 545259519, "nonce": 7 },
+        { "version": 536870913, "prevHash": "f436461da8138860690352401746b1a544ae6d0d697432ab656d782869f80736", "merkleRoot": "0000000000000000000000000000000000000000000000000000000000000009", "time": 1417713345, "bits": 545259519, "nonce": 8 },
+        { "version": 536870913, "prevHash": "2b52618a4758b5ba87081ab910aa1021af637d9a79225413b8eed1e5cc7d0ccb", "merkleRoot": "000000000000000000000000000000000000000000000000000000000000000a", "time": 1417713346, "bits": 545259519, "nonce": 9 },
+      ]
+    },
+  ],
 }
