@@ -81,7 +81,12 @@ impl BlsElem<G1, BLS_PK_LEN> {
         scalar.b.zeroize();
         Self::group(product, Coord::Basic)
       }
-      BlsArith::Relic(e) => Self(BlsArith::Relic(e.mul(&Bn::from_bendian(k)))),
+      BlsArith::Relic(e) => {
+        let mut k = Bn::from_bendian(k);
+        let product = e.mul(&k);
+        k.wipe();
+        Self(BlsArith::Relic(product))
+      }
     }
   }
 
