@@ -38,6 +38,15 @@ static std::string Rate(double rate)
     }
 }
 
+static std::string List(const std::vector<std::string>& items)
+{
+    std::string list;
+    for (const std::string& item : items) {
+        list += (list.empty() ? "" : ", ") + Quoted(item);
+    }
+    return "[" + list + "]";
+}
+
 static std::string LLMQName(Consensus::LLMQType type)
 {
     for (const auto& llmq : Consensus::available_llmqs) {
@@ -133,6 +142,7 @@ BOOST_AUTO_TEST_CASE(chain_params)
         PrintField(3, "prune_after_height", params->PruneAfterHeight());
         PrintField(3, "assumed_blockchain_size_gb", params->AssumedBlockchainSize());
         PrintField(3, "assumed_chain_state_size_gb", params->AssumedChainStateSize());
+        PrintField(3, "dns_seeds", List(params->DNSSeeds()));
         std::printf("      \"addr_params\": {\n");
         PrintField(4, "pubkey_addr", Quoted(HexStr(params->Base58Prefix(CChainParams::PUBKEY_ADDRESS))));
         PrintField(4, "script_addr", Quoted(HexStr(params->Base58Prefix(CChainParams::SCRIPT_ADDRESS))));
@@ -242,6 +252,7 @@ BOOST_AUTO_TEST_CASE(chain_params)
       "prune_after_height": 100000,
       "assumed_blockchain_size_gb": 57,
       "assumed_chain_state_size_gb": 1,
+      "dns_seeds": ["dnsseed.dash.org."],
       "addr_params": {
         "pubkey_addr": "4c",
         "script_addr": "10",
@@ -379,6 +390,7 @@ BOOST_AUTO_TEST_CASE(chain_params)
       "prune_after_height": 1000,
       "assumed_blockchain_size_gb": 10,
       "assumed_chain_state_size_gb": 1,
+      "dns_seeds": ["testnet-seed.dashdot.io."],
       "addr_params": {
         "pubkey_addr": "8c",
         "script_addr": "13",
@@ -496,6 +508,7 @@ BOOST_AUTO_TEST_CASE(chain_params)
       "prune_after_height": 1000,
       "assumed_blockchain_size_gb": 0,
       "assumed_chain_state_size_gb": 0,
+      "dns_seeds": ["dummySeed.invalid."],
       "addr_params": {
         "pubkey_addr": "8c",
         "script_addr": "13",

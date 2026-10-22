@@ -154,7 +154,7 @@ pub static PARAMS: ChainParams = ChainParams {
   prune_after_height: 1000,
   assumed_blockchain_size_gb: 0,
   assumed_chain_state_size_gb: 0,
-  dns_seeds: &[],
+  dns_seeds: &["dummySeed.invalid."],
   addr_params: dash_script::__private::params::REGTEST,
   network_id: "regtest",
   is_test_chain: true,
