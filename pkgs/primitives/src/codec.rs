@@ -6,8 +6,37 @@
 
 //! Codec helpers for primitives payload types.
 
+use crate::prelude::*;
+
+use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
+
 /// Maximum special-transaction payload size over the wire (10 KiB).
 pub const MAX_SPTX_PAYLOAD_SIZE: usize = 10_240;
+
+/// Reads `count` values written back to back.
+pub(crate) fn decode_items<T: BaseCodec>(data: &mut &[u8], count: u8) -> Result<Vec<T>, DecodeError> {
+  (0..count).map(|_| T::decode(data)).collect()
+}
+
+/// Reads a list whose length is a single byte.
+pub(crate) fn decode_list<T: BaseCodec>(data: &mut &[u8]) -> Result<Vec<T>, DecodeError> {
+  let count = u8::decode(data)?;
+  decode_items(data, count)
+}
+
+/// Writes values back to back.
+pub(crate) fn encode_items<T: BaseCodec>(items: &[T], buf: &mut impl EncodeBuf) {
+  for item in items {
+    item.encode(buf);
+  }
+}
+
+/// Writes a list whose length is a single byte, which wraps past 255 as the
+/// reference implementation's does.
+pub(crate) fn encode_list<T: BaseCodec>(items: &[T], buf: &mut impl EncodeBuf) {
+  (items.len() as u8).encode(buf);
+  encode_items(items, buf);
+}
 
 /// Blanket `Hashable<Hash = Hash256>` via SHA256d of wire encoding.
 ///

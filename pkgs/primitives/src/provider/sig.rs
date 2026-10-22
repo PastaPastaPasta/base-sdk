@@ -19,11 +19,13 @@ use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 #[cfg(feature = "serde")]
 use dash_types::serialize::hex as serde_hex;
 use dash_types::type_id::TypeId;
-use dash_types::{make_bytes, CompactSize, Hashable, Numeric};
+use dash_types::{dlgt_codec, make_bytes, type_cvrt, CompactSize, Hashable, Numeric};
 #[cfg(feature = "serde")]
 use serde::de::Error as _;
 #[cfg(feature = "serde")]
 use serde::{Deserializer, Serializer};
+
+use core::convert::Infallible;
 
 make_bytes! {
   /// Compact recoverable ECDSA signature, written without a length.
@@ -203,6 +205,39 @@ impl Default for OperatorSig {
   fn default() -> Self {
     Self(BlsSigBytes::from_bytes([0; BLS_SIG_LEN]))
   }
+}
+
+/// Declares a compact signature that names what it signs and delegates its
+/// codec to [`EcdsaRecSigArray`].
+macro_rules! rec_sig {
+  ($(#[$attr:meta])* $name:ident) => {
+    $(#[$attr])*
+    #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, TypeId)]
+    #[cfg_attr(
+      feature = "serde",
+      derive(::serde::Serialize, ::serde::Deserialize),
+      serde(transparent)
+    )]
+    pub struct $name(EcdsaRecSigArray);
+
+    dlgt_codec!($name => EcdsaRecSigArray, Hash256, Infallible, ECDSA_REC_SIG_LEN);
+
+    type_cvrt!(From<EcdsaRecSigArray> for $name, |sig| Self(*sig));
+
+    type_cvrt!(From<$name> for EcdsaRecSigArray, |sig| sig.0);
+
+    impl $name {
+      /// Borrows the signature bytes.
+      pub fn as_bytes(&self) -> &[u8; ECDSA_REC_SIG_LEN] {
+        self.0.as_bytes()
+      }
+    }
+  };
+}
+
+rec_sig! {
+  /// Consent of a collateral share owner to a shared registration.
+  JoinSig
 }
 
 #[cfg(test)]

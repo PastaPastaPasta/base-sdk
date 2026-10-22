@@ -6,28 +6,29 @@
 
 //! ProUpRegTx registrar-update payload (type 3).
 
-use super::{OwnerSig, ProTxVersion};
-use crate::codec::codec_payload;
+use super::{OwnerSig, PayoutShare, ProTxVersion};
+use crate::codec::{decode_list, encode_list, impl_payload};
 use crate::prelude::*;
 use crate::sign::{unsigned_digest, verify_compact};
 use crate::sptx::{InputsHash, ProTxInvalid};
-use crate::TxHash;
+use crate::{hash_impl, TxHash};
 
 use bitcoin_primitives::script::ScriptPubKeyBuf;
 use dash_pkc::bls::BlsPkBytes;
 use dash_pkc::ecdsa::{EcdsaError, ECDSA_REC_SIG_LEN};
 use dash_script::{PubKeyHash, Recipient};
+use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
 use dash_types::{Checkable, Signable};
 use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
-codec_payload! { @no_new
 /// ProUpRegTx -- update MN keys/payout (type 3).
 ///
 /// - v1: LegacyBLS
 /// - v2: BasicBLS
+/// - v3: ExtAddr (owner payouts)
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
@@ -47,9 +48,12 @@ pub struct ProUpRegTx {
   /// Voting key id (20 bytes).
   #[getset(get_copy = "pub")]
   key_id_voting: PubKeyHash,
-  /// Payout script.
+  /// Payout script (version < 3 only).
   #[getset(get = "pub")]
   script_payout: ScriptPubKeyBuf,
+  /// Owner payouts (version 3).
+  #[getset(get = "pub")]
+  payouts: Vec<PayoutShare>,
   /// Hash of all inputs.
   #[getset(get_copy = "pub")]
   inputs_hash: InputsHash,
@@ -58,6 +62,49 @@ pub struct ProUpRegTx {
   #[getset(get = "pub")]
   sig: OwnerSig,
 }
+
+impl_payload!(ProUpRegTx);
+
+impl BaseCodec for ProUpRegTx {
+  fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
+    let version = ProTxVersion::decode(data)?;
+    let pro_tx_hash = TxHash::decode(data)?;
+    let mode = u16::decode(data)?;
+    let pub_key_operator = BlsPkBytes::decode(data)?;
+    let key_id_voting = PubKeyHash::decode(data)?;
+    let (script_payout, payouts) = if version >= ProTxVersion::ExtAddr {
+      (ScriptPubKeyBuf::new(), decode_list(data)?)
+    } else {
+      (ScriptPubKeyBuf::decode(data)?, Vec::new())
+    };
+
+    Ok(Self {
+      version,
+      pro_tx_hash,
+      mode,
+      pub_key_operator,
+      key_id_voting,
+      script_payout,
+      payouts,
+      inputs_hash: InputsHash::decode(data)?,
+      sig: OwnerSig::decode(data)?,
+    })
+  }
+
+  fn encode(&self, buf: &mut impl EncodeBuf) {
+    self.version.encode(buf);
+    self.pro_tx_hash.encode(buf);
+    self.mode.encode(buf);
+    self.pub_key_operator.encode(buf);
+    self.key_id_voting.encode(buf);
+    if self.version >= ProTxVersion::ExtAddr {
+      encode_list(&self.payouts, buf);
+    } else {
+      self.script_payout.encode(buf);
+    }
+    self.inputs_hash.encode(buf);
+    self.sig.encode(buf);
+  }
 }
 
 impl Signable for ProUpRegTx {
@@ -113,6 +160,8 @@ impl Checkable for ProUpRegTx {
   }
 }
 
+hash_impl!(ProUpRegTx);
+
 impl ProUpRegTx {
   /// Constructs an unsigned payload. The signature is set through
   /// [`Signable::set_signature`].
@@ -123,6 +172,7 @@ impl ProUpRegTx {
     pub_key_operator: BlsPkBytes,
     key_id_voting: PubKeyHash,
     script_payout: ScriptPubKeyBuf,
+    payouts: Vec<PayoutShare>,
     inputs_hash: InputsHash,
   ) -> Self {
     Self {
@@ -132,6 +182,7 @@ impl ProUpRegTx {
       pub_key_operator,
       key_id_voting,
       script_payout,
+      payouts,
       inputs_hash,
       sig: OwnerSig::default(),
     }
