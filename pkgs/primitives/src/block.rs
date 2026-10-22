@@ -254,7 +254,7 @@ impl From<&GenesisParams> for Block {
         0xFFFF_FFFF,
       )],
       vec![TxOut::new(
-        params.reward,
+        params.reward.to_signed(),
         ScriptPubKeyBuf::from_bytes(params.script_pubkey.to_vec()),
       )],
       0,
@@ -285,7 +285,7 @@ mod tests {
   use crate::transaction::{OutPoint, TxIn, TxOut};
 
   use bitcoin_primitives::script::{ScriptPubKeyBuf, ScriptSigBuf};
-  use bitcoin_units::Amount;
+  use bitcoin_units::SignedAmount;
   use dash_dev::{assert_serde_rt, check_wire, Corpus};
   use dash_script::Opcode;
   use rstest::rstest;
@@ -332,7 +332,7 @@ mod tests {
         TxType::Spend,
         inputs.collect(),
         vec![TxOut::new(
-          Amount::from_sat(1).unwrap(),
+          SignedAmount::from_sat(1).unwrap(),
           ScriptPubKeyBuf::from_bytes(script),
         )],
         self.lock_time,
