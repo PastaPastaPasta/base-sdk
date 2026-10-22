@@ -8,6 +8,8 @@ export RUSTDOCFLAGS := "-D warnings"
 
 mod fuzz "fuzz/mod.just"
 
+import "bazel/mod.just"
+
 each := "cargo hack --workspace --exclude-features default --each-feature"
 powerset := "cargo hack --workspace --exclude-features default --feature-powerset"
 
