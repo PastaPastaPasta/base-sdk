@@ -31,7 +31,9 @@ hex-conservative = { workspace = true }
 
 [dev-dependencies]
 bitcoin-consensus-encoding = { workspace = true, features = ["alloc"] }
+dash-dev = { version = "0.0.0", path = "../../meta/dev", features = ["full"] }
 rstest = { workspace = true }
+serde = { workspace = true, features = ["derive", "std"] }
 
 [lints]
 workspace = true

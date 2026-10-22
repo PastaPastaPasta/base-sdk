@@ -470,12 +470,14 @@ dependencies = [
  "bitcoin-consensus-encoding",
  "bitcoin-primitives",
  "bitcoin-units",
+ "dash-dev",
  "dash-num",
  "dash-primitives",
  "dash-script",
  "dash-types",
  "hex-conservative",
  "rstest",
+ "serde",
 ]
 
 [[package]]

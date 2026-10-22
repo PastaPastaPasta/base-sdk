@@ -1,0 +1,416 @@
+//
+// Chain parameter vectors. Generated with the reference implementation
+// (dashpay/dash v24.0.0-rc.3, 0364ed626e).
+//
+// Each section comes with the program used to generate the vectors.
+//
+// To run a program, paste it at the end of the `llmq_params_tests` suite in
+// `src/test/llmq_params_tests.cpp` at the specified revision, build it with
+// `make -C src test/test_dash` and run
+// `./src/test/test_dash --run_test=llmq_params_tests/<name>`. The output
+// should match the section.
+//
+
+{
+/*
+static void PrintField(int depth, const std::string& key, const std::string& value)
+{
+    std::printf("%*s\"%s\": %s,\n", 2 * depth, "", key.c_str(), value.c_str());
+}
+
+static void PrintField(int depth, const std::string& key, int64_t value)
+{
+    PrintField(depth, key, strprintf("%d", value));
+}
+
+static std::string Quoted(const std::string& text) { return "\"" + text + "\""; }
+
+static std::string Flag(bool flag) { return flag ? "true" : "false"; }
+
+static std::string Pair(int height, const uint256& hash) { return strprintf("[%d, \"%s\"]", height, hash.GetHex()); }
+
+static std::string LLMQName(Consensus::LLMQType type)
+{
+    for (const auto& llmq : Consensus::available_llmqs) {
+        if (llmq.type == type) return Quoted(std::string{llmq.name});
+    }
+    return Quoted("none");
+}
+
+static void PrintDeployment(const std::string& name, const Consensus::BIP9Deployment& dep)
+{
+    std::printf("          \"%s\": {\n", name.c_str());
+    PrintField(6, "bit", dep.bit);
+    PrintField(6, "start_time", dep.nStartTime);
+    PrintField(6, "timeout", dep.nTimeout);
+    PrintField(6, "min_activation_height", dep.min_activation_height);
+    PrintField(6, "window_size", dep.nWindowSize);
+    PrintField(6, "threshold_start", dep.nThresholdStart);
+    PrintField(6, "threshold_min", dep.nThresholdMin);
+    PrintField(6, "falloff_coeff", dep.nFalloffCoeff);
+    PrintField(6, "use_ehf", Flag(dep.useEHF));
+    std::printf("          },\n");
+}
+
+BOOST_AUTO_TEST_CASE(chain_params)
+{
+    for (const std::string& chain : {CBaseChainParams::MAIN, CBaseChainParams::TESTNET, CBaseChainParams::REGTEST}) {
+        const auto params{CreateChainParams(ArgsManager{}, chain)};
+        const auto base{CreateBaseChainParams(chain)};
+        const Consensus::Params& consensus{params->GetConsensus()};
+        std::printf("    {\n");
+        PrintField(3, "network_id", Quoted(params->NetworkIDString()));
+        std::printf("      \"consensus\": {\n");
+        PrintField(4, "hash_genesis_block", Quoted(consensus.hashGenesisBlock.GetHex()));
+        PrintField(4, "subsidy_halving_interval", consensus.nSubsidyHalvingInterval);
+        PrintField(4, "masternode_payments_start_block", consensus.nMasternodePaymentsStartBlock);
+        PrintField(4, "masternode_payments_increase_block", consensus.nMasternodePaymentsIncreaseBlock);
+        PrintField(4, "masternode_payments_increase_period", consensus.nMasternodePaymentsIncreasePeriod);
+        PrintField(4, "instant_send_confirmations_required", consensus.nInstantSendConfirmationsRequired);
+        PrintField(4, "instant_send_keep_lock", consensus.nInstantSendKeepLock);
+        PrintField(4, "budget_payments_start_block", consensus.nBudgetPaymentsStartBlock);
+        PrintField(4, "budget_payments_cycle_blocks", consensus.nBudgetPaymentsCycleBlocks);
+        PrintField(4, "budget_payments_window_blocks", consensus.nBudgetPaymentsWindowBlocks);
+        PrintField(4, "superblock_start", Pair(consensus.nSuperblockStartBlock, consensus.nSuperblockStartHash));
+        PrintField(4, "superblock_cycle", consensus.nSuperblockCycle);
+        PrintField(4, "superblock_maturity_window", consensus.nSuperblockMaturityWindow);
+        PrintField(4, "governance_min_quorum", consensus.nGovernanceMinQuorum);
+        PrintField(4, "governance_filter_elements", consensus.nGovernanceFilterElements);
+        PrintField(4, "masternode_minimum_confirmations", consensus.nMasternodeMinimumConfirmations);
+        PrintField(4, "bip34", Pair(consensus.BIP34Height, consensus.BIP34Hash));
+        PrintField(4, "bip65_height", consensus.BIP65Height);
+        PrintField(4, "bip66_height", consensus.BIP66Height);
+        PrintField(4, "bip147_height", consensus.BIP147Height);
+        PrintField(4, "csv_height", consensus.CSVHeight);
+        PrintField(4, "dip0001_height", consensus.DIP0001Height);
+        PrintField(4, "dip0003_height", consensus.DIP0003Height);
+        PrintField(4, "dip0003_enforcement",
+                   Pair(consensus.DIP0003EnforcementHeight, consensus.DIP0003EnforcementHash));
+        PrintField(4, "dip0008_height", consensus.DIP0008Height);
+        PrintField(4, "brr_height", consensus.BRRHeight);
+        PrintField(4, "dip0020_height", consensus.DIP0020Height);
+        PrintField(4, "dip0024_height", consensus.DIP0024Height);
+        PrintField(4, "dip0024_quorums_height", consensus.DIP0024QuorumsHeight);
+        PrintField(4, "v19_height", consensus.V19Height);
+        PrintField(4, "v20_height", consensus.V20Height);
+        PrintField(4, "mn_rr_height", consensus.MN_RRHeight);
+        PrintField(4, "withdrawals_height", consensus.WithdrawalsHeight);
+        PrintField(4, "min_bip9_warning_height", consensus.MinBIP9WarningHeight);
+        PrintField(4, "rule_change_activation_threshold", consensus.nRuleChangeActivationThreshold);
+        PrintField(4, "miner_confirmation_window", consensus.nMinerConfirmationWindow);
+        std::printf("        \"deployments\": {\n");
+        PrintDeployment("test_dummy", consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY]);
+        std::printf("        },\n");
+        PrintField(4, "pow_limit", Quoted(consensus.powLimit.GetHex()));
+        PrintField(4, "pow_allow_min_difficulty_blocks", Flag(consensus.fPowAllowMinDifficultyBlocks));
+        PrintField(4, "pow_no_retargeting", Flag(consensus.fPowNoRetargeting));
+        PrintField(4, "pow_target_spacing", consensus.nPowTargetSpacing);
+        PrintField(4, "pow_target_timespan", consensus.nPowTargetTimespan);
+        PrintField(4, "pow_kgw_height", consensus.nPowKGWHeight);
+        PrintField(4, "pow_dgw_height", consensus.nPowDGWHeight);
+        PrintField(4, "llmq_type_chain_locks", LLMQName(consensus.llmqTypeChainLocks));
+        PrintField(4, "llmq_type_dip0024_instant_send", LLMQName(consensus.llmqTypeDIP0024InstantSend));
+        PrintField(4, "llmq_type_platform", LLMQName(consensus.llmqTypePlatform));
+        PrintField(4, "llmq_type_mnhf", LLMQName(consensus.llmqTypeMnhf));
+        std::printf("      },\n");
+        PrintField(3, "message_start", Quoted(HexStr(params->MessageStart())));
+        PrintField(3, "default_port", params->GetDefaultPort());
+        PrintField(3, "default_platform_p2p_port", params->GetDefaultPlatformP2PPort());
+        PrintField(3, "default_platform_http_port", params->GetDefaultPlatformHTTPPort());
+        PrintField(3, "rpc_port", base->RPCPort());
+        PrintField(3, "onion_service_target_port", base->OnionServiceTargetPort());
+        PrintField(3, "prune_after_height", params->PruneAfterHeight());
+        PrintField(3, "assumed_blockchain_size_gb", params->AssumedBlockchainSize());
+        PrintField(3, "assumed_chain_state_size_gb", params->AssumedChainStateSize());
+        std::printf("      \"addr_params\": {\n");
+        PrintField(4, "pubkey_addr", Quoted(HexStr(params->Base58Prefix(CChainParams::PUBKEY_ADDRESS))));
+        PrintField(4, "script_addr", Quoted(HexStr(params->Base58Prefix(CChainParams::SCRIPT_ADDRESS))));
+        PrintField(4, "secret_key", Quoted(HexStr(params->Base58Prefix(CChainParams::SECRET_KEY))));
+        PrintField(4, "ext_pubkey", Quoted(HexStr(params->Base58Prefix(CChainParams::EXT_PUBLIC_KEY))));
+        PrintField(4, "ext_secret", Quoted(HexStr(params->Base58Prefix(CChainParams::EXT_SECRET_KEY))));
+        PrintField(4, "bip44_idx", params->ExtCoinType());
+        std::printf("      },\n");
+        PrintField(3, "is_test_chain", Flag(params->IsTestChain()));
+        PrintField(3, "default_consistency_checks", Flag(params->DefaultConsistencyChecks()));
+        PrintField(3, "is_mockable_chain", Flag(params->IsMockableChain()));
+        PrintField(3, "pool_min_participants", params->PoolMinParticipants());
+        PrintField(3, "pool_max_participants", params->PoolMaxParticipants());
+        PrintField(3, "credit_pool_period_blocks", params->CreditPoolPeriodBlocks());
+        std::printf("    },\n");
+    }
+}
+*/
+  // Each vector holds the parameters of one chain, as the reference
+  // implementation builds them without options. Hashes and 256-bit numbers
+  // are big-endian hex, each pair holds a height and a block hash, LLMQ types
+  // are named, and address prefixes are hex.
+  "chains": [
+    // Mainnet, the production network.
+    {
+      "network_id": "main",
+      "consensus": {
+        "hash_genesis_block": "00000ffd590b1485b3caadc19b22e6379c733355108f107a430458cdf3407ab6",
+        "subsidy_halving_interval": 210240,
+        "masternode_payments_start_block": 100000,
+        "masternode_payments_increase_block": 158000,
+        "masternode_payments_increase_period": 17280,
+        "instant_send_confirmations_required": 6,
+        "instant_send_keep_lock": 24,
+        "budget_payments_start_block": 328008,
+        "budget_payments_cycle_blocks": 16616,
+        "budget_payments_window_blocks": 100,
+        "superblock_start": [614820, "0000000000020cb27c7ef164d21003d5d20cdca2f54dd9a9ca6d45f4d47f8aa3"],
+        "superblock_cycle": 16616,
+        "superblock_maturity_window": 1662,
+        "governance_min_quorum": 10,
+        "governance_filter_elements": 20000,
+        "masternode_minimum_confirmations": 15,
+        "bip34": [951, "000001f35e70f7c5705f64c6c5cc3dea9449e74d5b5c7cf74dad1bcca14a8012"],
+        "bip65_height": 619382,
+        "bip66_height": 245817,
+        "bip147_height": 939456,
+        "csv_height": 622944,
+        "dip0001_height": 782208,
+        "dip0003_height": 1028160,
+        "dip0003_enforcement": [1047200, "000000000000002d1734087b4c5afc3133e4e1c3e1a89218f62bcd9bb3d17f81"],
+        "dip0008_height": 1088640,
+        "brr_height": 1374912,
+        "dip0020_height": 1516032,
+        "dip0024_height": 1737792,
+        "dip0024_quorums_height": 1738698,
+        "v19_height": 1899072,
+        "v20_height": 1987776,
+        "mn_rr_height": 2128896,
+        "withdrawals_height": 2201472,
+        "min_bip9_warning_height": 2203488,
+        "rule_change_activation_threshold": 1815,
+        "miner_confirmation_window": 2016,
+        "deployments": {
+          "test_dummy": {
+            "bit": 28,
+            "start_time": -2,
+            "timeout": 9223372036854775807,
+            "min_activation_height": 0,
+            "window_size": 0,
+            "threshold_start": 0,
+            "threshold_min": 0,
+            "falloff_coeff": 0,
+            "use_ehf": false,
+          },
+        },
+        "pow_limit": "00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "pow_allow_min_difficulty_blocks": false,
+        "pow_no_retargeting": false,
+        "pow_target_spacing": 150,
+        "pow_target_timespan": 86400,
+        "pow_kgw_height": 15200,
+        "pow_dgw_height": 34140,
+        "llmq_type_chain_locks": "llmq_400_60",
+        "llmq_type_dip0024_instant_send": "llmq_60_75",
+        "llmq_type_platform": "llmq_100_67",
+        "llmq_type_mnhf": "llmq_400_85",
+      },
+      "message_start": "bf0c6bbd",
+      "default_port": 9999,
+      "default_platform_p2p_port": 26656,
+      "default_platform_http_port": 443,
+      "rpc_port": 9998,
+      "onion_service_target_port": 9996,
+      "prune_after_height": 100000,
+      "assumed_blockchain_size_gb": 57,
+      "assumed_chain_state_size_gb": 1,
+      "addr_params": {
+        "pubkey_addr": "4c",
+        "script_addr": "10",
+        "secret_key": "cc",
+        "ext_pubkey": "0488b21e",
+        "ext_secret": "0488ade4",
+        "bip44_idx": 5,
+      },
+      "is_test_chain": false,
+      "default_consistency_checks": false,
+      "is_mockable_chain": false,
+      "pool_min_participants": 3,
+      "pool_max_participants": 20,
+      "credit_pool_period_blocks": 576,
+    },
+    // Testnet, the public test network.
+    {
+      "network_id": "test",
+      "consensus": {
+        "hash_genesis_block": "00000bafbc94add76cb75e2ec92894837288a481e5c005f6563d91623bf8bc2c",
+        "subsidy_halving_interval": 210240,
+        "masternode_payments_start_block": 4010,
+        "masternode_payments_increase_block": 4030,
+        "masternode_payments_increase_period": 10,
+        "instant_send_confirmations_required": 2,
+        "instant_send_keep_lock": 6,
+        "budget_payments_start_block": 4100,
+        "budget_payments_cycle_blocks": 50,
+        "budget_payments_window_blocks": 10,
+        "superblock_start": [4200, "0000000000000000000000000000000000000000000000000000000000000000"],
+        "superblock_cycle": 24,
+        "superblock_maturity_window": 8,
+        "governance_min_quorum": 1,
+        "governance_filter_elements": 500,
+        "masternode_minimum_confirmations": 1,
+        "bip34": [76, "000008ebb1db2598e897d17275285767717c6acfeac4c73def49fbea1ddcbcb6"],
+        "bip65_height": 2431,
+        "bip66_height": 2075,
+        "bip147_height": 4300,
+        "csv_height": 8064,
+        "dip0001_height": 5500,
+        "dip0003_height": 7000,
+        "dip0003_enforcement": [7300, "00000055ebc0e974ba3a3fb785c5ad4365a39637d4df168169ee80d313612f8f"],
+        "dip0008_height": 78800,
+        "brr_height": 387500,
+        "dip0020_height": 414100,
+        "dip0024_height": 769700,
+        "dip0024_quorums_height": 770730,
+        "v19_height": 850100,
+        "v20_height": 905100,
+        "mn_rr_height": 1066900,
+        "withdrawals_height": 1148500,
+        "min_bip9_warning_height": 1150516,
+        "rule_change_activation_threshold": 1512,
+        "miner_confirmation_window": 2016,
+        "deployments": {
+          "test_dummy": {
+            "bit": 28,
+            "start_time": -2,
+            "timeout": 9223372036854775807,
+            "min_activation_height": 0,
+            "window_size": 0,
+            "threshold_start": 0,
+            "threshold_min": 0,
+            "falloff_coeff": 0,
+            "use_ehf": false,
+          },
+        },
+        "pow_limit": "00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "pow_allow_min_difficulty_blocks": true,
+        "pow_no_retargeting": false,
+        "pow_target_spacing": 150,
+        "pow_target_timespan": 86400,
+        "pow_kgw_height": 4002,
+        "pow_dgw_height": 4002,
+        "llmq_type_chain_locks": "llmq_50_60",
+        "llmq_type_dip0024_instant_send": "llmq_60_75",
+        "llmq_type_platform": "llmq_25_67",
+        "llmq_type_mnhf": "llmq_50_60",
+      },
+      "message_start": "cee2caff",
+      "default_port": 19999,
+      "default_platform_p2p_port": 22000,
+      "default_platform_http_port": 22001,
+      "rpc_port": 19998,
+      "onion_service_target_port": 19996,
+      "prune_after_height": 1000,
+      "assumed_blockchain_size_gb": 10,
+      "assumed_chain_state_size_gb": 1,
+      "addr_params": {
+        "pubkey_addr": "8c",
+        "script_addr": "13",
+        "secret_key": "ef",
+        "ext_pubkey": "043587cf",
+        "ext_secret": "04358394",
+        "bip44_idx": 1,
+      },
+      "is_test_chain": true,
+      "default_consistency_checks": false,
+      "is_mockable_chain": false,
+      "pool_min_participants": 2,
+      "pool_max_participants": 20,
+      "credit_pool_period_blocks": 576,
+    },
+    // Regtest, the network for local regression tests.
+    {
+      "network_id": "regtest",
+      "consensus": {
+        "hash_genesis_block": "000008ca1832a4baf228eb1553c03d3a2c8e02399550dd6ea8d65cec3ef23d2e",
+        "subsidy_halving_interval": 150,
+        "masternode_payments_start_block": 240,
+        "masternode_payments_increase_block": 350,
+        "masternode_payments_increase_period": 10,
+        "instant_send_confirmations_required": 2,
+        "instant_send_keep_lock": 6,
+        "budget_payments_start_block": 1000,
+        "budget_payments_cycle_blocks": 50,
+        "budget_payments_window_blocks": 10,
+        "superblock_start": [1500, "0000000000000000000000000000000000000000000000000000000000000000"],
+        "superblock_cycle": 20,
+        "superblock_maturity_window": 10,
+        "governance_min_quorum": 1,
+        "governance_filter_elements": 100,
+        "masternode_minimum_confirmations": 1,
+        "bip34": [1, "0000000000000000000000000000000000000000000000000000000000000000"],
+        "bip65_height": 1,
+        "bip66_height": 1,
+        "bip147_height": 0,
+        "csv_height": 1,
+        "dip0001_height": 1,
+        "dip0003_height": 432,
+        "dip0003_enforcement": [500, "0000000000000000000000000000000000000000000000000000000000000000"],
+        "dip0008_height": 1,
+        "brr_height": 1,
+        "dip0020_height": 1,
+        "dip0024_height": 1,
+        "dip0024_quorums_height": 1,
+        "v19_height": 1,
+        "v20_height": 432,
+        "mn_rr_height": 432,
+        "withdrawals_height": 600,
+        "min_bip9_warning_height": 0,
+        "rule_change_activation_threshold": 108,
+        "miner_confirmation_window": 144,
+        "deployments": {
+          "test_dummy": {
+            "bit": 28,
+            "start_time": 0,
+            "timeout": 9223372036854775807,
+            "min_activation_height": 0,
+            "window_size": 0,
+            "threshold_start": 0,
+            "threshold_min": 0,
+            "falloff_coeff": 0,
+            "use_ehf": false,
+          },
+        },
+        "pow_limit": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "pow_allow_min_difficulty_blocks": true,
+        "pow_no_retargeting": true,
+        "pow_target_spacing": 150,
+        "pow_target_timespan": 86400,
+        "pow_kgw_height": 15200,
+        "pow_dgw_height": 34140,
+        "llmq_type_chain_locks": "llmq_test",
+        "llmq_type_dip0024_instant_send": "llmq_test_dip0024",
+        "llmq_type_platform": "llmq_test_platform",
+        "llmq_type_mnhf": "llmq_test",
+      },
+      "message_start": "fcc1b7dc",
+      "default_port": 19899,
+      "default_platform_p2p_port": 22200,
+      "default_platform_http_port": 22201,
+      "rpc_port": 19898,
+      "onion_service_target_port": 19896,
+      "prune_after_height": 1000,
+      "assumed_blockchain_size_gb": 0,
+      "assumed_chain_state_size_gb": 0,
+      "addr_params": {
+        "pubkey_addr": "8c",
+        "script_addr": "13",
+        "secret_key": "ef",
+        "ext_pubkey": "043587cf",
+        "ext_secret": "04358394",
+        "bip44_idx": 1,
+      },
+      "is_test_chain": true,
+      "default_consistency_checks": true,
+      "is_mockable_chain": true,
+      "pool_min_participants": 2,
+      "pool_max_participants": 20,
+      "credit_pool_period_blocks": 100,
+    },
+  ],
+}
