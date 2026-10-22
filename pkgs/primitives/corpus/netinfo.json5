@@ -1,0 +1,198 @@
+//
+// Network info read vectors. Generated with the reference implementation (dashpay/dash v24.0.0-rc.4, 0e7382df80).
+//
+// Each section comes with the program used to generate the vectors.
+//
+// To run a program, paste it at the end of the `evo_netinfo_tests` suite in `src/test/evo_netinfo_tests.cpp` at the specified revision, build it with `make -C src test/test_dash` and run `./src/test/test_dash --run_test=evo_netinfo_tests/<name>`. The output should match the section.
+//
+{
+/*
+BOOST_AUTO_TEST_CASE(netinfo_entry_reads)
+{
+    const auto long_domain = [](size_t len) {
+        std::string name;
+        for (size_t i = 0; i < len; ++i) name += i % 10 == 9 ? '.' : 'a';
+        CDataStream size(SER_NETWORK, CLIENT_VERSION);
+        WriteCompactSize(size, len);
+        return "02" + HexStr(size) + HexStr(name) + "01bb";
+    };
+    for (const std::string& hex : std::vector<std::string>{
+             "01" "01" "04" "01020304" "270f",
+             "01" "02" "10" "26064700470000000000000000001111" "270f",
+             "01" "04" "20" "79bcc625184b05194975c28b66b66b0469f7f6556fb1ac3189a79b40dda32f1f" "270f",
+             "01" "05" "20" "a2894dabaec08c0051a481a6dac88b64f98232ae42d4b6fd2fa81952dfe36a87" "0000",
+             "01" "06" "10" "fc000000000000000000000000000001" "270f",
+             "02" "0b" "6578616d706c652e636f6d" "01bb",
+             "02" "0a" "686f73742e6c6f63616c" "01bb",
+             "02" "0b" "6578616d706c652e636f6d" "0050",
+             long_domain(253),
+             long_domain(254),
+             "02" "0b" "6578616d706c65",
+             "02" "0b" "6578616d706c652e636f6d",
+             "",
+         }) {
+        const auto raw{ParseHex(hex)};
+        CDataStream ds(raw, SER_NETWORK, CLIENT_VERSION);
+        NetInfoEntry entry;
+        try {
+            ds >> entry;
+        } catch (const std::ios_base::failure&) {
+            std::printf("    { \"raw\": \"%s\", \"read\": null, \"written\": null, \"addr_port\": null },\n",
+                        hex.c_str());
+            continue;
+        }
+        CDataStream out(SER_NETWORK, CLIENT_VERSION);
+        out << entry;
+        std::printf("    { \"raw\": \"%s\", \"read\": %zu, \"written\": \"%s\", \"addr_port\": \"%s\" },\n",
+                    hex.c_str(), raw.size() - ds.size(), HexStr(out).c_str(), entry.ToStringAddrPort().c_str());
+    }
+}
+*/
+  // Each vector reads one entry from `raw`. `read` counts the bytes read, `written` is the entry written back and `addr_port` its address and port. Fields other than `raw` are null when the read fails.
+  "entry": [
+    // An IPv4 service.
+    { "raw": "01010401020304270f", "read": 9, "written": "01010401020304270f", "addr_port": "1.2.3.4:9999" },
+    // An IPv6 service.
+    { "raw": "01021026064700470000000000000000001111270f", "read": 21, "written": "01021026064700470000000000000000001111270f", "addr_port": "[2606:4700:4700::1111]:9999" },
+    // A TORv3 service.
+    { "raw": "01042079bcc625184b05194975c28b66b66b0469f7f6556fb1ac3189a79b40dda32f1f270f", "read": 37, "written": "01042079bcc625184b05194975c28b66b66b0469f7f6556fb1ac3189a79b40dda32f1f270f", "addr_port": "pg6mmjiyjmcrsslvykfwnntlaru7p5svn6y2ymmju6nubxndf4pscryd.onion:9999" },
+    // An I2P service, on port 0.
+    { "raw": "010520a2894dabaec08c0051a481a6dac88b64f98232ae42d4b6fd2fa81952dfe36a870000", "read": 37, "written": "010520a2894dabaec08c0051a481a6dac88b64f98232ae42d4b6fd2fa81952dfe36a870000", "addr_port": "ukeu3k5oycgaauneqgtnvselmt4yemvoilkln7jpvamvfx7dnkdq.b32.i2p:0" },
+    // A CJDNS service.
+    { "raw": "010610fc000000000000000000000000000001270f", "read": 21, "written": "010610fc000000000000000000000000000001270f", "addr_port": "[fc00::1]:9999" },
+    // A domain.
+    { "raw": "020b6578616d706c652e636f6d01bb", "read": 15, "written": "020b6578616d706c652e636f6d01bb", "addr_port": "example.com:443" },
+    // A reserved top-level domain is kept; only the check refuses it.
+    { "raw": "020a686f73742e6c6f63616c01bb", "read": 14, "written": "020a686f73742e6c6f63616c01bb", "addr_port": "host.local:443" },
+    // A domain on a privileged port is kept; only the check refuses it.
+    { "raw": "020b6578616d706c652e636f6d0050", "read": 15, "written": "020b6578616d706c652e636f6d0050", "addr_port": "example.com:80" },
+    // A domain of 253 bytes, the longest that is read.
+    { "raw": "02fdfd006161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e61616101bb", "read": 259, "written": "02fdfd006161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e61616101bb", "addr_port": "aaaaaaaaa.aaaaaaaaa.aaaaaaaaa.aaaaaaaaa.aaaaaaaaa.aaaaaaaaa.aaaaaaaaa.aaaaaaaaa.aaaaaaaaa.aaaaaaaaa.aaaaaaaaa.aaaaaaaaa.aaaaaaaaa.aaaaaaaaa.aaaaaaaaa.aaaaaaaaa.aaaaaaaaa.aaaaaaaaa.aaaaaaaaa.aaaaaaaaa.aaaaaaaaa.aaaaaaaaa.aaaaaaaaa.aaaaaaaaa.aaaaaaaaa.aaa:443" },
+    // A domain of 254 bytes is refused.
+    { "raw": "02fdfe006161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616101bb", "read": null, "written": null, "addr_port": null },
+    // A domain shorter than its length is refused.
+    { "raw": "020b6578616d706c65", "read": null, "written": null, "addr_port": null },
+    // A domain without its port is refused.
+    { "raw": "020b6578616d706c652e636f6d", "read": null, "written": null, "addr_port": null },
+    // An empty input is refused.
+    { "raw": "", "read": null, "written": null, "addr_port": null },
+  ],
+/*
+BOOST_AUTO_TEST_CASE(netinfo_legacy_reads)
+{
+    for (const std::string& hex : std::vector<std::string>{
+             "00000000000000000000ffff01020304" "270f",
+             "00000000000000000000000000000000" "0000",
+             "26064700470000000000000000001111" "270f",
+             "00000000000000000000ffff01020304" "0000",
+             "fc000000000000000000000000000001" "270f",
+             "00000000000000000000ffff01020304" "27",
+         }) {
+        const auto raw{ParseHex(hex)};
+        CDataStream ds(raw, SER_NETWORK, CLIENT_VERSION);
+        MnNetInfo info;
+        try {
+            ds >> info;
+        } catch (const std::ios_base::failure&) {
+            std::printf("    { \"raw\": \"%s\", \"read\": null, \"written\": null, \"entries\": null, \"empty\": null },\n",
+                        hex.c_str());
+            continue;
+        }
+        CDataStream out(SER_NETWORK, CLIENT_VERSION);
+        out << info;
+        std::string entries;
+        for (const auto& entry : info.GetEntries()) {
+            entries += strprintf("%s\"%s\"", entries.empty() ? "" : ", ", entry.ToStringAddrPort());
+        }
+        std::printf("    { \"raw\": \"%s\", \"read\": %zu, \"written\": \"%s\", \"entries\": [%s], \"empty\": %s },\n",
+                    hex.c_str(), raw.size() - ds.size(), HexStr(out).c_str(), entries.c_str(),
+                    info.IsEmpty() ? "true" : "false");
+    }
+}
+*/
+  // Each vector reads the network info of a provider payload before version 3 from `raw`. `read` counts the bytes read, `written` is the value written back, `entries` the address and port of its entry and `empty` whether the value is empty. Fields other than `raw` are null when the read fails.
+  "legacy": [
+    // An IPv4 service.
+    { "raw": "00000000000000000000ffff01020304270f", "read": 18, "written": "00000000000000000000ffff01020304270f", "entries": ["1.2.3.4:9999"], "empty": false },
+    // The unset service is empty.
+    { "raw": "000000000000000000000000000000000000", "read": 18, "written": "000000000000000000000000000000000000", "entries": [], "empty": true },
+    // An IPv6 service.
+    { "raw": "26064700470000000000000000001111270f", "read": 18, "written": "26064700470000000000000000001111270f", "entries": ["[2606:4700:4700::1111]:9999"], "empty": false },
+    // A valid address on port 0 is kept.
+    { "raw": "00000000000000000000ffff010203040000", "read": 18, "written": "00000000000000000000ffff010203040000", "entries": ["1.2.3.4:0"], "empty": false },
+    // An IPv6 address in fc00::/8 is valid in this format.
+    { "raw": "fc000000000000000000000000000001270f", "read": 18, "written": "fc000000000000000000000000000001270f", "entries": ["[fc00::1]:9999"], "empty": false },
+    // A service without its whole port is refused.
+    { "raw": "00000000000000000000ffff0102030427", "read": null, "written": null, "entries": null, "empty": null },
+  ],
+/*
+BOOST_AUTO_TEST_CASE(netinfo_extended_reads)
+{
+    const auto long_domain = [](size_t len) {
+        std::string name;
+        for (size_t i = 0; i < len; ++i) name += i % 10 == 9 ? '.' : 'a';
+        CDataStream size(SER_NETWORK, CLIENT_VERSION);
+        WriteCompactSize(size, len);
+        return "02" + HexStr(size) + HexStr(name) + "01bb";
+    };
+    for (const std::string& hex : std::vector<std::string>{
+             "01" "01" "00" "01" "01" "01" "04" "01020304" "270f",
+             "01" "03" "00" "01" "01" "01" "04" "01020304" "270f" "01" "01" "01" "01" "04" "01020304" "6820" "02" "01" "02" "0b" "6578616d706c652e636f6d" "01bb",
+             "01" "01" "00" "02" "01" "01" "04" "01020304" "270f" "01" "01" "04" "05060708" "270f",
+             "01" "01" "00" "05" "01" "01" "04" "01020304" "270f" "01" "01" "04" "05060708" "270f" "01" "01" "04" "090a0b0c" "270f" "01" "01" "04" "0d0e0f10" "270f" "01" "01" "04" "11121314" "270f",
+             "01" "00",
+             "01" "00" "ff",
+             "",
+             "01",
+             "01" "01" "00",
+             "01" "02" "00" "01" "01" "01" "04" "01020304" "270f",
+             "01" "01" "00" "01" + long_domain(254),
+         }) {
+        const auto raw{ParseHex(hex)};
+        CDataStream ds(raw, SER_NETWORK, CLIENT_VERSION);
+        ExtNetInfo info;
+        try {
+            ds >> info;
+        } catch (const std::ios_base::failure&) {
+            std::printf("    { \"raw\": \"%s\", \"read\": null, \"written\": null, \"entries\": null, \"empty\": null },\n",
+                        hex.c_str());
+            continue;
+        }
+        CDataStream out(SER_NETWORK, CLIENT_VERSION);
+        out << info;
+        std::string entries;
+        for (const auto& entry : info.GetEntries()) {
+            entries += strprintf("%s\"%s\"", entries.empty() ? "" : ", ", entry.ToStringAddrPort());
+        }
+        std::printf("    { \"raw\": \"%s\", \"read\": %zu, \"written\": \"%s\", \"entries\": [%s], \"empty\": %s },\n",
+                    hex.c_str(), raw.size() - ds.size(), HexStr(out).c_str(), entries.c_str(),
+                    info.IsEmpty() ? "true" : "false");
+    }
+}
+*/
+  // Each vector reads the network info of a version 3 provider payload from `raw`. `read` counts the bytes read, `written` is the value written back, `entries` the address and port of every entry, group by group, and `empty` whether the value is empty. Fields other than `raw` are null when the read fails.
+  "extended": [
+    // One core P2P group.
+    { "raw": "0101000101010401020304270f", "read": 13, "written": "0101000101010401020304270f", "entries": ["1.2.3.4:9999"], "empty": false },
+    // A group for each purpose, in purpose order.
+    { "raw": "0103000101010401020304270f01010101040102030468200201020b6578616d706c652e636f6d01bb", "read": 41, "written": "0103000101010401020304270f01010101040102030468200201020b6578616d706c652e636f6d01bb", "entries": ["1.2.3.4:9999", "1.2.3.4:26656", "example.com:443"], "empty": false },
+    // Two entries in one group.
+    { "raw": "0101000201010401020304270f01010405060708270f", "read": 22, "written": "0101000201010401020304270f01010405060708270f", "entries": ["1.2.3.4:9999", "5.6.7.8:9999"], "empty": false },
+    // Five entries in one group are read; the limit of 4 is a check.
+    { "raw": "0101000501010401020304270f01010405060708270f010104090a0b0c270f0101040d0e0f10270f01010411121314270f", "read": 49, "written": "0101000501010401020304270f01010405060708270f010104090a0b0c270f0101040d0e0f10270f01010411121314270f", "entries": ["1.2.3.4:9999", "5.6.7.8:9999", "9.10.11.12:9999", "13.14.15.16:9999", "17.18.19.20:9999"], "empty": false },
+    // No groups is empty.
+    { "raw": "0100", "read": 2, "written": "0100", "entries": [], "empty": true },
+    // The read stops after the last group.
+    { "raw": "0100ff", "read": 2, "written": "0100", "entries": [], "empty": true },
+    // An empty input is refused.
+    { "raw": "", "read": null, "written": null, "entries": null, "empty": null },
+    // A version without a group count is refused.
+    { "raw": "01", "read": null, "written": null, "entries": null, "empty": null },
+    // A group without an entry count is refused.
+    { "raw": "010100", "read": null, "written": null, "entries": null, "empty": null },
+    // A group count past the input is refused.
+    { "raw": "0102000101010401020304270f", "read": null, "written": null, "entries": null, "empty": null },
+    // A domain of 254 bytes refuses the whole value.
+    { "raw": "0101000102fdfe006161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616101bb", "read": null, "written": null, "entries": null, "empty": null },
+  ],
+}

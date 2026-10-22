@@ -622,10 +622,12 @@ mod tests {
   use super::*;
   use crate::types::{AddrV1, AddrV2};
 
+  use dash_dev::{vec_from_hex, Corpus};
   use dash_types::codec::BaseCodec;
   use dash_types::Checkable;
-  use hex_conservative::hex;
+  use hex_conservative::{hex, DisplayHex};
   use rstest::rstest;
+  use serde::Deserialize;
 
   #[rstest]
   #[case::ipv4(
@@ -1033,5 +1035,69 @@ mod tests {
     assert!(v2.has_entries(NIPurpose::CoreP2p));
     assert!(v2.stores_platform());
     assert!(v2.primary().is_some());
+  }
+
+  #[derive(Deserialize)]
+  struct EntryVector {
+    raw: String,
+    read: Option<usize>,
+    written: Option<String>,
+    addr_port: Option<String>,
+  }
+
+  #[derive(Deserialize)]
+  struct InfoVector {
+    raw: String,
+    read: Option<usize>,
+    written: Option<String>,
+    entries: Option<Vec<String>>,
+    empty: Option<bool>,
+  }
+
+  /// Reads a `T` from the hex `raw`, returning the bytes read, the value
+  /// written back as hex and the value, each `None` when the read fails.
+  fn read<T: BaseCodec>(raw: &str) -> (Option<usize>, Option<String>, Option<T>) {
+    let raw = vec_from_hex(raw);
+    let mut data = raw.as_slice();
+    let Ok(value) = T::decode(&mut data) else {
+      return (None, None, None);
+    };
+    let mut written = Vec::new();
+    value.encode(&mut written);
+    (
+      Some(raw.len() - data.len()),
+      Some(written.to_lower_hex_string()),
+      Some(value),
+    )
+  }
+
+  type InfoRead = (Option<usize>, Option<String>, Option<Vec<String>>, Option<bool>);
+
+  fn read_info<T: BaseCodec + NITrait>(raw: &str) -> InfoRead {
+    let (len, written, info) = read::<T>(raw);
+    let entries = info
+      .as_ref()
+      .map(|info| info.entries(None).map(|entry| entry.to_string()).collect());
+    (len, written, entries, info.map(|info| info.is_empty()))
+  }
+
+  #[rstest]
+  fn entry_reads_match_vectors() {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "netinfo");
+    for v in corpus.vectors::<EntryVector>("entry") {
+      let (len, written, entry) = read::<NIEntry>(&v.raw);
+      let got = (len, written, entry.map(|entry| entry.to_string()));
+      assert_eq!(got, (v.read, v.written, v.addr_port), "{}", v.raw);
+    }
+  }
+
+  #[rstest]
+  #[case::legacy("legacy", read_info::<NetInfoV1>)]
+  #[case::extended("extended", read_info::<NetInfoV2>)]
+  fn info_reads_match_vectors(#[case] section: &str, #[case] read_info: fn(&str) -> InfoRead) {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "netinfo");
+    for v in corpus.vectors::<InfoVector>(section) {
+      assert_eq!(read_info(&v.raw), (v.read, v.written, v.entries, v.empty), "{}", v.raw);
+    }
   }
 }
