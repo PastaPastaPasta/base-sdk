@@ -1,0 +1,8 @@
+# `crate_universe` reads the workspace manifest and lockfile.
+exports_files(
+    [
+        "Cargo.lock",
+        "Cargo.toml",
+    ],
+    visibility = ["//visibility:public"],
+)

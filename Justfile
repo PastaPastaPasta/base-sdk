@@ -28,6 +28,7 @@ comb:
 
 lint:
     {{ python }} maint/lint_all.py --exclude lint_codeql
+    {{ python }} maint/lint/lint_bazel.py graph
     {{ python }} maint/lint/lint_codeql.py check
     {{ python }} maint/lint/lint_codeql.py run --lang=rust --with-suite=rust-security-and-quality
 

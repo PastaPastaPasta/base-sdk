@@ -5,11 +5,33 @@ module(
 
 bazel_dep(name = "platforms", version = "1.1.0")
 bazel_dep(name = "rules_cc", version = "0.2.17")
+bazel_dep(name = "rules_rust", version = "0.73.0")
 bazel_dep(name = "toolchains_llvm", version = "1.8.0")
 
 include("//bazel:darwin.MODULE.bazel")
 include("//bazel:linux.MODULE.bazel")
 include("//bazel:llvm.MODULE.bazel")
+include("//bazel:rust.MODULE.bazel")
+
+# The workspace manifest brings in `dash-meta-bazel`, whose `full` features
+# decide the third-party graph `crate_universe` resolves. An unlisted triple
+# is incompatible.
+crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+crate.from_cargo(
+    name = "crates",
+    cargo_lockfile = "//:Cargo.lock",
+    host_tools = "@rust_host_tools_pinned",
+    manifests = ["//:Cargo.toml"],
+    # Cargo owns `Cargo.lock`; Bazel only reads it.
+    skip_cargo_lockfile_overwrite = True,
+    supported_platform_triples = [
+        "aarch64-apple-darwin",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-apple-darwin",
+        "x86_64-unknown-linux-gnu",
+    ],
+)
+use_repo(crate, "crates")
 
 # Its extension reads its own `MODULE.bazel`, which the lockfile records under
 # the in-tree output base. Marking it reproducible keeps the checkout path out.
