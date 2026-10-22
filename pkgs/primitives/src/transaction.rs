@@ -9,13 +9,14 @@
 
 use crate::block::MAX_LEGACY_BLOCK_SIZE;
 use crate::prelude::*;
-use crate::sptx::{PayloadError, PayloadInvalid, TxType};
+use crate::sptx::{PayloadError, PayloadInvalid, QuorumHash, TxType};
 use crate::{codec_type, hash_impl};
 
 use bitcoin_hashes::sha256d;
 use bitcoin_primitives::script::{ScriptPubKeyBuf, ScriptSigBuf};
 use bitcoin_units::SignedAmount;
 use dash_num::make_hash;
+use dash_pkc::bls::BlsSigBytes;
 use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{impl_new, impl_type, Checkable, CompactSize, Hashable, Numeric};
@@ -28,6 +29,14 @@ pub const MAX_TX_EXTRA_PAYLOAD: usize = 10_000;
 
 /// Maximum coinbase script size in bytes.
 pub const MAX_COINBASE_SCRIPT_SIZE: usize = 100;
+
+/// Size of the quorum signing info that ends an asset unlock payload, made
+/// of the requested height, quorum hash and quorum signature.
+const ASSET_UNLOCK_QUORUM_INFO_SIZE: usize = size_of::<u32>() + size_of::<QuorumHash>() + size_of::<BlsSigBytes>();
+
+/// Size of an asset unlock payload.
+const ASSET_UNLOCK_PAYLOAD_SIZE: usize =
+  size_of::<u8>() + size_of::<u64>() + size_of::<u32>() + ASSET_UNLOCK_QUORUM_INFO_SIZE;
 
 make_hash! {
   /// SHA256d hash of a serialized transaction.
@@ -345,9 +354,15 @@ impl Checkable for Transaction {
 impl Hashable for Transaction {
   type Hash = TxHash;
 
+  /// Returns the txid. An asset unlock with a stable txid is hashed with its
+  /// quorum signing info zeroed; see [`Transaction::has_stable_txid`].
   fn hash(&self) -> TxHash {
     let mut buf = Vec::new();
     self.encode(&mut buf);
+    if self.has_stable_txid() {
+      let start = buf.len() - ASSET_UNLOCK_QUORUM_INFO_SIZE;
+      buf[start..].fill(0);
+    }
     TxHash::from_lendian(sha256d::Hash::hash(&buf).to_byte_array())
   }
 }
@@ -358,6 +373,27 @@ impl Transaction {
     let v = (self.version as u16) as i32;
     let t = (self.tx_type.to_base() as i32) << 16;
     v | t
+  }
+
+  /// Returns the hash of the whole serialization. It differs from the txid
+  /// only for an asset unlock with a stable txid.
+  pub fn instance_hash(&self) -> TxHash {
+    let mut buf = Vec::new();
+    self.encode(&mut buf);
+    TxHash::from_lendian(sha256d::Hash::hash(&buf).to_byte_array())
+  }
+
+  /// Returns `true` for an asset unlock whose payload has the size of a valid
+  /// one and a version of at least 2.
+  ///
+  /// Its txid leaves out the quorum signing info, so re-signing it keeps the
+  /// txid. Only the payload size and first byte are read, before any
+  /// validation.
+  pub fn has_stable_txid(&self) -> bool {
+    self.has_extra_payload()
+      && self.tx_type == TxType::AssetUnlock
+      && self.extra_payload.len() == ASSET_UNLOCK_PAYLOAD_SIZE
+      && self.extra_payload[0] >= 2
   }
 
   /// Returns true when this transaction carries an extra payload.
@@ -518,5 +554,86 @@ pub(crate) mod tests {
     let mut raw = value.to_le_bytes().to_vec();
     raw.push(0);
     assert_eq!(TxOut::decode(&mut &raw[..]).is_ok(), decodes);
+  }
+
+  /// A mainnet asset unlock with a version 1 payload.
+  const MAINNET_UNLOCK: &str = "65fc488b35abd172726238a16cc71ef11eecb034ce05991e9a3e5ba4fd85094f";
+
+  /// A regtest asset unlock with a version 2 payload.
+  const REGTEST_UNLOCK: &str = "0f9db35643e5ebca413fe5be12144185adb7236f051dbcb872162c14cea2523a";
+
+  /// The asset unlock `txid` of the corpus.
+  fn unlock(txid: &str) -> Transaction {
+    let mut tx = None;
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "assetunlock");
+    corpus.entries::<crate::AssetUnlock>("assetunlock", |raw, _, label| {
+      if label == txid {
+        tx = Some(Transaction::decode(&mut &raw[..]).unwrap());
+      }
+    });
+    tx.unwrap()
+  }
+
+  #[rstest]
+  #[case::v1(|_: &mut Transaction| {}, false)]
+  #[case::v2(|tx: &mut Transaction| tx.extra_payload[0] = 2, true)]
+  #[case::v3(|tx: &mut Transaction| tx.extra_payload[0] = 3, true)]
+  #[case::v2_short(
+    |tx: &mut Transaction| {
+      tx.extra_payload[0] = 2;
+      tx.extra_payload.pop();
+    },
+    false
+  )]
+  #[case::v2_long(
+    |tx: &mut Transaction| {
+      tx.extra_payload[0] = 2;
+      tx.extra_payload.push(0);
+    },
+    false
+  )]
+  #[case::v2_asset_lock(
+    |tx: &mut Transaction| {
+      tx.extra_payload[0] = 2;
+      tx.tx_type = TxType::AssetLock;
+    },
+    false
+  )]
+  #[case::v2_tx_version_2(
+    |tx: &mut Transaction| {
+      tx.extra_payload[0] = 2;
+      tx.version = 2;
+    },
+    false
+  )]
+  fn stable_txid(#[case] edit: fn(&mut Transaction), #[case] stable: bool) {
+    let mut tx = unlock(MAINNET_UNLOCK);
+    edit(&mut tx);
+    assert_eq!(tx.has_stable_txid(), stable);
+    assert_eq!(tx.hash() != tx.instance_hash(), stable);
+  }
+
+  /// A stable txid leaves out the requested height, quorum hash and quorum
+  /// signature.
+  #[rstest]
+  #[case::v1_signature(1, 144, false)]
+  #[case::v2_index(2, 1, false)]
+  #[case::v2_fee(2, 12, false)]
+  #[case::v2_requested_height(2, 13, true)]
+  #[case::v2_signature(2, 144, true)]
+  fn stable_txid_leaves_out_quorum_info(#[case] version: u8, #[case] at: usize, #[case] kept: bool) {
+    let mut tx = unlock(MAINNET_UNLOCK);
+    tx.extra_payload[0] = version;
+    let mut other = tx.clone();
+    other.extra_payload[at] ^= 1;
+    assert_eq!(other.hash() == tx.hash(), kept);
+    assert_ne!(other.instance_hash(), tx.instance_hash());
+  }
+
+  /// The instance hash that the reference reports for the regtest unlock.
+  #[rstest]
+  fn instance_hash_matches_reference() {
+    let expected = TxHash::from_hex("4661437eee9c8b84d6c966f396c93993f56a58140f916d3249a805859a07efb6").unwrap();
+    assert_eq!(unlock(REGTEST_UNLOCK).instance_hash(), expected);
   }
 }
