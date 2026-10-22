@@ -1,7 +1,11 @@
 //
+// Copyright (c) 2007-2010, Projet RNRT SAPHIR
 // Copyright (c) 2026-present, The Dash Core developers
 // SPDX-License-Identifier: MIT
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
+//
+// Adapted from sphlib, written by Thomas Pornin <thomas.pornin@cryptolog.com>
+// Adapted from SUPERCOP (aesni-intr), by Matusiewicz, Roland and Schläffer
 //
 
 //! Groestl-512 hash function.

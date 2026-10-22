@@ -1,8 +1,11 @@
 //
-// Copyright (c) 2016-2025, The RustCrypto Project Developers
+// Copyright (c) 2016-2017, Christian Barcenas, Artyom Pavlov
+// Copyright (c) 2016-2025, The RustCrypto Project developers
 // Copyright (c) 2026-present, The Dash Core developers
 // SPDX-License-Identifier: MIT
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
+//
+// Adapted from `threefish`, a crate from `RustCrypto/block-ciphers`
 //
 
 //! Threefish-512 tweakable block cipher.
