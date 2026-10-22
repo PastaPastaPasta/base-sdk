@@ -49,9 +49,6 @@ pub struct GetHeaders {
 
 impl_new! {
 /// Response carrying block headers.
-///
-/// Each header is followed by a CompactSize transaction count
-/// (always zero, since full blocks are not included).
 #[derive(Clone, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct Headers {
@@ -64,6 +61,8 @@ pub struct Headers {
 impl_p2p!(Headers);
 
 impl BaseCodec for Headers {
+  /// Decodes a `headers`, reading the CompactSize transaction count after
+  /// each header and ignoring it.
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let count = decode_count(data, Self::MAX_COUNT, MIN_HEADERS_SIZE)?;
     let mut headers = Vec::with_capacity(count);
@@ -76,12 +75,13 @@ impl BaseCodec for Headers {
         u32::decode(data)?,
         u32::decode(data)?,
       ));
-      // Consume the trailing tx_count (always 0).
-      CompactSize::decode(data)?.into_len(0)?;
+      CompactSize::decode(data)?;
     }
     Ok(Self { headers })
   }
 
+  /// Encodes a `headers`, writing a transaction count of zero after each
+  /// header, since full blocks are not included.
   fn encode(&self, buf: &mut impl EncodeBuf) {
     CompactSize::from(self.headers.len()).encode(buf);
     for h in &self.headers {
@@ -107,6 +107,9 @@ impl Headers {
 mod tests {
   use super::*;
 
+  use dash_params::Network;
+  use dash_primitives::Block;
+  use dash_types::MAX_SER_SIZE;
   use rstest::rstest;
 
   #[rstest]
@@ -119,5 +122,25 @@ mod tests {
         remaining: MIN_HEADERS_SIZE,
       })
     );
+  }
+
+  /// The main network genesis header, followed by each transaction count.
+  /// Any count passing the size range check is read and ignored.
+  #[rstest]
+  #[case::zero(&[0x00], Ok(()))]
+  #[case::one(&[0x01], Ok(()))]
+  #[case::max(&[0xfe, 0x00, 0x00, 0x00, 0x02], Ok(()))]
+  #[case::past_max(
+    &[0xfe, 0x01, 0x00, 0x00, 0x02],
+    Err(DecodeError::CompactSizeExceedsLimit { limit: MAX_SER_SIZE, value: 0x0200_0001 })
+  )]
+  #[case::non_minimal(&[0xfd, 0x01, 0x00], Err(DecodeError::NonMinimalCompactSize { value: 1 }))]
+  fn tx_counts_are_read_and_ignored(#[case] tx_count: &[u8], #[case] result: Result<(), DecodeError>) {
+    let header = Block::from(&Network::Main.chain().genesis).header();
+    let mut entry = Vec::new();
+    header.encode(&mut entry);
+    let payload = [&[1][..], &entry[..], tx_count].concat();
+    let headers = alloc::vec![header];
+    assert_eq!(Headers::decode(&mut &payload[..]), result.map(|()| Headers { headers }));
   }
 }
