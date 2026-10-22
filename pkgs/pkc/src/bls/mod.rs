@@ -33,6 +33,7 @@ pub use sig_id::BlsSigId;
 cfg_if::cfg_if! {
   if #[cfg(feature = "bls")] {
     mod curve_consts;
+    mod elem;
     mod ies_ops;
     mod macros;
     mod public_ops;
@@ -53,6 +54,7 @@ cfg_if::cfg_if! {
     pub(crate) mod blst_ffi;
     pub(crate) mod chia_h2c;
     pub(crate) mod group;
+    pub(crate) mod relic;
     pub(crate) mod scalar;
     pub(crate) mod scheme_ops;
     #[cfg(test)]

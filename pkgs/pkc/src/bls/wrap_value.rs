@@ -38,6 +38,8 @@ struct Element<K: BlsWire<N>, const N: usize> {
   /// Core's basic-scheme serialization, from which the legacy one follows.
   basic: [u8; N],
   point: K::Point,
+  /// The coord tag, or relic's coordinates for an engine result.
+  repr: K::Repr,
 }
 
 impl<K: BlsWire<N>, const N: usize> BlsValue<K, N> {
@@ -46,15 +48,30 @@ impl<K: BlsWire<N>, const N: usize> BlsValue<K, N> {
     let (basic, point) = K::default_element();
     Self {
       valid: false,
-      element: Element { basic, point },
+      element: Element {
+        basic,
+        point,
+        repr: K::Repr::default(),
+      },
     }
   }
 
   fn valid(basic: [u8; N], point: K::Point) -> Self {
+    Self::with_element(basic, point, K::Repr::default())
+  }
+
+  /// A valid object holding an element as an arithmetic result gives it.
+  pub(crate) fn with_element(basic: [u8; N], point: K::Point, repr: K::Repr) -> Self {
     Self {
       valid: true,
-      element: Element { basic, point },
+      element: Element { basic, point, repr },
     }
+  }
+
+  /// The element whatever the validity, Core's `impl`, as it is held: its
+  /// basic serialization, point and representation.
+  pub(crate) fn parts(&self) -> (&[u8; N], &K::Point, &K::Repr) {
+    (&self.element.basic, &self.element.point, &self.element.repr)
   }
 
   /// Decodes bytes that are canonical under `scheme`, the check Core's lazy
@@ -146,7 +163,11 @@ impl<K: BlsWire<N>, const N: usize> Hash for BlsValue<K, N> {
   }
 }
 
-/// Core's `operator==`: the same validity and the same element.
+/// The same validity and the same element as Core serializes it, the
+/// identity Core keys its containers by (`operator<` compares `GetHash()`).
+/// On decoded values it is Core's `operator==`; on arithmetic results that
+/// operator does not normalize and is not transitive, so it is `core_eq`
+/// (BS11a-3 D25).
 impl<K: BlsWire<N>, const N: usize> PartialEq for BlsValue<K, N> {
   fn eq(&self, other: &Self) -> bool {
     self.valid == other.valid && self.element == other.element
@@ -158,6 +179,7 @@ impl<K: BlsWire<N>, const N: usize> Clone for Element<K, N> {
     Self {
       basic: self.basic,
       point: self.point.clone(),
+      repr: self.repr.clone(),
     }
   }
 }
@@ -190,7 +212,8 @@ impl<K: BlsWire<N>, const N: usize> Hash for Element<K, N> {
   }
 }
 
-/// Core compares elements. A canonical encoding determines its element, but
+/// Elements are compared by what Core serializes, and the representation is
+/// ignored. A canonical encoding determines its element, but
 /// [`BlsValue::from_set_bytes_basic`] would give a G2 subgroup point with `y`
 /// in `Fp` and its negation one serialization, so points are compared too.
 /// Whether a legacy point's subgroup test has run is not compared.
