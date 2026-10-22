@@ -185,7 +185,7 @@ pub static PARAMS: ChainParams = ChainParams {
 };
 
 #[rustfmt::skip]
-const CHECKPOINTS: [Checkpoint; 37] = [
+const CHECKPOINTS: [Checkpoint; 39] = [
   (BlockHeight::from_u32(   1_500), Hash256::from_bendian(hex!("000000aaf0300f59f49bc3e970bad15c11f961fe2347accffff19d96ec9778e3"))),
   (BlockHeight::from_u32(   4_991), Hash256::from_bendian(hex!("000000003b01809551952460744d5dbb8fcbd6cbae3c220267bf7fa43f837367"))),
   (BlockHeight::from_u32(   9_918), Hash256::from_bendian(hex!("00000000213e229f332c0ffbe34defdaa9e74de87f2d8d1f01af8d121c3c170b"))),
@@ -223,4 +223,6 @@ const CHECKPOINTS: [Checkpoint; 37] = [
   (BlockHeight::from_u32(2_216_986), Hash256::from_bendian(hex!("0000000000000010b1135dc743f27f6fc8a138c6420a9d963fc676f96c2048f4"))),
   (BlockHeight::from_u32(2_361_500), Hash256::from_bendian(hex!("0000000000000009ba1e8f47851d036bb618a4f6565eb3c32d1f647d450ff195"))),
   (BlockHeight::from_u32(2_421_800), Hash256::from_bendian(hex!("000000000000000718ed026ebd644a8b70b42d4cbd7b25304c066c9bf15f85b7"))),
+  (BlockHeight::from_u32(2_471_728), Hash256::from_bendian(hex!("000000000000001a19ad7270422a00f86123ea94e0b295a3a796d6861bd7b032"))),
+  (BlockHeight::from_u32(2_487_500), Hash256::from_bendian(hex!("00000000000000119fe42827219e0686d3f7b494ae65f823194c740c5dbab492"))),
 ];

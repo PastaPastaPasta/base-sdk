@@ -35,6 +35,7 @@ struct ChainVector {
   pool_min_participants: i32,
   pool_max_participants: i32,
   credit_pool_period_blocks: i32,
+  checkpoints: Vec<(u32, String)>,
   chain_tx_data: TxDataVector,
 }
 
@@ -61,7 +62,7 @@ impl From<&ChainParams> for ChainVector {
       pool_min_participants,
       pool_max_participants,
       credit_pool_period_blocks,
-      checkpoints: _,
+      checkpoints,
       chain_tx_data,
     } = *chain;
     Self {
@@ -83,6 +84,7 @@ impl From<&ChainParams> for ChainVector {
       pool_min_participants,
       pool_max_participants,
       credit_pool_period_blocks,
+      checkpoints: checkpoints.iter().copied().map(pair).collect(),
       chain_tx_data: TxDataVector::from(&chain_tx_data),
     }
   }
