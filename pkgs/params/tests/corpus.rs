@@ -8,7 +8,7 @@
 
 use dash_dev::Corpus;
 use dash_num::Hash256;
-use dash_params::{Bip9Deployment, Bip9Deployments, ChainParams, Checkpoint, ConsensusParams, Network};
+use dash_params::{Bip9Deployment, Bip9Deployments, ChainParams, ChainTxData, Checkpoint, ConsensusParams, Network};
 use dash_script::AddrParams;
 use hex_conservative::DisplayHex;
 use rstest::rstest;
@@ -35,6 +35,7 @@ struct ChainVector {
   pool_min_participants: i32,
   pool_max_participants: i32,
   credit_pool_period_blocks: i32,
+  chain_tx_data: TxDataVector,
 }
 
 impl From<&ChainParams> for ChainVector {
@@ -61,7 +62,7 @@ impl From<&ChainParams> for ChainVector {
       pool_max_participants,
       credit_pool_period_blocks,
       checkpoints: _,
-      chain_tx_data: _,
+      chain_tx_data,
     } = *chain;
     Self {
       network_id: network_id.into(),
@@ -82,6 +83,7 @@ impl From<&ChainParams> for ChainVector {
       pool_min_participants,
       pool_max_participants,
       credit_pool_period_blocks,
+      chain_tx_data: TxDataVector::from(&chain_tx_data),
     }
   }
 }
@@ -334,6 +336,29 @@ impl From<&AddrParams> for AddrVector {
       ext_pubkey: ext_pubkey.to_lower_hex_string(),
       ext_secret: ext_secret.to_lower_hex_string(),
       bip44_idx,
+    }
+  }
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct TxDataVector {
+  timestamp: i64,
+  tx_count: i64,
+  tx_rate: f64,
+}
+
+impl From<&ChainTxData> for TxDataVector {
+  fn from(data: &ChainTxData) -> Self {
+    let ChainTxData {
+      timestamp,
+      tx_count,
+      tx_rate,
+    } = *data;
+    Self {
+      timestamp,
+      tx_count,
+      tx_rate,
     }
   }
 }

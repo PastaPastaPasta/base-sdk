@@ -178,9 +178,9 @@ pub static PARAMS: ChainParams = ChainParams {
   credit_pool_period_blocks: 576,
   checkpoints: &CHECKPOINTS,
   chain_tx_data: ChainTxData {
-    timestamp: 1_770_962_602,
-    tx_count: 64_859_329,
-    tx_rate: 0.9523581589072819,
+    timestamp: 1_781_318_234,
+    tx_count: 69_770_814,
+    tx_rate: 0.1569520632249578,
   },
 };
 
