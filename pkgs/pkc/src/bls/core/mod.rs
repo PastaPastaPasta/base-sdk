@@ -28,18 +28,30 @@
 use super::blst_ffi::{hash_to_g2, pairing_product_is_one};
 use super::chia_h2c;
 use super::group::{G1Affine, G2Affine, Point, G1, G2};
+use super::scalar::Fr;
 use super::scheme_ietf::DST_BASIC;
 use super::scheme_ops::secure_weights;
-use super::{BlsSchemeKind, BlsValue, BLS_PK_LEN, BLS_SIG_LEN};
+use super::{BlsSchemeKind, BlsValue, BLS_PK_LEN, BLS_SIG_LEN, BLS_SK_LEN};
 use crate::prelude::*;
+
+pub use super::elem::BlsElem;
+#[doc(hidden)]
+pub use super::elem::BlsShape;
 
 #[cfg(feature = "codec")]
 use dash_types::type_id::Unencodable;
+use zeroize::Zeroizing;
 
+/// A secret key as Core's wrapper holds it.
+pub type BlsSkValue = BlsValue<Fr, BLS_SK_LEN>;
 /// A public key as Core's wrapper holds it.
 pub type BlsPkValue = BlsValue<G1, BLS_PK_LEN>;
 /// A signature as Core's wrapper holds it.
 pub type BlsSigValue = BlsValue<G2, BLS_SIG_LEN>;
+/// A public key's element as Core's arithmetic holds it.
+pub type BlsPkElem = BlsElem<G1, BLS_PK_LEN>;
+/// A signature's element as Core's arithmetic holds it.
+pub type BlsSigElem = BlsElem<G2, BLS_SIG_LEN>;
 
 /// Core's answer to a verification.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -191,6 +203,26 @@ fn aggregate_verify(
   pairing_product_is_one(&pairs).into()
 }
 
+/// The BLS-IES symmetric key for `sk` and a peer key: the product
+/// `DHKeyExchange` forms, serialized basic and cut to 32 bytes, as Core's IES
+/// code takes it under either scheme (`bls.cpp:208-220`,
+/// `bls_ies.cpp:43-48,79-84,96-101`).
+///
+/// `None` when either value is invalid. A basic key equal to `r` gives the
+/// infinity, whose key is `c0 00 ... 00`. An Exotic peer key runs the engine,
+/// which is variable-time, as relic is in Core.
+#[must_use]
+pub fn ies_key(sk: &BlsSkValue, pk: &BlsPkValue) -> Option<Zeroizing<[u8; 32]>> {
+  if !sk.is_valid() || !pk.is_valid() {
+    return None;
+  }
+  let (k, (), ()) = sk.parts();
+  let shared = Zeroizing::new(BlsPkElem::from_impl(pk).mul_secret(k).to_bytes(BlsSchemeKind::Basic));
+  let mut key = Zeroizing::new([0u8; 32]);
+  key.copy_from_slice(&shared[..32]);
+  Some(key)
+}
+
 #[cfg(test)]
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
@@ -310,5 +342,41 @@ mod tests {
   #[case::basic(assert_secure_kept_elements::<BlsScIetf>, BlsSchemeKind::Basic)]
   fn secure_verify_uses_kept_elements(#[case] assertion: fn(BlsSchemeKind), #[case] kind: BlsSchemeKind) {
     assertion(kind);
+  }
+
+  /// The key is the basic encoding of the DH point whatever scheme decoded
+  /// the operands, and is the one the IES code uses.
+  fn assert_ies_key<S: BlsScheme>(kind: BlsSchemeKind) {
+    let sk = BlsSecretKey::<S>::from_ikm(&[3; 32]).unwrap();
+    let peer = BlsSecretKey::<S>::from_ikm(&[4; 32]).unwrap().public_key();
+    let shared = BlsSecretKey::<BlsScIetf>::from_bytes(&sk.to_bytes())
+      .unwrap()
+      .dh_exchange(&BlsPublicKey::<BlsScIetf>::from_bytes(&peer.to_scheme::<BlsScIetf>().unwrap().to_bytes()).unwrap())
+      .unwrap();
+    let sk_value = BlsSkValue::from_canonical(&sk.to_bytes(), kind).unwrap();
+    let pk_value = BlsPkValue::from_canonical(&peer.to_bytes(), kind).unwrap();
+    let key = ies_key(&sk_value, &pk_value).unwrap();
+    assert_eq!(key[..], shared.as_bytes()[..32]);
+    assert!(ies_key(&BlsSkValue::invalid(), &pk_value).is_none());
+    assert!(ies_key(&sk_value, &BlsPkValue::invalid()).is_none());
+  }
+
+  #[rstest]
+  #[case::legacy(assert_ies_key::<BlsScChia>, BlsSchemeKind::Legacy)]
+  #[case::basic(assert_ies_key::<BlsScIetf>, BlsSchemeKind::Basic)]
+  fn ies_key_is_the_basic_dh_encoding(#[case] assertion: fn(BlsSchemeKind), #[case] kind: BlsSchemeKind) {
+    assertion(kind);
+  }
+
+  /// A basic key equal to `r` is valid and gives the infinity's key.
+  #[test]
+  fn ies_key_of_the_order_is_the_infinity() {
+    let r = hex!("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001");
+    let sk = BlsSkValue::from_canonical(&r, BlsSchemeKind::Basic).unwrap();
+    assert!(BlsSkValue::from_canonical(&r, BlsSchemeKind::Legacy).is_none());
+    let (_, pk) = values::<BlsScIetf>(1, &[0; 32], BlsSchemeKind::Basic);
+    let mut infinity = [0u8; 32];
+    infinity[0] = 0xc0;
+    assert_eq!(*ies_key(&sk, &pk).unwrap(), infinity);
   }
 }

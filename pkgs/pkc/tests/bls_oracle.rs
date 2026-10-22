@@ -21,7 +21,8 @@ use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::sha256d::Hash as Sha256d;
 use dash_dev::{arr_from_hex, vec_from_hex, Corpus};
 use dash_pkc::bls::core::{
-  verify_insecure, verify_insecure_aggregated, verify_secure_aggregated, BlsPkValue, BlsSigValue, BlsVerdict,
+  ies_key, verify_insecure, verify_insecure_aggregated, verify_secure_aggregated, BlsPkElem, BlsPkValue, BlsSigElem,
+  BlsSigValue, BlsSkValue, BlsVerdict,
 };
 use dash_pkc::bls::{
   BlsEager, BlsIesBlob, BlsIesBlobBytes, BlsIesMulti, BlsIesMultiBytes, BlsLazy, BlsPublicKey, BlsScChia, BlsScIetf,
@@ -443,20 +444,11 @@ fn decode_bytes<T: BaseCodec>(hex: &str) -> T {
   out
 }
 
-/// Core keys BLS-IES with the basic encoding of the shared point under both
-/// schemes; the crate keys a legacy message with the legacy encoding, so it
-/// opens none of Core's legacy messages (BS11a D11).
-const IES_KDF_GAP: BlsSchemeKind = LEGACY;
-
-/// Compares a decryption with Core's, through the known gaps: the KDF one
-/// above and the empty plaintext, which Core opens to nothing and the crate
-/// refuses (BS11b).
-fn assert_opened(label: &str, kind: BlsSchemeKind, got: Option<String>, core: Option<&String>) {
+/// Compares a decryption with Core's, through the known gap of the empty
+/// plaintext, which Core opens to nothing and the crate refuses (BS11b).
+fn assert_opened(label: &str, got: Option<String>, core: Option<&String>) {
   match core {
     Some(plain) if plain.is_empty() => assert!(got.is_none(), "{label}: empty plaintext gap closed"),
-    Some(plain) if kind == IES_KDF_GAP => {
-      assert_ne!(got.as_ref(), Some(plain), "{label}: KDF gap closed, remove IES_KDF_GAP");
-    }
     _ => assert_eq!(got.as_ref(), core, "{label}"),
   }
 }
@@ -498,7 +490,7 @@ fn assert_ies<S: BlsScheme>(kind: BlsSchemeKind) {
         .ok()
         .map(|p| p.to_lower_hex_string());
       let label = format!("{}: decrypt {} with {}", row.note, d.idx, d.sk);
-      assert_opened(&label, kind, got, d.plain.as_ref());
+      assert_opened(&label, got, d.plain.as_ref());
     }
   }
   for row in c.vectors::<BlobRow>("blob") {
@@ -509,7 +501,7 @@ fn assert_ies<S: BlsScheme>(kind: BlsSchemeKind) {
       .ies_decrypt(&blob, row.idx)
       .ok()
       .map(|p| p.to_lower_hex_string());
-    assert_opened(&format!("blob {}", row.idx), kind, got, row.plain.as_ref());
+    assert_opened(&format!("blob {}", row.idx), got, row.plain.as_ref());
   }
 }
 
@@ -645,6 +637,302 @@ fn assert_edge() {
     "{gaps} of {} rows in the relic gap",
     rows.len()
   );
+}
+
+// relic.json5 and arith.json5
+
+#[derive(Deserialize)]
+struct RelicRow {
+  probe: String,
+  scheme: String,
+  note: String,
+  steps: Vec<RelicStep>,
+}
+
+#[derive(Deserialize)]
+struct RelicStep {
+  op: String,
+  flag: Option<String>,
+  kind: Option<String>,
+  input: Option<String>,
+  a: Option<usize>,
+  b: Option<usize>,
+  k: Option<String>,
+  sig: Option<usize>,
+  pk: Option<usize>,
+  sk: Option<usize>,
+  recv: Option<usize>,
+  items: Option<Vec<usize>>,
+  #[serde(default)]
+  pair: bool,
+  msg: Option<String>,
+  status: i32,
+  code: i32,
+  out: String,
+  log: Vec<(String, i32)>,
+}
+
+fn need<'a, T: ?Sized>(value: Option<&'a T>, label: &str, what: &str) -> &'a T {
+  value.unwrap_or_else(|| panic!("{label}: no {what}"))
+}
+
+/// A register of a step script: the object a step left, as Core's wrapper
+/// holds it, with its `GetHash()` cache. A step that stores nothing leaves
+/// an empty register, so registers stay indexed by step.
+#[derive(Clone)]
+enum Obj {
+  Empty,
+  Sk(BlsSkValue),
+  Pk(BlsPkValue),
+  Sig(BlsSigValue),
+}
+
+#[derive(Clone)]
+struct Reg {
+  obj: Obj,
+  hash: Option<[u8; 32]>,
+}
+
+impl From<Obj> for Reg {
+  fn from(obj: Obj) -> Self {
+    Self { obj, hash: None }
+  }
+}
+
+impl Obj {
+  fn is_valid(&self) -> bool {
+    match self {
+      Self::Empty => panic!("an empty register"),
+      Self::Sk(v) => v.is_valid(),
+      Self::Pk(v) => v.is_valid(),
+      Self::Sig(v) => v.is_valid(),
+    }
+  }
+
+  /// `ToBytes(scheme)`: zeros when invalid.
+  fn bytes(&self, kind: BlsSchemeKind) -> Vec<u8> {
+    match self {
+      Self::Empty => panic!("an empty register"),
+      Self::Sk(v) => v.to_bytes(kind).to_vec(),
+      Self::Pk(v) => v.to_bytes(kind).to_vec(),
+      Self::Sig(v) => v.to_bytes(kind).to_vec(),
+    }
+  }
+
+  /// Core's status for a destination op: `ORACLE_OK` when the object is
+  /// valid, else `ORACLE_REJECT`.
+  fn status(&self) -> i32 {
+    i32::from(!self.is_valid())
+  }
+}
+
+/// `ADD`, `NEG` and `MUL` on registers' elements, whatever their validity.
+fn elem_op(label: &str, op: &str, a: &Obj, b: Option<&Obj>, k: Option<&str>) -> Obj {
+  let k = || arr_from_hex::<32>(need(k, label, "k"));
+  match (a, b) {
+    (Obj::Pk(a), b) => {
+      let a = BlsPkElem::from_impl(a);
+      Obj::Pk(
+        match (op, b) {
+          ("add", Some(Obj::Pk(b))) => a.add(&BlsPkElem::from_impl(b)),
+          ("neg", None) => a.neg(),
+          ("mul", None) => a.mul(&k()),
+          _ => panic!("{label}: operands"),
+        }
+        .into(),
+      )
+    }
+    (Obj::Sig(a), b) => {
+      let a = BlsSigElem::from_impl(a);
+      Obj::Sig(
+        match (op, b) {
+          ("add", Some(Obj::Sig(b))) => a.add(&BlsSigElem::from_impl(b)),
+          ("neg", None) => a.neg(),
+          ("mul", None) => a.mul(&k()),
+          _ => panic!("{label}: operands"),
+        }
+        .into(),
+      )
+    }
+    _ => panic!("{label}: operands"),
+  }
+}
+
+/// `EQ` (the wrapper's `operator==`) and `IMPL_EQ` (the elements').
+fn eq_op(label: &str, op: &str, a: &Obj, b: &Obj) -> bool {
+  match (op, a, b) {
+    ("eq", Obj::Pk(a), Obj::Pk(b)) => a.core_eq(b),
+    ("eq", Obj::Sig(a), Obj::Sig(b)) => a.core_eq(b),
+    ("impl_eq", Obj::Pk(a), Obj::Pk(b)) => BlsPkElem::from_impl(a).core_eq(&BlsPkElem::from_impl(b)),
+    ("impl_eq", Obj::Sig(a), Obj::Sig(b)) => BlsSigElem::from_impl(a).core_eq(&BlsSigElem::from_impl(b)),
+    _ => panic!("{label}: operands"),
+  }
+}
+
+/// `ISVALID`: the wrapper's `IsValid()`, then its element's.
+fn is_valid_op(label: &str, a: &Obj) -> [bool; 2] {
+  match a {
+    Obj::Pk(v) => [v.is_valid(), BlsPkElem::from_impl(v).is_valid()],
+    Obj::Sig(v) => [v.is_valid(), BlsSigElem::from_impl(v).is_valid()],
+    _ => panic!("{label}: operands"),
+  }
+}
+
+/// `AGG_PK` and `AGG_SIG`: the span form, invalid when empty, or the pair
+/// form, which Core asserts on an invalid side (`ORACLE_E_ARG`, nothing
+/// stored).
+fn agg_op(label: &str, op: &str, items: &[&Obj], pair: bool) -> Option<Obj> {
+  if pair && items.iter().any(|o| !o.is_valid()) {
+    return None;
+  }
+  let pks: Option<Vec<&BlsPkValue>> = items
+    .iter()
+    .map(|o| if let Obj::Pk(v) = o { Some(v) } else { None })
+    .collect();
+  let sigs: Option<Vec<&BlsSigValue>> = items
+    .iter()
+    .map(|o| if let Obj::Sig(v) = o { Some(v) } else { None })
+    .collect();
+  Some(if op == "agg_pk" {
+    let pks = need(pks.as_ref(), label, "keys");
+    Obj::Pk(BlsPkElem::aggregate_insecure(pks.iter().copied()).map_or_else(BlsPkValue::invalid, Into::into))
+  } else {
+    let sigs = need(sigs.as_ref(), label, "signatures");
+    Obj::Sig(BlsSigElem::aggregate_insecure(sigs.iter().copied()).map_or_else(BlsSigValue::invalid, Into::into))
+  })
+}
+
+/// `DHKeyExchange` on a fresh wrapper, or on a copy of `recv` (`INPLACE`),
+/// which keeps its element when it fails. A valid product's IES key is the
+/// first 32 bytes of its basic encoding.
+fn dh_op(label: &str, sk: &Obj, pk: &Obj, recv: Option<&Obj>) -> Obj {
+  let (Obj::Sk(sk), Obj::Pk(pk)) = (sk, pk) else {
+    panic!("{label}: operands");
+  };
+  let Some(key) = ies_key(sk, pk) else {
+    let mut kept = match recv {
+      Some(Obj::Pk(v)) => v.clone(),
+      None => BlsPkValue::invalid(),
+      _ => panic!("{label}: receiver"),
+    };
+    kept.invalidate();
+    return Obj::Pk(kept);
+  };
+  let product: BlsPkValue = BlsPkElem::from_impl(pk).mul(&sk.to_bytes(BASIC)).into();
+  assert_eq!(key[..], product.to_bytes(BASIC)[..32], "{label}: the IES key");
+  Obj::Pk(product)
+}
+
+/// Runs a step script's every step on `BlsValue`/`BlsElem` over registers
+/// that hold what the earlier steps left, with relic's code `RLC_OK` after
+/// every step and every logged call. `gaps` counts the verifications on an
+/// exotic operand under the legacy flag, `Unsupported` until BS11a-4.
+fn assert_steps(file: &str) -> usize {
+  let rows = corpus(file).vectors::<RelicRow>("rows");
+  let mut gaps = 0;
+  for row in &rows {
+    let scheme = scheme_named(&row.scheme);
+    let mut regs: Vec<Reg> = Vec::new();
+    for (i, step) in row.steps.iter().enumerate() {
+      let label = format!("{file} {} ({}) step {i} {}", row.probe, row.note, step.op);
+      assert_eq!(step.code, 0, "{label}: relic's code");
+      assert!(step.log.iter().all(|(_, code)| *code == 0), "{label}: {:?}", step.log);
+      // Decoding runs outside the log window; an op on an invalid wrapper
+      // may make no relic call inside it.
+      assert!(step.op != "decode" || step.log.is_empty(), "{label}: the log window");
+      let flag = step.flag.as_deref().map_or(scheme, scheme_named);
+      let at = |index: Option<usize>| &regs[*need(index.as_ref(), &label, "operand")].obj;
+      let (status, out, made) = match step.op.as_str() {
+        "decode" => {
+          let input = need(step.input.as_deref(), &label, "input");
+          let obj = match step.kind.as_deref() {
+            Some("pk") => Obj::Pk(pk_value(input, scheme)),
+            Some("sig") => Obj::Sig(sig_value(input, scheme)),
+            Some("sk") => Obj::Sk(eager(input, scheme).unwrap_or_else(|| panic!("Core reads sk {input}"))),
+            other => panic!("{label}: kind {other:?}"),
+          };
+          (obj.status(), obj.bytes(scheme), obj)
+        }
+        "pubkey" => (0, vec_from_hex(&step.out), Obj::Pk(pk_value(&step.out, scheme))),
+        "sign" => (0, vec_from_hex(&step.out), Obj::Sig(sig_value(&step.out, scheme))),
+        "add" | "neg" | "mul" => {
+          let b = step.b.map(|_| at(step.b));
+          let obj = elem_op(&label, &step.op, at(step.a), b, step.k.as_deref());
+          (0, obj.bytes(flag), obj)
+        }
+        "agg_pk" | "agg_sig" => {
+          let items: Vec<&Obj> = need(step.items.as_ref(), &label, "items")
+            .iter()
+            .map(|&i| &regs[i].obj)
+            .collect();
+          match agg_op(&label, &step.op, &items, step.pair) {
+            Some(obj) => (obj.status(), obj.bytes(flag), obj),
+            None => (-4, Vec::new(), Obj::Empty),
+          }
+        }
+        "dh" => {
+          let recv = step.recv.map(|_| at(step.recv));
+          let obj = dh_op(&label, at(step.sk), at(step.pk), recv);
+          (obj.status(), obj.bytes(flag), obj)
+        }
+        "ser" => {
+          let a = at(step.a);
+          (a.status(), a.bytes(flag), Obj::Empty)
+        }
+        "ser_hash" => {
+          let index = *need(step.a.as_ref(), &label, "operand");
+          let reg = &mut regs[index];
+          let bytes = reg.obj.bytes(flag);
+          let hash = *reg.hash.get_or_insert_with(|| Sha256d::hash(&bytes).to_byte_array());
+          (reg.obj.status(), [bytes, hash.to_vec()].concat(), Obj::Empty)
+        }
+        "is_valid" => {
+          let [wrapper, element] = is_valid_op(&label, at(step.a));
+          (0, vec![u8::from(wrapper), u8::from(element)], Obj::Empty)
+        }
+        "eq" | "impl_eq" => {
+          let eq = eq_op(&label, &step.op, at(step.a), at(step.b));
+          (0, vec![u8::from(eq)], Obj::Empty)
+        }
+        "verify" => {
+          let (Obj::Sig(sig), Obj::Pk(pk)) = (at(step.sig), at(step.pk)) else {
+            panic!("{label}: operands");
+          };
+          let h = hash(need(step.msg.as_deref(), &label, "msg"));
+          let core = verify_insecure(sig, pk, &h, flag);
+          let exotic = sig.point().is_some_and(|p| p.usable().is_none());
+          if flag == LEGACY && exotic {
+            gaps += 1;
+            assert_eq!(core, BlsVerdict::Unsupported, "{label}: the relic gap closed");
+          } else {
+            assert_verdict(&label, core, None, step.status == 0);
+          }
+          (step.status, Vec::new(), Obj::Empty)
+        }
+        other => panic!("{label}: op {other}"),
+      };
+      assert_eq!(
+        (step.status, step.out.as_str()),
+        (status, out.to_lower_hex_string().as_str()),
+        "{label}"
+      );
+      regs.push(made.into());
+    }
+  }
+  gaps
+}
+
+/// The reference implementation's relic arithmetic on points outside the
+/// subgroup (the BS11a design's probes P1 to P5 and its fixed vectors).
+fn assert_relic() {
+  assert!(assert_steps("relic") > 0, "no step in the relic gap");
+}
+
+/// Core's element operations over mixed registers (BS11a-3 D17): the shape
+/// table against Exotic values and engine results, the scalar classes, the
+/// aggregations, DH and its IES key, and `SER_HASH`'s cache.
+fn assert_arith() {
+  assert_eq!(assert_steps("arith"), 0);
 }
 
 // dkg.json5
@@ -959,7 +1247,7 @@ fn assert_dkg() {
 // The files and their provenance.
 
 /// Every corpus file, each checked by its own case below.
-const FILES: [&str; 9] = [
+const FILES: [&str; 11] = [
   "hash_to_g2",
   "sign",
   "aggregate",
@@ -968,6 +1256,8 @@ const FILES: [&str; 9] = [
   "ies",
   "decode",
   "edge",
+  "relic",
+  "arith",
   "dkg",
 ];
 
@@ -980,6 +1270,8 @@ const FILES: [&str; 9] = [
 #[case::ies(|| { assert_ies::<BlsScChia>(LEGACY); assert_ies::<BlsScIetf>(BASIC); })]
 #[case::decode(assert_decode)]
 #[case::edge(assert_edge)]
+#[case::relic(assert_relic)]
+#[case::arith(assert_arith)]
 #[case::dkg(assert_dkg)]
 fn core_bls_corpus(#[case] check: fn()) {
   check();

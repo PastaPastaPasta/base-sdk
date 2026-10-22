@@ -6,7 +6,7 @@
 
 /*
  * Dash Core BLS oracle probe: forwards requests to the BLS entry points of the
- * Dash Core consensus oracle (libdash_oracle, ABI 14) and prints Core's
+ * Dash Core consensus oracle (libdash_oracle, ABI 14 or later) and prints Core's
  * answers, one line per request.
  *
  * Requests (stdin), hex arguments:

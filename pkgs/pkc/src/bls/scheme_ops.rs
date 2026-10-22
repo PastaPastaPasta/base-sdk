@@ -165,15 +165,21 @@ pub trait BlsScheme: BlsSchemeId + sealed::Sealed + Sized {
     Ok(BlsDhBytes::from_bytes(Self::pk_to_bytes(&shared)))
   }
 
-  /// Derive the BLS-IES symmetric key from a Diffie-Hellman shared key.
+  /// Derive the BLS-IES symmetric key for `sk` and a peer key.
   ///
-  /// The key is the leading 32 bytes of the shared point's serialization, so
-  /// it depends on the scheme and a blob is readable only by the scheme that
-  /// wrote it.
-  fn ies_key(shared: &BlsDhBytes<Self>) -> Zeroizing<[u8; AES_KEY_LEN]> {
+  /// The key is the leading 32 bytes of the Diffie-Hellman point's basic
+  /// serialization under either scheme: Core keys every blob with
+  /// `ToByteVector(false)` (`bls_ies.cpp:47-48,83-84,100-101`), so a blob
+  /// does not record the scheme that wrote it.
+  ///
+  /// # Errors
+  ///
+  /// Returns `InvalidPublicKey` when the shared secret cannot be derived.
+  fn ies_key(sk: &Self::InnerSk, peer_pk: &Self::InnerPk) -> Result<Zeroizing<[u8; AES_KEY_LEN]>, BlsError> {
+    let shared = Self::pk_to_g1(&Self::dh_exchange(sk, peer_pk)?)?;
     let mut key = Zeroizing::new([0u8; AES_KEY_LEN]);
-    key.copy_from_slice(&shared.as_bytes()[..AES_KEY_LEN]);
-    key
+    key.copy_from_slice(&shared.to_affine().compress()[..AES_KEY_LEN]);
+    Ok(key)
   }
 
   /// Seal one plaintext to a recipient under an ephemeral key and IV.
@@ -192,7 +198,7 @@ pub trait BlsScheme: BlsSchemeId + sealed::Sealed + Sized {
     if plaintext.is_empty() {
       return Err(BlsError::InvalidPlaintextLength);
     }
-    let key = Self::ies_key(&Self::dh_bytes(eph_sk, recipient)?);
+    let key = Self::ies_key(eph_sk, recipient)?;
     aes_cbc::encrypt(&key, iv, plaintext).ok_or(BlsError::InvalidPlaintextLength)
   }
 
@@ -212,7 +218,7 @@ pub trait BlsScheme: BlsSchemeId + sealed::Sealed + Sized {
     if ciphertext.is_empty() {
       return Err(BlsError::InvalidCiphertextLength);
     }
-    let key = Self::ies_key(&Self::dh_bytes(sk, eph_pk)?);
+    let key = Self::ies_key(sk, eph_pk)?;
     aes_cbc::decrypt(&key, iv, ciphertext).ok_or(BlsError::InvalidCiphertextLength)
   }
 

@@ -8,14 +8,15 @@
 
 Inputs are derived from fixed labels; each output, verdict and decode
 outcome is what Dash Core's own BLS code returns through the consensus
-oracle (probe.c, ABI 14). See README.md.
+oracle (probe.c, ABI 14; relic.json5 ABI 19). See README.md.
 
-  gen.py --probe PROBE --out-dir pkgs/pkc/corpus/bls_oracle
+  gen.py --probe PROBE --out-dir pkgs/pkc/corpus/bls_oracle [--only FILE]...
 """
 
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import importlib.util
 import json
@@ -481,6 +482,393 @@ def edge_rows(probe: o.Probe, decoded: list[Row]) -> list[Row]:
   return rows
 
 
+# Points outside the subgroup that the legacy scheme reads (bls_wrapper's
+# rules): (0, +-2), G1's points of order 3, are x = 0 with the sign bit; x = 1
+# is off G1 (1 + 4 is a non-residue) and off G2 (1 + 4(1 + u) is one).
+G1_ORDER3 = b"\x80" + bytes(47)
+G1_OFF = bytes(47) + b"\x01"
+G2_OFF = bytes(47) + b"\x01" + bytes(48)
+# The scalar of the reference implementation's relic probes.
+K = b"\x3a" + b"\x5a" * 31
+
+
+class Steps:
+  """A script whose every op is logged and is a row's step; a step that
+  stores names its register by the step's index. Objects are made under
+  the script's scheme and the other ops run under `flag` (by default the
+  same)."""
+
+  def __init__(self, legacy: bool, flag: bool | None = None) -> None:
+    self.script = o.Script(legacy)
+    self.flag = flag
+    self.steps: list[Row] = []
+    self.regs: dict[int, int] = {}
+
+  def add(
+    self,
+    op: int,
+    name: str,
+    operands: bytes,
+    flag: bool | None = None,
+    extra: int = 0,
+    **fields: object,
+  ) -> int:
+    flag = self.flag if flag is None else flag
+    self.script.emit(op, operands, flag, o.LOG | extra)
+    index = len(self.steps)
+    if op in o.STORES:
+      self.regs[index] = self.script.regs - 1
+    step: Row = {"op": name}
+    if flag is not None and flag != self.script.legacy:
+      step["flag"] = "legacy" if flag else "basic"
+    self.steps.append(step | fields)
+    return index
+
+  def r(self, *steps: int) -> bytes:
+    return bytes(self.regs[s] for s in steps)
+
+  def decode(self, kind: str, raw: bytes) -> int:
+    code = {"sk": o.SK, "pk": o.PK, "sig": o.SIG}[kind]
+    operands = bytes([code, o.EAGER]) + o.blob(raw)
+    legacy = self.script.legacy
+    return self.add(
+      o.DECODE, "decode", operands, legacy, kind=kind, input=raw.hex()
+    )
+
+  def pubkey(self, sk: int) -> int:
+    legacy = self.script.legacy
+    return self.add(o.PUBLIC_KEY, "pubkey", self.r(sk), legacy, a=sk)
+
+  def sign(self, sk: int, msg: bytes) -> int:
+    operands = self.r(sk) + msg
+    legacy = self.script.legacy
+    return self.add(o.SIGN, "sign", operands, legacy, a=sk, msg=msg.hex())
+
+  def unary(self, op: int, name: str, a: int) -> int:
+    return self.add(op, name, self.r(a), a=a)
+
+  def binary(self, op: int, name: str, a: int, b: int) -> int:
+    return self.add(op, name, self.r(a, b), a=a, b=b)
+
+  def mul(self, a: int, k: bytes) -> int:
+    return self.add(o.MUL, "mul", self.r(a) + k, a=a, k=k.hex())
+
+  def verify(
+    self, sig: int, pk: int, msg: bytes, flag: bool | None = None
+  ) -> int:
+    operands = self.r(sig, pk) + msg
+    return self.add(
+      o.VERIFY, "verify", operands, flag, sig=sig, pk=pk, msg=msg.hex()
+    )
+
+  def agg(self, kind: str, items: list[int], pair: bool = False) -> int:
+    op = o.AGGREGATE_PK if kind == "pk" else o.AGGREGATE_SIG
+    operands = o.vec(self.r(i) for i in items)
+    extra = o.PAIR if pair else 0
+    return self.add(
+      op, f"agg_{kind}", operands, extra=extra, items=items, pair=pair
+    )
+
+  def dh(self, sk: int, pk: int, recv: int | None = None) -> int:
+    if recv is None:
+      return self.add(o.DH, "dh", self.r(sk, pk), sk=sk, pk=pk)
+    operands = self.r(recv, sk, pk)
+    return self.add(
+      o.DH, "dh", operands, extra=o.INPLACE, sk=sk, pk=pk, recv=recv
+    )
+
+  def run(self, probe: o.Probe) -> list[Row]:
+    records = probe.exec(self.script)
+    if len(records) != len(self.steps):
+      msg = f"{len(records)} records for {len(self.steps)} steps"
+      raise o.OracleError(msg)
+    for step, rec in zip(self.steps, records, strict=True):
+      log = [[symbol, code] for symbol, code in rec.log or []]
+      step |= {
+        "status": rec.status,
+        "code": rec.code,
+        "out": rec.output.hex(),
+        "log": log,
+      }
+    return self.steps
+
+
+def relic_rows(probe: o.Probe) -> list[Row]:
+  """The reference implementation's relic arithmetic on points outside the
+  subgroup, through its wrappers under the legacy scheme: the design's
+  probes P1 to P5 and its fixed vectors, each op with relic's code and the
+  relic calls it made. A legacy signature runs first: dashbls reads two
+  constants once per process, and their calls would land in the first
+  legacy hash's log."""
+  if probe.abi < o.RELIC_ABI:
+    msg = f"relic.json5 needs ABI {o.RELIC_ABI}, the probe has {probe.abi}"
+    raise o.OracleError(msg)
+  digest = h("relic msg")
+  zero, one, three = (v.to_bytes(32, "big") for v in (0, 1, 3))
+  rows: list[Row] = []
+  warm = Steps(legacy=True)
+  warm.sign(warm.decode("sk", one), digest)
+  warm.run(probe)
+
+  def row(probe_id: str, note: str, s: Steps) -> None:
+    rows.append(
+      {
+        "probe": probe_id,
+        "scheme": "legacy" if s.script.legacy else "basic",
+        "note": note,
+        "steps": s.run(probe),
+      }
+    )
+
+  s = Steps(legacy=True)
+  p = s.decode("pk", G1_ORDER3)
+  s.unary(o.IS_VALID, "is_valid", p)
+  q = s.mul(p, K)
+  s.unary(o.IS_VALID, "is_valid", q)
+  s.mul(p, one)
+  s.mul(p, three)
+  row(
+    "P1 P2",
+    "P2: [k](0, 2) for a 255-bit k gives (0, 0); P1, fp_inv(0) = 0 when"
+    " normalizing a zero z, is its wrapper consequence, not observed here",
+    s,
+  )
+
+  s = Steps(legacy=True)
+  g = s.pubkey(s.decode("sk", one))
+  q = s.mul(s.decode("pk", G1_ORDER3), K)
+  projc = s.binary(o.ADD, "add", g, s.unary(o.NEG, "neg", g))
+  basic = s.mul(g, zero)
+  reset = s.unary(o.NEG, "neg", projc)
+  for inf in (projc, basic, reset):
+    s.binary(o.IMPL_EQ, "impl_eq", inf, q)
+    s.binary(o.EQ, "eq", inf, q)
+  row("fixed G1", "G + (-G), [0]G and -(G + (-G)) against [k](0, 2)", s)
+
+  s = Steps(legacy=True)
+  h2 = s.sign(s.decode("sk", one), digest)
+  off = s.decode("sig", G2_OFF)
+  zero_z = s.binary(o.ADD, "add", off, off)
+  projc = s.binary(o.ADD, "add", h2, s.unary(o.NEG, "neg", h2))
+  reset = s.unary(o.NEG, "neg", projc)
+  for inf in (projc, reset, s.mul(h2, zero)):
+    s.binary(o.IMPL_EQ, "impl_eq", inf, zero_z)
+  s.unary(o.IS_VALID, "is_valid", zero_z)
+  row("fixed G2", "infinities against a doubled off-curve G2 point (y = 0)", s)
+
+  s = Steps(legacy=True)
+  p = s.decode("pk", G1_OFF)
+  s.unary(o.IS_VALID, "is_valid", p)
+  s.binary(o.ADD, "add", p, p)
+  s.mul(p, K)
+  s.mul(p, one)
+  row("P3", "g1_add and g1_mul on an off-curve point", s)
+
+  s = Steps(legacy=True)
+  g = s.pubkey(s.decode("sk", one))
+  off = s.decode("sig", G2_OFF)
+  s.verify(off, g, digest)
+  s.verify(off, g, digest, flag=False)
+  row(
+    "P4 P5",
+    "P5: an off-curve signature's zero Miller value, rejected; P4, FE(0) = 0,"
+    " is its wrapper consequence, not observed here",
+    s,
+  )
+  return rows
+
+
+# relic's GLV and GLS constants: lambda = x^2 - 1 and |x|, the BLS12-381
+# parameter, which bound bn_rec_glv's and bn_rec_frb's digits.
+LAMBDA = 0xAC45A4010001A40200000000FFFFFFFF
+X_ABS = 0xD201000000010000
+G1_OFF_S1 = b"\x80" + bytes(46) + b"\x01"
+ZEROS = {"pk": bytes(48), "sig": bytes(96)}  # Core's invalid objects
+
+
+def arith_scalars() -> list[bytes]:
+  """The design's scalar classes (section 8): the mul_dig boundary, r and
+  its neighbours, 2^256 - 1, and scalars at the GLV and GLS recodings'
+  boundaries."""
+  values = [0, 1, 2, 2**64 - 1, 2**64, R - 1, R, R + 1, 2**256 - 1]
+  values += [LAMBDA - 1, LAMBDA, LAMBDA + 1, R // 2, R // 2 + 1]
+  values += [X_ABS, X_ABS + 1, X_ABS**2, X_ABS**3 % R, LAMBDA * LAMBDA % R]
+  values += [int.from_bytes(h("arith k", i), "big") for i in range(2)]
+  return [v.to_bytes(32, "big") for v in values]
+
+
+def arith_rows(probe: o.Probe, decoded: list[Row]) -> list[Row]:
+  """Core's element operations over mixed registers (BS11a-3 D17, the
+  design's section 8 seeds), in both groups: every row of the design's
+  section 3.1 shape table against Exotic values and a zero-z engine
+  result, the scalar classes, the span and pair aggregations, DH with
+  invalid sides and a kept element, and SER_HASH's cache. Each op is
+  logged, as in relic.json5."""
+  if probe.abi < o.ARITH_ABI:
+    msg = f"arith.json5 needs ABI {o.ARITH_ABI}, the probe has {probe.abi}"
+    raise o.OracleError(msg)
+  digest = h("arith msg")
+  zero, one = bytes(32), (1).to_bytes(32, "big")
+  order = R.to_bytes(32, "big")
+  warm = Steps(legacy=True)
+  warm.sign(warm.decode("sk", one), digest)
+  warm.run(probe)
+  exotic = {
+    kind: [
+      bytes.fromhex(str(r["in"]))
+      for r in decoded
+      if r["kind"] == kind
+      and str(r["class"]).startswith(EXOTIC)
+      and str(r["eager_legacy"]).startswith("V")
+    ][:3]
+    for kind in ("pk", "sig")
+  }
+  exotic["pk"] += [G1_ORDER3, G1_OFF, G1_OFF_S1]
+  exotic["sig"] += [G2_OFF]
+  off = {"pk": G1_OFF, "sig": G2_OFF}
+  rows: list[Row] = []
+
+  def row(name: str, note: str, s: Steps) -> None:
+    rows.append(
+      {
+        "probe": name,
+        "scheme": "legacy" if s.script.legacy else "basic",
+        "note": note,
+        "steps": s.run(probe),
+      }
+    )
+
+  def usable(s: Steps, kind: str) -> tuple[int, int]:
+    sk1, sk2 = s.decode("sk", one), s.decode("sk", sk_of("arith", kind))
+    if kind == "pk":
+      return s.pubkey(sk1), s.pubkey(sk2)
+    return s.sign(sk1, digest), s.sign(sk2, digest)
+
+  def neg(s: Steps, a: int) -> int:
+    return s.unary(o.NEG, "neg", a)
+
+  def add(s: Steps, a: int, b: int) -> int:
+    return s.binary(o.ADD, "add", a, b)
+
+  def shapes(s: Steps, p: int, q: int) -> list[int]:
+    """The shape table's producers on Usable values."""
+    infb, infp, fin = s.mul(p, zero), add(s, p, neg(s, p)), add(s, p, q)
+    return [
+      p, infb, infp, fin, neg(s, infp), neg(s, infb), neg(s, fin),
+      add(s, infb, p), add(s, p, infb), add(s, infp, infb),
+      add(s, infb, infp), add(s, infp, p), add(s, p, infp),
+      add(s, infp, infp),
+    ]  # fmt: skip
+
+  def engines(s: Steps, kind: str) -> list[int]:
+    """An Exotic value, a zero-z engine result and an engine product."""
+    e = s.decode(kind, exotic[kind][-1])
+    o_ = s.decode(kind, off[kind])
+    return [e, add(s, o_, o_), s.mul(e, K)]
+
+  for kind in ("pk", "sig"):
+    for flag in (True, False):
+      s = Steps(legacy=True, flag=flag)
+      p, q = usable(s, kind)
+      shape, engine = shapes(s, p, q), engines(s, kind)
+      for a in shape:
+        s.unary(o.IS_VALID, "is_valid", a)
+        for b in engine:
+          s.binary(o.IMPL_EQ, "impl_eq", a, b)
+          s.binary(o.EQ, "eq", a, b)
+          add(s, a, b)
+          add(s, b, a)
+      for b in engine:
+        s.unary(o.IS_VALID, "is_valid", b)
+      row(
+        f"shape {kind}",
+        "the shape table's producers against an Exotic value, a zero-z"
+        " engine result and an engine product",
+        s,
+      )
+
+    s = Steps(legacy=False)
+    p, q = usable(s, kind)
+    shape = [*shapes(s, p, q), s.decode(kind, ZEROS[kind])]
+    for i, a in enumerate(shape):
+      s.unary(o.IS_VALID, "is_valid", a)
+      for b in shape[i:]:
+        s.binary(o.IMPL_EQ, "impl_eq", a, b)
+        s.binary(o.EQ, "eq", a, b)
+    row(f"shape {kind}", "the shape table's producers among themselves", s)
+
+    s = Steps(legacy=True)
+    p, q = usable(s, kind)
+    infp = add(s, p, neg(s, p))
+    bases = [p, infp, add(s, p, q), *engines(s, kind)]
+    bases += [s.decode(kind, x) for x in exotic[kind][:-1]]
+    for a in bases:
+      for k in arith_scalars():
+        s.mul(a, k)
+    row(f"scalars {kind}", "the scalar classes on Usable and Exotic values", s)
+
+    for flag in (True, False):
+      s = Steps(legacy=True, flag=flag)
+      p, q = usable(s, kind)
+      invalid = s.decode(kind, ZEROS[kind])
+      infp = add(s, p, neg(s, p))
+      e, z, w = engines(s, kind)
+      xs = [s.decode(kind, x) for x in exotic[kind][:-1]]
+      spans = [[], [p], [e], [invalid], [p, q, e, invalid, infp, z]]
+      spans += [[infp, s.mul(p, zero)], [z, e], [w, p, w]]
+      spans += [[x, neg(s, x)] for x in xs] + [[x, p] for x in xs]
+      for span in spans:
+        s.agg(kind, span)
+      for a, b in [(p, e), (e, z), (infp, p), (p, invalid), (invalid, e)]:
+        s.agg(kind, [a, b], pair=True)
+      row(f"agg {kind}", "span and pair aggregation over mixed registers", s)
+
+  for flag in (True, False):
+    for legacy in (True, False):
+      s = Steps(legacy=legacy, flag=flag)
+      p, _ = usable(s, "pk")
+      sks = [s.decode("sk", one), s.decode("sk", sk_of("arith dh"))]
+      sks += [s.decode("sk", zero)]
+      if not legacy:
+        sks.append(s.decode("sk", order))
+      pks = [p, add(s, p, neg(s, p)), s.decode("pk", ZEROS["pk"])]
+      kept = p
+      if legacy:
+        e, z, w = engines(s, "pk")
+        pks += [e, z, w] + [s.decode("pk", x) for x in exotic["pk"][:-1]]
+        kept = e
+      for sk in sks:
+        for pk in pks:
+          d = s.dh(sk, pk)
+          s.add(o.SER, "ser", s.r(d), flag=not flag, a=d)
+      k = s.dh(sks[2], kept, recv=kept)
+      s.unary(o.IS_VALID, "is_valid", k)
+      s.binary(o.IMPL_EQ, "impl_eq", k, kept)
+      s.binary(o.EQ, "eq", k, kept)
+      s.unary(o.SER, "ser", k)
+      add(s, k, p)
+      note = "DH over valid, invalid and Exotic sides, and a kept element"
+      row("dh", note, s)
+
+  for kind in ("pk", "sig"):
+    s = Steps(legacy=True)
+    p, q = usable(s, kind)
+    invalid = s.decode(kind, ZEROS[kind])
+    infp = add(s, p, neg(s, p))
+    regs = [p, add(s, p, q), infp, invalid, *engines(s, kind)]
+    for a in regs:
+      s.unary(o.SER, "ser", a)
+      s.add(o.SER, "ser", s.r(a), flag=False, a=a)
+      s.unary(o.SER_HASH, "ser_hash", a)
+      s.add(o.SER_HASH, "ser_hash", s.r(a), flag=False, a=a)
+    for a in regs:
+      b = s.unary(o.NEG, "neg", s.unary(o.NEG, "neg", a))
+      s.add(o.SER_HASH, "ser_hash", s.r(b), flag=False, a=b)
+      s.unary(o.SER_HASH, "ser_hash", b)
+    row(f"ser {kind}", "SER and SER_HASH's cache under both flags", s)
+  return rows
+
+
 def decode_rows(probe: o.Probe) -> list[Row]:
   """bls_wrapper's eager inputs, decoded by the oracle eagerly and lazily."""
   # bls_wrapper's generator, loaded by path: it is also named gen. Its
@@ -551,20 +939,32 @@ def main() -> int:
   )
   ap.add_argument("--probe", required=True)
   ap.add_argument("--out-dir", type=Path, required=True)
+  ap.add_argument("--only", action="append", help="write only these files")
   args = ap.parse_args()
 
   probe = o.Probe(args.probe)
   core = probe.core_version
-  files = {
-    "hash_to_g2": per_scheme(probe, lambda g, _: hash_to_g2(g)),
-    "sign": per_scheme(probe, sign_rows),
-    "aggregate": per_scheme(probe, aggregate_rows),
-    "secure": per_scheme(probe, secure_rows),
-    "threshold": per_scheme(probe, threshold_rows),
-    "ies": per_scheme(probe, ies_rows),
+  decoded = functools.cache(lambda: decode_rows(probe))
+  builders: dict[str, Callable[[], object]] = {
+    "hash_to_g2": lambda: per_scheme(probe, lambda g, _: hash_to_g2(g)),
+    "sign": lambda: per_scheme(probe, sign_rows),
+    "aggregate": lambda: per_scheme(probe, aggregate_rows),
+    "secure": lambda: per_scheme(probe, secure_rows),
+    "threshold": lambda: per_scheme(probe, threshold_rows),
+    "ies": lambda: per_scheme(probe, ies_rows),
+    "decode": lambda: {"rows": decoded()},
+    "edge": lambda: {"rows": edge_rows(probe, decoded())},
+    "relic": lambda: {"rows": relic_rows(probe)},
+    "arith": lambda: {"rows": arith_rows(probe, decoded())},
   }
-  files["decode"] = {"rows": decode_rows(probe)}
-  files["edge"] = {"rows": edge_rows(probe, files["decode"]["rows"])}
+  unknown = set(args.only or ()) - builders.keys()
+  if unknown:
+    ap.error(f"no such file: {', '.join(sorted(unknown))}")
+  files = {
+    name: build()
+    for name, build in builders.items()
+    if args.only is None or name in args.only
+  }
   probe.close()
   args.out_dir.mkdir(parents=True, exist_ok=True)
   for name, body in files.items():

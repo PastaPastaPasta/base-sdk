@@ -275,6 +275,12 @@ impl Zeroize for Fr {
 pub(crate) struct Fp(pub(super) blst_fp);
 
 impl Fp {
+  /// The element whose Montgomery form has these little-endian limbs, as
+  /// relic's raw digits set it.
+  pub(crate) const fn from_raw_limbs(l: [u64; 6]) -> Self {
+    Self(blst_fp { l })
+  }
+
   /// Construct from a `u64`, zero-extended into the low limbs.
   pub(crate) fn from_u64(v: u64) -> Self {
     let mut bytes = [0u8; 48];

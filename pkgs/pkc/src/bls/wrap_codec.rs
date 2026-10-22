@@ -9,10 +9,14 @@
 //! Each kind answers one question per scheme. Does Core's `SetBytes` accept
 //! the bytes as a valid object that re-serializes to the same bytes?
 
+use super::elem::BlsArith;
 use super::group::{G1Affine, G2Affine, G1, G2};
+use super::relic::ep::Ep;
+use super::relic::ep2::Ep2;
 use super::scalar::{Fp, Fr};
 use super::scheme_ctx::BlsSchemeKind;
 use super::{BLS_PK_LEN, BLS_SIG_LEN, BLS_SK_LEN};
+use crate::prelude::*;
 
 use blst::BLST_ERROR;
 #[cfg(feature = "codec")]
@@ -28,17 +32,34 @@ const GROUP_ORDER: [u8; BLS_SK_LEN] = hex!("73eda753299d7d483339d80809a1d80553bd
 
 /// Leading-byte bit 0x80, the sign of `y` in the legacy layout and the
 /// compression flag in the basic one.
-const FLAG_HIGH: u8 = 0x80;
+pub(super) const FLAG_HIGH: u8 = 0x80;
 /// Leading-byte bit 0x40, infinity in the basic layout.
-const FLAG_INFINITY: u8 = 0x40;
+pub(super) const FLAG_INFINITY: u8 = 0x40;
 /// Leading-byte bit 0x20, the sign of `y` in the basic layout.
-const FLAG_SIGN: u8 = 0x20;
+pub(super) const FLAG_SIGN: u8 = 0x20;
 /// The leading-byte bits that belong to a coordinate.
-const COORD_MASK: u8 = 0x1f;
+pub(super) const COORD_MASK: u8 = 0x1f;
 
 /// Keeps [`BlsWire`] sealed to the kinds this crate defines.
 pub(crate) mod sealed {
   pub trait Sealed {}
+}
+
+/// How an element is held besides its serialization and point (design D27,
+/// Lemma T'): Core's coord tag for a value blst computes, or relic's
+/// coordinates for one only the engine can.
+#[doc(hidden)]
+#[derive(Clone, Debug, Default)]
+pub enum BlsRepr<E> {
+  /// `BASIC`: decoded values, the default element and every `g*_mul`
+  /// result.
+  #[default]
+  Basic,
+  /// `PROJC`: a finite `g*_add` result, or the infinity a sum of a point
+  /// and its negation leaves.
+  Projc,
+  /// relic's coordinates, for an element of the engine (BS11a-3 D6).
+  Relic(Box<E>),
 }
 
 /// A curve point a valid object holds.
@@ -113,6 +134,10 @@ pub trait BlsWire<const N: usize>: sealed::Sealed + Sized + 'static {
   /// What an object holds besides its bytes.
   type Point: Clone + Debug + Eq + Send + Sync;
 
+  /// How an arithmetic result is held besides its bytes and point.
+  #[doc(hidden)]
+  type Repr: Clone + Debug + Default + Send + Sync;
+
   /// Core's default element as basic-scheme bytes and point: infinity for a
   /// curve point, zero for a secret key. An invalid object holds it unless an
   /// operation that failed in place kept its previous element.
@@ -151,7 +176,11 @@ pub trait BlsWire<const N: usize>: sealed::Sealed + Sized + 'static {
 }
 
 /// A curve-point kind, the kinds Core also wraps lazily.
-pub trait BlsWirePoint<const N: usize>: BlsWire<N> {}
+pub trait BlsWirePoint<const N: usize>: BlsWire<N> {
+  /// The element as `BlsElem` computes with it.
+  #[doc(hidden)]
+  type Arith: Clone + Debug + Send + Sync;
+}
 
 /// Whether the bytes are all zero, which Core's `SetBytes` resets to the
 /// invalid object before any decoding. Constant time, as the bytes may be a
@@ -292,11 +321,12 @@ fn g2_decode_legacy(bytes: &[u8; BLS_SIG_LEN]) -> Option<([u8; BLS_SIG_LEN], Opt
 /// Implements [`BlsWire`] and [`BlsWirePoint`] for a curve group from its
 /// basic and legacy decoders and its legacy encoder.
 macro_rules! impl_wire_point {
-  ($group:ty, $affine:ty, $len:expr, $decode_basic:ident, $decode_legacy:ident, $to_legacy:ident) => {
+  ($group:ty, $affine:ty, $engine:ty, $len:expr, $decode_basic:ident, $decode_legacy:ident, $to_legacy:ident) => {
     impl sealed::Sealed for $group {}
 
     impl BlsWire<$len> for $group {
       type Point = BlsPoint<$affine>;
+      type Repr = BlsRepr<$engine>;
 
       const SECRET: bool = false;
 
@@ -335,13 +365,16 @@ macro_rules! impl_wire_point {
       }
     }
 
-    impl BlsWirePoint<$len> for $group {}
+    impl BlsWirePoint<$len> for $group {
+      type Arith = BlsArith<$group, $engine>;
+    }
   };
 }
 
 impl_wire_point!(
   G1,
   G1Affine,
+  Ep,
   BLS_PK_LEN,
   g1_decode_basic,
   g1_decode_legacy,
@@ -350,6 +383,7 @@ impl_wire_point!(
 impl_wire_point!(
   G2,
   G2Affine,
+  Ep2,
   BLS_SIG_LEN,
   g2_decode_basic,
   g2_decode_legacy,
@@ -363,6 +397,7 @@ impl sealed::Sealed for Fr {}
 /// Basic refuses keys above `r` and keeps `r` itself unreduced.
 impl BlsWire<BLS_SK_LEN> for Fr {
   type Point = ();
+  type Repr = ();
 
   const SECRET: bool = true;
 

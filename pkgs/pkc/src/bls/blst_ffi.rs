@@ -237,6 +237,22 @@ type_cvrt!(From<Fr> for blst_scalar, |fr| {
   out
 });
 
+impl Fp {
+  /// Multiplicative inverse; the inverse of zero is left unspecified.
+  pub(crate) fn inverse(&self) -> Self {
+    let mut out = blst_fp::default();
+    unsafe { blst_fp_inverse(&mut out, &self.0) };
+    Self(out)
+  }
+
+  /// The square of this element.
+  pub(crate) fn square(&self) -> Self {
+    let mut out = blst_fp::default();
+    unsafe { blst_fp_sqr(&mut out, &self.0) };
+    Self(out)
+  }
+}
+
 impl Add for Fp {
   type Output = Self;
 
@@ -430,6 +446,11 @@ impl G1Affine {
     unsafe { blst_p1_affine_is_inf(&self.0) }
   }
 
+  /// Whether the point satisfies the curve equation, whatever its subgroup.
+  pub(crate) fn on_curve(&self) -> bool {
+    unsafe { blst_p1_affine_on_curve(&self.0) }
+  }
+
   /// Convert to projective coordinates.
   pub(crate) fn to_projective(self) -> G1 {
     let mut out = blst_p1::default();
@@ -544,6 +565,11 @@ impl Point for G2 {
 }
 
 impl G2Affine {
+  /// Whether the point satisfies the curve equation, whatever its subgroup.
+  pub(crate) fn on_curve(&self) -> bool {
+    unsafe { blst_p2_affine_on_curve(&self.0) }
+  }
+
   /// Convert to projective coordinates.
   pub(crate) fn to_projective(self) -> G2 {
     let mut out = blst_p2::default();

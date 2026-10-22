@@ -7,7 +7,7 @@
 //! The BLS12-381 groups G1 and G2.
 
 use super::macros::impl_group;
-use super::scalar::{Fp2, Fr, FR_BITS};
+use super::scalar::{Fp, Fp2, Fr, FR_BITS};
 
 use blst::{blst_p1, blst_p1_affine, blst_p2, blst_p2_affine};
 use dash_types::type_cvrt;
@@ -84,6 +84,26 @@ type_cvrt!(From<blst_p1> for G1, |raw| Self(*raw));
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct G1Affine(pub(super) blst_p1_affine);
+
+impl G1Affine {
+  /// The affine point with coordinates `x` and `y`, unchecked.
+  pub(crate) fn from_coords(x: Fp, y: Fp) -> Self {
+    Self(blst_p1_affine {
+      x: x.into(),
+      y: y.into(),
+    })
+  }
+
+  /// The `x` coordinate.
+  pub(crate) fn x(&self) -> Fp {
+    Fp::from(self.0.x)
+  }
+
+  /// The `y` coordinate.
+  pub(crate) fn y(&self) -> Fp {
+    Fp::from(self.0.y)
+  }
+}
 
 impl_group!(G1, G1Affine, 48);
 
