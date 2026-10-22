@@ -8,6 +8,19 @@ build:
   - rust-toolchain.toml
   - uv.lock
 
+bazel:
+  - .bazelignore
+  - .bazeliskrc
+  - .bazelrc
+  - .bazelversion
+  - .github/workflows/build_bazel.yml
+  - bazel/**
+  - BUILD.bazel
+  - Justfile
+  - meta/bazel/**
+  - MODULE.bazel
+  - MODULE.bazel.lock
+
 msrv:
   - .github/workflows/build_msrv.yml
 
