@@ -45,7 +45,8 @@ pub struct CompressedHeader {
   /// Which fields the entry carries.
   #[getset(get_copy = "pub")]
   flags: u8,
-  /// The header, with the fields the entry leaves out restored.
+  /// The header, with the fields the entry leaves out restored, or zero where
+  /// there is nothing to restore them from.
   #[getset(get = "pub")]
   header: BlockHeader,
   /// Time against the entry before, if the entry leaves the time out.
@@ -93,7 +94,8 @@ impl CompressedHeader {
   }
 
   /// Reads an entry, restoring the fields it leaves out from `prev` and
-  /// `versions` as [`Self::compress`] takes them.
+  /// `versions` as [`Self::compress`] takes them. A field with nothing to
+  /// restore it from stays zero.
   fn decode_wire(data: &mut &[u8], prev: Option<&BlockHeader>, versions: &mut Vec<i32>) -> Result<Self, DecodeError> {
     let flags = u8::decode(data)?;
     let version = if flags & VERSION_OFFSET_MASK == 0 {
@@ -113,7 +115,7 @@ impl CompressedHeader {
       let time_offset = i16::decode(data)?;
       let time = match prev {
         Some(prev) => prev.time().wrapping_add_signed(time_offset.into()),
-        None => time_offset as u32,
+        None => 0,
       };
       (time, time_offset)
     };
@@ -123,24 +125,22 @@ impl CompressedHeader {
       prev.map_or(0, BlockHeader::bits)
     };
     let nonce = u32::decode(data)?;
-    // The version is restored last, so an entry cut short fails as such
-    // before a version offset past the recent versions does.
-    let version = match version {
-      Some(version) => {
+    let version = match (version, prev) {
+      (Some(version), _) => {
         save_version(versions, version);
         version
       }
-      None => {
-        let pos = usize::from((flags & VERSION_OFFSET_MASK) - 1);
-        if pos >= versions.len() {
-          return Err(DecodeError::InvalidValue {
-            expected: (0..versions.len() as u64).collect(),
-            actual: pos as u64,
-          });
-        }
-        versions[..=pos].rotate_right(1);
-        versions[0]
+      (None, None) => {
+        save_version(versions, 0);
+        0
       }
+      (None, Some(_)) => match usize::from(flags & VERSION_OFFSET_MASK) {
+        offset if offset <= versions.len() => {
+          versions[..offset].rotate_right(1);
+          versions[0]
+        }
+        _ => 0,
+      },
     };
     Ok(Self {
       flags,
@@ -208,7 +208,8 @@ impl_p2p!(Headers2);
 
 impl BaseCodec for Headers2 {
   /// Decodes a `headers2`, restoring the fields each entry leaves out from
-  /// the entry before it.
+  /// the entries before it, or leaving them at zero where those give nothing
+  /// to restore from.
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let count = decode_count(data, Self::MAX_COUNT, MIN_HEADERS2_SIZE)?;
     let mut versions = Vec::with_capacity(MAX_VERSION_CACHE);
