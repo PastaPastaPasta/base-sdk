@@ -8,8 +8,13 @@
 
 use dash_dev::Corpus;
 use dash_num::Hash256;
-use dash_params::{Bip9Deployment, Bip9Deployments, ChainParams, ChainTxData, Checkpoint, ConsensusParams, Network};
+use dash_params::{
+  Bip9Deployment, Bip9Deployments, ChainParams, ChainTxData, Checkpoint, ConsensusParams, LlmqParams, Network,
+  AVAILABLE_LLMQS,
+};
+use dash_primitives::LlmqType;
 use dash_script::AddrParams;
+use dash_types::Numeric;
 use hex_conservative::DisplayHex;
 use rstest::rstest;
 use serde::Deserialize;
@@ -146,6 +151,7 @@ struct ConsensusVector {
   pow_dgw_height: u32,
   minimum_chain_work: String,
   default_assume_valid: String,
+  llmqs: Vec<String>,
   llmq_type_chain_locks: String,
   llmq_type_dip0024_instant_send: String,
   llmq_type_platform: String,
@@ -201,6 +207,7 @@ impl From<&ConsensusParams> for ConsensusVector {
       pow_dgw_height,
       minimum_chain_work,
       default_assume_valid,
+      llmqs,
       llmq_type_chain_locks,
       llmq_type_dip0024_instant_send,
       llmq_type_platform,
@@ -253,6 +260,7 @@ impl From<&ConsensusParams> for ConsensusVector {
       pow_dgw_height: pow_dgw_height.to_u32(),
       minimum_chain_work: Hash256::from(minimum_chain_work).to_string(),
       default_assume_valid: default_assume_valid.to_string(),
+      llmqs: llmqs.iter().map(LlmqType::to_string).collect(),
       llmq_type_chain_locks: llmq_type_chain_locks.to_string(),
       llmq_type_dip0024_instant_send: llmq_type_dip0024_instant_send.to_string(),
       llmq_type_platform: llmq_type_platform.to_string(),
@@ -380,6 +388,65 @@ impl From<&ChainTxData> for TxDataVector {
   }
 }
 
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct LlmqVector {
+  #[serde(rename = "type")]
+  llmq_type: u8,
+  name: String,
+  use_rotation: bool,
+  size: i32,
+  min_size: i32,
+  threshold: i32,
+  dkg_interval: i32,
+  dkg_phase_blocks: i32,
+  dkg_mining_window_start: i32,
+  dkg_mining_window_end: i32,
+  dkg_bad_votes_threshold: i32,
+  signing_active_quorum_count: i32,
+  keep_old_connections: i32,
+  keep_old_keys: i32,
+  recovery_members: i32,
+}
+
+impl From<&LlmqParams> for LlmqVector {
+  fn from(llmq: &LlmqParams) -> Self {
+    let LlmqParams {
+      llmq_type,
+      use_rotation,
+      size,
+      min_size,
+      threshold,
+      dkg_interval,
+      dkg_phase_blocks,
+      dkg_mining_window_start,
+      dkg_mining_window_end,
+      dkg_bad_votes_threshold,
+      signing_active_quorum_count,
+      keep_old_connections,
+      keep_old_keys,
+      recovery_members,
+    } = *llmq;
+    Self {
+      llmq_type: llmq_type.to_base(),
+      name: llmq_type.to_string(),
+      use_rotation,
+      size,
+      min_size,
+      threshold,
+      dkg_interval,
+      dkg_phase_blocks,
+      dkg_mining_window_start,
+      dkg_mining_window_end,
+      dkg_bad_votes_threshold,
+      signing_active_quorum_count,
+      keep_old_connections,
+      keep_old_keys,
+      recovery_members,
+    }
+  }
+}
+
 fn pair((height, hash): Checkpoint) -> (u32, String) {
   (height.to_u32(), hash.to_string())
 }
@@ -396,5 +463,30 @@ fn chains_match_vectors() {
   assert_eq!(vectors.len(), NETWORKS.len());
   for (network, vector) in NETWORKS.into_iter().zip(vectors) {
     assert_eq!(ChainVector::from(network.chain()), vector, "{network:?}");
+  }
+}
+
+#[rstest]
+fn llmqs_match_vectors() {
+  let vectors = corpus().vectors::<LlmqVector>("llmqs");
+  let llmqs: Vec<_> = AVAILABLE_LLMQS.iter().map(LlmqVector::from).collect();
+  assert_eq!(llmqs, vectors);
+}
+
+#[rstest]
+fn chains_look_up_the_llmqs_they_run() {
+  let corpus = corpus();
+  let chains = corpus.vectors::<ChainVector>("chains");
+  let llmqs = corpus.vectors::<LlmqVector>("llmqs");
+  for (network, chain) in NETWORKS.into_iter().zip(chains) {
+    for &llmq_type in LlmqType::variants() {
+      let name = llmq_type.to_string();
+      let expected = llmqs
+        .iter()
+        .find(|llmq| llmq.name == name)
+        .filter(|_| chain.consensus.llmqs.contains(&name));
+      let actual = network.consensus().llmq(llmq_type).map(LlmqVector::from);
+      assert_eq!(actual.as_ref(), expected, "{network:?} {name}");
+    }
   }
 }

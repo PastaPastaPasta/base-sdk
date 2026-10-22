@@ -130,6 +130,11 @@ BOOST_AUTO_TEST_CASE(chain_params)
         PrintField(4, "pow_dgw_height", consensus.nPowDGWHeight);
         PrintField(4, "minimum_chain_work", Quoted(consensus.nMinimumChainWork.GetHex()));
         PrintField(4, "default_assume_valid", Quoted(consensus.defaultAssumeValid.GetHex()));
+        std::vector<std::string> llmqs;
+        for (const auto& llmq : consensus.llmqs) {
+            llmqs.emplace_back(llmq.name);
+        }
+        PrintField(4, "llmqs", List(llmqs));
         PrintField(4, "llmq_type_chain_locks", LLMQName(consensus.llmqTypeChainLocks));
         PrintField(4, "llmq_type_dip0024_instant_send", LLMQName(consensus.llmqTypeDIP0024InstantSend));
         PrintField(4, "llmq_type_platform", LLMQName(consensus.llmqTypePlatform));
@@ -264,6 +269,7 @@ BOOST_AUTO_TEST_CASE(chain_params)
         "pow_dgw_height": 34140,
         "minimum_chain_work": "00000000000000000000000000000000000000000000ba7225adc3153945d14d",
         "default_assume_valid": "00000000000000119fe42827219e0686d3f7b494ae65f823194c740c5dbab492",
+        "llmqs": ["llmq_50_60", "llmq_60_75", "llmq_400_60", "llmq_400_85", "llmq_100_67"],
         "llmq_type_chain_locks": "llmq_400_60",
         "llmq_type_dip0024_instant_send": "llmq_60_75",
         "llmq_type_platform": "llmq_100_67",
@@ -426,6 +432,7 @@ BOOST_AUTO_TEST_CASE(chain_params)
         "pow_dgw_height": 4002,
         "minimum_chain_work": "000000000000000000000000000000000000000000000000036c8f738da818d2",
         "default_assume_valid": "000000541a23f9db7411cddbe50f9f1ebd4aa7108ebdcad62214753f648c0239",
+        "llmqs": ["llmq_50_60", "llmq_60_75", "llmq_400_60", "llmq_400_85", "llmq_100_67", "llmq_25_67"],
         "llmq_type_chain_locks": "llmq_50_60",
         "llmq_type_dip0024_instant_send": "llmq_60_75",
         "llmq_type_platform": "llmq_25_67",
@@ -568,6 +575,7 @@ BOOST_AUTO_TEST_CASE(chain_params)
         "pow_dgw_height": 34140,
         "minimum_chain_work": "0000000000000000000000000000000000000000000000000000000000000000",
         "default_assume_valid": "0000000000000000000000000000000000000000000000000000000000000000",
+        "llmqs": ["llmq_test", "llmq_test_instantsend", "llmq_test_v17", "llmq_test_dip0024", "llmq_test_platform"],
         "llmq_type_chain_locks": "llmq_test",
         "llmq_type_dip0024_instant_send": "llmq_test_dip0024",
         "llmq_type_platform": "llmq_test_platform",
@@ -607,6 +615,286 @@ BOOST_AUTO_TEST_CASE(chain_params)
         "tx_count": 0,
         "tx_rate": 0,
       },
+    },
+  ],
+/*
+BOOST_AUTO_TEST_CASE(llmq_params)
+{
+    for (const auto& llmq : Consensus::available_llmqs) {
+        std::printf("    {\n");
+        std::printf("      \"type\": %d,\n", static_cast<int>(llmq.type));
+        std::printf("      \"name\": \"%s\",\n", std::string{llmq.name}.c_str());
+        std::printf("      \"use_rotation\": %s,\n", llmq.useRotation ? "true" : "false");
+        std::printf("      \"size\": %d,\n", llmq.size);
+        std::printf("      \"min_size\": %d,\n", llmq.minSize);
+        std::printf("      \"threshold\": %d,\n", llmq.threshold);
+        std::printf("      \"dkg_interval\": %d,\n", llmq.dkgInterval);
+        std::printf("      \"dkg_phase_blocks\": %d,\n", llmq.dkgPhaseBlocks);
+        std::printf("      \"dkg_mining_window_start\": %d,\n", llmq.dkgMiningWindowStart);
+        std::printf("      \"dkg_mining_window_end\": %d,\n", llmq.dkgMiningWindowEnd);
+        std::printf("      \"dkg_bad_votes_threshold\": %d,\n", llmq.dkgBadVotesThreshold);
+        std::printf("      \"signing_active_quorum_count\": %d,\n", llmq.signingActiveQuorumCount);
+        std::printf("      \"keep_old_connections\": %d,\n", llmq.keepOldConnections);
+        std::printf("      \"keep_old_keys\": %d,\n", llmq.keepOldKeys);
+        std::printf("      \"recovery_members\": %d,\n", llmq.recoveryMembers);
+        std::printf("    },\n");
+    }
+}
+*/
+  // Each vector holds one entry of the reference implementation's LLMQ table,
+  // in its order. `type` is the byte of the LLMQ type.
+  "llmqs": [
+    // Regtest's ChainLocks and hard-fork signalling quorum.
+    {
+      "type": 100,
+      "name": "llmq_test",
+      "use_rotation": false,
+      "size": 3,
+      "min_size": 2,
+      "threshold": 2,
+      "dkg_interval": 24,
+      "dkg_phase_blocks": 2,
+      "dkg_mining_window_start": 10,
+      "dkg_mining_window_end": 18,
+      "dkg_bad_votes_threshold": 2,
+      "signing_active_quorum_count": 2,
+      "keep_old_connections": 3,
+      "keep_old_keys": 4,
+      "recovery_members": 3,
+    },
+    // Run by regtest, with the shape of `llmq_test`.
+    {
+      "type": 104,
+      "name": "llmq_test_instantsend",
+      "use_rotation": false,
+      "size": 3,
+      "min_size": 2,
+      "threshold": 2,
+      "dkg_interval": 24,
+      "dkg_phase_blocks": 2,
+      "dkg_mining_window_start": 10,
+      "dkg_mining_window_end": 18,
+      "dkg_bad_votes_threshold": 2,
+      "signing_active_quorum_count": 2,
+      "keep_old_connections": 3,
+      "keep_old_keys": 4,
+      "recovery_members": 3,
+    },
+    // Run by regtest to test the activation of a new quorum type.
+    {
+      "type": 102,
+      "name": "llmq_test_v17",
+      "use_rotation": false,
+      "size": 3,
+      "min_size": 2,
+      "threshold": 2,
+      "dkg_interval": 24,
+      "dkg_phase_blocks": 2,
+      "dkg_mining_window_start": 10,
+      "dkg_mining_window_end": 18,
+      "dkg_bad_votes_threshold": 2,
+      "signing_active_quorum_count": 2,
+      "keep_old_connections": 3,
+      "keep_old_keys": 4,
+      "recovery_members": 3,
+    },
+    // Regtest's rotating InstantSend quorum.
+    {
+      "type": 103,
+      "name": "llmq_test_dip0024",
+      "use_rotation": true,
+      "size": 4,
+      "min_size": 4,
+      "threshold": 3,
+      "dkg_interval": 24,
+      "dkg_phase_blocks": 2,
+      "dkg_mining_window_start": 12,
+      "dkg_mining_window_end": 20,
+      "dkg_bad_votes_threshold": 2,
+      "signing_active_quorum_count": 2,
+      "keep_old_connections": 4,
+      "keep_old_keys": 4,
+      "recovery_members": 3,
+    },
+    // Regtest's Platform quorum.
+    {
+      "type": 106,
+      "name": "llmq_test_platform",
+      "use_rotation": false,
+      "size": 3,
+      "min_size": 2,
+      "threshold": 2,
+      "dkg_interval": 24,
+      "dkg_phase_blocks": 2,
+      "dkg_mining_window_start": 10,
+      "dkg_mining_window_end": 18,
+      "dkg_bad_votes_threshold": 2,
+      "signing_active_quorum_count": 2,
+      "keep_old_connections": 4,
+      "keep_old_keys": 1440,
+      "recovery_members": 3,
+    },
+    // A quorum that none of the three chains runs.
+    {
+      "type": 101,
+      "name": "llmq_devnet",
+      "use_rotation": false,
+      "size": 12,
+      "min_size": 7,
+      "threshold": 6,
+      "dkg_interval": 24,
+      "dkg_phase_blocks": 2,
+      "dkg_mining_window_start": 10,
+      "dkg_mining_window_end": 18,
+      "dkg_bad_votes_threshold": 7,
+      "signing_active_quorum_count": 4,
+      "keep_old_connections": 5,
+      "keep_old_keys": 8,
+      "recovery_members": 6,
+    },
+    // A rotating quorum that none of the three chains runs.
+    {
+      "type": 105,
+      "name": "llmq_devnet_dip0024",
+      "use_rotation": true,
+      "size": 8,
+      "min_size": 6,
+      "threshold": 4,
+      "dkg_interval": 48,
+      "dkg_phase_blocks": 2,
+      "dkg_mining_window_start": 12,
+      "dkg_mining_window_end": 20,
+      "dkg_bad_votes_threshold": 7,
+      "signing_active_quorum_count": 2,
+      "keep_old_connections": 4,
+      "keep_old_keys": 4,
+      "recovery_members": 4,
+    },
+    // A Platform quorum that none of the three chains runs.
+    {
+      "type": 107,
+      "name": "llmq_devnet_platform",
+      "use_rotation": false,
+      "size": 12,
+      "min_size": 9,
+      "threshold": 8,
+      "dkg_interval": 24,
+      "dkg_phase_blocks": 2,
+      "dkg_mining_window_start": 10,
+      "dkg_mining_window_end": 18,
+      "dkg_bad_votes_threshold": 7,
+      "signing_active_quorum_count": 4,
+      "keep_old_connections": 5,
+      "keep_old_keys": 1440,
+      "recovery_members": 6,
+    },
+    // Testnet's ChainLocks and hard-fork signalling quorum, also run on mainnet.
+    {
+      "type": 1,
+      "name": "llmq_50_60",
+      "use_rotation": false,
+      "size": 50,
+      "min_size": 40,
+      "threshold": 30,
+      "dkg_interval": 24,
+      "dkg_phase_blocks": 2,
+      "dkg_mining_window_start": 10,
+      "dkg_mining_window_end": 18,
+      "dkg_bad_votes_threshold": 40,
+      "signing_active_quorum_count": 24,
+      "keep_old_connections": 25,
+      "keep_old_keys": 48,
+      "recovery_members": 25,
+    },
+    // The rotating InstantSend quorum of mainnet and testnet.
+    {
+      "type": 5,
+      "name": "llmq_60_75",
+      "use_rotation": true,
+      "size": 60,
+      "min_size": 50,
+      "threshold": 45,
+      "dkg_interval": 288,
+      "dkg_phase_blocks": 2,
+      "dkg_mining_window_start": 42,
+      "dkg_mining_window_end": 50,
+      "dkg_bad_votes_threshold": 48,
+      "signing_active_quorum_count": 32,
+      "keep_old_connections": 64,
+      "keep_old_keys": 64,
+      "recovery_members": 25,
+    },
+    // Mainnet's ChainLocks quorum, also run on testnet.
+    {
+      "type": 2,
+      "name": "llmq_400_60",
+      "use_rotation": false,
+      "size": 400,
+      "min_size": 300,
+      "threshold": 240,
+      "dkg_interval": 288,
+      "dkg_phase_blocks": 4,
+      "dkg_mining_window_start": 20,
+      "dkg_mining_window_end": 28,
+      "dkg_bad_votes_threshold": 300,
+      "signing_active_quorum_count": 4,
+      "keep_old_connections": 5,
+      "keep_old_keys": 8,
+      "recovery_members": 100,
+    },
+    // Mainnet's hard-fork signalling quorum, also run on testnet, with the widest mining window.
+    {
+      "type": 3,
+      "name": "llmq_400_85",
+      "use_rotation": false,
+      "size": 400,
+      "min_size": 350,
+      "threshold": 340,
+      "dkg_interval": 576,
+      "dkg_phase_blocks": 4,
+      "dkg_mining_window_start": 20,
+      "dkg_mining_window_end": 48,
+      "dkg_bad_votes_threshold": 300,
+      "signing_active_quorum_count": 4,
+      "keep_old_connections": 5,
+      "keep_old_keys": 8,
+      "recovery_members": 100,
+    },
+    // Mainnet's Platform quorum, also run on testnet.
+    {
+      "type": 4,
+      "name": "llmq_100_67",
+      "use_rotation": false,
+      "size": 100,
+      "min_size": 80,
+      "threshold": 67,
+      "dkg_interval": 24,
+      "dkg_phase_blocks": 2,
+      "dkg_mining_window_start": 10,
+      "dkg_mining_window_end": 18,
+      "dkg_bad_votes_threshold": 80,
+      "signing_active_quorum_count": 24,
+      "keep_old_connections": 25,
+      "keep_old_keys": 1440,
+      "recovery_members": 50,
+    },
+    // Testnet's Platform quorum.
+    {
+      "type": 6,
+      "name": "llmq_25_67",
+      "use_rotation": false,
+      "size": 25,
+      "min_size": 22,
+      "threshold": 17,
+      "dkg_interval": 24,
+      "dkg_phase_blocks": 2,
+      "dkg_mining_window_start": 10,
+      "dkg_mining_window_end": 18,
+      "dkg_bad_votes_threshold": 22,
+      "signing_active_quorum_count": 24,
+      "keep_old_connections": 25,
+      "keep_old_keys": 1440,
+      "recovery_members": 12,
     },
   ],
 }

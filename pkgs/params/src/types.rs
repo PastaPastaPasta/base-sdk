@@ -6,6 +6,8 @@
 
 //! Shared type definitions for chain parameters.
 
+use crate::{LlmqParams, AVAILABLE_LLMQS};
+
 pub(crate) use bitcoin_units::BlockHeight;
 use dash_num::{Arith256, Hash256};
 use dash_primitives::LlmqType;
@@ -222,6 +224,8 @@ pub struct ConsensusParams {
   /// Block hash assumed valid for fast initial
   /// sync.
   pub default_assume_valid: Hash256,
+  /// LLMQ types the chain runs.
+  pub llmqs: &'static [LlmqType],
   /// LLMQ type used for ChainLocks.
   pub llmq_type_chain_locks: LlmqType,
   /// LLMQ type used for DIP0024 InstantSend.
@@ -253,6 +257,15 @@ impl ConsensusParams {
       BuriedDeployment::MnRr => self.mn_rr_height,
       BuriedDeployment::Withdrawals => self.withdrawals_height,
     }
+  }
+
+  /// Returns the parameters of an LLMQ type the chain
+  /// runs, or `None` if the chain does not run it.
+  pub fn llmq(&self, llmq_type: LlmqType) -> Option<&'static LlmqParams> {
+    if !self.llmqs.contains(&llmq_type) {
+      return None;
+    }
+    AVAILABLE_LLMQS.iter().find(|llmq| llmq.llmq_type == llmq_type)
   }
 }
 

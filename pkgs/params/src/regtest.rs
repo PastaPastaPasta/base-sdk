@@ -151,6 +151,13 @@ pub static PARAMS: ChainParams = ChainParams {
     pow_dgw_height: BlockHeight::from_u32(34_140),
     minimum_chain_work: Arith256::ZERO,
     default_assume_valid: Hash256::ZERO,
+    llmqs: &[
+      LlmqType::LlmqTest,
+      LlmqType::LlmqTestInstantsend,
+      LlmqType::LlmqTestV17,
+      LlmqType::LlmqTestDip0024,
+      LlmqType::LlmqTestPlatform,
+    ],
     llmq_type_chain_locks: LlmqType::LlmqTest,
     llmq_type_dip0024_instant_send: LlmqType::LlmqTestDip0024,
     llmq_type_platform: LlmqType::LlmqTestPlatform,

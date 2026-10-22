@@ -12,6 +12,7 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+mod llmq;
 mod mainnet;
 #[allow(unused_imports, reason = "ergonomic shim, exports may be unused")]
 mod prelude;
@@ -22,6 +23,7 @@ mod types;
 use dash_primitives::Block;
 use dash_script::AddrParams;
 
+pub use llmq::*;
 pub use types::*;
 
 /// Dash network identifier.
