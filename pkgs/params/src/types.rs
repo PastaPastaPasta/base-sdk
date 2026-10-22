@@ -283,6 +283,8 @@ pub struct ChainParams {
   pub dns_seeds: &'static [&'static str],
   /// Address encoding parameters.
   pub addr_params: AddrParams,
+  /// Bech32m human-readable part of DIP0018 Platform addresses.
+  pub platform_hrp: &'static str,
   /// Human-readable network identifier string.
   pub network_id: &'static str,
   /// Whether this is a test network.
@@ -296,6 +298,8 @@ pub struct ChainParams {
   pub pool_min_participants: i32,
   /// Maximum participants for a CoinJoin session.
   pub pool_max_participants: i32,
+  /// Address of the key that signs sporks.
+  pub spork_address: &'static str,
   /// Number of blocks in a credit-pool accounting
   /// period.
   pub credit_pool_period_blocks: i32,
