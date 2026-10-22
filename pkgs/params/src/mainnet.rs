@@ -147,10 +147,10 @@ pub static PARAMS: ChainParams = ChainParams {
     pow_kgw_height: BlockHeight::from_u32(15_200),
     pow_dgw_height: BlockHeight::from_u32(34_140),
     minimum_chain_work: Arith256::from_bendian(hex!(
-      "00000000000000000000000000000000000000000000b567e2d53a06de194061"
+      "00000000000000000000000000000000000000000000ba7225adc3153945d14d"
     )),
     default_assume_valid: Hash256::from_bendian(hex!(
-      "00000000000000018fb7d55a2d7ab5f3d1369cf0d7eef25db727bf8c9ca7d4b2"
+      "00000000000000119fe42827219e0686d3f7b494ae65f823194c740c5dbab492"
     )),
     llmq_type_chain_locks: LlmqType::Llmq400_60,
     llmq_type_dip0024_instant_send: LlmqType::Llmq60_75,
