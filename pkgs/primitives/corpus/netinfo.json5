@@ -30,6 +30,11 @@ BOOST_AUTO_TEST_CASE(netinfo_entry_reads)
              "02" "0b" "6578616d706c65",
              "02" "0b" "6578616d706c652e636f6d",
              "",
+             "00",
+             "03",
+             "fe",
+             "ff",
+             "03" "01" "04" "01020304" "270f",
          }) {
         const auto raw{ParseHex(hex)};
         CDataStream ds(raw, SER_NETWORK, CLIENT_VERSION);
@@ -76,6 +81,16 @@ BOOST_AUTO_TEST_CASE(netinfo_entry_reads)
     { "raw": "020b6578616d706c652e636f6d", "read": null, "written": null, "addr_port": null },
     // An empty input is refused.
     { "raw": "", "read": null, "written": null, "addr_port": null },
+    // Type 0 is not a type, so the entry is invalid.
+    { "raw": "00", "read": 1, "written": "ff", "addr_port": "[invalid entry]" },
+    // Type 3, after the domain type, is not a type either.
+    { "raw": "03", "read": 1, "written": "ff", "addr_port": "[invalid entry]" },
+    // Type 0xfe, below the invalid entry type, is not a type either.
+    { "raw": "fe", "read": 1, "written": "ff", "addr_port": "[invalid entry]" },
+    // The invalid entry type reads back as itself.
+    { "raw": "ff", "read": 1, "written": "ff", "addr_port": "[invalid entry]" },
+    // Only the type byte of an unknown type is read.
+    { "raw": "03010401020304270f", "read": 1, "written": "ff", "addr_port": "[invalid entry]" },
   ],
 /*
 BOOST_AUTO_TEST_CASE(netinfo_legacy_reads)
@@ -153,6 +168,7 @@ BOOST_AUTO_TEST_CASE(netinfo_extended_reads)
              "01" "01" "00",
              "01" "02" "00" "01" "01" "01" "04" "01020304" "270f",
              "01" "01" "00" "01" + long_domain(254),
+             "01" "01" "00" "02" "00" "01" "01" "04" "01020304" "270f",
          }) {
         const auto raw{ParseHex(hex)};
         CDataStream ds(raw, SER_NETWORK, CLIENT_VERSION);
@@ -214,5 +230,7 @@ BOOST_AUTO_TEST_CASE(netinfo_extended_reads)
     { "raw": "0102000101010401020304270f", "read": null, "written": null, "entries": null, "empty": null },
     // A domain of 254 bytes refuses the whole value.
     { "raw": "0101000102fdfe006161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616101bb", "read": null, "written": null, "entries": null, "empty": null },
+    // An entry of unknown type is invalid and the next entry is read.
+    { "raw": "010100020001010401020304270f", "read": 14, "written": "01010002ff01010401020304270f", "entries": ["[invalid entry]", "1.2.3.4:9999"], "empty": false },
   ],
 }

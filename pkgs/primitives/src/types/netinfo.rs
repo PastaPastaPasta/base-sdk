@@ -76,6 +76,8 @@ enum_map! {
     Service = 0x01 => "service",
     /// Domain name + port.
     Domain = 0x02 => "domain",
+    /// Invalid entry marker.
+    Invalid = 0xff => "invalid",
   }
 }
 
@@ -135,9 +137,15 @@ pub enum NIEntry {
     /// Network port (big-endian on wire).
     port: u16,
   },
+  /// Invalid entry.
+  Invalid,
 }
 
 impl BaseCodec for NIEntry {
+  /// Decodes an entry. These are read as [`NIEntry::Invalid`]:
+  ///
+  /// - an entry of the invalid type or an unknown type, of which only the type
+  ///   is read.
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     match NIEntryCode::from_base(u8::decode(data)?) {
       NIEntryCode::Service => Ok(Self::Service(ServiceV2::decode(data)?)),
@@ -147,13 +155,11 @@ impl BaseCodec for NIEntry {
         let port = codec::read_u16_be(data)?;
         Ok(Self::Domain { name, port })
       }
-      NIEntryCode::Unknown(t) => Err(DecodeError::InvalidValue {
-        expected: NIEntryCode::variants().iter().map(|v| u64::from(v.to_base())).collect(),
-        actual: u64::from(t),
-      }),
+      NIEntryCode::Invalid | NIEntryCode::Unknown(_) => Ok(Self::Invalid),
     }
   }
 
+  /// Encodes an entry, [`NIEntry::Invalid`] as the invalid entry type alone.
   fn encode(&self, buf: &mut impl EncodeBuf) {
     match self {
       Self::Service(svc) => {
@@ -165,6 +171,7 @@ impl BaseCodec for NIEntry {
         name.encode(buf);
         buf.extend_from_slice(&port.to_be_bytes());
       }
+      Self::Invalid => NIEntryCode::Invalid.to_base().encode(buf),
     }
   }
 }
@@ -232,6 +239,7 @@ impl Checkable for NIEntry {
         }
         check_domain(name)
       }
+      Self::Invalid => Some(NIError::Malformed),
     }
   }
 }
@@ -246,6 +254,7 @@ impl fmt::Display for NIEntry {
         let s = core::str::from_utf8(name).unwrap_or("<invalid utf-8>");
         write!(f, "{s}:{port}")
       }
+      Self::Invalid => f.write_str("[invalid entry]"),
     }
   }
 }
@@ -708,12 +717,6 @@ mod tests {
   }
 
   #[rstest]
-  fn nientry_unknown_type_fails() {
-    let wire = hex!("ff");
-    assert!(NIEntry::decode(&mut &wire[..]).is_err());
-  }
-
-  #[rstest]
   #[case::single_ipv4(
     &hex!(concat!(
       "01",               // version=1
@@ -952,6 +955,11 @@ mod tests {
     NIPurpose::CoreP2p,
     vec![svc(AddrV2::Unknown { network: 99, addr: vec![1, 2] }, 9999)],
     Some(NIError::BadType { entry_type: 99 }),
+  )]
+  #[case::invalid_entry(
+    NIPurpose::CoreP2p,
+    vec![NIEntry::Invalid],
+    Some(NIError::Malformed),
   )]
   #[case::delegates_entry_error(
     NIPurpose::CoreP2p,
