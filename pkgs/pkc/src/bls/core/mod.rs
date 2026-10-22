@@ -34,13 +34,13 @@ use super::scheme_ops::secure_weights;
 use super::{BlsSchemeKind, BlsValue, BLS_PK_LEN, BLS_SIG_LEN, BLS_SK_LEN};
 use crate::prelude::*;
 
-pub use super::elem::BlsElem;
-#[doc(hidden)]
-pub use super::elem::BlsShape;
-
 #[cfg(feature = "codec")]
 use dash_types::type_id::Unencodable;
 use zeroize::Zeroizing;
+
+pub use super::elem::BlsElem;
+#[doc(hidden)]
+pub use super::elem::BlsShape;
 
 /// A secret key as Core's wrapper holds it.
 pub type BlsSkValue = BlsValue<Fr, BLS_SK_LEN>;

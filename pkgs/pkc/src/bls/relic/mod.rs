@@ -12,16 +12,18 @@
 //! Only the functions `BlsElem` reaches are ported, each citing its relic
 //! source. Group values never come here; blst computes them.
 
+pub(crate) mod ep;
+pub(crate) mod ep2;
 mod field;
 mod recode;
 
-pub(crate) mod ep;
-pub(crate) mod ep2;
-
+#[cfg(feature = "codec")]
+use dash_types::type_id::Unencodable;
 pub(crate) use recode::Bn;
 
 /// relic's `coord` tag, of which Core's configuration reaches two values.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub enum Coord {
   /// `BASIC`: affine, z read as 1 where relic assumes it.
   Basic,

@@ -15,11 +15,14 @@ use super::super::scalar::Fp2;
 use super::field::{self, EP2_FRB, ONE};
 use super::recode::{self, Bn};
 use super::Coord;
-
 use crate::prelude::*;
+
+#[cfg(feature = "codec")]
+use dash_types::type_id::Unencodable;
 
 /// A relic `ep2_t`: x, y, z and the coord tag.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct Ep2 {
   pub(crate) x: Fp2,
   pub(crate) y: Fp2,

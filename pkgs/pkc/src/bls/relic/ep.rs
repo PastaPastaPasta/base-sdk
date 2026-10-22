@@ -18,12 +18,15 @@ use super::super::scalar::Fp;
 use super::field::{self, B3, BETA, ONE};
 use super::recode::{self, Bn};
 use super::Coord;
-
 #[cfg(test)]
 use crate::prelude::*;
 
+#[cfg(feature = "codec")]
+use dash_types::type_id::Unencodable;
+
 /// A relic `ep_t`: x, y, z and the coord tag.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct Ep {
   pub(crate) x: Fp,
   pub(crate) y: Fp,
