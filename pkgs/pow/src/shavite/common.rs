@@ -7,16 +7,15 @@
 // Adapted from sphlib, written by Thomas Pornin <thomas.pornin@cryptolog.com>
 //
 
-//! SHAvite-3-512 hash function.
+//! Streaming SHAvite-3-512 over the selected backend.
 
-use crate::aes::{block_from_words, round_nk, words_from_block, Block};
+use super::backend;
 use crate::consts::shavite::{BLOCK, IV};
 use crate::util::buffer::{Buffer, Compress};
 use crate::util::impl_digest;
 use crate::util::memops::{digest_from_u32_le, load_u32_le};
 
 use digest::{FixedOutput, Output, Update};
-use wide::u32x4;
 
 const SCHEDULE_BUNDLES: usize = 112;
 type Bundle = [u32; 4];
@@ -148,7 +147,7 @@ fn expand_round_keys(msg: &[u8; BLOCK], counter: u128) -> [Bundle; SCHEDULE_BUND
 /// Applies the AES-based bundle step used by the key schedule.
 #[inline(always)]
 fn expand_aes_step(schedule: &[Bundle; SCHEDULE_BUNDLES], bundle: usize) -> Bundle {
-  let expanded = words_from_block(round_nk(lane(rotate_bundle_words(schedule[bundle - 8])))).to_array();
+  let expanded = backend::aes_nk(rotate_bundle_words(schedule[bundle - 8]));
   [
     expanded[0] ^ schedule[bundle - 1][0],
     expanded[1] ^ schedule[bundle - 1][1],
@@ -178,25 +177,15 @@ fn inject_counter_words(bundle_words: &mut Bundle, counter: u128, injection: Cou
   }
 }
 
-/// Lays four state words out as one AES block.
-#[inline(always)]
-fn lane(words: Bundle) -> Block {
-  block_from_words(u32x4::new(words))
-}
-
 /// Runs the 4-round AES bundle that updates one 4-word half.
 #[inline(always)]
 fn apply_round_bundle(state: &mut State, left: [usize; 4], right: [usize; 4], keys: &[Bundle]) {
   // Each bundle reads one 4-word half, runs four keyed AES rounds, then xors
   // the result into the opposite half in Feistel order.
-  let mut block = lane([state[right[0]], state[right[1]], state[right[2]], state[right[3]]]);
-  let mut round = 0;
-  while round < 4 {
-    block = round_nk(block ^ lane(keys[round]));
-    round += 1;
-  }
-
-  let mixed = words_from_block(block).to_array();
+  let mixed = backend::aes_rounds(
+    [state[right[0]], state[right[1]], state[right[2]], state[right[3]]],
+    keys,
+  );
   state[left[0]] ^= mixed[0];
   state[left[1]] ^= mixed[1];
   state[left[2]] ^= mixed[2];
