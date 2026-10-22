@@ -7,6 +7,7 @@
 //! Re-exports for no_std compatibility.
 
 pub(crate) use alloc::borrow::Cow;
+pub(crate) use alloc::collections::BTreeMap;
 pub(crate) use alloc::format;
 pub(crate) use alloc::string::String;
 pub(crate) use alloc::vec;

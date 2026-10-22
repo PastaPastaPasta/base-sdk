@@ -22,6 +22,7 @@ mod version;
 use crate::command::CommandString;
 use crate::prelude::*;
 use crate::short_id::ShortId;
+use crate::version::ProtocolVersion;
 
 use bitcoin_consensus_encoding as encoding;
 use dash_primitives::{GovObject, GovVote};
