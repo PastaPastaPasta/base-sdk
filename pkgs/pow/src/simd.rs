@@ -9,7 +9,7 @@
 
 //! SIMD-512 hash function.
 
-use crate::consts::simd::{ALPHA_TAB, BLOCK, IV, PP8K, WBP, YOFF_B_F, YOFF_B_N};
+use crate::consts::simd::{ALPHA_TAB, BLOCK, FINAL64_SCHEDULE, FINAL64_WORD0, IV, PP8K, WBP, YOFF_B_F, YOFF_B_N};
 use crate::util::buffer::{Buffer, Compress};
 use crate::util::impl_digest;
 use crate::util::memops::{digest_from_u32_le, load_u32_le};
@@ -412,6 +412,26 @@ fn compress_words(h: &mut [u32; 32], buf: &[u8; BLOCK], words: &BlockWords, last
   *h = state;
 }
 
+/// Compresses the length-only final block of a 64-byte message against its
+/// precomputed schedule, skipping the NTT.
+#[inline(always)]
+fn compress_final64(h: &mut [u32; 32]) {
+  let mut state = *h;
+  state[0] ^= FINAL64_WORD0;
+
+  one_round_big(&mut state, &FINAL64_SCHEDULE[0], 0, 3, 23, 17, 27);
+  one_round_big(&mut state, &FINAL64_SCHEDULE[1], 1, 28, 19, 22, 7);
+  one_round_big(&mut state, &FINAL64_SCHEDULE[2], 2, 29, 9, 15, 5);
+  one_round_big(&mut state, &FINAL64_SCHEDULE[3], 3, 4, 13, 10, 25);
+
+  step2_big(&mut state, h, 0, simd_if, 4, 13, 5);
+  step2_big(&mut state, h, 8, simd_if, 13, 10, 7);
+  step2_big(&mut state, h, 16, simd_if, 10, 25, 4);
+  step2_big(&mut state, h, 24, simd_if, 25, 4, 1);
+
+  *h = state;
+}
+
 /// Encodes the processed bit count for the final block.
 #[inline(always)]
 fn encode_count(dst: &mut [u8], low: u32, high: u32, ptr: usize) {
@@ -468,16 +488,22 @@ impl Update for Simd512 {
 impl FixedOutput for Simd512 {
   fn finalize_into(mut self, out: &mut Output<Self>) {
     // A partial tail is compressed zero padded as an ordinary block. The
-    // final block then carries only the bit count.
+    // final block then carries only the bit count, which is constant for a
+    // 64-byte message and takes the precomputed schedule.
     let ptr = self.buffer.len();
     let count = self.core.count;
+    let single_block = count == [0; 2] && ptr == 64;
     let h = &mut self.core.h;
     if ptr > 0 {
       compress(h, self.buffer.zero_padded(), false);
     }
-    let mut block = [0u8; BLOCK];
-    encode_count(&mut block, count[0], count[1], ptr);
-    compress(h, &block, true);
+    if single_block {
+      compress_final64(h);
+    } else {
+      let mut block = [0u8; BLOCK];
+      encode_count(&mut block, count[0], count[1], ptr);
+      compress(h, &block, true);
+    }
     out.copy_from_slice(&digest_from_u32_le(h));
   }
 }

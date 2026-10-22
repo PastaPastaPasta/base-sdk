@@ -222,6 +222,37 @@ const fn wbread_const(q: &[i32], sb: usize, o1: i32, o2: i32, mm: i32) -> [u32; 
   words
 }
 
+/// First word of the length-only final block for a 64-byte message, which
+/// carries the 512-bit message length.
+pub(crate) const FINAL64_WORD0: u32 = 0x200;
+
+/// Message schedule of the length-only final block for a 64-byte message.
+pub(crate) const FINAL64_SCHEDULE: [[u32; 64]; 4] = {
+  let mut buf = [0u8; BLOCK];
+  buf[0] = FINAL64_WORD0.to_le_bytes()[0];
+  buf[1] = FINAL64_WORD0.to_le_bytes()[1];
+
+  let mut q = [0i32; 256];
+  fft256_const(&buf, &mut q);
+
+  let mut i = 0;
+  while i < 256 {
+    let mut tq = q[i] + YOFF_B_F[i] as i32;
+    tq = reds2(tq);
+    tq = reds1(tq);
+    tq = reds1(tq);
+    q[i] = if tq <= 128 { tq } else { tq - 257 };
+    i += 1;
+  }
+
+  [
+    wbread_const(&q, 0, 0, 1, 185),
+    wbread_const(&q, 8, 0, 1, 185),
+    wbread_const(&q, 16, -256, -128, 233),
+    wbread_const(&q, 24, -383, -255, 233),
+  ]
+};
+
 /// IV derived by compressing `"SIMD-512 v1.1"` into the zero state.
 pub(crate) const IV: [u32; 32] = {
   let mut buf = [0u8; 128];
