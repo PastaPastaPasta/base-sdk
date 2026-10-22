@@ -29,6 +29,8 @@ enum_map! {
     MerkleRootQuorums = 2 => "merkle_root_quorums",
     /// ChainLock proof and credit pool balance.
     ClSigAndBalance = 3 => "clsig_and_balance",
+    /// Merkle root of asset unlocks.
+    MerkleRootAssetUnlocks = 4 => "merkle_root_asset_unlocks",
   }
 }
 
@@ -63,6 +65,10 @@ pub struct CoinbaseCommitment {
   /// Credit pool balance in duffs (v3+).
   #[getset(get_copy = "pub")]
   credit_pool_balance: Option<i64>,
+  /// Merkle root of the instance hashes of the block's asset unlocks with a
+  /// stable txid (v4+).
+  #[getset(get_copy = "pub")]
+  merkle_root_asset_unlocks: Option<MerkleRoot>,
 }
 }
 
@@ -87,6 +93,11 @@ impl BaseCodec for CoinbaseCommitment {
     } else {
       (None, None, None)
     };
+    let merkle_root_asset_unlocks = if version.to_base() >= 4 {
+      Some(MerkleRoot::decode(data)?)
+    } else {
+      None
+    };
 
     Ok(Self {
       version,
@@ -96,6 +107,7 @@ impl BaseCodec for CoinbaseCommitment {
       best_cl_height_diff,
       best_cl_signature,
       credit_pool_balance,
+      merkle_root_asset_unlocks,
     })
   }
 
@@ -114,6 +126,9 @@ impl BaseCodec for CoinbaseCommitment {
       CompactSize::from(diff).encode(buf);
       sig.encode(buf);
       bal.encode(buf);
+    }
+    if let Some(root) = self.merkle_root_asset_unlocks {
+      root.encode(buf);
     }
   }
 }
@@ -135,6 +150,8 @@ pub enum CbTxInvalid {
 impl Checkable for CoinbaseCommitment {
   type Error = CbTxInvalid;
 
+  /// Checks the rules that need no chain context. The version that the active
+  /// deployments require is left to the caller.
   fn check(&self) -> Option<Self::Error> {
     let version = self.version.to_base();
     if matches!(self.version, CbCommitmentVersion::Unknown(_)) {
@@ -160,6 +177,14 @@ impl Checkable for CoinbaseCommitment {
       return Some(CbTxInvalid::UnexpectedField);
     }
 
+    if version >= 4 {
+      if self.merkle_root_asset_unlocks.is_none() {
+        return Some(CbTxInvalid::MissingField);
+      }
+    } else if self.merkle_root_asset_unlocks.is_some() {
+      return Some(CbTxInvalid::UnexpectedField);
+    }
+
     None
   }
 }
@@ -178,8 +203,10 @@ impl fmt::Display for CoinbaseCommitment {
 }
 
 #[cfg(all(test, feature = "serde"))]
+#[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
+  use crate::prelude::*;
 
   use dash_dev::{assert_serde_rt, check_sptx, Corpus};
   use rstest::rstest;
@@ -189,5 +216,56 @@ mod tests {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "cbtx");
     let items = corpus.entries::<CoinbaseCommitment>("cbtx", check_sptx);
     assert_serde_rt("cbtx", &items);
+  }
+
+  /// The testnet payload at the v24 activation height, encoded as `version`
+  /// with the fields of that version and the asset unlock root if `root`.
+  fn encode_as(version: u16, root: bool) -> Vec<u8> {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "cbtx");
+    let mut entries = corpus.entries::<CoinbaseCommitment>("cbtx", |_, _, _| {});
+    let cbtx = entries
+      .remove("ab22dcb7082a94cbf8c11091dc3f4ac3aea5aee150177137791da2b33108bacc")
+      .unwrap();
+    let mut buf = Vec::new();
+    CoinbaseCommitment {
+      version: CbCommitmentVersion::from_base(version),
+      merkle_root_quorums: cbtx.merkle_root_quorums.filter(|_| version >= 2),
+      best_cl_height_diff: cbtx.best_cl_height_diff.filter(|_| version >= 3),
+      best_cl_signature: cbtx.best_cl_signature.filter(|_| version >= 3),
+      credit_pool_balance: cbtx.credit_pool_balance.filter(|_| version >= 3),
+      merkle_root_asset_unlocks: cbtx.merkle_root_asset_unlocks.filter(|_| root),
+      ..cbtx
+    }
+    .encode(&mut buf);
+    buf
+  }
+
+  /// Each version reads its own fields, and the check refuses unknown ones.
+  #[rstest]
+  #[case::v0(0, Some(CbTxInvalid::BadVersion { version: 0 }))]
+  #[case::v1(1, None)]
+  #[case::v2(2, None)]
+  #[case::v3(3, None)]
+  #[case::v4(4, None)]
+  #[case::v5(5, Some(CbTxInvalid::BadVersion { version: 5 }))]
+  fn version_sets_fields(#[case] version: u16, #[case] expected: Option<CbTxInvalid>) {
+    let raw = encode_as(version, version >= 4);
+    let mut cursor = &raw[..];
+    let cbtx = CoinbaseCommitment::decode(&mut cursor).unwrap();
+    assert!(cursor.is_empty());
+    assert_eq!(cbtx.check(), expected);
+  }
+
+  /// Only version 4 and later read the asset unlock root.
+  #[rstest]
+  #[case::v1_root(1, true)]
+  #[case::v2_root(2, true)]
+  #[case::v3_root(3, true)]
+  #[case::v4_no_root(4, false)]
+  #[case::v5_no_root(5, false)]
+  fn root_follows_version(#[case] version: u16, #[case] root: bool) {
+    let raw = encode_as(version, root);
+    let mut cursor = &raw[..];
+    assert!(CoinbaseCommitment::decode(&mut cursor).is_err() || !cursor.is_empty());
   }
 }
