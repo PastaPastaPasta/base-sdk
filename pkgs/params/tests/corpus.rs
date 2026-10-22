@@ -57,7 +57,6 @@ impl From<&ChainParams> for ChainVector {
       addr_params,
       network_id,
       is_test_chain,
-      require_standard: _,
       default_consistency_checks,
       is_mockable_chain,
       pool_min_participants,

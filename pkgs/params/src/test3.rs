@@ -179,7 +179,6 @@ pub static PARAMS: ChainParams = ChainParams {
   addr_params: dash_script::__private::params::TESTNET,
   network_id: "test",
   is_test_chain: true,
-  require_standard: false,
   default_consistency_checks: false,
   is_mockable_chain: false,
   pool_min_participants: 2,
