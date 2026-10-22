@@ -443,20 +443,11 @@ fn decode_bytes<T: BaseCodec>(hex: &str) -> T {
   out
 }
 
-/// Core keys BLS-IES with the basic encoding of the shared point under both
-/// schemes; the crate keys a legacy message with the legacy encoding, so it
-/// opens none of Core's legacy messages (BS11a D11).
-const IES_KDF_GAP: BlsSchemeKind = LEGACY;
-
-/// Compares a decryption with Core's, through the known gaps: the KDF one
-/// above and the empty plaintext, which Core opens to nothing and the crate
-/// refuses (BS11b).
-fn assert_opened(label: &str, kind: BlsSchemeKind, got: Option<String>, core: Option<&String>) {
+/// Compares a decryption with Core's, through the known gap of the empty
+/// plaintext, which Core opens to nothing and the crate refuses (BS11b).
+fn assert_opened(label: &str, got: Option<String>, core: Option<&String>) {
   match core {
     Some(plain) if plain.is_empty() => assert!(got.is_none(), "{label}: empty plaintext gap closed"),
-    Some(plain) if kind == IES_KDF_GAP => {
-      assert_ne!(got.as_ref(), Some(plain), "{label}: KDF gap closed, remove IES_KDF_GAP");
-    }
     _ => assert_eq!(got.as_ref(), core, "{label}"),
   }
 }
@@ -498,7 +489,7 @@ fn assert_ies<S: BlsScheme>(kind: BlsSchemeKind) {
         .ok()
         .map(|p| p.to_lower_hex_string());
       let label = format!("{}: decrypt {} with {}", row.note, d.idx, d.sk);
-      assert_opened(&label, kind, got, d.plain.as_ref());
+      assert_opened(&label, got, d.plain.as_ref());
     }
   }
   for row in c.vectors::<BlobRow>("blob") {
@@ -509,7 +500,7 @@ fn assert_ies<S: BlsScheme>(kind: BlsSchemeKind) {
       .ies_decrypt(&blob, row.idx)
       .ok()
       .map(|p| p.to_lower_hex_string());
-    assert_opened(&format!("blob {}", row.idx), kind, got, row.plain.as_ref());
+    assert_opened(&format!("blob {}", row.idx), got, row.plain.as_ref());
   }
 }
 

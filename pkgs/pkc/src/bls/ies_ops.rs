@@ -121,9 +121,9 @@ impl<S: BlsScheme> BlsIesBlob<S> {
 
   /// Re-encode the ephemeral key under another scheme.
   ///
-  /// Only the ephemeral key's encoding moves; the ciphertext and the key it
-  /// was written under are untouched. The tag records how the sender wrote
-  /// that key, which need not match the scheme the KDF read.
+  /// Only the ephemeral key's encoding moves; the ciphertext is untouched.
+  /// The symmetric key comes from the basic encoding under both schemes, so
+  /// the blob opens under either.
   ///
   /// # Errors
   ///
@@ -311,9 +311,9 @@ type_cvrt!(for[S: BlsScheme] TryFrom<BlsIesMultiBytes<S>> for BlsIesMulti<S>, Bl
 impl<S: BlsScheme> BlsPublicKey<S> {
   /// Encrypt one blob for this recipient.
   ///
-  /// The blob decrypts at recipient index 0. The scheme reaches the ciphertext
-  /// through the symmetric key, so a blob is readable only by the same scheme
-  /// that wrote it.
+  /// The blob decrypts at recipient index 0. The symmetric key is the shared
+  /// point's basic encoding under both schemes, as Core's is, so the blob
+  /// opens under either.
   ///
   /// # Errors
   ///
@@ -529,11 +529,12 @@ mod tests {
     assertion(scheme);
   }
 
-  /// The scheme decides how the shared point is written and the key is that
-  /// encoding truncated, so the arms differ at the flag byte and nowhere
-  /// else.
+  /// The scheme decides how the shared point is written, but the key is
+  /// its basic encoding truncated under both (Core's `ToByteVector(false)`),
+  /// so the arms' DH bytes differ at the flag byte and their ciphertexts
+  /// not at all.
   #[rstest]
-  fn kdf_reads_the_scheme_own_encoding() {
+  fn kdf_reads_the_basic_encoding() {
     let legacy_kat = load_kat::<BlsScChia>("chia");
     let basic_kat = load_kat::<BlsScIetf>("ietf");
     let legacy_r = &legacy_kat.recipients[0];
@@ -555,10 +556,10 @@ mod tests {
       .ies_encrypt_with(&legacy_kat.eph_sk, &legacy_kat.iv_seed, &plaintext)
       .unwrap();
     assert_eq!(blob.data(), vec_from_hex(&legacy_r.ciphertext));
-    assert_ne!(
+    assert_eq!(
       vec_from_hex(&legacy_r.ciphertext),
       vec_from_hex(&basic_r.ciphertext),
-      "the arms must differ"
+      "one key under both schemes"
     );
   }
 
@@ -845,9 +846,9 @@ mod tests {
 
       /// The bag's tag and the cipher's scheme are separate.
       ///
-      /// A sender may write the ephemeral key in the legacy encoding while
-      /// deriving the symmetric key from the basic one, so its message is
-      /// carried across by converting it and read by the basic arm.
+      /// The tag says how the ephemeral key is written and the symmetric key
+      /// is the basic encoding under both, so a legacy-tagged message opens
+      /// converted back or under the legacy arm directly.
       #[rstest]
       fn legacy_tagged_blob_converts_and_decrypts() {
         let kat = load_kat::<BlsScIetf>("ietf");
@@ -874,6 +875,7 @@ mod tests {
           .unwrap();
 
         assert_eq!(*recovered, vec_from_hex(&kat.recipients[0].plaintext));
+        assert_eq!(*sk.ies_decrypt_multi(&legacy, 0).unwrap(), *recovered);
       }
 
       cfg_if! {
