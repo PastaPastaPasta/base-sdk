@@ -7,12 +7,16 @@
 //! P2P message types and dispatch.
 
 mod addr;
+mod blocks;
+mod coinjoin;
 mod gov;
 mod headers;
 mod headers2;
 mod inv;
 mod mn_list;
 mod ping;
+mod quorum_sigs;
+mod tx_reconcile;
 mod version;
 
 use crate::command::CommandString;
@@ -24,12 +28,16 @@ use dash_primitives::{GovObject, GovVote};
 use dash_types::type_id::Unencodable;
 
 pub use addr::{Addr, AddrV2Entry, AddrV2Msg, TimestampedAddr};
-pub use gov::GovSync;
+pub use blocks::{GetBlocks, SendCmpct};
+pub use coinjoin::SendDsq;
+pub use gov::{GovSync, GovSyncStatusCount};
 pub use headers::{GetHeaders, Headers};
 pub use headers2::{CompressionState, GetHeaders2, Headers2};
 pub use inv::{GetData, Inv, InvType, Inventory, NotFound};
 pub use mn_list::{DeletedQuorum, GetMnListDiff, MnListDiff, MnListDiffPayload, QuorumClSig, SimplifiedMnListEntry};
 pub use ping::{Ping, Pong};
+pub use quorum_sigs::QSendRecSigs;
+pub use tx_reconcile::SendTxRcncl;
 pub use version::{ServiceFlags, UserAgent, UserAgentTooLong, Version, VersionAddr};
 
 define_p2p! {
@@ -52,6 +60,8 @@ define_p2p! {
     NotFound(NotFound) => NOTFOUND "notfound" @ 17,
     /// Request block headers.
     GetHeaders(GetHeaders) => GETHEADERS "getheaders" @ 12,
+    /// Request block hashes.
+    GetBlocks(GetBlocks) => GETBLOCKS "getblocks" @ 9,
     /// Block headers.
     Headers(Headers) => HEADERS "headers" @ 13,
     /// Request compressed block headers.
@@ -60,6 +70,8 @@ define_p2p! {
     Headers2(Headers2) => HEADERS2 "headers2" @ 165,
     /// Governance sync request.
     GovSync(GovSync) => GOVSYNC "govsync" @ 140,
+    /// Sync status count.
+    Ssc(GovSyncStatusCount) => SSC "ssc" @ 139,
     /// Governance object.
     GovObj(GovObject) => GOVOBJ "govobj" @ 141,
     /// Governance vote.
@@ -68,6 +80,14 @@ define_p2p! {
     GetMnListDiff(GetMnListDiff) => GETMNLISTD "getmnlistd" @ 143,
     /// MN list diff.
     MnListDiff(MnListDiff) => MNLISTDIFF "mnlistdiff" @ 144,
+    /// Signal CoinJoin queue relay.
+    SendDsq(SendDsq) => SENDDSQ "senddsq" @ 130,
+    /// LLMQ: send recovered signatures.
+    QSendRecSigs(QSendRecSigs) => QSENDRECSIGS "qsendrecsigs" @ 145,
+    /// BIP152: signal compact block support.
+    SendCmpct(SendCmpct) => SENDCMPCT "sendcmpct" @ 20,
+    /// BIP330: transaction reconciliation.
+    SendTxRcncl(SendTxRcncl) => SENDTXRCNCL "sendtxrcncl",
   }
 
   parsed_empty {
@@ -94,14 +114,10 @@ define_p2p! {
     FilterAdd => FILTERADD "filteradd" @ 6,
     /// BIP37: load bloom filter.
     FilterLoad => FILTERLOAD "filterload" @ 8,
-    /// Request block hashes.
-    GetBlocks => GETBLOCKS "getblocks" @ 9,
     /// BIP152: request compact block transactions.
     GetBlockTxn => GETBLOCKTXN "getblocktxn" @ 10,
     /// BIP37: filtered block.
     MerkleBlock => MERKLEBLOCK "merkleblock" @ 16,
-    /// BIP152: signal compact block support.
-    SendCmpct => SENDCMPCT "sendcmpct" @ 20,
     /// Transaction.
     Tx => TX "tx" @ 21,
     /// Request compact filters.
@@ -116,8 +132,6 @@ define_p2p! {
     GetCFCheckpt => GETCFCHECKPT "getcfcheckpt" @ 26,
     /// Compact filter checkpoints.
     CFCheckpt => CFCHECKPT "cfcheckpt" @ 27,
-    /// BIP330: transaction reconciliation.
-    SendTxRcncl => SENDTXRCNCL "sendtxrcncl",
     /// Spork broadcast/request.
     Spork => SPORK "spork" @ 128,
     /// CoinJoin: accept denomination.
@@ -136,8 +150,6 @@ define_p2p! {
     Dstx => DSTX "dstx" @ 137,
     /// CoinJoin: queue entry.
     Dsq => DSQ "dsq" @ 138,
-    /// Sync status count.
-    Ssc => SSC "ssc" @ 139,
     /// LLMQ: final commitment.
     QfCommit => QFCOMMIT "qfcommit" @ 146,
     /// LLMQ: contribution.
@@ -185,10 +197,6 @@ define_p2p! {
     Mempool => MEMPOOL "mempool" @ 15,
     /// Request active sporks.
     GetSporks => GETSPORKS "getsporks" @ 129,
-    /// Signal CoinJoin queue relay.
-    SendDsq => SENDDSQ "senddsq" @ 130,
-    /// LLMQ: send recovered signatures.
-    QSendRecSigs => QSENDRECSIGS "qsendrecsigs" @ 145,
     /// LLMQ: watch quorums.
     QWatch => QWATCH "qwatch" @ 151,
   }
