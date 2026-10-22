@@ -6,6 +6,7 @@
 
 //! ProUpRegTx registrar-update payload (type 3).
 
+use super::share::{check_payouts, MAX_REWARD};
 use super::{OwnerSig, PayoutShare, ProTxVersion};
 use crate::codec::{decode_list, encode_list, impl_payload};
 use crate::prelude::*;
@@ -16,7 +17,7 @@ use crate::{hash_impl, TxHash};
 use bitcoin_primitives::script::ScriptPubKeyBuf;
 use dash_pkc::bls::BlsPkBytes;
 use dash_pkc::ecdsa::{EcdsaError, ECDSA_REC_SIG_LEN};
-use dash_script::{PubKeyHash, Recipient};
+use dash_script::PubKeyHash;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
 use dash_types::{Checkable, Signable};
@@ -148,15 +149,11 @@ impl Checkable for ProUpRegTx {
       return Some(ProTxInvalid::NullKey);
     }
 
-    let payout = self.script_payout.as_bytes();
-    if !matches!(
-      Recipient::from_script(payout),
-      Some(Recipient::PubKeyHash(_) | Recipient::ScriptHash(_))
-    ) {
-      return Some(ProTxInvalid::BadPayoutScript);
+    if self.version >= ProTxVersion::ExtAddr {
+      return check_payouts(&self.payouts, None, &self.key_id_voting);
     }
-
-    None
+    let payout = PayoutShare::new(self.script_payout.clone(), MAX_REWARD);
+    check_payouts(&[payout], None, &self.key_id_voting)
   }
 }
 
@@ -196,10 +193,13 @@ impl fmt::Display for ProUpRegTx {
 }
 
 #[cfg(all(test, feature = "serde"))]
+#[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
+  use crate::provider::share::tests::script;
 
   use dash_dev::{assert_serde_rt, check_sptx, Corpus};
+  use dash_script::Recipient;
   use rstest::rstest;
 
   #[rstest]
@@ -207,5 +207,48 @@ mod tests {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "proupregtx");
     let items = corpus.entries::<ProUpRegTx>("proupregtx", check_sptx);
     assert_serde_rt("proupregtx", &items);
+  }
+
+  /// A version 2 payload from the chain.
+  fn basic_bls() -> ProUpRegTx {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "proupregtx");
+    let entries = corpus.entries::<ProUpRegTx>("proupregtx", |_, _, _| {});
+    entries
+      .into_values()
+      .find(|ptx| ptx.version == ProTxVersion::BasicBls)
+      .unwrap()
+  }
+
+  /// A regtest update with eight payouts.
+  fn update() -> ProUpRegTx {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "proupregtx");
+    let mut entries = corpus.entries::<ProUpRegTx>("proupregtx", |_, _, _| {});
+    entries
+      .remove("e7cb375dc4fbb47d60490f298538d8f48adc11e9af8619963d39923234cac08e")
+      .unwrap()
+  }
+
+  /// The first payout of `ptx` paid to `key` instead.
+  fn first_to(ptx: &mut ProUpRegTx, key: PubKeyHash) {
+    ptx.payouts[0] = PayoutShare::new(script(Recipient::PubKeyHash(key)), ptx.payouts[0].reward());
+  }
+
+  /// Payouts are checked with the voting key and without an owner key.
+  #[rstest]
+  #[case::payout_to_voting(
+    update(),
+    |ptx: &mut ProUpRegTx| first_to(ptx, ptx.key_id_voting),
+    Some(ProTxInvalid::PayoutKeyReuse)
+  )]
+  #[case::payout_to_null_key(update(), |ptx: &mut ProUpRegTx| first_to(ptx, PubKeyHash::default()), None)]
+  #[case::v2_payout_to_voting(
+    basic_bls(),
+    |ptx: &mut ProUpRegTx| ptx.script_payout = script(Recipient::PubKeyHash(ptx.key_id_voting)),
+    Some(ProTxInvalid::PayoutKeyReuse)
+  )]
+  fn check(#[case] mut ptx: ProUpRegTx, #[case] edit: fn(&mut ProUpRegTx), #[case] expected: Option<ProTxInvalid>) {
+    assert_eq!(ptx.check(), None);
+    edit(&mut ptx);
+    assert_eq!(ptx.check(), expected);
   }
 }

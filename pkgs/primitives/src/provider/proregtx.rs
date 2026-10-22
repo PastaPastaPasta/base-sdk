@@ -6,6 +6,7 @@
 
 //! ProRegTx registration payload (type 1).
 
+use super::share::{check_payouts, check_shares, EVO_COLLATERAL, MAX_REWARD, REGULAR_COLLATERAL};
 use super::{CollateralShare, CollateralSig, JoinSig, PayoutShare, ProTxVersion};
 use crate::codec::{decode_items, decode_list, encode_items, encode_list, impl_payload};
 use crate::prelude::*;
@@ -292,18 +293,31 @@ impl Checkable for ProRegTx {
       return Some(ProTxInvalid::BadMode { mode: self.mode });
     }
 
-    if self.key_id_owner.is_null() || self.key_id_voting.is_null() {
-      return Some(ProTxInvalid::NullKey);
+    let shared = !self.shares.is_empty();
+    if shared {
+      if !self.collateral_hash.is_null() {
+        return Some(ProTxInvalid::ExternalSharedCollateral);
+      }
+      if !self.key_id_owner.is_null() {
+        return Some(ProTxInvalid::SharedOwnerKey);
+      }
+      if !self.payouts.is_empty() {
+        return Some(ProTxInvalid::SharedPayouts);
+      }
+    } else {
+      if self.early_period_blocks != 0 || self.early_penalty != 0 {
+        return Some(ProTxInvalid::UnsharedEarlyTerms);
+      }
+      if self.key_id_owner.is_null() {
+        return Some(ProTxInvalid::NullKey);
+      }
     }
-    if self.pub_key_operator.is_null() {
+    if self.pub_key_operator.is_null() || self.key_id_voting.is_null() {
       return Some(ProTxInvalid::NullKey);
     }
 
-    let payout = self.script_payout.as_bytes();
-    let recipient = Recipient::from_script(payout);
-    match &recipient {
-      Some(Recipient::PubKeyHash(_) | Recipient::ScriptHash(_)) => {}
-      _ => return Some(ProTxInvalid::BadPayoutScript),
+    if let Some(e) = self.check_owner_rewards() {
+      return Some(e);
     }
 
     let is_extended = matches!(self.net_info, NetInfo::Extended(_));
@@ -334,12 +348,6 @@ impl Checkable for ProRegTx {
       self.platform_http_port,
     ) {
       return Some(e);
-    }
-
-    if let Some(Recipient::PubKeyHash(hash)) = &recipient {
-      if *hash == self.key_id_owner || *hash == self.key_id_voting {
-        return Some(ProTxInvalid::PayoutKeyReuse);
-      }
     }
 
     if self.operator_reward > MAX_OPERATOR_REWARD {
@@ -403,6 +411,28 @@ impl ProRegTx {
       sig: CollateralSig::default(),
     }
   }
+
+  /// Checks the collateral shares, or the owner payouts when unshared.
+  fn check_owner_rewards(&self) -> Option<ProTxInvalid> {
+    if !self.shares.is_empty() {
+      let collateral = match self.mn_type {
+        MnType::Evo => EVO_COLLATERAL,
+        _ => REGULAR_COLLATERAL,
+      };
+      return check_shares(
+        &self.shares,
+        collateral,
+        self.early_period_blocks,
+        self.early_penalty,
+        &self.key_id_voting,
+      );
+    }
+    if self.version >= ProTxVersion::ExtAddr {
+      return check_payouts(&self.payouts, Some(&self.key_id_owner), &self.key_id_voting);
+    }
+    let payout = PayoutShare::new(self.script_payout.clone(), MAX_REWARD);
+    check_payouts(&[payout], Some(&self.key_id_owner), &self.key_id_voting)
+  }
 }
 
 impl fmt::Display for ProRegTx {
@@ -417,8 +447,10 @@ impl fmt::Display for ProRegTx {
 }
 
 #[cfg(all(test, feature = "serde"))]
+#[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
+  use crate::provider::share::tests::script;
 
   use dash_dev::{assert_serde_rt, check_sptx, Corpus};
   use rstest::rstest;
@@ -428,5 +460,86 @@ mod tests {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "proregtx");
     let items = corpus.entries::<ProRegTx>("proregtx", check_sptx);
     assert_serde_rt("proregtx", &items);
+  }
+
+  /// The payload of `txid` in the corpus.
+  fn entry(txid: &str) -> ProRegTx {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "proregtx");
+    corpus
+      .entries::<ProRegTx>("proregtx", |_, _, _| {})
+      .remove(txid)
+      .unwrap()
+  }
+
+  /// A testnet registration with one payout.
+  fn registration() -> ProRegTx {
+    entry("13ccca675ed8a8a788693f46191e7237e2896701ede3058c20263e1b2343923d")
+  }
+
+  /// A regtest registration with two shares.
+  fn shared() -> ProRegTx {
+    entry("be0bcc4773f4510a7a3afdfd18e7758f007c3ff1eb57c3c7a500620c13a05b9c")
+  }
+
+  /// `share` with its refund script paying `key`.
+  fn refund_to(share: &CollateralShare, key: PubKeyHash) -> CollateralShare {
+    CollateralShare::new(
+      share.amount(),
+      script(Recipient::PubKeyHash(key)),
+      share.script_reward().clone(),
+      share.key_id_owner(),
+    )
+  }
+
+  #[rstest]
+  #[case::payout_to_owner(
+    registration(),
+    |ptx: &mut ProRegTx| ptx.payouts[0] = PayoutShare::new(script(Recipient::PubKeyHash(ptx.key_id_owner)), MAX_REWARD),
+    ProTxInvalid::PayoutKeyReuse
+  )]
+  #[case::unshared_early_period(
+    registration(),
+    |ptx: &mut ProRegTx| ptx.early_period_blocks = 1,
+    ProTxInvalid::UnsharedEarlyTerms
+  )]
+  #[case::unshared_early_penalty(
+    registration(),
+    |ptx: &mut ProRegTx| ptx.early_penalty = 1,
+    ProTxInvalid::UnsharedEarlyTerms
+  )]
+  #[case::unshared_null_owner(
+    registration(),
+    |ptx: &mut ProRegTx| ptx.key_id_owner = PubKeyHash::default(),
+    ProTxInvalid::NullKey
+  )]
+  #[case::shared_external_collateral(
+    shared(),
+    |ptx: &mut ProRegTx| ptx.collateral_hash = TxHash::from_lendian([1; 32]),
+    ProTxInvalid::ExternalSharedCollateral
+  )]
+  #[case::shared_owner_key(
+    shared(),
+    |ptx: &mut ProRegTx| ptx.key_id_owner = ptx.shares[0].key_id_owner(),
+    ProTxInvalid::SharedOwnerKey
+  )]
+  #[case::shared_payouts(
+    shared(),
+    |ptx: &mut ProRegTx| ptx.payouts = registration().payouts,
+    ProTxInvalid::SharedPayouts
+  )]
+  #[case::share_refund_to_voting(
+    shared(),
+    |ptx: &mut ProRegTx| ptx.shares[0] = refund_to(&ptx.shares[0], ptx.key_id_voting),
+    ProTxInvalid::ShareKeyReuse
+  )]
+  #[case::evo_shares_of_regular_collateral(
+    shared(),
+    |ptx: &mut ProRegTx| ptx.mn_type = MnType::Evo,
+    ProTxInvalid::BadShareAmountSum { total: REGULAR_COLLATERAL }
+  )]
+  fn check(#[case] mut ptx: ProRegTx, #[case] edit: fn(&mut ProRegTx), #[case] expected: ProTxInvalid) {
+    assert_eq!(ptx.check(), None);
+    edit(&mut ptx);
+    assert_eq!(ptx.check(), Some(expected));
   }
 }
