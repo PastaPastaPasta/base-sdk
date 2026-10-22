@@ -259,11 +259,12 @@ predicate isSuppressed(TypeItem t, string trait) {
   nameOf(t) = ["BlsArith", "BlsElem"] and
   trait = ["Eq", "Hash", "PartialEq"]
   or
-  // relic's points keep non-canonical coordinates, so a hash of them would
-  // not follow the point: suppress Hash
+  // relic's points, and the representation that may hold one, keep
+  // non-canonical coordinates, so neither equality nor a hash of them would
+  // follow the point, as for G1 and G2: suppress Eq, Hash and PartialEq
   isOpaqueCrate(fileOf(t)) and
-  nameOf(t) = ["Ep", "Ep2"] and
-  trait = "Hash"
+  nameOf(t) = ["BlsRepr", "Ep", "Ep2"] and
+  trait = ["Eq", "Hash", "PartialEq"]
 }
 
 /** Holds if `t` is exempt from serde derivation requirements. */
