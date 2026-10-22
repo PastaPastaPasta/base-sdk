@@ -108,6 +108,9 @@ BOOST_AUTO_TEST_CASE(netinfo_legacy_reads)
              "00000000000000000000ffff01020304" "0000",
              "fc000000000000000000000000000001" "270f",
              "00000000000000000000ffff01020304" "27",
+             "00000000000000000000ffff00000000" "270f",
+             "fd87d87eeb4300112233445566778899" "270f",
+             "fd6b88c0872400112233445566778899" "270f",
          }) {
         const auto raw{ParseHex(hex)};
         CDataStream ds(raw, SER_NETWORK, CLIENT_VERSION);
@@ -145,6 +148,12 @@ BOOST_AUTO_TEST_CASE(netinfo_legacy_reads)
     { "raw": "fc000000000000000000000000000001270f", "read": 18, "written": "fc000000000000000000000000000001270f", "entries": ["[fc00::1]:9999"], "empty": false },
     // A service without its whole port is refused.
     { "raw": "00000000000000000000ffff0102030427", "read": null, "written": null, "entries": null, "empty": null },
+    // 0.0.0.0 is not valid, so the value is written as the unset service.
+    { "raw": "00000000000000000000ffff00000000270f", "read": 18, "written": "000000000000000000000000000000000000", "entries": [], "empty": true },
+    // A TORv2 address is not valid.
+    { "raw": "fd87d87eeb4300112233445566778899270f", "read": 18, "written": "000000000000000000000000000000000000", "entries": [], "empty": true },
+    // An internal address is not valid.
+    { "raw": "fd6b88c0872400112233445566778899270f", "read": 18, "written": "000000000000000000000000000000000000", "entries": [], "empty": true },
   ],
 /*
 BOOST_AUTO_TEST_CASE(netinfo_extended_reads)

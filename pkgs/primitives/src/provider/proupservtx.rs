@@ -14,7 +14,7 @@ use crate::prelude::*;
 use crate::provider::PlatformNodeId;
 use crate::sign::unsigned_digest;
 use crate::sptx::{check_sptx_netinfo, InputsHash, MnType, ProTxInvalid};
-use crate::types::{NITrait, NetInfo, NetInfoV1, NetInfoV2, ServiceV1};
+use crate::types::{NITrait, NetInfo, NetInfoV1, NetInfoV2};
 use crate::{hash_impl, TxHash};
 
 use bitcoin_primitives::script::ScriptPubKeyBuf;
@@ -84,7 +84,7 @@ impl BaseCodec for ProUpServTx {
     let net_info = if version >= ProTxVersion::ExtAddr {
       NetInfo::Extended(NetInfoV2::decode(data)?)
     } else {
-      NetInfo::Legacy(NetInfoV1::new(ServiceV1::decode(data)?))
+      NetInfo::Legacy(NetInfoV1::decode(data)?)
     };
     let script_operator_payout = ScriptPubKeyBuf::decode(data)?;
     let inputs_hash = InputsHash::decode(data)?;

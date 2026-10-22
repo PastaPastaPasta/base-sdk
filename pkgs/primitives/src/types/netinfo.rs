@@ -7,7 +7,7 @@
 //! Network information types and trait.
 
 use super::netaddr::{is_bad_port, NetAddr};
-use super::{AddrV2, NetAddrError, ServiceV1, ServiceV2};
+use super::{AddrV1, AddrV2, NetAddrError, ServiceV1, ServiceV2};
 use crate::hash_impl;
 use crate::prelude::*;
 
@@ -26,6 +26,10 @@ const DOMAIN_LABEL_MAX: usize = 63;
 const DOMAIN_MAX: usize = 253;
 /// Minimum FQDN length.
 const DOMAIN_MIN: usize = 3;
+/// IPv6 prefix of an embedded TORv2 address.
+const TORV2_IN_IPV6: [u8; 6] = [0xfd, 0x87, 0xd8, 0x7e, 0xeb, 0x43];
+/// IPv6 prefix of an embedded internal address.
+const INTERNAL_IN_IPV6: [u8; 6] = [0xfd, 0x6b, 0x88, 0xc0, 0x87, 0x24];
 
 /// Reserved and privacy TLDs that must be rejected.
 const TLDS_BAD: &[&str] = &[
@@ -180,6 +184,23 @@ impl BaseCodec for NIEntry {
       }
       Self::Invalid => NIEntryCode::Invalid.to_base().encode(buf),
     }
+  }
+}
+
+/// Returns `true` for an address the reference implementation holds valid.
+fn is_valid_addr(addr: &AddrV2) -> bool {
+  match addr {
+    AddrV2::Ipv4(b) => *b != [0; 4] && *b != [0xff; 4],
+    AddrV2::Ipv6(b) => {
+      !addr.is_null()
+        && !addr.is_rfc3849()
+        && !addr.is_rfc4291()
+        && !b.starts_with(&TORV2_IN_IPV6)
+        && !b.starts_with(&INTERNAL_IN_IPV6)
+    }
+    AddrV2::Cjdns(b) => b[0] == 0xfc,
+    AddrV2::TorV3(_) | AddrV2::I2p(_) => true,
+    AddrV2::Unknown { .. } => false,
   }
 }
 
@@ -530,8 +551,14 @@ pub struct NetInfoV1(ServiceV1);
 impl_type!(NetInfoV1);
 
 impl BaseCodec for NetInfoV1 {
+  /// Decodes a legacy network info, reading a service at an address that is
+  /// not valid as the unset service.
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    Ok(Self(ServiceV1::decode(data)?))
+    let service = ServiceV1::decode(data)?;
+    if is_valid_addr(&AddrV2::from(service.addr())) {
+      return Ok(Self(service));
+    }
+    Ok(Self(ServiceV1::new(AddrV1::default(), 0)))
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
@@ -937,6 +964,18 @@ mod tests {
     let addr: AddrV1 = addr_str.parse().unwrap();
     let v1 = NetInfoV1(ServiceV1::new(addr, port));
     assert_eq!(v1.check(), expected);
+  }
+
+  #[rstest]
+  #[case::ipv4(AddrV2::Ipv4([1, 2, 3, 4]), true)]
+  #[case::ipv4_any(AddrV2::Ipv4([0; 4]), false)]
+  #[case::ipv4_broadcast(AddrV2::Ipv4([0xff; 4]), false)]
+  #[case::ipv6(AddrV2::Ipv6(hex!("26064700470000000000000000001111")), true)]
+  #[case::ipv6_unspecified(AddrV2::Ipv6([0; 16]), false)]
+  #[case::ipv6_documentation(AddrV2::Ipv6(hex!("20010db8000000000000000000000001")), false)]
+  #[case::torv3_zeros(AddrV2::TorV3([0; 32]), true)]
+  fn valid_addr(#[case] addr: AddrV2, #[case] expected: bool) {
+    assert_eq!(is_valid_addr(&addr), expected);
   }
 
   fn svc(addr: AddrV2, port: u16) -> NIEntry {

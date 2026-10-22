@@ -12,7 +12,7 @@ use crate::prelude::*;
 use crate::provider::PlatformNodeId;
 use crate::sign::{message_digest, unsigned_digest, verify_compact};
 use crate::sptx::{check_sptx_netinfo, InputsHash, MnType, ProTxInvalid, MAX_OPERATOR_REWARD};
-use crate::types::{NITrait, NetInfo, NetInfoV1, NetInfoV2, ServiceV1};
+use crate::types::{NITrait, NetInfo, NetInfoV1, NetInfoV2};
 use crate::{hash_impl, TxHash};
 
 use bitcoin_primitives::script::ScriptPubKeyBuf;
@@ -128,7 +128,7 @@ impl BaseCodec for ProRegTx {
     let net_info = if version >= ProTxVersion::ExtAddr {
       NetInfo::Extended(NetInfoV2::decode(data)?)
     } else {
-      NetInfo::Legacy(NetInfoV1::new(ServiceV1::decode(data)?))
+      NetInfo::Legacy(NetInfoV1::decode(data)?)
     };
     let key_id_owner = PubKeyHash::decode(data)?;
     let pub_key_operator = BlsPkBytes::decode(data)?;
