@@ -119,6 +119,60 @@ pub enum ProTxInvalid {
   /// `bad-protx-payee-reuse`
   #[error("bad-protx-payee-reuse")]
   PayoutKeyReuse,
+  /// `bad-protx-payouts-count`
+  #[error("bad-protx-payouts-count: {count}")]
+  BadPayoutCount { count: usize },
+  /// `bad-protx-payout-reward`
+  #[error("bad-protx-payout-reward: {reward}")]
+  BadPayoutReward { reward: u16 },
+  /// `bad-protx-payee-dup`
+  #[error("bad-protx-payee-dup")]
+  DuplicatePayout,
+  /// `bad-protx-payout-reward-sum`
+  #[error("bad-protx-payout-reward-sum: {total}")]
+  BadPayoutRewardSum { total: u32 },
+  /// `bad-protx-shares-external`
+  #[error("bad-protx-shares-external")]
+  ExternalSharedCollateral,
+  /// `bad-protx-shares-owner-key`
+  #[error("bad-protx-shares-owner-key")]
+  SharedOwnerKey,
+  /// `bad-protx-shares-payouts`
+  #[error("bad-protx-shares-payouts")]
+  SharedPayouts,
+  /// `bad-protx-shares-empty-fields`
+  #[error("bad-protx-shares-empty-fields")]
+  UnsharedEarlyTerms,
+  /// `bad-protx-shares-count`
+  #[error("bad-protx-shares-count: {count}")]
+  BadShareCount { count: usize },
+  /// `bad-protx-shares-early-period`
+  #[error("bad-protx-shares-early-period: {blocks}")]
+  BadEarlyPeriod { blocks: u32 },
+  /// `bad-protx-shares-amount`
+  #[error("bad-protx-shares-amount: {amount}")]
+  BadShareAmount { amount: i64 },
+  /// `bad-protx-shares-key-null`
+  #[error("bad-protx-shares-key-null")]
+  NullShareKey,
+  /// `bad-protx-shares-dup-key`
+  #[error("bad-protx-shares-dup-key")]
+  DuplicateShareKey,
+  /// `bad-protx-shares-dup-refund`
+  #[error("bad-protx-shares-dup-refund")]
+  DuplicateShareRefund,
+  /// `bad-protx-shares-payee`
+  #[error("bad-protx-shares-payee")]
+  BadShareScript,
+  /// `bad-protx-shares-payee-reuse`
+  #[error("bad-protx-shares-payee-reuse")]
+  ShareKeyReuse,
+  /// `bad-protx-shares-amount-sum`
+  #[error("bad-protx-shares-amount-sum: {total}")]
+  BadShareAmountSum { total: i64 },
+  /// `bad-protx-shares-penalty`
+  #[error("bad-protx-shares-penalty: {penalty}")]
+  BadEarlyPenalty { penalty: i64 },
   /// `bad-protx-operator-reward`
   #[error("bad-protx-operator-reward: {reward}")]
   OperatorRewardTooHigh { reward: u16 },
