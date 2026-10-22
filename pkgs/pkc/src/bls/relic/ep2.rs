@@ -21,7 +21,7 @@ use crate::prelude::*;
 use dash_types::type_id::Unencodable;
 
 /// A relic `ep2_t`: x, y, z and the coord tag.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct Ep2 {
   pub(crate) x: Fp2,
@@ -307,6 +307,11 @@ mod tests {
   use super::super::super::group::{G2Affine, G2};
   use super::*;
 
+  /// The coordinates and tag, which tests compare as Ep2 has no `==`.
+  fn parts(p: &Ep2) -> (Fp2, Fp2, Fp2, Coord) {
+    (p.x, p.y, p.z, p.coord)
+  }
+
   fn generator() -> Ep2 {
     let g = G2::generator().to_affine();
     Ep2::affine(g.x(), g.y(), Coord::Basic)
@@ -349,21 +354,21 @@ mod tests {
     // P + (-P) is set_infty, then tagged PROJC.
     let z = g.add(&g.neg());
     assert_eq!(
-      z,
-      Ep2 {
+      parts(&z),
+      parts(&Ep2 {
         coord: Coord::Projc,
         ..Ep2::INFTY
-      }
+      })
     );
     let three = g.dbl().add(&g);
     let w = three.add(&three.neg());
-    assert_eq!(w, z);
+    assert_eq!(parts(&w), parts(&z));
     // A PROJC infinity equals every PROJC point (relic_ep2_cmp.c:51-63)
     // and no finite BASIC one.
     assert!(z.cmp(&three) && three.cmp(&z));
     assert!(!z.cmp(&g) && !g.cmp(&z));
     assert!(z.cmp(&Ep2::INFTY));
-    assert_eq!(z.neg(), Ep2::INFTY);
+    assert_eq!(parts(&z.neg()), parts(&Ep2::INFTY));
     // Doubling a Lemma C value (x, 0) gives z = 0 with x != 0. Against a
     // BASIC operand it normalizes to set_infty, so it equals the affine
     // (0, 0), and only that.
@@ -417,10 +422,10 @@ mod tests {
       assert_eq!(got.coord, Coord::Basic);
       let expect = bg.mul_scalar(&bn.mod_r().to_lendian(), 256).to_affine();
       assert_eq!(to_blst(&got), expect, "{k:02x?}");
-      assert_eq!(projc.mul(&bn), got);
+      assert_eq!(parts(&projc.mul(&bn)), parts(&got));
     }
-    assert_eq!(g.mul(&scalar(0)), Ep2::INFTY);
-    assert_eq!(Ep2::INFTY.mul(&scalar(9)), Ep2::INFTY);
+    assert_eq!(parts(&g.mul(&scalar(0))), parts(&Ep2::INFTY));
+    assert_eq!(parts(&Ep2::INFTY.mul(&scalar(9))), parts(&Ep2::INFTY));
   }
 
   #[test]

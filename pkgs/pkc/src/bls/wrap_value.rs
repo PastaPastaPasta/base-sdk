@@ -163,11 +163,15 @@ impl<K: BlsWire<N>, const N: usize> Hash for BlsValue<K, N> {
   }
 }
 
-/// The same validity and the same element as Core serializes it, the
-/// identity Core keys its containers by (`operator<` compares `GetHash()`).
-/// On decoded values it is Core's `operator==`; on arithmetic results that
-/// operator does not normalize and is not transitive, so it is `core_eq`
-/// (BS11a-3 D25).
+/// The same validity, serialized bytes and held point, while the hash
+/// covers the validity and the bytes (the validity alone for secret keys).
+/// That is finer than Core's container
+/// key, as `operator<` orders by `GetHash()` of the serialization alone
+/// (`bls.h:85-87,141-146`); the two agree whenever the bytes determine the
+/// point. On decoded values it is Core's `operator==`; on arithmetic results
+/// that operator does not normalize and is not transitive, so it is
+/// `core_eq` (BS11a-3 D25). To dedupe as Core's `std::set` and `std::map`
+/// do, key by `to_bytes(scheme)`.
 impl<K: BlsWire<N>, const N: usize> PartialEq for BlsValue<K, N> {
   fn eq(&self, other: &Self) -> bool {
     self.valid == other.valid && self.element == other.element

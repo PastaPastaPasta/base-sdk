@@ -15,6 +15,7 @@ use crate::prelude::*;
 
 #[cfg(feature = "codec")]
 use dash_types::type_id::Unencodable;
+use zeroize::Zeroize;
 
 use core::cmp::Ordering;
 
@@ -255,6 +256,15 @@ impl Bn {
     }
     (Self::pos(&[rem as u64]), Self { neg: false, mag: quo })
   }
+
+  /// Overwrites the value with zero, for a copy of a secret scalar
+  /// (BS11a-3 D33). `Bn` does not implement `Zeroize`: base-sdk's CodeQL
+  /// policy treats any type that does as secret (no `Debug` or
+  /// `PartialEq`), and public scalars use `Bn` too.
+  pub(crate) fn wipe(&mut self) {
+    self.neg.zeroize();
+    self.mag.zeroize();
+  }
 }
 
 fn cmp_mag(a: &[u64; LIMBS], b: &[u64; LIMBS]) -> Ordering {
@@ -323,18 +333,25 @@ pub(crate) fn rec_naf(k: &Bn, w: u32) -> Vec<i8> {
 }
 
 /// `bn_rec_glv(k0, k1, k, r, v1, v2)` (`relic_bn_rec.c`): Babai rounding
-/// against the G1 basis, so that k = k0 + k1·lambda (mod r).
+/// against the G1 basis, so that k = k0 + k1·lambda (mod r). k may be a
+/// secret key, so its named copies are wiped, and the caller wipes k0 and
+/// k1 (BS11a-3 D33).
 pub(crate) fn rec_glv(k: &Bn) -> (Bn, Bn) {
-  let t = k.abs();
+  let mut t = k.abs();
   let round = |v: &Bn| {
-    let b = t.mul(*v);
+    let mut b = t.mul(*v);
     let r = b.bit(R_BITS);
-    b.rsh(R_BITS + 1).add_dig(r)
+    let out = b.rsh(R_BITS + 1).add_dig(r);
+    b.wipe();
+    out
   };
-  let b1 = round(&V1[0]);
-  let b2 = round(&V2[0]);
+  let mut b1 = round(&V1[0]);
+  let mut b2 = round(&V2[0]);
   let k0 = t.sub(b1.mul(V1[1]).add(b2.mul(V2[1])));
   let k1 = b1.mul(V1[2]).add(b2.mul(V2[2])).neg();
+  t.wipe();
+  b1.wipe();
+  b2.wipe();
   (k0, k1)
 }
 

@@ -23,9 +23,10 @@ use crate::prelude::*;
 
 #[cfg(feature = "codec")]
 use dash_types::type_id::Unencodable;
+use zeroize::{Zeroize, Zeroizing};
 
 /// A relic `ep_t`: x, y, z and the coord tag.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct Ep {
   pub(crate) x: Fp,
@@ -228,11 +229,17 @@ impl Ep {
   /// `g1_mul` (`relic_pc_exp.c:38-66`) for a scalar `bn_read_bin` gives,
   /// which is never negative: up to 64 bits `ep_mul_dig`, otherwise
   /// `ep_mul_lwnaf` of k mod r.
+  ///
+  /// k may be a secret key (`ies_key`), so its copies, recodings and the
+  /// accumulator are wiped (BS11a-3 D33).
   pub(crate) fn mul(&self, k: &Bn) -> Self {
     if k.bits() <= 64 {
       self.mul_dig(k.low())
     } else {
-      self.mul_lwnaf(&k.mod_r())
+      let mut k = k.mod_r();
+      let out = self.mul_lwnaf(&k);
+      k.wipe();
+      out
     }
   }
 
@@ -242,7 +249,9 @@ impl Ep {
     if k == 0 || self.is_infty() {
       return Self::INFTY;
     }
-    let naf = recode::rec_naf(&Bn::from_bendian(&u256(k)), 2);
+    let mut kb = Bn::from_bendian(&u256(k));
+    let naf = Zeroizing::new(recode::rec_naf(&kb, 2));
+    kb.wipe();
     let mut t = Self::INFTY;
     for &u in naf.iter().rev() {
       t = t.dbl();
@@ -252,7 +261,9 @@ impl Ep {
         t = t.sub(self);
       }
     }
-    t.norm()
+    let out = t.norm();
+    t.wipe();
+    out
   }
 
   /// `ep_mul_lwnaf` (`relic_ep_mul.c`): zero or an infinite point gives
@@ -268,11 +279,13 @@ impl Ep {
   /// `ep_mul_glv_imp` (`relic_ep_mul.c:43-140`). k0's sign picks the table
   /// of p or -p; psi of a table entry is negated when the two signs differ.
   fn mul_glv(&self, k: &Bn) -> Self {
-    let (k0, k1) = recode::rec_glv(k);
+    let (mut k0, mut k1) = recode::rec_glv(k);
     let (s0, s1) = (k0.is_neg(), k1.is_neg());
     let t = if s0 { self.neg().tab() } else { self.tab() };
-    let naf0 = recode::rec_naf(&k0, 4);
-    let naf1 = recode::rec_naf(&k1, 4);
+    let naf0 = Zeroizing::new(recode::rec_naf(&k0, 4));
+    let naf1 = Zeroizing::new(recode::rec_naf(&k1, 4));
+    k0.wipe();
+    k1.wipe();
     let digit = |naf: &[i8], i: usize| naf.get(i).copied().unwrap_or(0);
     let entry = |n: i8| &t[usize::from(n.unsigned_abs() / 2)];
     let mut r = Self::INFTY;
@@ -293,11 +306,12 @@ impl Ep {
         r = if n1 > 0 { r.add(&q) } else { r.sub(&q) };
       }
     }
-    let r = r.norm();
+    let out = r.norm();
+    r.wipe();
     if k.is_neg() {
-      r.neg()
+      out.neg()
     } else {
-      r
+      out
     }
   }
 
@@ -324,6 +338,15 @@ impl Ep {
     let t = self.norm();
     Some((t.x, field::sign(t.y)))
   }
+
+  /// Overwrites the coordinates with zero, for an accumulator of a secret
+  /// multiple (BS11a-3 D33). As for `Bn::wipe`, `Ep` implements no
+  /// `Zeroize`.
+  fn wipe(&mut self) {
+    for c in [&mut self.x, &mut self.y, &mut self.z] {
+      c.0.l.zeroize();
+    }
+  }
 }
 
 /// A digit as a 32-byte big-endian scalar.
@@ -338,6 +361,11 @@ mod tests {
   use super::super::super::group::Point as _;
   use super::super::super::group::{G1Affine, G1};
   use super::*;
+
+  /// The coordinates and tag, which tests compare as Ep has no `==`.
+  fn parts(p: &Ep) -> (Fp, Fp, Fp, Coord) {
+    (p.x, p.y, p.z, p.coord)
+  }
 
   fn generator() -> Ep {
     let g = G1Affine::generator();
@@ -385,11 +413,11 @@ mod tests {
     assert_eq!(z.coord, Coord::Projc);
     assert!(!field::is_zero(&z.y));
     // Adding infinity copies the other operand, tag included.
-    assert_eq!(z.add(&g), g);
-    assert_eq!(g.add(&z), g);
+    assert_eq!(parts(&z.add(&g)), parts(&g));
+    assert_eq!(parts(&g.add(&z)), parts(&g));
     // Negating or doubling infinity gives set_infty.
-    assert_eq!(z.neg(), Ep::INFTY);
-    assert_eq!(z.dbl(), Ep::INFTY);
+    assert_eq!(parts(&z.neg()), parts(&Ep::INFTY));
+    assert_eq!(parts(&z.dbl()), parts(&Ep::INFTY));
     // set_infty equals the affine (0, 0), which the PROJC infinity does not.
     let origin = Ep::affine(Fp::default(), Fp::default(), Coord::Basic);
     assert!(Ep::INFTY.cmp(&origin));
@@ -434,9 +462,9 @@ mod tests {
       assert!(projc.cmp(&g));
       assert!(projc.mul(&bn).cmp(&got));
     }
-    assert_eq!(g.mul(&Bn::from_bendian(&r)), Ep::INFTY);
-    assert_eq!(g.mul(&scalar(0)), Ep::INFTY);
-    assert_eq!(Ep::INFTY.mul(&scalar(5)), Ep::INFTY);
+    assert_eq!(parts(&g.mul(&Bn::from_bendian(&r))), parts(&Ep::INFTY));
+    assert_eq!(parts(&g.mul(&scalar(0))), parts(&Ep::INFTY));
+    assert_eq!(parts(&Ep::INFTY.mul(&scalar(5))), parts(&Ep::INFTY));
   }
 
   #[test]
@@ -454,10 +482,10 @@ mod tests {
     let two = g.dbl();
     let [a, b, c] = Ep::norm_sim([two, z, g]);
     let origin = Ep::affine(Fp::default(), Fp::default(), Coord::Basic);
-    assert_eq!(a, origin);
-    assert_eq!(b, origin);
+    assert_eq!(parts(&a), parts(&origin));
+    assert_eq!(parts(&b), parts(&origin));
     // A BASIC entry keeps x and y and takes the zero inverse as z.
-    assert_eq!(c, Ep { z: Fp::default(), ..g });
+    assert_eq!(parts(&c), parts(&Ep { z: Fp::default(), ..g }));
     assert!(c.is_infty());
   }
 
