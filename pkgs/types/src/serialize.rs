@@ -122,42 +122,102 @@ pub mod hex {
 
 /// Serializes `u64` as a decimal string in human-readable formats to avoid
 /// JSON precision loss, and as a native integer in machine-readable formats.
+///
+/// An `Option<u64>` field takes the same form, with `None` as none.
 pub mod str_u64 {
-  /// Serializes a `u64` as a decimal string, or as an integer when the format
-  /// is machine-readable.
-  pub fn serialize<S: ::serde::Serializer>(val: &u64, s: S) -> Result<S::Ok, S::Error> {
-    if s.is_human_readable() {
-      s.collect_str(val)
-    } else {
-      s.serialize_u64(*val)
+  mod sealed {
+    /// Sealing marker for the field types [`super::Value`] covers.
+    pub trait Sealed {}
+
+    impl Sealed for u64 {}
+    impl Sealed for Option<u64> {}
+  }
+
+  /// A field type [`str_u64`](self) carries, either `u64` or `Option<u64>`.
+  pub trait Value: sealed::Sealed + Sized {
+    /// Serializes the value.
+    fn serialize<S: ::serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error>;
+
+    /// Deserializes the value.
+    fn deserialize<'de, D: ::serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error>;
+  }
+
+  impl Value for u64 {
+    fn serialize<S: ::serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+      if s.is_human_readable() {
+        s.collect_str(self)
+      } else {
+        s.serialize_u64(*self)
+      }
+    }
+
+    fn deserialize<'de, D: ::serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+      struct Visitor;
+
+      impl ::serde::de::Visitor<'_> for Visitor {
+        type Value = u64;
+
+        fn expecting(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+          f.write_str("u64 as string or number")
+        }
+
+        fn visit_u64<E: ::serde::de::Error>(self, v: u64) -> Result<u64, E> {
+          Ok(v)
+        }
+
+        fn visit_str<E: ::serde::de::Error>(self, s: &str) -> Result<u64, E> {
+          s.parse().map_err(E::custom)
+        }
+      }
+
+      if d.is_human_readable() {
+        d.deserialize_any(Visitor)
+      } else {
+        d.deserialize_u64(Visitor)
+      }
     }
   }
 
-  /// Deserializes a `u64` from a decimal string or a number.
-  pub fn deserialize<'de, D: ::serde::Deserializer<'de>>(d: D) -> Result<u64, D::Error> {
-    struct Visitor;
-
-    impl ::serde::de::Visitor<'_> for Visitor {
-      type Value = u64;
-
-      fn expecting(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str("u64 as string or number")
-      }
-
-      fn visit_u64<E: ::serde::de::Error>(self, v: u64) -> Result<u64, E> {
-        Ok(v)
-      }
-
-      fn visit_str<E: ::serde::de::Error>(self, s: &str) -> Result<u64, E> {
-        s.parse().map_err(E::custom)
+  impl Value for Option<u64> {
+    fn serialize<S: ::serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+      match *self {
+        Some(val) => s.serialize_some(&Inner(val)),
+        None => s.serialize_none(),
       }
     }
 
-    if d.is_human_readable() {
-      d.deserialize_any(Visitor)
-    } else {
-      d.deserialize_u64(Visitor)
+    fn deserialize<'de, D: ::serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+      let val: Option<Inner> = ::serde::Deserialize::deserialize(d)?;
+      Ok(val.map(|Inner(v)| v))
     }
+  }
+
+  /// The `u64` inside an `Option<u64>`, carried as a `u64` field is.
+  #[derive(Clone, Debug, Eq, Hash, PartialEq)]
+  struct Inner(u64);
+
+  impl ::serde::Serialize for Inner {
+    fn serialize<S: ::serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+      Value::serialize(&self.0, s)
+    }
+  }
+
+  impl<'de> ::serde::Deserialize<'de> for Inner {
+    fn deserialize<D: ::serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+      <u64 as Value>::deserialize(d).map(Self)
+    }
+  }
+
+  /// Serializes a `u64` as a decimal string, or as an integer when the format
+  /// is machine-readable, and `None` as none.
+  pub fn serialize<V: Value, S: ::serde::Serializer>(val: &V, s: S) -> Result<S::Ok, S::Error> {
+    val.serialize(s)
+  }
+
+  /// Deserializes a `u64` from a decimal string or a number, and none as
+  /// `None`.
+  pub fn deserialize<'de, V: Value, D: ::serde::Deserializer<'de>>(d: D) -> Result<V, D::Error> {
+    V::deserialize(d)
   }
 }
 
@@ -324,6 +384,20 @@ mod tests {
     ciborium::into_writer(&nonce, &mut wire).unwrap();
     assert_eq!(wire, hex!("1b0102030405060708"));
     assert_eq!(ciborium::from_reader::<Nonce, _>(wire.as_slice()).unwrap(), nonce);
+  }
+
+  #[derive(Debug, PartialEq, Serialize, Deserialize)]
+  struct OptNonce(#[serde(with = "super::str_u64")] Option<u64>);
+
+  #[rstest]
+  #[case::some(Some(0x0102_0304_0506_0708), &hex!("1b0102030405060708"))]
+  #[case::none(None, &hex!("f6"))]
+  fn str_u64_carries_integer_or_null_through_cbor(#[case] val: Option<u64>, #[case] raw: &[u8]) {
+    let nonce = OptNonce(val);
+    let mut wire = Vec::new();
+    ciborium::into_writer(&nonce, &mut wire).unwrap();
+    assert_eq!(wire, raw);
+    assert_eq!(ciborium::from_reader::<OptNonce, _>(wire.as_slice()).unwrap(), nonce);
   }
 
   #[derive(Debug, PartialEq, Serialize, Deserialize)]
