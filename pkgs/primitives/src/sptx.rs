@@ -12,7 +12,9 @@ use crate::payload::{
   FinalCommitment, MnHardFork, MnHardForkInvalid,
 };
 use crate::prelude::*;
-use crate::provider::{ProDisTx, ProRegTx, ProTxVersion, ProUpRegTx, ProUpRevTx, ProUpServTx};
+use crate::provider::{
+  ProDisTx, ProRegTx, ProTxVersion, ProUpRegTx, ProUpRevTx, ProUpServTx, ProUpShareTx, ProUpSharedRegTx,
+};
 use crate::types::{NIError, NIPurpose, NITrait, NetInfoV2};
 
 use dash_num::make_hash;
@@ -63,6 +65,10 @@ enum_map! {
     AssetUnlock = 9 => "asset_unlock",
     /// Shared masternode dissolution (type 10).
     ProviderDissolve = 10 => "provider_dissolve",
+    /// Share reward script update (type 11).
+    ProviderUpdateShare = 11 => "provider_update_share",
+    /// Shared masternode registrar update (type 12).
+    ProviderUpdateSharedRegistrar = 12 => "provider_update_shared_registrar",
   }
 }
 
@@ -178,6 +184,15 @@ pub enum ProTxInvalid {
   /// `bad-prodis-sig-count`
   #[error("bad-prodis-sig-count: {count}")]
   BadDissolveSigCount { count: usize },
+  /// `bad-proupshare-sig-size`
+  #[error("bad-proupshare-sig-size: {size}")]
+  BadShareUpdateSigSize { size: usize },
+  /// `bad-proupshare-payee`
+  #[error("bad-proupshare-payee")]
+  BadShareUpdateScript,
+  /// `bad-proupsharedreg-sig-count`
+  #[error("bad-proupsharedreg-sig-count: {count}")]
+  BadSharedRegistrarSigCount { count: usize },
   /// `bad-protx-operator-reward`
   #[error("bad-protx-operator-reward: {reward}")]
   OperatorRewardTooHigh { reward: u16 },
@@ -240,6 +255,10 @@ pub enum SpecialPayload {
   AssetUnlock(AssetUnlock),
   /// Shared masternode dissolution (type 10).
   ProviderDissolve(ProDisTx),
+  /// Share reward script update (type 11).
+  ProviderUpdateShare(ProUpShareTx),
+  /// Shared masternode registrar update (type 12).
+  ProviderUpdateSharedRegistrar(ProUpSharedRegTx),
   /// Unrecognized type, stored as raw bytes.
   Unknown {
     /// The transaction type code.
@@ -304,6 +323,8 @@ impl Checkable for SpecialPayload {
       Self::AssetLock(p) => p.check().map(PayloadInvalid::AssetLock),
       Self::AssetUnlock(p) => p.check().map(PayloadInvalid::AssetUnlock),
       Self::ProviderDissolve(p) => p.check().map(PayloadInvalid::ProTx),
+      Self::ProviderUpdateShare(p) => p.check().map(PayloadInvalid::ProTx),
+      Self::ProviderUpdateSharedRegistrar(p) => p.check().map(PayloadInvalid::ProTx),
       Self::Unknown { .. } => None,
     }
   }
@@ -347,6 +368,10 @@ impl SpecialPayload {
       TxType::AssetLock => AssetLock::decode(data).map(Self::AssetLock).map_err(err),
       TxType::AssetUnlock => AssetUnlock::decode(data).map(Self::AssetUnlock).map_err(err),
       TxType::ProviderDissolve => ProDisTx::decode(data).map(Self::ProviderDissolve).map_err(err),
+      TxType::ProviderUpdateShare => ProUpShareTx::decode(data).map(Self::ProviderUpdateShare).map_err(err),
+      TxType::ProviderUpdateSharedRegistrar => ProUpSharedRegTx::decode(data)
+        .map(Self::ProviderUpdateSharedRegistrar)
+        .map_err(err),
       unknown => {
         let bytes = data.to_vec();
         *data = &[];

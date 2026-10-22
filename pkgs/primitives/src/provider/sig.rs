@@ -245,6 +245,11 @@ rec_sig! {
   DissolveSig
 }
 
+rec_sig! {
+  /// Signature of a share owner replacing the keys of a shared masternode.
+  SharedRegistrarSig
+}
+
 #[cfg(test)]
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
