@@ -26,7 +26,7 @@ struct Core {
 }
 
 impl Compress<BLOCK> for Core {
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   fn compress(&mut self, block: &[u8; BLOCK]) {
     backend::compress_block(&mut self.h, block);
     self.blocks = self.blocks.wrapping_add(1);

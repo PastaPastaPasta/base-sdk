@@ -12,26 +12,26 @@ use crate::util::const_array;
 pub(crate) const BLOCK: usize = 128;
 
 /// IV, `0x8081828384858687 + 0x0808080808080808 * i` for `i` in `0..16`.
-pub(crate) const IV: [u64; 16] =
+pub(crate) static IV: [u64; 16] =
   const_array!(0; 16; |i| 0x0808080808080808u64.wrapping_mul(i as u64).wrapping_add(0x8081828384858687));
 
 /// Finalization constant, `0xaaaaaaaaaaaaaaa0 + i` for `i` in `0..16`.
-pub(crate) const FINAL_B: [u64; 16] = const_array!(0; 16; |i| 0xaaaaaaaaaaaaaaa0u64.wrapping_add(i as u64));
+pub(crate) static FINAL_B: [u64; 16] = const_array!(0; 16; |i| 0xaaaaaaaaaaaaaaa0u64.wrapping_add(i as u64));
 
 /// Parameters of the `s` functions, `s_n(x) = (x >> SHR[n]) ^ (x << SHL[n])
 /// ^ rotl(x, RC[n]) ^ rotl(x, RD[n])` for `n < 4` and `(x >> SHR[n]) ^ x`
 /// above.
-pub(crate) const SB_SHR: [u32; 6] = [1, 1, 2, 2, 1, 2];
-pub(crate) const SB_SHL: [u32; 4] = [3, 2, 1, 2];
-pub(crate) const SB_RC: [u32; 4] = [4, 13, 19, 28];
-pub(crate) const SB_RD: [u32; 4] = [37, 43, 53, 59];
+pub(crate) static SB_SHR: [u32; 6] = [1, 1, 2, 2, 1, 2];
+pub(crate) static SB_SHL: [u32; 4] = [3, 2, 1, 2];
+pub(crate) static SB_RC: [u32; 4] = [4, 13, 19, 28];
+pub(crate) static SB_RD: [u32; 4] = [37, 43, 53, 59];
 
 /// Rotation amounts for expand2's interleaved rotations (rb1..rb7).
-pub(crate) const RB: [u32; 7] = [5, 11, 27, 32, 37, 43, 53];
+pub(crate) static RB: [u32; 7] = [5, 11, 27, 32, 37, 43, 53];
 
 /// Indices of the five `M ^ H` words summed into each `W[i]`.
 #[rustfmt::skip]
-pub(crate) const W_IDX: [[usize; 5]; 16] = [
+pub(crate) static W_IDX: [[usize; 5]; 16] = [
   [ 5,  7, 10, 13, 14], [ 6,  8, 11, 14, 15],
   [ 0,  7,  9, 12, 15], [ 0,  1,  8, 10, 13],
   [ 1,  2,  9, 11, 14], [ 3,  2, 10, 12, 15],
@@ -44,7 +44,7 @@ pub(crate) const W_IDX: [[usize; 5]; 16] = [
 
 /// Signs of the last four terms of each `W[i]`, `true` for addition.
 #[rustfmt::skip]
-pub(crate) const W_OPS: [[bool; 4]; 16] = [
+pub(crate) static W_OPS: [[bool; 4]; 16] = [
   [false, true,  true,  true ],  // - + + +
   [false, true,  true,  false],  // - + + -
   [true,  true,  false, true ],  // + + - +
@@ -72,7 +72,7 @@ pub(crate) enum Shift {
 
 impl Shift {
   /// Applies the shift to `word`.
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   pub(crate) const fn apply(self, word: u64) -> u64 {
     match self {
       Self::Left(amount) => word << amount,
@@ -83,7 +83,7 @@ impl Shift {
 
 /// Fold phase 1 shifts of `xh` and `q[16 + i]` for `dh[i]`, `i` in `0..8`.
 #[rustfmt::skip]
-pub(crate) const FOLD1: [(Shift, Shift); 8] = [
+pub(crate) static FOLD1: [(Shift, Shift); 8] = [
   (Shift::Left(5),   Shift::Right(5)),
   (Shift::Right(7),  Shift::Left(8)),
   (Shift::Right(5),  Shift::Left(5)),
@@ -98,7 +98,7 @@ pub(crate) const FOLD1: [(Shift, Shift); 8] = [
 /// `dh` word to rotate, its rotation, the shift of `xl` and the `q` word
 /// xored with it.
 #[rustfmt::skip]
-pub(crate) const FOLD2: [(usize, u32, Shift, usize); 8] = [
+pub(crate) static FOLD2: [(usize, u32, Shift, usize); 8] = [
   (4,  9, Shift::Left(8),  23),
   (5, 10, Shift::Right(6), 16),
   (6, 11, Shift::Left(6),  17),

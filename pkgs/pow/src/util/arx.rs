@@ -25,7 +25,7 @@ pub(crate) fn rotl_u32x4(words: u32x4, shift: u32) -> u32x4 {
 }
 
 /// Rotate each lane of a `u32x8` value left by `shift` bits.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 pub(crate) fn rotl_u32x8(words: u32x8, shift: u32) -> u32x8 {
   (words << shift) | (words >> (32 - shift))
 }

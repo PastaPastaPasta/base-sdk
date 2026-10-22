@@ -24,7 +24,7 @@ const NW: usize = 8;
 
 /// Rotation constants, indexed as `ROT[round % 8][pair]`.
 #[rustfmt::skip]
-const ROT: [[u32; 4]; 8] = [
+static ROT: [[u32; 4]; 8] = [
   [46, 36, 19, 37],
   [33, 27, 14, 42],
   [17, 49, 36, 39],
@@ -36,13 +36,13 @@ const ROT: [[u32; 4]; 8] = [
 ];
 
 /// Rotates left by a compile-time amount.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 const fn rotl<const R: u32>(x: u64) -> u64 {
   x.rotate_left(R)
 }
 
 /// Encrypts `block` in place using Threefish-512.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 pub(crate) const fn encrypt(block: &mut [u64; NW], key: &[u64; NW], tweak: &[u64; 2]) {
   let k = [
     key[0],

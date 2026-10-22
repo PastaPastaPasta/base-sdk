@@ -48,3 +48,18 @@ fn chunked_updates(#[case] len: usize) {
   empty_updates.update([]);
   assert_eq!(empty_updates.finalize(), expected, "empty updates");
 }
+
+/// Hashing fits a 128 KiB thread stack in debug builds too. At -O0 a forced
+/// inline keeps its callee's locals in the caller's frame, and a `const`
+/// table is copied per lookup, so either regression overflows here.
+#[rstest]
+#[case::empty(&[], hex!("51b572209083576ea221c27e62b4e22063257571ccb6cc3dc3cd17eb67584eba"))]
+#[case::single_zero(&[0u8], hex!("ad4015a1059886781a796efe2326c9e6beb07bcf847f4897e0f8a3fa24004024"))]
+fn fits_128k_thread_stack(#[case] input: &'static [u8], #[case] expected: [u8; 32]) -> std::io::Result<()> {
+  let handle = std::thread::Builder::new()
+    .stack_size(128 * 1024)
+    .spawn(move || X11::digest(input))?;
+  let digest: Option<[u8; 32]> = handle.join().ok().map(Into::into);
+  assert_eq!(digest, Some(expected));
+  Ok(())
+}

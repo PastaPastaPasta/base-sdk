@@ -15,8 +15,8 @@ use crate::util::memops::{pack_nibbles, unpack_nibbles};
 /// Block size in bytes.
 pub(crate) const BLOCK: usize = 64;
 
-const S0: [u8; 16] = [9, 0, 4, 11, 13, 12, 3, 15, 1, 10, 2, 6, 7, 5, 8, 14];
-const S1: [u8; 16] = [3, 12, 6, 13, 5, 7, 1, 9, 15, 2, 0, 4, 11, 10, 14, 8];
+static S0: [u8; 16] = [9, 0, 4, 11, 13, 12, 3, 15, 1, 10, 2, 6, 7, 5, 8, 14];
+static S1: [u8; 16] = [3, 12, 6, 13, 5, 7, 1, 9, 15, 2, 0, 4, 11, 10, 14, 8];
 
 /// S-box layer: S0 or S1 per round-constant bit.
 const fn sbox_layer(s: &[u8; 64], rc: &[u8; 64]) -> [u8; 64] {
@@ -87,17 +87,17 @@ const fn r6(state: &[u8; 64], rc: &[u8; 64]) -> [u8; 64] {
 
 /// floor((sqrt2 - 1) x 2^256): first 256 fractional bits of sqrt2.
 #[rustfmt::skip]
-const SEED: [u8; 32] = [
+static SEED: [u8; 32] = [
   0x6a, 0x09, 0xe6, 0x67, 0xf3, 0xbc, 0xc9, 0x08,
   0xb2, 0xfb, 0x13, 0x66, 0xea, 0x95, 0x7d, 0x3e,
   0x3a, 0xde, 0xc1, 0x75, 0x12, 0x77, 0x50, 0x99,
   0xda, 0x2f, 0x59, 0x0b, 0x06, 0x67, 0x32, 0x2a,
 ];
 
-const ZERO_RC: [u8; 64] = [0; 64];
+static ZERO_RC: [u8; 64] = [0; 64];
 
 /// 42 hardware-form constants via R_6 iteration from sqrt2 seed.
-const HW_CONSTANTS: [[u8; 32]; 42] = {
+static HW_CONSTANTS: [[u8; 32]; 42] = {
   let mut c = [[0u8; 32]; 42];
   c[0] = SEED;
   let mut r = 1;
@@ -117,7 +117,7 @@ const HW_CONSTANTS: [[u8; 32]; 42] = {
 
 /// IP_8: inverse of P_8 on 256 bit positions.
 #[rustfmt::skip]
-const IP8: [u16; 256] = [
+static IP8: [u16; 256] = [
     0,129,128,  1,  2,131,130,  3,  4,133,132,  5,  6,135,134,  7,
     8,137,136,  9, 10,139,138, 11, 12,141,140, 13, 14,143,142, 15,
    16,145,144, 17, 18,147,146, 19, 20,149,148, 21, 22,151,150, 23,
@@ -237,7 +237,7 @@ const fn to_bitslice(hw: &[u8; 32], r: usize) -> [u64; 4] {
 }
 
 /// 42 round constants, grouped as `[even_hi, even_lo, odd_hi, odd_lo]`.
-pub(crate) const ROUND_CONSTS: [[u64; 4]; 42] = {
+pub(crate) static ROUND_CONSTS: [[u64; 4]; 42] = {
   let mut out = [[0u64; 4]; 42];
   let mut r = 0;
   while r < 42 {
@@ -252,7 +252,7 @@ pub(crate) const ROUND_CONSTS: [[u64; 4]; 42] = {
 /// The config block has digest size (512 = 0x0200) in the first two bytes. With zero message, F_8 simplifies to E_8.
 #[rustfmt::skip]
 /// JH-512 IV derived from the config block.
-pub(crate) const IV: [[u64; 2]; 8] = [
+pub(crate) static IV: [[u64; 2]; 8] = [
   [0x17aa003e964bd16f, 0x43d5157a052e6a63],
   [0x0bef970c8d5e228a, 0x61c3b3f2591234e9],
   [0x1e806f53c1a01d89, 0x806d2bea6b05a92a],

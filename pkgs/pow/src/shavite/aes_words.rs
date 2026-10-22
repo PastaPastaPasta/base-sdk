@@ -19,19 +19,19 @@ pub(super) struct Lane([u32; 4]);
 
 impl Lane {
   /// Builds the lane from four words in order.
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   pub(super) const fn new(words: [u32; 4]) -> Self {
     Self(words)
   }
 
   /// Repeats one word four times.
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   pub(super) const fn splat(word: u32) -> Self {
     Self([word; 4])
   }
 
   /// Returns the words in order.
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   pub(super) const fn to_array(self) -> [u32; 4] {
     self.0
   }
@@ -40,7 +40,7 @@ impl Lane {
 impl BitXor for Lane {
   type Output = Self;
 
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   fn bitxor(self, rhs: Self) -> Self {
     let [a, b, c, d] = self.0;
     let [e, f, g, h] = rhs.0;
@@ -49,14 +49,14 @@ impl BitXor for Lane {
 }
 
 impl BitXorAssign for Lane {
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   fn bitxor_assign(&mut self, rhs: Self) {
     *self = *self ^ rhs;
   }
 }
 
 /// Runs SubBytes, ShiftRows and MixColumns, then xors in `key`.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 pub(super) fn round(state: Lane, key: Lane) -> Lane {
   Lane(table_round(&state.0, &key.0))
 }

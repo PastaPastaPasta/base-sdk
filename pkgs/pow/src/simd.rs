@@ -36,7 +36,7 @@ const QBUF: usize = 264;
 
 /// Shift amounts for powers of the 8th root of unity. The root is 4, so
 /// `w^n` is a left shift by `2n`.
-const ROOT8_SHIFTS: [u32; 4] = [0, 2, 4, 6];
+static ROOT8_SHIFTS: [u32; 4] = [0, 2, 4, 6];
 
 /// Block tweak `X^255` applied to every block in lane 7 of the last row.
 const TWEAK: NttVec = NttVec::new([0, 0, 0, 0, 0, 0, 0, 1]);
@@ -50,20 +50,20 @@ const MODULUS: NttVec = NttVec::splat(257);
 ///
 /// Congruence holds because `2^8 = -1 (mod 257)`. The result is valid only
 /// while the unwrapped value fits in `i16`.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn reduce(x: NttVec) -> NttVec {
   x - (x >> 8u32) * MODULUS
 }
 
 /// Reduces a value in `[-127, 383]` into the canonical `[-128, 128]` range.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn extra_reduce(x: NttVec) -> NttVec {
   const HALF: NttVec = NttVec::splat(128);
   x - (x.simd_gt(HALF) & MODULUS)
 }
 
 /// Reduces modulo 257 into `[-128, 128]`.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn reduce_full(x: NttVec) -> NttVec {
   extra_reduce(reduce(x))
 }
@@ -72,7 +72,7 @@ fn reduce_full(x: NttVec) -> NttVec {
 ///
 /// Valid for `|x| <= 32639`. A product of the result with a twiddle in
 /// `[-128, 128]` fits in `i16`, so it replaces `reduce_full` before a multiply.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn reduce_round(x: NttVec) -> NttVec {
   const ROUNDING: NttVec = NttVec::splat(128);
   x - ((x + ROUNDING) >> 8u32) * MODULUS
@@ -86,13 +86,13 @@ mod lanes {
   use wide::{u32x4, u64x2, u8x16};
 
   /// Reinterprets eight 16-bit lanes as four 32-bit lanes in memory order.
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   fn as_words(x: NttVec) -> u32x4 {
     u32x4::from_ne_bytes(x.to_ne_bytes())
   }
 
   /// Swaps the middle two 16-bit lanes of each 64-bit half.
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   fn swap_middle(x: u32x4) -> NttVec {
     const PATTERN: u8x16 = u8x16::new([0, 1, 4, 5, 2, 3, 6, 7, 8, 9, 12, 13, 10, 11, 14, 15]);
     NttVec::from_ne_bytes(u8x16::new(x.to_ne_bytes()).shuffle(PATTERN).to_array())
@@ -100,7 +100,7 @@ mod lanes {
 
   /// Interleaves the lanes of `a` and `b`. The low result alternates lanes
   /// 0..4 of each input and the high result alternates lanes 4..8.
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   pub(super) fn interleave(a: NttVec, b: NttVec) -> (NttVec, NttVec) {
     // The 32-bit interleave leaves lane pairs adjacent, and `swap_middle`
     // puts each pair in alternating order.
@@ -109,7 +109,7 @@ mod lanes {
   }
 
   /// Gathers the even lanes of `a` followed by the even lanes of `b`.
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   pub(super) fn even_lanes(a: NttVec, b: NttVec) -> NttVec {
     const PATTERN: u8x16 = u8x16::new([0, 1, 4, 5, 8, 9, 12, 13, 2, 3, 6, 7, 10, 11, 14, 15]);
     let pack = |x: NttVec| u64x2::from_ne_bytes(u8x16::new(x.to_ne_bytes()).shuffle(PATTERN).to_array());
@@ -117,15 +117,15 @@ mod lanes {
   }
 
   /// Zero-extends the low and high eight bytes into 16-bit lanes.
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   pub(super) fn widen(bytes: u8x16) -> (NttVec, NttVec) {
     (NttVec::from_u8x16_low(bytes), NttVec::from_u8x16_high(bytes))
   }
 
   /// Permutes the eight words so lane `i` reads lane `i ^ mask`.
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   pub(super) fn xor_permute(x: WordVec, mask: usize) -> WordVec {
-    const PERMS: [WordVec; 8] =
+    static PERMS: [WordVec; 8] =
       const_array!(WordVec::splat(0); 8; |mask| WordVec::new(const_array!(0; 8; |lane| (lane ^ mask) as u32)));
     match mask {
       1..=7 => x.shuffle(PERMS[mask]),
@@ -136,7 +136,7 @@ mod lanes {
 
 /// Decimation-in-frequency butterfly mapping `(a, b)` to
 /// `((a - b) * w^n, a + b)`.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn dif_butterfly(x: &mut [NttVec; 8], i: usize, j: usize, n: usize) {
   let v = x[j];
   x[j] = x[i] + v;
@@ -146,7 +146,7 @@ fn dif_butterfly(x: &mut [NttVec; 8], i: usize, j: usize, n: usize) {
 
 /// Decimation-in-time butterfly mapping `(a, b)` to
 /// `(b + a * w^n, b - a * w^n)`.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn dit_butterfly(x: &mut [NttVec; 8], i: usize, j: usize, n: usize) {
   let u = x[j];
   let scaled = if n == 0 { x[i] } else { x[i] << ROOT8_SHIFTS[n] };
@@ -155,7 +155,7 @@ fn dit_butterfly(x: &mut [NttVec; 8], i: usize, j: usize, n: usize) {
 }
 
 /// Interleaves the lanes of `x[i]` and `x[j]` as one transpose step.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn interleave_pair(x: &mut [NttVec; 8], i: usize, j: usize) {
   let (lo, hi) = interleave(x[i], x[j]);
   x[i] = lo;
@@ -167,7 +167,7 @@ fn interleave_pair(x: &mut [NttVec; 8], i: usize, j: usize) {
 ///
 /// Inputs must satisfy `|x| <= 255`. Layer 1 then leaves `x[3] <= 32640`, and
 /// after reducing `x[1..4]` the largest pre-twiddle value is `x[5] <= 17340`.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn fft64(x: &mut [NttVec; 8]) {
   dif_butterfly(x, 0, 4, 0);
   dif_butterfly(x, 1, 5, 1);
@@ -255,7 +255,7 @@ fn fft64(x: &mut [NttVec; 8]) {
 
 /// Runs a 128-point NTT over two 8-register halves. Register `v` of the
 /// flattened 16 holds coefficients `8v..8v + 8` in natural order.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn fft128(a: &mut [[NttVec; 8]; 2]) {
   // Inputs lie in `[-127, 383]`, so sums and differences stay below 767.
   // The rounded reductions then leave `|b|, |a[1]| <= 255` for `fft64`.
@@ -290,7 +290,7 @@ fn fft128(a: &mut [[NttVec; 8]; 2]) {
 ///
 /// The block is zero-padded to 256 points. The tweak polynomial `X^255`, plus
 /// `X^253` for the final block, folds into the first radix-2 layer.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn ntt256(buf: &[u8; BLOCK], last: bool, q: &mut [i16; QBUF]) {
   let tweak = if last { TWEAK_FINAL } else { TWEAK };
   let rows = buf.as_chunks::<16>().0;
@@ -330,7 +330,7 @@ fn ntt256(buf: &[u8; BLOCK], last: bool, q: &mut [i16; QBUF]) {
 }
 
 /// Loads eight NTT coefficients starting at `offset`.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn load_coeffs(q: &[i16; QBUF], offset: usize) -> NttVec {
   let mut lanes = [0i16; 8];
   lanes.copy_from_slice(&q[offset..offset + 8]);
@@ -338,7 +338,7 @@ fn load_coeffs(q: &[i16; QBUF], offset: usize) -> NttVec {
 }
 
 /// Packs lane pairs `(2k, 2k + 1)` into `u32` word `k`, low lane first.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn pack_pairs(x: NttVec) -> [u32; 4] {
   if cfg!(target_endian = "little") {
     u32x4::from_ne_bytes(x.to_ne_bytes()).to_array()
@@ -353,7 +353,7 @@ fn pack_pairs(x: NttVec) -> [u32; 4] {
 ///
 /// A packed word keeps the low 16 product bits of each limb, so a wrapping
 /// `i16` multiply of the interleaved pair already yields the packed pair.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn wbread_adjacent(q: &[i16; QBUF], sb: usize, w: &mut [u32; 64]) {
   const MM: NttVec = NttVec::splat(185);
   macro_rules! step {
@@ -369,7 +369,7 @@ fn wbread_adjacent(q: &[i16; QBUF], sb: usize, w: &mut [u32; 64]) {
 
 /// Reads 64 schedule words of rounds 2 and 3, whose low and high limbs sit at
 /// even offsets of two separate `q` regions.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn wbread_split(q: &[i16; QBUF], sb: usize, o1: i32, o2: i32, w: &mut [u32; 64]) {
   const MM: NttVec = NttVec::splat(233);
   macro_rules! step {
@@ -388,19 +388,19 @@ fn wbread_split(q: &[i16; QBUF], sb: usize, o1: i32, o2: i32, w: &mut [u32; 64])
 }
 
 /// Loads eight words starting at `offset`, a multiple of eight.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn load_word_vec(words: &[u32], offset: usize) -> WordVec {
   WordVec::new(words.as_chunks::<8>().0[offset / 8])
 }
 
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn store_word_vec(state: &mut [u32; 32], offset: usize, value: WordVec) {
   state[offset..offset + 8].copy_from_slice(&value.to_array());
 }
 
 /// Runs one 8-lane state-update step group with the IF boolean function when
 /// `USE_IF` is set and MAJ otherwise.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn step2_big<const USE_IF: bool>(state: &mut [u32; 32], w: &[u32], w_off: usize, r: u32, s: u32, pp8b: usize) {
   let a = load_word_vec(state, 0);
   let b = load_word_vec(state, 8);
@@ -420,7 +420,7 @@ fn step2_big<const USE_IF: bool>(state: &mut [u32; 32], w: &[u32], w_off: usize,
   store_word_vec(state, 0, new_a);
 }
 
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn one_round_big(state: &mut [u32; 32], w: &[u32; 64], isp: usize, p0: u32, p1: u32, p2: u32, p3: u32) {
   step2_big::<true>(state, w, 0, p0, p1, PP8K[isp]);
   step2_big::<true>(state, w, 8, p1, p2, PP8K[isp + 1]);
@@ -433,7 +433,7 @@ fn one_round_big(state: &mut [u32; 32], w: &[u32; 64], isp: usize, p0: u32, p1: 
 }
 
 /// Runs the four feedforward IF steps keyed by the previous chaining value.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn feed_forward(state: &mut [u32; 32], h: &[u32; 32]) {
   step2_big::<true>(state, h, 0, 4, 13, 5);
   step2_big::<true>(state, h, 8, 13, 10, 7);
@@ -441,7 +441,7 @@ fn feed_forward(state: &mut [u32; 32], h: &[u32; 32]) {
   step2_big::<true>(state, h, 24, 25, 4, 1);
 }
 
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn compress(h: &mut [u32; 32], buf: &[u8; BLOCK], last: bool) {
   let mut q = [0i16; QBUF];
   ntt256(buf, last, &mut q);
@@ -470,7 +470,7 @@ fn compress(h: &mut [u32; 32], buf: &[u8; BLOCK], last: bool) {
 
 /// Compresses the length-only final block of a 64-byte message against its
 /// precomputed schedule, skipping the NTT.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn compress_final64(h: &mut [u32; 32]) {
   let mut state = *h;
   state[0] ^= FINAL64_WORD0;
@@ -485,7 +485,7 @@ fn compress_final64(h: &mut [u32; 32]) {
 }
 
 /// Encodes the processed bit count for the final block.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn encode_count(dst: &mut [u8], low: u32, high: u32, ptr: usize) {
   let low_bits = low.wrapping_shl(10);
   let high_bits = high.wrapping_shl(10).wrapping_add(low >> 22);
@@ -503,7 +503,7 @@ struct Core {
 }
 
 impl Compress<BLOCK> for Core {
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   fn compress(&mut self, block: &[u8; BLOCK]) {
     compress(&mut self.h, block, false);
     self.count[0] = self.count[0].wrapping_add(1);

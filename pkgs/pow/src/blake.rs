@@ -19,7 +19,7 @@ use digest::{FixedOutput, Output, Update};
 /// Compresses one 128-byte block into the chaining state.
 ///
 /// `t0` and `t1` are the 128-bit bit counter after this block has been counted.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn compress(h: &mut [u64; 8], m: &[u64; 16], t0: u64, t1: u64) {
   #[rustfmt::skip]
   // The working state is the chaining value, four fixed constants, and the
@@ -88,7 +88,7 @@ struct Core {
 }
 
 impl Compress<BLOCK> for Core {
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   fn compress(&mut self, block: &[u8; BLOCK]) {
     advance_counter(&mut self.t0, &mut self.t1);
     compress(&mut self.h, &load_message(block), self.t0, self.t1);

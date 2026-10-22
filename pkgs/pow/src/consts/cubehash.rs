@@ -30,39 +30,39 @@ pub(crate) const BLOCK: usize = 32;
 // Phase 2 add:
 //   incorporates step-3 (i-swap) and step-5 (j-swap).
 //
-const ADD2_SRC: [usize; 16] = [8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7];
+static ADD2_SRC: [usize; 16] = [8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7];
 #[rustfmt::skip]
-const ADD2_DST: [usize; 16] = [ 2,  3,  0,  1,  6,  7,  4,  5, 10, 11,  8,  9, 14, 15, 12, 13];
+static ADD2_DST: [usize; 16] = [ 2,  3,  0,  1,  6,  7,  4,  5, 10, 11,  8,  9, 14, 15, 12, 13];
 
 /// Phase-2 XOR: incorporates step-8 (k-swap) and step-10 (l-swap).
 #[rustfmt::skip]
-const XOR2_DST: [usize; 16] = [12, 13, 14, 15,  8,  9, 10, 11,  4,  5,  6,  7,  0,  1,  2,  3];
+static XOR2_DST: [usize; 16] = [12, 13, 14, 15,  8,  9, 10, 11,  4,  5,  6,  7,  0,  1,  2,  3];
 #[rustfmt::skip]
-const XOR2_SRC: [usize; 16] = [ 2,  3,  0,  1,  6,  7,  4,  5, 10, 11,  8,  9, 14, 15, 12, 13];
+static XOR2_SRC: [usize; 16] = [ 2,  3,  0,  1,  6,  7,  4,  5, 10, 11,  8,  9, 14, 15, 12, 13];
 
 /// Odd-round phase-1 add: accumulated permutation from even round's deferred swaps.
 #[rustfmt::skip]
-const ODD_ADD1_SRC: [usize; 16] = [12, 13, 14, 15,  8,  9, 10, 11,  4,  5,  6,  7,  0,  1,  2,  3];
+static ODD_ADD1_SRC: [usize; 16] = [12, 13, 14, 15,  8,  9, 10, 11,  4,  5,  6,  7,  0,  1,  2,  3];
 #[rustfmt::skip]
-const ODD_ADD1_DST: [usize; 16] = [ 3,  2,  1,  0,  7,  6,  5,  4, 11, 10,  9,  8, 15, 14, 13, 12];
+static ODD_ADD1_DST: [usize; 16] = [ 3,  2,  1,  0,  7,  6,  5,  4, 11, 10,  9,  8, 15, 14, 13, 12];
 
 /// Odd-round phase-1 XOR: deferred-swap accumulation.
 #[rustfmt::skip]
-const ODD_XOR1_DST: [usize; 16] = [ 4,  5,  6,  7,  0,  1,  2,  3, 12, 13, 14, 15,  8,  9, 10, 11];
+static ODD_XOR1_DST: [usize; 16] = [ 4,  5,  6,  7,  0,  1,  2,  3, 12, 13, 14, 15,  8,  9, 10, 11];
 #[rustfmt::skip]
-const ODD_XOR1_SRC: [usize; 16] = [ 3,  2,  1,  0,  7,  6,  5,  4, 11, 10,  9,  8, 15, 14, 13, 12];
+static ODD_XOR1_SRC: [usize; 16] = [ 3,  2,  1,  0,  7,  6,  5,  4, 11, 10,  9,  8, 15, 14, 13, 12];
 
 /// Odd-round phase-2 add: fully accumulated permutation (cancels back to identity after XOR).
 #[rustfmt::skip]
-const ODD_ADD2_SRC: [usize; 16] = [ 4,  5,  6,  7,  0,  1,  2,  3, 12, 13, 14, 15,  8,  9, 10, 11];
+static ODD_ADD2_SRC: [usize; 16] = [ 4,  5,  6,  7,  0,  1,  2,  3, 12, 13, 14, 15,  8,  9, 10, 11];
 #[rustfmt::skip]
-const ODD_ADD2_DST: [usize; 16] = [ 1,  0,  3,  2,  5,  4,  7,  6,  9,  8, 11, 10, 13, 12, 15, 14];
+static ODD_ADD2_DST: [usize; 16] = [ 1,  0,  3,  2,  5,  4,  7,  6,  9,  8, 11, 10, 13, 12, 15, 14];
 
 /// Odd-round phase-2 XOR: identity (all swaps cancelled).
 #[rustfmt::skip]
-const ODD_XOR2_DST: [usize; 16] = [ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15];
+static ODD_XOR2_DST: [usize; 16] = [ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15];
 #[rustfmt::skip]
-const ODD_XOR2_SRC: [usize; 16] = [ 1,  0,  3,  2,  5,  4,  7,  6,  9,  8, 11, 10, 13, 12, 15, 14];
+static ODD_XOR2_SRC: [usize; 16] = [ 1,  0,  3,  2,  5,  4,  7,  6,  9,  8, 11, 10, 13, 12, 15, 14];
 
 /// Add-and-rotate: `upper[dst[n]] += lower[src[n]]; lower[src[n]] <<<= rot`.
 const fn add_rotate(s: &mut [u32; 32], rot: u32, src: &[usize; 16], dst: &[usize; 16]) {
@@ -85,7 +85,7 @@ const fn xor_phase(s: &mut [u32; 32], dst: &[usize; 16], src: &[usize; 16]) {
 
 /// Identity permutation for phase-1 of even rounds.
 #[rustfmt::skip]
-const IDENTITY: [usize; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+static IDENTITY: [usize; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 
 /// Applies one pair of CubeHash rounds (even + odd) in place.
 ///
@@ -111,7 +111,7 @@ pub(super) const fn round_pair(s: &mut [u32; 32]) {
 ///
 /// Computed by setting state = \[64, 32, 16, 0, ..., 0\] (where 64 = h/8, 32 =
 /// b, 16 = r) and running 10r = 160 rounds (80 round-pairs).
-pub(crate) const IV: [u32; 32] = {
+pub(crate) static IV: [u32; 32] = {
   let mut s = [0u32; 32];
   s[0] = 64; // h / 8 = 512 / 8
   s[1] = 32; // b (block size in bytes)

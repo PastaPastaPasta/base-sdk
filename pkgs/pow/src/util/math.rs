@@ -25,7 +25,7 @@ pub(crate) const fn gf4_mul2(x: u8) -> u8 {
 }
 
 /// Discrete logarithm table over GF(2^8) using generator 3.
-pub(crate) const LOG: [u8; 256] = {
+pub(crate) static LOG: [u8; 256] = {
   let mut t = [0u8; 256];
   let mut x = 1u8;
   let mut i = 0;
@@ -38,7 +38,7 @@ pub(crate) const LOG: [u8; 256] = {
 };
 
 /// Power table over GF(2^8).
-pub(crate) const POW: [u8; 256] = {
+pub(crate) static POW: [u8; 256] = {
   let mut t = [0u8; 256];
   let mut x = 1u8;
   let mut i = 0;

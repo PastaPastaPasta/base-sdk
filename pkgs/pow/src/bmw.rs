@@ -21,7 +21,7 @@ const WORDS: usize = 16;
 const QWORDS: usize = 32;
 
 /// Applies one of the six `s` mixing formulas to a temporary word.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn mix_word(index: usize, word: u64) -> u64 {
   if index < 4 {
     (word >> SB_SHR[index]) ^ (word << SB_SHL[index]) ^ word.rotate_left(SB_RC[index]) ^ word.rotate_left(SB_RD[index])
@@ -31,25 +31,25 @@ fn mix_word(index: usize, word: u64) -> u64 {
 }
 
 /// Returns the linear schedule constant used in `Q` expansion.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn schedule_constant(index: usize) -> u64 {
   (index as u64).wrapping_mul(0x0555_5555_5555_5555)
 }
 
 /// Xors the message words with the current chaining value.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn xor_words(message: &[u64; WORDS], state: &[u64; WORDS]) -> [u64; WORDS] {
   core::array::from_fn(|index| message[index] ^ state[index])
 }
 
 /// Builds the sixteen `W` polynomials from `M ^ H`.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn compute_w(mh: &[u64; WORDS]) -> [u64; WORDS] {
   let mut w = [0u64; WORDS];
   macro_rules! word {
     ($i:literal) => {{
-      const IDX: [usize; 5] = W_IDX[$i];
-      const OPS: [bool; 4] = W_OPS[$i];
+      const IDX: [usize; 5] = W_IDX[$i]; // nosemgrep: pow-require-static-tables
+      const OPS: [bool; 4] = W_OPS[$i]; // nosemgrep: pow-require-static-tables
       let mut acc = mh[IDX[0]];
       macro_rules! term {
         ($t:literal) => {
@@ -65,13 +65,13 @@ fn compute_w(mh: &[u64; WORDS]) -> [u64; WORDS] {
 }
 
 /// Pre-rotates each message word before `Q` expansion.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn expand_message(message: &[u64; WORDS]) -> [u64; WORDS] {
   core::array::from_fn(|index| message[index].rotate_left(index as u32 + 1))
 }
 
 /// Builds the message-dependent term added to each expanded `Q` word.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn message_schedule_term<const INDEX: usize>(rotated_message: &[u64; WORDS], state: &[u64; WORDS]) -> u64 {
   rotated_message[INDEX]
     .wrapping_add(rotated_message[(INDEX + 3) & 15])
@@ -81,7 +81,7 @@ fn message_schedule_term<const INDEX: usize>(rotated_message: &[u64; WORDS], sta
 }
 
 /// Expands one `Q` word with the heavier non-linear schedule.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn expand_q_with_sboxes<const INDEX: usize>(q: &[u64; QWORDS]) -> u64 {
   let base = INDEX - 16;
   let mut acc = 0u64;
@@ -94,7 +94,7 @@ fn expand_q_with_sboxes<const INDEX: usize>(q: &[u64; QWORDS]) -> u64 {
 }
 
 /// Expands one `Q` word with the lighter rotate-heavy schedule.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn expand_q_with_rotates<const INDEX: usize>(q: &[u64; QWORDS]) -> u64 {
   let base = INDEX - 16;
   let mut acc = q[base];
@@ -111,7 +111,7 @@ fn expand_q_with_rotates<const INDEX: usize>(q: &[u64; QWORDS]) -> u64 {
 }
 
 /// Expands `q[16..32]` from the first layer and the message.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn expand_schedule(q: &mut [u64; QWORDS], state: &[u64; WORDS], rotated_message: &[u64; WORDS]) {
   // BMW uses two expansion families. The first two new words use the
   // heavier s-box mixing, and the rest switch to the lighter rotate-heavy
@@ -133,7 +133,7 @@ fn expand_schedule(q: &mut [u64; QWORDS], state: &[u64; WORDS], rotated_message:
 }
 
 /// Folds the 32 expanded `Q` words back into the next 16-word state.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn fold_schedule(message: &[u64; WORDS], q: &[u64; QWORDS], out: &mut [u64; WORDS]) {
   // The fold stage reduces 32 temporary words back into 16 chaining words.
   // `xl` and `xh` are the two parity accumulators defined by the design.
@@ -160,7 +160,7 @@ fn fold_schedule(message: &[u64; WORDS], q: &[u64; QWORDS], out: &mut [u64; WORD
   unroll!(fold2; 0, 1, 2, 3, 4, 5, 6, 7);
 }
 
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn compress(message: &[u64; WORDS], state: &[u64; WORDS], out: &mut [u64; WORDS]) {
   let mh = xor_words(message, state);
   let w = compute_w(&mh);

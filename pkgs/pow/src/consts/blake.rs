@@ -16,7 +16,7 @@ pub(crate) const BLOCK: usize = 128;
 
 /// Blake-512 initial hash values (SHA-512 IV).
 #[rustfmt::skip]
-pub(crate) const IV: [u64; 8] = [
+pub(crate) static IV: [u64; 8] = [
   0x6a09e667f3bcc908, 0xbb67ae8584caa73b,
   0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1,
   0x510e527fade682d1, 0x9b05688c2b3e6c1f,
@@ -25,7 +25,7 @@ pub(crate) const IV: [u64; 8] = [
 
 /// Round constants (first 1024 bits of the fractional part of pi).
 #[rustfmt::skip]
-pub(crate) const CB: [u64; 16] = [
+pub(crate) static CB: [u64; 16] = [
   0x243f6a8885a308d3, 0x13198a2e03707344,
   0xa4093822299f31d0, 0x082efa98ec4e6c89,
   0x452821e638d01377, 0xbe5466cf34e90c6c,
@@ -38,7 +38,7 @@ pub(crate) const CB: [u64; 16] = [
 
 /// Message-word permutation schedule (10 unique rows, then rows 0..6 again for rounds 10..15).
 #[rustfmt::skip]
-pub(crate) const SIGMA: [[usize; 16]; 16] = [
+pub(crate) static SIGMA: [[usize; 16]; 16] = [
   [ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15],
   [14, 10,  4,  8,  9, 15, 13,  6,  1, 12,  0,  2, 11,  7,  5,  3],
   [11,  8, 12,  0,  5,  2, 15, 13, 10, 14,  3,  6,  7,  1,  9,  4],

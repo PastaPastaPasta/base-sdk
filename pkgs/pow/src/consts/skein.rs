@@ -15,7 +15,7 @@ pub(crate) const NW: usize = 8;
 /// Skein-512 IV (from the specification, derived by UBI-processing
 /// a config block with schema "SHA3", version 1, output bits 512).
 #[rustfmt::skip]
-pub(crate) const IV: [u64; 8] = [
+pub(crate) static IV: [u64; 8] = [
   0x4903adff749c51ce, 0x0d95de399746df03,
   0x8fd1934127c79bce, 0x9a255629ff352cb1,
   0x5db62599df6ca7b0, 0xeabe394ca9d5c3f4,

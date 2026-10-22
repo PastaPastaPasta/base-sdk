@@ -21,23 +21,23 @@ type State = [u32; 16];
 
 /// Counter words that enter the key schedule at each HAIFA checkpoint. The
 /// last word of every checkpoint enters inverted.
-const INJECTION_WORDS: [[usize; 4]; 4] = [[0, 1, 2, 3], [3, 2, 1, 0], [2, 3, 0, 1], [1, 0, 3, 2]];
+static INJECTION_WORDS: [[usize; 4]; 4] = [[0, 1, 2, 3], [3, 2, 1, 0], [2, 3, 0, 1], [1, 0, 3, 2]];
 
 /// Rotates the four words of one bundle toward the front.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn rotate_words(bundle: Lane) -> Lane {
   shift_words(bundle, bundle)
 }
 
 /// Takes the upper three words of `older` and the first word of `newer`.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn shift_words(older: Lane, newer: Lane) -> Lane {
   let (older, newer) = (older.to_array(), newer.to_array());
   Lane::new([older[1], older[2], older[3], newer[0]])
 }
 
 /// Builds the counter injection vector for one checkpoint.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn injection(counter: u128, checkpoint: usize) -> Lane {
   let [a, b, c, d] = INJECTION_WORDS[checkpoint].map(|index| (counter >> (32 * index)) as u32);
   Lane::new([a, b, c, !d])
@@ -46,7 +46,7 @@ fn injection(counter: u128, checkpoint: usize) -> Lane {
 /// Expands the next eight bundles with the AES recurrence.
 ///
 /// `INJ` names the slot that takes the counter injection, or 8 for none.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn expand_aes<const INJ: usize>(window: &mut [Lane; 8], inject: Lane) {
   let mut previous = window[7];
   let mut slot = 0;
@@ -62,7 +62,7 @@ fn expand_aes<const INJ: usize>(window: &mut [Lane; 8], inject: Lane) {
 }
 
 /// Expands the next eight bundles with the xor-only recurrence.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn expand_linear(window: &mut [Lane; 8]) {
   let mut two_back = window[6];
   let mut one_back = window[7];
@@ -77,7 +77,7 @@ fn expand_linear(window: &mut [Lane; 8]) {
 }
 
 /// Runs the four AES rounds of one Feistel half, the last with a zero key.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn feistel<const BASE: usize>(source: Lane, window: &[Lane; 8]) -> Lane {
   let mut lane = backend::round(source ^ window[BASE], window[BASE + 1]);
   lane = backend::round(lane, window[BASE + 2]);
@@ -86,7 +86,7 @@ fn feistel<const BASE: usize>(source: Lane, window: &[Lane; 8]) -> Lane {
 }
 
 /// Applies both Feistel halves and the column rotation of one round.
-#[inline(always)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn mix_round(state: &mut [Lane; 4], window: &[Lane; 8]) {
   let left = feistel::<0>(state[1], window);
   let right = feistel::<4>(state[3], window);
@@ -169,7 +169,7 @@ struct Core {
 }
 
 impl Compress<BLOCK> for Core {
-  #[inline(always)]
+  #[cfg_attr(not(debug_assertions), inline(always))]
   fn compress(&mut self, block: &[u8; BLOCK]) {
     self.counter = self.counter.wrapping_add(1024);
     compress_block(&mut self.h, block, self.counter);
