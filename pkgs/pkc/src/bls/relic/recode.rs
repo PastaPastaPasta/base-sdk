@@ -13,6 +13,9 @@
 
 use crate::prelude::*;
 
+#[cfg(feature = "codec")]
+use dash_types::type_id::Unencodable;
+
 use core::cmp::Ordering;
 
 /// Limbs of a [`Bn`] magnitude, enough for the GLV products (384 bits).
@@ -49,7 +52,8 @@ const V2: [Bn; 3] = [
 ];
 
 /// A relic `bn_t`: a sign and a magnitude.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub(crate) struct Bn {
   neg: bool,
   mag: [u64; LIMBS],

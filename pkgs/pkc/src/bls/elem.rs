@@ -26,6 +26,8 @@ use super::wrap_value::BlsValue;
 use super::{BLS_PK_LEN, BLS_SIG_LEN};
 use crate::prelude::*;
 
+#[cfg(feature = "codec")]
+use dash_types::type_id::Unencodable;
 use zeroize::Zeroize;
 
 use core::fmt::{self, Debug, Formatter};
@@ -33,6 +35,7 @@ use core::fmt::{self, Debug, Formatter};
 /// How [`BlsElem`] holds an element.
 #[doc(hidden)]
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub enum BlsArith<P, E> {
   /// A point in the prime-order subgroup, computed by blst, with the coord
   /// tag Core's relic gives it; a `PROJC` identity is the infinity
@@ -46,7 +49,8 @@ pub enum BlsArith<P, E> {
 /// two representations (BS11a-3 D18): the coord tag and which of x, y and
 /// z are zero.
 #[doc(hidden)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct BlsShape {
   /// Whether the tag is `PROJC`.
   pub projc: bool,
@@ -61,7 +65,36 @@ pub struct BlsShape {
 /// [`Self::core_eq`] is `operator==` and [`Self::is_valid`] is `IsValid`.
 /// They give Core's result on every element, including those off the
 /// curve or outside the subgroup that legacy decoding admits.
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct BlsElem<K: BlsWirePoint<N>, const N: usize>(K::Arith);
+
+impl BlsElem<G1, BLS_PK_LEN> {
+  /// `*this * k` for a secret key's stored bytes, at most `r`: blst's
+  /// constant-time multiplication on a Group element, where it gives
+  /// [`Self::mul`]'s element, and the engine (variable-time, as relic is in
+  /// Core) on an engine one.
+  pub(crate) fn mul_secret(&self, k: &[u8; 32]) -> Self {
+    match &self.0 {
+      BlsArith::Group { point, .. } => {
+        let mut scalar = blst_ffi::scalar_from_bendian(k);
+        let product = point.mul_scalar(&scalar.b, FR_BITS);
+        scalar.b.zeroize();
+        Self::group(product, Coord::Basic)
+      }
+      BlsArith::Relic(e) => Self(BlsArith::Relic(e.mul(&Bn::from_bendian(k)))),
+    }
+  }
+
+  /// The basic serialization of a [`Self::mul_secret`] product: blst's
+  /// constant-time compression on a Group element, which writes the same
+  /// bytes, and the engine's on an engine one.
+  pub(crate) fn secret_basic(&self) -> [u8; BLS_PK_LEN] {
+    match &self.0 {
+      BlsArith::Group { point, .. } => point.to_affine().compress(),
+      BlsArith::Relic(_) => self.to_bytes(BlsSchemeKind::Basic),
+    }
+  }
+}
 
 impl<K: BlsWirePoint<N>, const N: usize> Clone for BlsElem<K, N> {
   fn clone(&self) -> Self {
@@ -443,34 +476,6 @@ impl_elem!(
   G2, G2Affine, Ep2, BLS_SIG_LEN,
   exotic: g2_exotic, rebuild: g2_rebuild, basic: g2_basic, point: g2_point, group_eq: g2_group_eq,
 );
-
-impl BlsElem<G1, BLS_PK_LEN> {
-  /// `*this * k` for a secret key's stored bytes, at most `r`: blst's
-  /// constant-time multiplication on a Group element, where it gives
-  /// [`Self::mul`]'s element, and the engine (variable-time, as relic is in
-  /// Core) on an engine one.
-  pub(crate) fn mul_secret(&self, k: &[u8; 32]) -> Self {
-    match &self.0 {
-      BlsArith::Group { point, .. } => {
-        let mut scalar = blst_ffi::scalar_from_bendian(k);
-        let product = point.mul_scalar(&scalar.b, FR_BITS);
-        scalar.b.zeroize();
-        Self::group(product, Coord::Basic)
-      }
-      BlsArith::Relic(e) => Self(BlsArith::Relic(e.mul(&Bn::from_bendian(k)))),
-    }
-  }
-
-  /// The basic serialization of a [`Self::mul_secret`] product: blst's
-  /// constant-time compression on a Group element, which writes the same
-  /// bytes, and the engine's on an engine one.
-  pub(crate) fn secret_basic(&self) -> [u8; BLS_PK_LEN] {
-    match &self.0 {
-      BlsArith::Group { point, .. } => point.to_affine().compress(),
-      BlsArith::Relic(_) => self.to_bytes(BlsSchemeKind::Basic),
-    }
-  }
-}
 
 #[cfg(test)]
 mod tests {
