@@ -209,15 +209,16 @@ fn aggregate_verify(
 /// `bls_ies.cpp:43-48,79-84,96-101`).
 ///
 /// `None` when either value is invalid. A basic key equal to `r` gives the
-/// infinity, whose key is `c0 00 ... 00`. An Exotic peer key runs the engine,
-/// which is variable-time, as relic is in Core.
+/// infinity, whose key is `c0 00 ... 00`. A subgroup peer key stays on blst,
+/// constant-time; an Exotic one runs the engine, which is variable-time, as
+/// relic is in Core.
 #[must_use]
 pub fn ies_key(sk: &BlsSkValue, pk: &BlsPkValue) -> Option<Zeroizing<[u8; 32]>> {
   if !sk.is_valid() || !pk.is_valid() {
     return None;
   }
   let (k, (), ()) = sk.parts();
-  let shared = Zeroizing::new(BlsPkElem::from_impl(pk).mul_secret(k).to_bytes(BlsSchemeKind::Basic));
+  let shared = Zeroizing::new(BlsPkElem::from_impl(pk).mul_secret(k).secret_basic());
   let mut key = Zeroizing::new([0u8; 32]);
   key.copy_from_slice(&shared[..32]);
   Some(key)
