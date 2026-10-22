@@ -146,14 +146,21 @@ impl BaseCodec for NIEntry {
   ///
   /// - an entry of the invalid type or an unknown type, of which only the type
   ///   is read.
+  /// - a domain with a bad name or port 0.
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     match NIEntryCode::from_base(u8::decode(data)?) {
       NIEntryCode::Service => Ok(Self::Service(ServiceV2::decode(data)?)),
       NIEntryCode::Domain => {
         let name_len = CompactSize::decode_len(data, DOMAIN_MAX)?;
-        let name = codec::read_bytes(data, name_len)?.to_vec();
+        let name = codec::read_bytes(data, name_len)?;
         let port = codec::read_u16_be(data)?;
-        Ok(Self::Domain { name, port })
+        if port == 0 || !is_valid_domain(name) {
+          return Ok(Self::Invalid);
+        }
+        Ok(Self::Domain {
+          name: name.to_vec(),
+          port,
+        })
       }
       NIEntryCode::Invalid | NIEntryCode::Unknown(_) => Ok(Self::Invalid),
     }
@@ -176,44 +183,47 @@ impl BaseCodec for NIEntry {
   }
 }
 
+/// Returns `true` for a domain name the reference implementation holds
+/// valid, in lowercase RFC 1035 syntax with at least two labels.
+fn is_valid_domain(name: &[u8]) -> bool {
+  if name.len() < DOMAIN_MIN || name.len() > DOMAIN_MAX {
+    return false;
+  }
+  let is_allowed = |&b: &u8| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'.' || b == b'-';
+  if !name.iter().all(is_allowed) {
+    return false;
+  }
+  // At least two labels.
+  if !name.contains(&b'.') {
+    return false;
+  }
+  for label in name.split(|&b| b == b'.') {
+    if label.is_empty() || label.len() > DOMAIN_LABEL_MAX {
+      return false;
+    }
+    if label.starts_with(b"-") || label.ends_with(b"-") {
+      return false;
+    }
+  }
+  true
+}
+
 /// Validates a domain name per RFC 1035 consensus rules.
 fn check_domain(name: &[u8]) -> Option<NIError> {
-  let s = match core::str::from_utf8(name) {
-    Ok(s) => s,
-    Err(_) => return Some(NIError::Malformed),
-  };
-  if s.len() < DOMAIN_MIN || s.len() > DOMAIN_MAX {
-    return Some(NIError::Malformed);
-  }
-  if s.bytes().any(|b| b.is_ascii_uppercase()) {
-    return Some(NIError::Malformed);
-  }
-  if !s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-') {
-    return Some(NIError::Malformed);
-  }
-  if s.as_bytes()[0] == b'.' || s.as_bytes()[s.len() - 1] == b'.' {
-    return Some(NIError::Malformed);
-  }
-  let mut label_count = 0usize;
-  for label in s.split('.') {
-    if label.is_empty() || label.len() > DOMAIN_LABEL_MAX {
-      return Some(NIError::Malformed);
-    }
-    if label.as_bytes()[0] == b'-' || label.as_bytes()[label.len() - 1] == b'-' {
-      return Some(NIError::Malformed);
-    }
-    label_count += 1;
-  }
-  if label_count < 2 {
+  if !is_valid_domain(name) {
     return Some(NIError::Malformed);
   }
   // Reject reserved and privacy TLDs.
-  if TLDS_BAD.iter().chain(TLDS_PRIVACY.iter()).any(|tld| s.ends_with(tld)) {
+  if TLDS_BAD
+    .iter()
+    .chain(TLDS_PRIVACY.iter())
+    .any(|tld| name.ends_with(tld.as_bytes()))
+  {
     return Some(NIError::Malformed);
   }
   // TLD must be purely alphabetic (ICANN guideline).
-  let last_label = s.rsplit('.').next().unwrap_or("");
-  if !last_label.bytes().all(|b| b.is_ascii_lowercase()) {
+  let last_label = name.rsplit(|&b| b == b'.').next().unwrap_or_default();
+  if !last_label.iter().all(u8::is_ascii_lowercase) {
     return Some(NIError::Malformed);
   }
   None
@@ -832,6 +842,8 @@ mod tests {
   #[case::trailing_hyphen(b"a-.bc.de", 443, Some(NIError::Malformed))]
   #[case::bad_char_apostrophe(b"it's.example.com", 443, Some(NIError::Malformed))]
   #[case::bad_char_space(b"some host.example.com", 443, Some(NIError::Malformed))]
+  #[case::bad_char_underscore(b"exa_mple.com", 443, Some(NIError::Malformed))]
+  #[case::empty(b"", 443, Some(NIError::Malformed))]
   // TLD rules
   #[case::tld_local(b"host.local", 443, Some(NIError::Malformed))]
   #[case::tld_onion(b"hidden.onion", 443, Some(NIError::Malformed))]
@@ -847,10 +859,30 @@ mod tests {
     assert_eq!(entry.check(), expected);
   }
 
+  #[rstest]
+  #[case::valid(b"example.com", true)]
+  #[case::two_one_letter_labels(b"a.b", true)]
+  #[case::too_short(b"ab", false)]
+  #[case::dotless(b"localhost", false)]
+  #[case::empty(b"", false)]
+  #[case::empty_label(b"a..b.com", false)]
+  #[case::trailing_dot(b"example.com.", false)]
+  #[case::leading_hyphen(b"-example.com", false)]
+  #[case::bad_char_underscore(b"exa_mple.com", false)]
+  #[case::uppercase(b"Example.com", false)]
+  #[case::label_64_bytes(b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com", false)]
+  fn valid_domain(#[case] name: &[u8], #[case] expected: bool) {
+    assert_eq!(is_valid_domain(name), expected);
+  }
+
+  fn domain_name(len: usize) -> Vec<u8> {
+    (0..len).map(|i| if i % 10 == 9 { b'.' } else { b'a' }).collect()
+  }
+
   fn domain_wire(len: usize) -> Vec<u8> {
     let mut wire = Vec::new();
     NIEntry::Domain {
-      name: vec![b'a'; len],
+      name: domain_name(len),
       port: 443,
     }
     .encode(&mut wire);
@@ -858,7 +890,7 @@ mod tests {
   }
 
   #[rstest]
-  #[case::at_limit(DOMAIN_MAX, Ok(NIEntry::Domain { name: vec![b'a'; DOMAIN_MAX], port: 443 }))]
+  #[case::at_limit(DOMAIN_MAX, Ok(NIEntry::Domain { name: domain_name(DOMAIN_MAX), port: 443 }))]
   #[case::past_limit(DOMAIN_MAX + 1, Err(DecodeError::CompactSizeExceedsLimit { limit: DOMAIN_MAX, value: 254 }))]
   fn nientry_domain_decodes_at_most_253_bytes(#[case] len: usize, #[case] expected: Result<NIEntry, DecodeError>) {
     assert_eq!(NIEntry::decode(&mut domain_wire(len).as_slice()), expected);

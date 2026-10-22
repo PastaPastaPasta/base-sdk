@@ -35,6 +35,8 @@ BOOST_AUTO_TEST_CASE(netinfo_entry_reads)
              "fe",
              "ff",
              "03" "01" "04" "01020304" "270f",
+             "02" "0b" "4578616d706c652e636f6d" "01bb",
+             "02" "0b" "6578616d706c652e636f6d" "0000",
          }) {
         const auto raw{ParseHex(hex)};
         CDataStream ds(raw, SER_NETWORK, CLIENT_VERSION);
@@ -91,6 +93,10 @@ BOOST_AUTO_TEST_CASE(netinfo_entry_reads)
     { "raw": "ff", "read": 1, "written": "ff", "addr_port": "[invalid entry]" },
     // Only the type byte of an unknown type is read.
     { "raw": "03010401020304270f", "read": 1, "written": "ff", "addr_port": "[invalid entry]" },
+    // A domain with an uppercase letter is invalid.
+    { "raw": "020b4578616d706c652e636f6d01bb", "read": 15, "written": "ff", "addr_port": "[invalid entry]" },
+    // A domain on port 0 is invalid.
+    { "raw": "020b6578616d706c652e636f6d0000", "read": 15, "written": "ff", "addr_port": "[invalid entry]" },
   ],
 /*
 BOOST_AUTO_TEST_CASE(netinfo_legacy_reads)
