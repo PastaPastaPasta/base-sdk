@@ -1,7 +1,10 @@
 //
+// Copyright (c) 2007-2010, Projet RNRT SAPHIR
 // Copyright (c) 2026-present, The Dash Core developers
 // SPDX-License-Identifier: MIT
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
+//
+// Adapted from sphlib, written by Thomas Pornin <thomas.pornin@cryptolog.com>
 //
 
 //! Skein-512 hash function.
@@ -9,7 +12,7 @@
 use crate::consts::skein::{BLOCK, IV, NW};
 use crate::util::buffer::{Buffer, Compress};
 use crate::util::impl_digest;
-use crate::util::memops::{digest_from_u64_le, load_u64_le};
+use crate::util::memops::{digest_from_u64_le, load_u64s_le};
 use crate::util::threefish::encrypt;
 
 use digest::{FixedOutput, Output, Update};
@@ -58,11 +61,6 @@ impl UbiTweak {
   }
 }
 
-/// Reads one 64-byte Skein block as eight little-endian words.
-fn load_block(block: &[u8]) -> BlockWords {
-  core::array::from_fn(|index| load_u64_le(block, index))
-}
-
 /// Applies one UBI step.
 ///
 /// UBI uses Threefish with the current chaining value as the key. The block
@@ -72,8 +70,8 @@ fn ubi(state: &mut Chaining, plaintext: &BlockWords, tweak: UbiTweak) {
   let mut encrypted = *plaintext;
   encrypt(&mut encrypted, state, &tweak.as_words());
 
-  // UBI uses MMO feedforward: encrypt the block, then xor the plaintext
-  // back in to form the next chaining value.
+  // The MMO feedforward xors the plaintext back into the encrypted block
+  // to form the next chaining value.
   let mut index = 0;
   while index < NW {
     state[index] = encrypted[index] ^ plaintext[index];
@@ -116,7 +114,7 @@ impl Core {
       final_block,
     };
     self.position = tweak.position;
-    ubi(&mut self.h, &load_block(block), tweak);
+    ubi(&mut self.h, &load_u64s_le(block), tweak);
   }
 }
 

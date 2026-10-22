@@ -6,7 +6,7 @@
 
 //! Shared helpers for ARX-style permutations.
 
-use wide::u32x4;
+use wide::{u32x4, u32x8};
 
 /// Rotate a `u32` word left by `shift` bits.
 #[expect(dead_code, reason = "used by cubehash consts IV generation")]
@@ -21,5 +21,11 @@ pub(crate) fn rotl_u32x4(words: u32x4, shift: u32) -> u32x4 {
   if shift == 0 {
     return words;
   }
+  (words << shift) | (words >> (32 - shift))
+}
+
+/// Rotate each lane of a `u32x8` value left by `shift` bits.
+#[inline(always)]
+pub(crate) fn rotl_u32x8(words: u32x8, shift: u32) -> u32x8 {
   (words << shift) | (words >> (32 - shift))
 }

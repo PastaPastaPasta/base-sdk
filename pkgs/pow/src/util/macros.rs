@@ -46,3 +46,26 @@ macro_rules! impl_hash {
   };
 }
 pub(crate) use impl_hash;
+
+/// Builds an array in const context by evaluating `$element` at each index
+/// `$i`. Every slot starts as `$fill` and is overwritten in index order.
+macro_rules! const_array {
+  ($fill:expr; $n:expr; |$i:ident| $element:expr) => {{
+    let mut out = [$fill; $n];
+    let mut $i = 0;
+    while $i < $n {
+      out[$i] = $element;
+      $i += 1;
+    }
+    out
+  }};
+}
+pub(crate) use const_array;
+
+/// Invokes `$step!(i)` for each literal `i`.
+macro_rules! unroll {
+  ($step:ident; $($i:literal),* $(,)?) => {
+    $($step!($i);)*
+  };
+}
+pub(crate) use unroll;

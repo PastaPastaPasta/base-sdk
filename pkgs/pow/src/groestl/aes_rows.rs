@@ -3,19 +3,48 @@
 // SPDX-License-Identifier: MIT
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
+// Adapted from SUPERCOP (aesni-intr), by Matusiewicz, Roland and Schläffer
+//
 
-//! Groestl-512 hash function.
+//! Row-first Groestl-512 backend, one AES SubBytes per row vector.
 
 use crate::aes::sub_shift as aes_sub_shift;
-use crate::consts::groestl::{BLOCK, IV_ROWS, RC_P, RC_Q, ROUNDS, SUBSH_P, SUBSH_Q};
-use crate::util::buffer::{Buffer, Compress};
-use crate::util::{impl_digest, impl_hash};
+use crate::consts::groestl::{BLOCK, IV as IV_COLUMNS, RC_P, RC_Q, ROUNDS, SHIFT_P, SHIFT_Q};
+use crate::util::const_array;
 
-use digest::{FixedOutput, Output, Update};
 use wide::{i8x16, u8x16};
 
 /// One row of the byte-sliced state, a byte per column.
 type Row = u8x16;
+
+/// Chaining value as eight rows.
+pub(super) type State = [Row; 8];
+
+/// IV with row `r` of every column gathered into row `r`.
+pub(super) const IV: State =
+  const_array!(Row::splat(0); 8; |row| Row::new(const_array!(0; 16; |col| (IV_COLUMNS[col] >> (8 * row)) as u8)));
+
+/// Byte shuffles that make AES ShiftRows, which runs after SubBytes, land each
+/// byte where the Groestl row shift puts it.
+const fn sub_shift_masks(shifts: &[usize; 8]) -> [[u8; 16]; 8] {
+  const_array!([0; 16]; 8; |row| const_array!(0; 16; |dst| {
+    let (aes_row, col) = (dst % 4, dst / 4);
+    let source = 4 * ((col + 4 - aes_row) % 4) + aes_row;
+    ((source + shifts[row]) % 16) as u8
+  }))
+}
+
+/// Fused SubBytes and ShiftBytes masks of the `P` permutation.
+const SUBSH_P: [[u8; 16]; 8] = sub_shift_masks(&SHIFT_P);
+
+/// Fused SubBytes and ShiftBytes masks of the `Q` permutation.
+const SUBSH_Q: [[u8; 16]; 8] = sub_shift_masks(&SHIFT_Q);
+
+/// Returns the state as plain bytes, which `Hash` accepts.
+#[inline(always)]
+pub(super) fn hashable(state: &State) -> [[u8; 16]; 8] {
+  state.map(|row| row.to_array())
+}
 
 /// Multiplies each byte by `x` in `GF(2^8)`.
 ///
@@ -29,7 +58,7 @@ fn mul2(row: Row) -> Row {
 
 /// Applies the byte-sliced MixBytes transform to eight rows.
 #[inline(always)]
-fn mix_bytes(rows: &mut [Row; 8]) {
+fn mix_bytes(rows: &mut State) {
   let mut a0 = rows[0];
   let mut a1 = rows[1];
   let mut a2 = rows[2];
@@ -119,12 +148,12 @@ fn mix_bytes(rows: &mut [Row; 8]) {
 }
 
 #[inline(always)]
-fn add_rc_p(rows: &mut [Row; 8], round: usize) {
+fn add_rc_p(rows: &mut State, round: usize) {
   rows[0] ^= Row::new(RC_P[round]);
 }
 
 #[inline(always)]
-fn add_rc_q(rows: &mut [Row; 8], round: usize) {
+fn add_rc_q(rows: &mut State, round: usize) {
   let ff = Row::splat(0xFF);
   rows[0] ^= ff;
   rows[1] ^= ff;
@@ -137,11 +166,8 @@ fn add_rc_q(rows: &mut [Row; 8], round: usize) {
 }
 
 /// Applies SubBytes and the row shifts with one AES instruction per row.
-///
-/// Each mask moves bytes so that AES ShiftRows, which runs after SubBytes,
-/// lands them where the Groestl row shift puts them.
 #[inline(always)]
-fn sub_shift(rows: &mut [Row; 8], masks: &[[u8; 16]; 8]) {
+fn sub_shift(rows: &mut State, masks: &[[u8; 16]; 8]) {
   let mut row = 0;
   while row < 8 {
     rows[row] = aes_sub_shift(rows[row].shuffle(Row::new(masks[row])));
@@ -151,7 +177,7 @@ fn sub_shift(rows: &mut [Row; 8], masks: &[[u8; 16]; 8]) {
 
 /// Applies the `P` permutation to the current state.
 #[inline(always)]
-fn perm_p(state: &mut [Row; 8]) {
+fn perm_p(state: &mut State) {
   let mut round = 0;
   while round < ROUNDS {
     add_rc_p(state, round);
@@ -163,7 +189,7 @@ fn perm_p(state: &mut [Row; 8]) {
 
 /// Applies the `P` and `Q` permutations in lockstep for one compression.
 #[inline(always)]
-fn perm_pq(p_state: &mut [Row; 8], q_state: &mut [Row; 8]) {
+fn perm_pq(p_state: &mut State, q_state: &mut State) {
   let mut round = 0;
   while round < ROUNDS {
     add_rc_p(p_state, round);
@@ -178,14 +204,14 @@ fn perm_pq(p_state: &mut [Row; 8], q_state: &mut [Row; 8]) {
 
 /// Loads the column-major block into eight row vectors.
 #[inline(always)]
-fn load_block(block: &[u8; BLOCK]) -> [Row; 8] {
+fn load_block(block: &[u8; BLOCK]) -> State {
   let mut rows = [Row::splat(0); 8];
   let mut row = 0;
   while row < 8 {
     let mut bytes = [0u8; 16];
     let mut col = 0;
     while col < 16 {
-      bytes[col] = block[col * 8 + row];
+      bytes[col] = block[8 * col + row];
       col += 1;
     }
     rows[row] = Row::new(bytes);
@@ -194,23 +220,8 @@ fn load_block(block: &[u8; BLOCK]) -> [Row; 8] {
   rows
 }
 
-/// Extracts columns 8 through 15 as the 512-bit output digest.
 #[inline(always)]
-fn extract_right_half(rows: &[Row; 8], out: &mut [u8; 64]) {
-  let mut col = 8;
-  while col < 16 {
-    let offset = (col - 8) * 8;
-    let mut row = 0;
-    while row < 8 {
-      out[offset + row] = rows[row].as_array()[col];
-      row += 1;
-    }
-    col += 1;
-  }
-}
-
-#[inline(always)]
-fn xor_rows(lhs: &[Row; 8], rhs: &[Row; 8]) -> [Row; 8] {
+fn xor_rows(lhs: &State, rhs: &State) -> State {
   [
     lhs[0] ^ rhs[0],
     lhs[1] ^ rhs[1],
@@ -225,7 +236,7 @@ fn xor_rows(lhs: &[Row; 8], rhs: &[Row; 8]) -> [Row; 8] {
 
 /// Computes `H = H ^ P(H ^ M) ^ Q(M)`.
 #[inline(always)]
-fn compress_rows(chaining_value: &mut [Row; 8], message: &[Row; 8]) {
+fn compress_rows(chaining_value: &mut State, message: &State) {
   let mut p_state = xor_rows(chaining_value, message);
   let mut q_state = *message;
   perm_pq(&mut p_state, &mut q_state);
@@ -234,95 +245,44 @@ fn compress_rows(chaining_value: &mut [Row; 8], message: &[Row; 8]) {
 
 /// Computes `H = H ^ P(H ^ M) ^ Q(M)`.
 #[inline(always)]
-fn compress_block(chaining_value: &mut [Row; 8], block: &[u8; BLOCK]) {
+pub(super) fn compress_block(chaining_value: &mut State, block: &[u8; BLOCK]) {
   let message = load_block(block);
   compress_rows(chaining_value, &message);
 }
 
 /// Computes `H = H ^ P(H)` before the final digest extraction.
 #[inline(always)]
-fn output_transform(chaining_value: &mut [Row; 8]) {
+pub(super) fn output_transform(chaining_value: &mut State) {
   let mut state = *chaining_value;
   perm_p(&mut state);
   *chaining_value = xor_rows(chaining_value, &state);
 }
 
-/// Chaining value and block count.
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct Core {
-  h: [Row; 8],
-  blocks: u64,
-}
-
-impl Compress<BLOCK> for Core {
-  #[inline(always)]
-  fn compress(&mut self, block: &[u8; BLOCK]) {
-    compress_block(&mut self.h, block);
-    self.blocks = self.blocks.wrapping_add(1);
-  }
-}
-
-impl_hash!(Core, [h], [blocks]);
-
-/// Streaming Groestl-512.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Groestl512 {
-  core: Core,
-  buffer: Buffer<BLOCK>,
-}
-
-impl Default for Groestl512 {
-  #[inline]
-  fn default() -> Self {
-    Self {
-      core: Core {
-        h: IV_ROWS.map(Row::new),
-        blocks: 0,
-      },
-      buffer: Buffer::new(),
+/// Extracts columns 8 through 15 as the 512-bit digest.
+#[inline(always)]
+pub(super) fn digest(rows: &State) -> [u8; 64] {
+  let mut out = [0u8; 64];
+  let mut col = 8;
+  while col < 16 {
+    let offset = (col - 8) * 8;
+    let mut row = 0;
+    while row < 8 {
+      out[offset + row] = rows[row].as_array()[col];
+      row += 1;
     }
+    col += 1;
   }
+  out
 }
-
-impl Update for Groestl512 {
-  #[inline]
-  fn update(&mut self, data: &[u8]) {
-    self.buffer.update(data, &mut self.core);
-  }
-}
-
-impl FixedOutput for Groestl512 {
-  fn finalize_into(mut self, out: &mut Output<Self>) {
-    let remaining = self.buffer.len();
-    // The last eight bytes hold the total block count, padding included, so
-    // a tail reaching byte 120 spills into a second block.
-    let block = self.buffer.pad(0x80);
-    if remaining < 120 {
-      block[120..].copy_from_slice(&self.core.blocks.wrapping_add(1).to_be_bytes());
-      self.core.compress(block);
-    } else {
-      self.core.compress(block);
-      let mut last = [0u8; BLOCK];
-      last[120..].copy_from_slice(&self.core.blocks.wrapping_add(1).to_be_bytes());
-      self.core.compress(&last);
-    }
-    output_transform(&mut self.core.h);
-
-    let mut digest = [0u8; 64];
-    extract_right_half(&self.core.h, &mut digest);
-    out.copy_from_slice(&digest);
-  }
-}
-
-impl_digest!(Groestl512, U64);
 
 #[cfg(test)]
 mod tests {
-  use super::Groestl512;
-  use crate::tests::run_nist_kat_chunked;
+  use super::*;
+
+  use hex_conservative::hex;
 
   #[test]
-  fn nist_kat() {
-    run_nist_kat_chunked::<Groestl512>("groestl");
+  fn spot_check_subsh_p() {
+    assert_eq!(SUBSH_P[0], hex!("000d0a0704010e0b0805020f0c090603"));
   }
 }

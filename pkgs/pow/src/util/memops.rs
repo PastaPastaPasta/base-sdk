@@ -153,3 +153,15 @@ pub(crate) const fn unpack_nibbles(bytes: &[u8; 32]) -> [u8; 64] {
   }
   out
 }
+
+/// Reads `N` little-endian `u64` words from the start of `buf`.
+#[inline]
+pub(crate) fn load_u64s_le<const N: usize>(buf: &[u8]) -> [u64; N] {
+  core::array::from_fn(|i| load_u64_le(buf, i))
+}
+
+/// Reads `N` little-endian `u32` words from the start of `buf`.
+#[inline]
+pub(crate) fn load_u32s_le<const N: usize>(buf: &[u8]) -> [u32; N] {
+  core::array::from_fn(|i| load_u32_le(buf, i))
+}
