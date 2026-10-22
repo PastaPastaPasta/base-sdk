@@ -460,6 +460,16 @@ impl BlsElem<G1, BLS_PK_LEN> {
       BlsArith::Relic(e) => Self(BlsArith::Relic(e.mul(&Bn::from_bendian(k)))),
     }
   }
+
+  /// The basic serialization of a [`Self::mul_secret`] product: blst's
+  /// constant-time compression on a Group element, which writes the same
+  /// bytes, and the engine's on an engine one.
+  pub(crate) fn secret_basic(&self) -> [u8; BLS_PK_LEN] {
+    match &self.0 {
+      BlsArith::Group { point, .. } => point.to_affine().compress(),
+      BlsArith::Relic(_) => self.to_bytes(BlsSchemeKind::Basic),
+    }
+  }
 }
 
 #[cfg(test)]
@@ -684,6 +694,20 @@ mod tests {
       g2_point(&Ep2::affine(zero, zero, Coord::Basic)),
       BlsPoint::Exotic
     ));
+  }
+
+  #[test]
+  fn secret_products_serialize_as_the_engine_does() {
+    let mut r_minus_one = GROUP_ORDER;
+    r_minus_one[31] -= 1;
+    for k in [scalar(1), scalar(7), r_minus_one, GROUP_ORDER] {
+      let p = g1().mul_secret(&k);
+      assert!(!p.__is_relic());
+      assert_eq!(p.secret_basic(), p.to_bytes(BASIC));
+    }
+    let e = Pk::from_impl(&legacy_pk(&G1_OFF_SUBGROUP_CHIA)).mul_secret(&scalar(7));
+    assert!(e.__is_relic());
+    assert_eq!(e.secret_basic(), e.to_bytes(BASIC));
   }
 
   #[test]
