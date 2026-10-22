@@ -24,9 +24,9 @@ private string packageName(string segments) {
 /** Holds if a crate directory named `crate` holds `f`. */
 private predicate encloses(string crate, File f) {
   exists(string path | path = f.getAbsolutePath() |
-    crate = packageName(path.regexpCapture(".*/pkgs/([^/]+)/.*", 1))
+    crate = packageName(path.regexpCapture(".*/(?:meta|pkgs)/([^/]+)/.*", 1))
     or
-    crate = packageName(path.regexpCapture(".*/pkgs/([^/]+/[^/]+)/.*", 1))
+    crate = packageName(path.regexpCapture(".*/(?:meta|pkgs)/([^/]+/[^/]+)/.*", 1))
     or
     crate = packageName(path.regexpCapture(".*/fuzz/([^/]+)/.*", 1)) + "-fuzz"
   )

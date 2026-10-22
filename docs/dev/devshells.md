@@ -22,6 +22,12 @@
   then generate an updated lockfile by running `uv lock` in the shell. Then re-enter a fresh devshell, it should take on
   the new definitions.
 
+* **Linux devshells expect a standard layout**
+
+  Binaries built for standard Linux systems look for dynamic loaders and libraries at paths NixOS leaves empty.
+  `fhs-run <command>` runs a command in an [FHS](https://refspecs.linuxfoundation.org/FHS_3.0/fhs/index.html) layout
+  typical of Linux distributions, and `fhs-run bash` opens a shell in it. The Docker container enters it by default.
+
 * **Pinned versions of tools don't match against manual setup**
 
   Manual setup installs PyPI-sourced dependencies with `.dev`. Not every PyPI package is written in Python nor does it

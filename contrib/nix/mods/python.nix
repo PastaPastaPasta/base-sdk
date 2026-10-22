@@ -25,6 +25,12 @@ let
         (old.nativeBuildInputs or [ ]) ++ final.resolveBuildSystem { setuptools = [ ]; };
     });
 
+    # `lief` links the C++ runtime, `autoPatchelfHook` has to find it for Linux.
+    lief = prev.lief.overrideAttrs (old: {
+      buildInputs =
+        (old.buildInputs or [ ]) ++ lib.optional pkgs.stdenv.hostPlatform.isLinux pkgs.stdenv.cc.cc.lib;
+    });
+
     # Narrow rebuild triggers to relevant files to avoid pulling in the whole
     # source tree and thrashing the cache for it.
     dash-base-sdk = prev.dash-base-sdk.overrideAttrs (_: {

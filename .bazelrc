@@ -1,0 +1,5 @@
+# The output root is placed in `.cache` (see `bazel/shim.py`), and the repo contents cache cannot live in-tree.
+common --repo_contents_cache=
+
+# Keeps the convenience symlinks out of the repository root.
+build --symlink_prefix=.cache/bazel-

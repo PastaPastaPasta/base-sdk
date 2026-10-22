@@ -61,7 +61,7 @@ serde = { workspace = true, features = [
 ], optional = true }
 
 [dev-dependencies]
-dash-dev = { path = "../dev", features = ["full"] }
+dash-dev = { path = "../../meta/dev", features = ["full"] }
 divan = { workspace = true }
 rstest = { workspace = true }
 serde = { workspace = true, features = ["derive", "std"] }

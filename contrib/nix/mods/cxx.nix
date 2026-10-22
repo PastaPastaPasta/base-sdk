@@ -3,15 +3,14 @@
 {
   pkgs,
   lib,
+  llvm,
   xcodeSdk ? null,
 }:
 
 let
-  llvm = pkgs.llvmPackages_20;
-
   # clang -print-resource-dir names the main output, but the builtin headers are
   # split into .lib, so the flag has to be passed explicitly.
-  resourceDir = "${llvm.clang-unwrapped.lib}/lib/clang/20";
+  resourceDir = "${import ./compiler_rt.nix { inherit pkgs llvm; }}/lib/clang/20";
 
   # --ld-path names lld directly, where -fuse-ld=lld would find the nixpkgs
   # bintools wrapper on PATH. Mach-O needs ld64.
@@ -85,7 +84,7 @@ let
   darwinFlags =
     _:
     [
-      "-isysroot ${xcodeSdk}"
+      "-isysroot ${xcodeSdk.sysroot}"
       "-nostdlibinc"
       "-iwithsysroot/usr/include"
       "-iframeworkwithsysroot/System/Library/Frameworks"
@@ -208,7 +207,7 @@ in
   # Adding clang to packages would not displace the cc-wrapper the default
   # stdenv puts on PATH, so the shell is built against this stdenv instead.
   compiler = {
-    stdenv = llvm.stdenv;
+    stdenv = pkgs.overrideCC pkgs.stdenv llvm.clang;
     packages = [ llvm.bintools ];
   };
 
@@ -225,8 +224,9 @@ in
       # both are set shell-wide rather than per target. A native macOS build
       # has to resolve against the same pinned SDK as a cross target.
       darwin = lib.optionalAttrs (lib.any (t: (defFor t).kind == "darwin") targets) {
+        MACOS_SDK_VERSION = xcodeSdk.sdkVersion;
         MACOSX_DEPLOYMENT_TARGET = xcodeSdk.minVersion;
-        SDKROOT = "${xcodeSdk}";
+        SDKROOT = xcodeSdk.sysroot;
       };
     in
     {

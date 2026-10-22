@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 [project.optional-dependencies]
 dev = ["dash-base-sdk[tools,lib]"]
 lib = [
+  "lief>=1.0",
   "Markdown>=3.7",
   "pygments-styles>=0.3.0",
   "pymarkdownlnt>=0.9.37",

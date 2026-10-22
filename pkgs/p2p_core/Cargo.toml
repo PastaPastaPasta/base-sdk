@@ -54,7 +54,7 @@ serde = { workspace = true, features = [
 thiserror = { workspace = true }
 
 [dev-dependencies]
-dash-dev = { version = "0.0.0", path = "../dev", features = ["full"] }
+dash-dev = { version = "0.0.0", path = "../../meta/dev", features = ["full"] }
 hex-conservative = { workspace = true, features = ["std"] }
 rstest = { workspace = true }
 serde = { workspace = true, features = ["derive", "std"] }

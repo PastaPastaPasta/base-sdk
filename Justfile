@@ -8,6 +8,8 @@ export RUSTDOCFLAGS := "-D warnings"
 
 mod fuzz "fuzz/mod.just"
 
+import "bazel/mod.just"
+
 each := "cargo hack --workspace --exclude-features default --each-feature"
 powerset := "cargo hack --workspace --exclude-features default --feature-powerset"
 
@@ -51,3 +53,6 @@ test:
     {{ each }} test --doc
     cargo doc --workspace --no-deps --features full
     {{ each }} test --benches
+
+zbuild *flags:
+    bazel build {{ flags }} //...

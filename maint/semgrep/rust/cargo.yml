@@ -4,6 +4,6 @@ rules:
     severity: ERROR
     languages: [generic]
     paths:
-      include: [/pkgs/**/Cargo.toml]
-      exclude: [/pkgs/dev/Cargo.toml]
+      include: [/meta/**/Cargo.toml, /pkgs/**/Cargo.toml]
+      exclude: [/meta/dev/Cargo.toml]
     pattern-regex: \b(serde[-_]json|json5)\b

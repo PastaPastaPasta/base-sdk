@@ -9,8 +9,7 @@
 
 """Validate and enforce constraints across Rust's build system, cargo.
 
-Includes a TOML formatter using taplo that affects all TOML files regardless of
-provenance or origin, exclusions must be defined in 'maint/taplo.toml'
+taplo formats tracked TOML files except those excluded by 'maint/taplo.toml'.
 """
 
 from __future__ import annotations
@@ -27,6 +26,7 @@ from common import (
   declare_verbs,
   formatted,
   relay,
+  repo_files,
   require_bin,
   root_dir,
   touched,
@@ -60,12 +60,15 @@ def _check_format(
       drop=lambda line: line.lstrip().startswith("INFO"),
     )
 
-  # None, not an empty list: with no paths taplo finds its own through
-  # 'maint/taplo.toml', so there is no count to report for the whole tree.
+  sources = (
+    repo_files(repo_root, "*.toml")
+    if only is None
+    else [Path(name) for name in only]
+  )
   return formatted(
     SCRIPT,
     "TOML file",
-    None if only is None else [Path(name) for name in only],
+    sources,
     lambda paths: [
       taplo, "fmt",
       "--config", str(repo_root / "maint" / "taplo.toml"),

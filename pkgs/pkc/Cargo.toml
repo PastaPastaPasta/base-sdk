@@ -62,7 +62,7 @@ zeroize = { workspace = true, features = ["alloc", "derive"] }
 
 [dev-dependencies]
 bitcoin-consensus-encoding = { workspace = true, features = ["alloc"] }
-dash-dev = { path = "../dev", features = ["full"] }
+dash-dev = { path = "../../meta/dev", features = ["full"] }
 divan = { workspace = true }
 getrandom = { version = "0.4", features = ["sys_rng"] }
 hex-conservative = { workspace = true, features = ["std"] }
