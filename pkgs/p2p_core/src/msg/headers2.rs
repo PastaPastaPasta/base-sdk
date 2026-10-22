@@ -17,6 +17,8 @@ use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{CompactSize, Hashable};
 use getset::{CopyGetters, Getters};
 
+use core::iter;
+
 /// Size of the smallest compressed header, made of flags, a merkle root, a
 /// time delta and a nonce.
 const MIN_HEADERS2_SIZE: usize = 39;
@@ -52,9 +54,18 @@ pub struct CompressedHeader {
 }
 
 impl CompressedHeader {
+  /// Takes `header` whole, as the first entry goes.
+  fn whole(header: &BlockHeader) -> Self {
+    Self {
+      flags: FLAG_PREV_HASH | FLAG_TIMESTAMP_FULL | FLAG_NBITS,
+      header: *header,
+      time_offset: 0,
+    }
+  }
+
   /// Compresses `header` against `prev`, the header before it, and
   /// `versions`, the versions of recent entries, newest first.
-  fn compress(header: &BlockHeader, prev: Option<&BlockHeader>, versions: &mut Vec<i32>) -> Self {
+  fn compress(header: &BlockHeader, prev: &BlockHeader, versions: &mut Vec<i32>) -> Self {
     let mut flags = 0;
     match versions.iter().position(|&v| v == header.version()) {
       Some(pos) => {
@@ -63,18 +74,15 @@ impl CompressedHeader {
       }
       None => save_version(versions, header.version()),
     }
-    if prev.is_none_or(|prev| header.prev_hash() != prev.hash()) {
-      flags |= FLAG_PREV_HASH;
-    }
-    let step = prev.map(|prev| i64::from(header.time()) - i64::from(prev.time()));
-    let time_offset = match step.and_then(|step| i16::try_from(step).ok()) {
-      Some(offset) => offset,
-      None => {
+    // The step is taken modulo 2^32, so a step back goes as the full time.
+    let time_offset = match i16::try_from(header.time().wrapping_sub(prev.time())) {
+      Ok(offset) => offset,
+      Err(_) => {
         flags |= FLAG_TIMESTAMP_FULL;
         0
       }
     };
-    if prev.is_none_or(|prev| header.bits() != prev.bits()) {
+    if header.bits() != prev.bits() {
       flags |= FLAG_NBITS;
     }
     Self {
@@ -238,25 +246,40 @@ impl Headers2 {
     }
   }
 
-  /// Compresses `headers` for an announcement, each taken to follow the one
-  /// before it.
+  /// Compresses `headers` as a reply to `getheaders2` does, each taken to
+  /// follow the one before it.
+  pub fn reply(headers: &[BlockHeader]) -> Self {
+    Self::compress(headers, false)
+  }
+
+  /// Compresses `headers` as an announcement does, each taken to follow the
+  /// one before it.
   pub fn announce(headers: &[BlockHeader]) -> Self {
-    let mut versions = Vec::with_capacity(MAX_VERSION_CACHE);
-    let mut prev = None;
-    let headers = headers
-      .iter()
-      .map(|header| {
-        let entry = CompressedHeader::compress(header, prev, &mut versions);
-        prev = Some(header);
-        entry
-      })
-      .collect();
-    Self { headers }
+    Self::compress(headers, true)
   }
 
   /// Block headers in chain order.
   pub fn block_headers(&self) -> impl ExactSizeIterator<Item = &BlockHeader> {
     self.headers.iter().map(CompressedHeader::header)
+  }
+
+  /// Compresses `headers`, the first one whole, keeping its version for the
+  /// rest if `keep_first`.
+  fn compress(headers: &[BlockHeader], keep_first: bool) -> Self {
+    let Some((first, tail)) = headers.split_first() else {
+      return Self { headers: Vec::new() };
+    };
+    let mut versions = Vec::with_capacity(MAX_VERSION_CACHE);
+    if keep_first {
+      save_version(&mut versions, first.version());
+    }
+    let rest = headers
+      .iter()
+      .zip(tail)
+      .map(|(prev, header)| CompressedHeader::compress(header, prev, &mut versions));
+    Self {
+      headers: iter::once(CompressedHeader::whole(first)).chain(rest).collect(),
+    }
   }
 }
 
@@ -323,6 +346,16 @@ mod tests {
       let mut buf = Vec::new();
       msg.encode(&mut buf);
       assert_eq!(buf, raw);
+    }
+  }
+
+  #[rstest]
+  #[case::reply("reply", Headers2::reply)]
+  #[case::announce("announce", Headers2::announce)]
+  fn corpus_compress(#[case] section: &str, #[case] compress: fn(&[BlockHeader]) -> Headers2) {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "headers2");
+    for v in corpus.vectors::<HeadersVector>(section) {
+      check_wire(&decode_to_vec(&v.raw).unwrap(), &compress(&v.headers), &v.raw);
     }
   }
 
