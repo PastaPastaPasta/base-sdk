@@ -57,8 +57,10 @@ pub enum AssetUnlockInvalid {
 impl Checkable for AssetUnlock {
   type Error = AssetUnlockInvalid;
 
+  /// Checks the rules that need no chain context. Refusing version 2 before
+  /// the v24 deployment is active is left to the caller.
   fn check(&self) -> Option<Self::Error> {
-    if self.version == 0 || self.version > 1 {
+    if self.version == 0 || self.version > 2 {
       return Some(AssetUnlockInvalid::BadVersion { version: self.version });
     }
 
@@ -88,5 +90,18 @@ mod tests {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "assetunlock");
     let items = corpus.entries::<AssetUnlock>("assetunlock", check_sptx);
     assert_serde_rt("assetunlock", &items);
+  }
+
+  #[rstest]
+  #[case::v1(1, 1, None)]
+  #[case::v2(2, 1, None)]
+  #[case::v0(0, 1, Some(AssetUnlockInvalid::BadVersion { version: 0 }))]
+  #[case::v3(3, 1, Some(AssetUnlockInvalid::BadVersion { version: 3 }))]
+  #[case::v255(255, 1, Some(AssetUnlockInvalid::BadVersion { version: 255 }))]
+  #[case::zero_fee(1, 0, Some(AssetUnlockInvalid::FeeOutOfRange { fee: 0 }))]
+  #[case::v2_zero_fee(2, 0, Some(AssetUnlockInvalid::FeeOutOfRange { fee: 0 }))]
+  fn check(#[case] version: u8, #[case] fee: u32, #[case] expected: Option<AssetUnlockInvalid>) {
+    let unlock = AssetUnlock::new(version, 0, fee, 0, QuorumHash::default(), BlsSigBytes::default());
+    assert_eq!(unlock.check(), expected);
   }
 }
