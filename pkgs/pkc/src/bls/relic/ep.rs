@@ -26,7 +26,7 @@ use dash_types::type_id::Unencodable;
 use zeroize::{Zeroize, Zeroizing};
 
 /// A relic `ep_t`: x, y, z and the coord tag.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct Ep {
   pub(crate) x: Fp,
@@ -362,6 +362,11 @@ mod tests {
   use super::super::super::group::{G1Affine, G1};
   use super::*;
 
+  /// The coordinates and tag, which tests compare as Ep has no `==`.
+  fn parts(p: &Ep) -> (Fp, Fp, Fp, Coord) {
+    (p.x, p.y, p.z, p.coord)
+  }
+
   fn generator() -> Ep {
     let g = G1Affine::generator();
     Ep::affine(g.x(), g.y(), Coord::Basic)
@@ -408,11 +413,11 @@ mod tests {
     assert_eq!(z.coord, Coord::Projc);
     assert!(!field::is_zero(&z.y));
     // Adding infinity copies the other operand, tag included.
-    assert_eq!(z.add(&g), g);
-    assert_eq!(g.add(&z), g);
+    assert_eq!(parts(&z.add(&g)), parts(&g));
+    assert_eq!(parts(&g.add(&z)), parts(&g));
     // Negating or doubling infinity gives set_infty.
-    assert_eq!(z.neg(), Ep::INFTY);
-    assert_eq!(z.dbl(), Ep::INFTY);
+    assert_eq!(parts(&z.neg()), parts(&Ep::INFTY));
+    assert_eq!(parts(&z.dbl()), parts(&Ep::INFTY));
     // set_infty equals the affine (0, 0), which the PROJC infinity does not.
     let origin = Ep::affine(Fp::default(), Fp::default(), Coord::Basic);
     assert!(Ep::INFTY.cmp(&origin));
@@ -457,9 +462,9 @@ mod tests {
       assert!(projc.cmp(&g));
       assert!(projc.mul(&bn).cmp(&got));
     }
-    assert_eq!(g.mul(&Bn::from_bendian(&r)), Ep::INFTY);
-    assert_eq!(g.mul(&scalar(0)), Ep::INFTY);
-    assert_eq!(Ep::INFTY.mul(&scalar(5)), Ep::INFTY);
+    assert_eq!(parts(&g.mul(&Bn::from_bendian(&r))), parts(&Ep::INFTY));
+    assert_eq!(parts(&g.mul(&scalar(0))), parts(&Ep::INFTY));
+    assert_eq!(parts(&Ep::INFTY.mul(&scalar(5))), parts(&Ep::INFTY));
   }
 
   #[test]
@@ -477,10 +482,10 @@ mod tests {
     let two = g.dbl();
     let [a, b, c] = Ep::norm_sim([two, z, g]);
     let origin = Ep::affine(Fp::default(), Fp::default(), Coord::Basic);
-    assert_eq!(a, origin);
-    assert_eq!(b, origin);
+    assert_eq!(parts(&a), parts(&origin));
+    assert_eq!(parts(&b), parts(&origin));
     // A BASIC entry keeps x and y and takes the zero inverse as z.
-    assert_eq!(c, Ep { z: Fp::default(), ..g });
+    assert_eq!(parts(&c), parts(&Ep { z: Fp::default(), ..g }));
     assert!(c.is_infty());
   }
 

@@ -49,7 +49,7 @@ pub(crate) mod sealed {
 /// Lemma T'): Core's coord tag for a value blst computes, or relic's
 /// coordinates for one only the engine can.
 #[doc(hidden)]
-#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "codec", derive(Unencodable))]
 pub enum BlsRepr<E> {
   /// `BASIC`: decoded values, the default element and every `g*_mul`
