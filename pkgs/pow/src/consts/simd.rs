@@ -6,6 +6,10 @@
 
 //! SIMD-512 constants.
 
+use crate::util::const_array;
+
+use wide::i16x8;
+
 /// Block size in bytes.
 pub(crate) const BLOCK: usize = 128;
 
@@ -192,6 +196,41 @@ const fn one_round_const(state: &mut [u32; 32], words: &[u32; 64], isp: usize, p
   step_const(state, words, 48, false, p2, p3, PP8K[isp + 6]);
   step_const(state, words, 56, false, p3, p0, PP8K[isp + 7]);
 }
+
+/// Signed representative of `x` modulo 257 in `[-128, 128]`.
+const fn signed_rep(x: i32) -> i16 {
+  let r = x.rem_euclid(257);
+  (if r <= 128 { r } else { r - 257 }) as i16
+}
+
+/// Builds one 8-lane NTT twiddle row holding `alpha^(base + lane * step)` as
+/// signed representatives.
+const fn twiddle_row(base: usize, step: usize) -> i16x8 {
+  i16x8::new(const_array!(0; 8; |lane| signed_rep(ALPHA_TAB[(base + lane * step) % 256])))
+}
+
+/// Twiddles for the radix-2 split of the 256-point NTT. Row `k` holds
+/// `alpha^(8k + lane)` for byte positions `8k + lane`.
+pub(crate) const TWIDDLE_256: [i16x8; 16] = const_array!(i16x8::splat(0); 16; |k| twiddle_row(8 * k, 1));
+
+/// Twiddles for the radix-2 split of each 128-point NTT. Row `k` holds
+/// `alpha^(2 * (8k + lane))`.
+pub(crate) const TWIDDLE_128: [i16x8; 8] = const_array!(i16x8::splat(0); 8; |k| twiddle_row(16 * k, 2));
+
+/// Twiddles applied between the two FFT-8 passes of the 64-point NTT.
+///
+/// Row `k` multiplies register `6 - k` before the transpose, using the
+/// 64-point root `alpha^4`.
+#[rustfmt::skip]
+pub(crate) const TWIDDLE_64: [i16x8; 7] = [
+  i16x8::new([1,    2,    4,    8,   16,   32,   64,  128]),
+  i16x8::new([1,   60,    2,  120,    4,  -17,    8,  -34]),
+  i16x8::new([1,  120,    8,  -68,   64,  -30,   -2,   17]),
+  i16x8::new([1,   46,   60,  -67,    2,   92,  120,  123]),
+  i16x8::new([1,   92,  -17,  -22,   32,  117,  -30,   67]),
+  i16x8::new([1,  -67,  120,  -73,    8,  -22,  -68,  -70]),
+  i16x8::new([1,  123,  -34,  -70,  128,   67,   17,   35]),
+];
 
 #[rustfmt::skip]
 pub(crate) const WBP: [usize; 32] = [
