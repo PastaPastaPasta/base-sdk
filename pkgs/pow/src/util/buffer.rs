@@ -183,7 +183,7 @@ mod tests {
   }
 
   /// The longest message the tests feed, a byte ramp.
-  const RAMP: [u8; 100] = {
+  static RAMP: [u8; 100] = {
     let mut ramp = [0u8; 100];
     let mut i = 0;
     while i < 100 {
@@ -194,7 +194,7 @@ mod tests {
   };
 
   /// Cut positions for feeding a message byte by byte.
-  const BYTE_CUTS: [usize; 100] = {
+  static BYTE_CUTS: [usize; 100] = {
     let mut cuts = [0usize; 100];
     let mut i = 0;
     while i < 100 {

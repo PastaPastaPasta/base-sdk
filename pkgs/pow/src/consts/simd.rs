@@ -14,13 +14,13 @@ use wide::i16x8;
 pub(crate) const BLOCK: usize = 128;
 
 /// Permutation schedule for the 8-lane Feistel steps.
-pub(crate) const PP8K: [usize; 11] = [1, 6, 2, 3, 5, 7, 4, 1, 6, 2, 3];
+pub(crate) static PP8K: [usize; 11] = [1, 6, 2, 3, 5, 7, 4, 1, 6, 2, 3];
 
 /// Primitive root of `Z/257Z` used in the NTT.
 const ALPHA: u32 = 41;
 
 /// Powers of `ALPHA` modulo 257.
-pub(crate) const ALPHA_TAB: [i32; 256] = {
+pub(crate) static ALPHA_TAB: [i32; 256] = {
   let mut table = [0i32; 256];
   let mut x = 1u32;
   let mut i = 0;
@@ -36,7 +36,7 @@ const ALPHA_INV: u32 = ALPHA_TAB[255] as u32;
 const ALPHA_INV3: u32 = ALPHA_TAB[253] as u32;
 
 /// Offset table used for non-final blocks.
-pub(crate) const YOFF_B_N: [u16; 256] = {
+pub(crate) static YOFF_B_N: [u16; 256] = {
   let mut table = [0u16; 256];
   let mut x = 1u32;
   let mut i = 0;
@@ -49,7 +49,7 @@ pub(crate) const YOFF_B_N: [u16; 256] = {
 };
 
 /// Offset table used for the final block.
-pub(crate) const YOFF_B_F: [u16; 256] = {
+pub(crate) static YOFF_B_F: [u16; 256] = {
   let mut table = [0u16; 256];
   let mut x = 1u32;
   let mut y = 1u32;
@@ -211,18 +211,18 @@ const fn twiddle_row(base: usize, step: usize) -> i16x8 {
 
 /// Twiddles for the radix-2 split of the 256-point NTT. Row `k` holds
 /// `alpha^(8k + lane)` for byte positions `8k + lane`.
-pub(crate) const TWIDDLE_256: [i16x8; 16] = const_array!(i16x8::splat(0); 16; |k| twiddle_row(8 * k, 1));
+pub(crate) static TWIDDLE_256: [i16x8; 16] = const_array!(i16x8::splat(0); 16; |k| twiddle_row(8 * k, 1));
 
 /// Twiddles for the radix-2 split of each 128-point NTT. Row `k` holds
 /// `alpha^(2 * (8k + lane))`.
-pub(crate) const TWIDDLE_128: [i16x8; 8] = const_array!(i16x8::splat(0); 8; |k| twiddle_row(16 * k, 2));
+pub(crate) static TWIDDLE_128: [i16x8; 8] = const_array!(i16x8::splat(0); 8; |k| twiddle_row(16 * k, 2));
 
 /// Twiddles applied between the two FFT-8 passes of the 64-point NTT.
 ///
 /// Row `k` multiplies register `6 - k` before the transpose, using the
 /// 64-point root `alpha^4`.
 #[rustfmt::skip]
-pub(crate) const TWIDDLE_64: [i16x8; 7] = [
+pub(crate) static TWIDDLE_64: [i16x8; 7] = [
   i16x8::new([1,    2,    4,    8,   16,   32,   64,  128]),
   i16x8::new([1,   60,    2,  120,    4,  -17,    8,  -34]),
   i16x8::new([1,  120,    8,  -68,   64,  -30,   -2,   17]),
@@ -233,7 +233,7 @@ pub(crate) const TWIDDLE_64: [i16x8; 7] = [
 ];
 
 #[rustfmt::skip]
-pub(crate) const WBP: [usize; 32] = [
+pub(crate) static WBP: [usize; 32] = [
    4 << 4,  6 << 4,  0 << 4,  2 << 4,
    7 << 4,  5 << 4,  3 << 4,  1 << 4,
   15 << 4, 11 << 4, 12 << 4,  8 << 4,
@@ -266,7 +266,7 @@ const fn wbread_const(q: &[i32], sb: usize, o1: i32, o2: i32, mm: i32) -> [u32; 
 pub(crate) const FINAL64_WORD0: u32 = 0x200;
 
 /// Message schedule of the length-only final block for a 64-byte message.
-pub(crate) const FINAL64_SCHEDULE: [[u32; 64]; 4] = {
+pub(crate) static FINAL64_SCHEDULE: [[u32; 64]; 4] = {
   let mut buf = [0u8; BLOCK];
   buf[0] = FINAL64_WORD0.to_le_bytes()[0];
   buf[1] = FINAL64_WORD0.to_le_bytes()[1];
@@ -293,7 +293,7 @@ pub(crate) const FINAL64_SCHEDULE: [[u32; 64]; 4] = {
 };
 
 /// IV derived by compressing `"SIMD-512 v1.1"` into the zero state.
-pub(crate) const IV: [u32; 32] = {
+pub(crate) static IV: [u32; 32] = {
   let mut buf = [0u8; 128];
   let msg = b"SIMD-512 v1.1";
   let mut i = 0;

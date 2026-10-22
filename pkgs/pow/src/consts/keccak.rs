@@ -40,7 +40,7 @@ pub(crate) const RATE: usize = 72;
 ///
 /// Each RC[ir] has bits set only at positions 2^j - 1 for j in 0..=6, i.e. at
 /// bit indices {0, 1, 3, 7, 15, 31, 63}.
-pub(crate) const RC: [u64; 24] = {
+pub(crate) static RC: [u64; 24] = {
   let mut out = [0u64; 24];
   let mut ir = 0;
   while ir < 24 {
@@ -61,7 +61,7 @@ pub(crate) const RC: [u64; 24] = {
 /// Rotation offsets for each lane (x, y) (FIPS 202, Section 3.2.2).
 ///
 /// Indexed as `ROTC[x + 5 * y]` to match the flat state layout.
-pub(crate) const ROTC: [u32; 25] = {
+pub(crate) static ROTC: [u32; 25] = {
   let mut out = [0u32; 25];
   // Lane (0, 0) has offset 0 (already set).
   let (mut x, mut y) = (1usize, 0usize);

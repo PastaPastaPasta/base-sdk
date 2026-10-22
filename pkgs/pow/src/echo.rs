@@ -25,7 +25,7 @@ type ChainingValue = [AesState; 8];
 type BlockWords = [u32; 32];
 
 /// Grid permutation used by the row-shift step.
-const BIG_SHIFT_ROWS: [usize; 16] = [0, 5, 10, 15, 4, 9, 14, 3, 8, 13, 2, 7, 12, 1, 6, 11];
+static BIG_SHIFT_ROWS: [usize; 16] = [0, 5, 10, 15, 4, 9, 14, 3, 8, 13, 2, 7, 12, 1, 6, 11];
 
 /// Lays four words out as one grid cell.
 #[inline(always)]

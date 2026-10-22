@@ -12,24 +12,24 @@ pub(crate) const BLOCK: usize = 128;
 pub(crate) const ROUNDS: usize = 14;
 
 /// IV with the 512-bit output size big-endian in the last column.
-pub(crate) const IV: [u64; 16] = {
+pub(crate) static IV: [u64; 16] = {
   let mut h = [0u64; 16];
   h[15] = 512u64.swap_bytes();
   h
 };
 
 /// Row shifts of the `P` permutation.
-pub(crate) const SHIFT_P: [usize; 8] = [0, 1, 2, 3, 4, 5, 6, 11];
+pub(crate) static SHIFT_P: [usize; 8] = [0, 1, 2, 3, 4, 5, 6, 11];
 
 /// Row shifts of the `Q` permutation.
-pub(crate) const SHIFT_Q: [usize; 8] = [1, 3, 5, 11, 0, 2, 4, 6];
+pub(crate) static SHIFT_Q: [usize; 8] = [1, 3, 5, 11, 0, 2, 4, 6];
 
 /// Round constants xored into row 0 of the `P` permutation.
-pub(crate) const RC_P: [[u8; 16]; ROUNDS] =
+pub(crate) static RC_P: [[u8; 16]; ROUNDS] =
   const_array!([0; 16]; ROUNDS; |round| const_array!(0; 16; |col| (col as u8) * 0x10 + (round as u8)));
 
 /// Round constants xored into row 7 of the `Q` permutation.
-pub(crate) const RC_Q: [[u8; 16]; ROUNDS] =
+pub(crate) static RC_Q: [[u8; 16]; ROUNDS] =
   const_array!([0; 16]; ROUNDS; |round| const_array!(0; 16; |col| (round as u8) ^ !((col as u8) * 0x10)));
 
 #[cfg(test)]

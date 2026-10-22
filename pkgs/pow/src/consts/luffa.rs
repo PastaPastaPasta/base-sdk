@@ -17,7 +17,7 @@ pub(crate) const BLOCK: usize = 32;
 
 /// Initial branch states (Appendix C.1).
 #[rustfmt::skip]
-pub(crate) const IV: [[u32; 8]; 5] = [
+pub(crate) static IV: [[u32; 8]; 5] = [
   [
     0x6d251e69, 0x44b051e0, 0x4eaa6fb4, 0xdbf78465,
     0x6e292011, 0x90152df4, 0xee058139, 0xdef610bb,
@@ -37,7 +37,7 @@ pub(crate) const IV: [[u32; 8]; 5] = [
 ];
 
 /// Appendix B-1 seeds for the round-constant LFSR.
-const LFSR_SEEDS: [(u32, u32); 5] = [
+static LFSR_SEEDS: [(u32, u32); 5] = [
   (0x181cca53, 0x380cde06),
   (0x5b6f0876, 0xf16f8594),
   (0x7e106ce9, 0x38979cb0),
@@ -53,7 +53,7 @@ const TAP_R: u32 = 0x55c61c8d;
 ///
 /// Each branch has one constant for word 0 and one for word 4 in each round.
 /// The two values come from consecutive LFSR steps.
-pub(crate) const RC: [[[u32; 8]; 2]; 5] = {
+pub(crate) static RC: [[[u32; 8]; 2]; 5] = {
   let mut rc = [[[0u32; 8]; 2]; 5];
   let mut branch = 0;
   while branch < 5 {
@@ -83,7 +83,7 @@ pub(crate) const RC: [[[u32; 8]; 2]; 5] = {
 };
 
 /// Packed constants for branches 0 through 3, word 0.
-pub(crate) const RC_FIRST4_LOW: [u32x4; 8] = {
+pub(crate) static RC_FIRST4_LOW: [u32x4; 8] = {
   let mut rc = [u32x4::splat(0); 8];
   let mut round = 0;
   while round < 8 {
@@ -94,7 +94,7 @@ pub(crate) const RC_FIRST4_LOW: [u32x4; 8] = {
 };
 
 /// Packed constants for branches 0 through 3, word 4.
-pub(crate) const RC_FIRST4_HIGH: [u32x4; 8] = {
+pub(crate) static RC_FIRST4_HIGH: [u32x4; 8] = {
   let mut rc = [u32x4::splat(0); 8];
   let mut round = 0;
   while round < 8 {

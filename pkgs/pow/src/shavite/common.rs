@@ -21,7 +21,7 @@ type State = [u32; 16];
 
 /// Counter words that enter the key schedule at each HAIFA checkpoint. The
 /// last word of every checkpoint enters inverted.
-const INJECTION_WORDS: [[usize; 4]; 4] = [[0, 1, 2, 3], [3, 2, 1, 0], [2, 3, 0, 1], [1, 0, 3, 2]];
+static INJECTION_WORDS: [[usize; 4]; 4] = [[0, 1, 2, 3], [3, 2, 1, 0], [2, 3, 0, 1], [1, 0, 3, 2]];
 
 /// Rotates the four words of one bundle toward the front.
 #[inline(always)]

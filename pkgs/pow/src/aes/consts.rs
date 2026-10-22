@@ -9,7 +9,7 @@
 use crate::util::math::{gf2_mul, LOG, POW};
 
 /// Forward AES S-box, derived from GF(2^8) inversion + affine.
-pub(crate) const SBOX: [u8; 256] = {
+pub(crate) static SBOX: [u8; 256] = {
   let mut s = [0u8; 256];
   s[0] = 0x63;
   let mut i = 1;
@@ -35,7 +35,7 @@ pub(crate) const SBOX: [u8; 256] = {
 /// Each table combines SubBytes + MixColumns for one byte position. The MDS
 /// column vector [2,1,1,3] is rotated per table index. Used by the scalar
 /// backend and tests.
-pub(crate) const T: [[u32; 256]; 4] = {
+pub(crate) static T: [[u32; 256]; 4] = {
   let mut t = [[0u32; 256]; 4];
   let mut i = 0;
   while i < 256 {

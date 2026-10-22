@@ -92,8 +92,8 @@ pub(crate) fn words_from_block(block: Block) -> u32x4 {
 mod tests {
   use super::*;
 
-  const STATE: [u32; 4] = [0x01020304, 0x05060708, 0x090a0b0c, 0x0d0e0f10];
-  const KEY: [u32; 4] = [0x11121314, 0x15161718, 0x191a1b1c, 0x1d1e1f20];
+  static STATE: [u32; 4] = [0x01020304, 0x05060708, 0x090a0b0c, 0x0d0e0f10];
+  static KEY: [u32; 4] = [0x11121314, 0x15161718, 0x191a1b1c, 0x1d1e1f20];
 
   fn block(words: [u32; 4]) -> Block {
     block_from_words(u32x4::new(words))
@@ -136,7 +136,7 @@ mod tests {
     use hex_conservative::hex;
 
     /// Source byte of each ShiftRows output byte in the column-major state.
-    const SHIFT_ROWS: [usize; 16] = {
+    static SHIFT_ROWS: [usize; 16] = {
       let mut source = [0; 16];
       let mut dst = 0;
       while dst < 16 {

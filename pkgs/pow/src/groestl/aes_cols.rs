@@ -21,8 +21,8 @@ use crate::util::memops::load_u64s_le;
 ///
 /// A byte entering row `r` yields the row 0 column rotated by `r` bytes, so
 /// one table serves all eight rows.
-const T0: [u64; 256] = {
-  const B: [u8; 8] = [2, 2, 3, 4, 5, 3, 5, 7];
+static T0: [u64; 256] = {
+  static B: [u8; 8] = [2, 2, 3, 4, 5, 3, 5, 7];
   let mut table = [0u64; 256];
   let mut x = 0;
   while x < 256 {
@@ -50,7 +50,7 @@ const T0: [u64; 256] = {
 pub(super) type State = [u64; 16];
 
 /// IV as sixteen columns.
-pub(super) const IV: State = crate::consts::groestl::IV;
+pub(super) static IV: State = crate::consts::groestl::IV;
 
 /// Returns the state, which `Hash` accepts as is.
 #[inline(always)]

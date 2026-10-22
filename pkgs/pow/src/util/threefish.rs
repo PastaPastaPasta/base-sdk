@@ -24,7 +24,7 @@ const NW: usize = 8;
 
 /// Rotation constants, indexed as `ROT[round % 8][pair]`.
 #[rustfmt::skip]
-const ROT: [[u32; 4]; 8] = [
+static ROT: [[u32; 4]; 8] = [
   [46, 36, 19, 37],
   [33, 27, 14, 42],
   [17, 49, 36, 39],

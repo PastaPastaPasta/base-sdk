@@ -21,7 +21,7 @@ type Row = u8x16;
 pub(super) type State = [Row; 8];
 
 /// IV with row `r` of every column gathered into row `r`.
-pub(super) const IV: State =
+pub(super) static IV: State =
   const_array!(Row::splat(0); 8; |row| Row::new(const_array!(0; 16; |col| (IV_COLUMNS[col] >> (8 * row)) as u8)));
 
 /// Byte shuffles that make AES ShiftRows, which runs after SubBytes, land each
@@ -35,10 +35,10 @@ const fn sub_shift_masks(shifts: &[usize; 8]) -> [[u8; 16]; 8] {
 }
 
 /// Fused SubBytes and ShiftBytes masks of the `P` permutation.
-const SUBSH_P: [[u8; 16]; 8] = sub_shift_masks(&SHIFT_P);
+static SUBSH_P: [[u8; 16]; 8] = sub_shift_masks(&SHIFT_P);
 
 /// Fused SubBytes and ShiftBytes masks of the `Q` permutation.
-const SUBSH_Q: [[u8; 16]; 8] = sub_shift_masks(&SHIFT_Q);
+static SUBSH_Q: [[u8; 16]; 8] = sub_shift_masks(&SHIFT_Q);
 
 /// Returns the state as plain bytes, which `Hash` accepts.
 #[inline(always)]

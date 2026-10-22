@@ -36,7 +36,7 @@ const QBUF: usize = 264;
 
 /// Shift amounts for powers of the 8th root of unity. The root is 4, so
 /// `w^n` is a left shift by `2n`.
-const ROOT8_SHIFTS: [u32; 4] = [0, 2, 4, 6];
+static ROOT8_SHIFTS: [u32; 4] = [0, 2, 4, 6];
 
 /// Block tweak `X^255` applied to every block in lane 7 of the last row.
 const TWEAK: NttVec = NttVec::new([0, 0, 0, 0, 0, 0, 0, 1]);
@@ -125,7 +125,7 @@ mod lanes {
   /// Permutes the eight words so lane `i` reads lane `i ^ mask`.
   #[inline(always)]
   pub(super) fn xor_permute(x: WordVec, mask: usize) -> WordVec {
-    const PERMS: [WordVec; 8] =
+    static PERMS: [WordVec; 8] =
       const_array!(WordVec::splat(0); 8; |mask| WordVec::new(const_array!(0; 8; |lane| (lane ^ mask) as u32)));
     match mask {
       1..=7 => x.shuffle(PERMS[mask]),
