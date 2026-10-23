@@ -139,6 +139,7 @@ pub static PARAMS: ChainParams = ChainParams {
     ext_pubkey: [0x04, 0x35, 0x87, 0xCF], // tpub
     ext_secret: [0x04, 0x35, 0x83, 0x94], // tprv
     bip44_idx: 1,
+    bech32_hrp: "tdash",
   },
   network_id: "test",
   is_test_chain: true,

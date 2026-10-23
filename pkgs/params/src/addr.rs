@@ -23,4 +23,6 @@ pub struct AddrParams {
   pub ext_secret: [u8; 4],
   /// BIP44 coin type index.
   pub bip44_idx: u32,
+  /// Bech32m human-readable part of DIP-18 Platform addresses.
+  pub bech32_hrp: &'static str,
 }

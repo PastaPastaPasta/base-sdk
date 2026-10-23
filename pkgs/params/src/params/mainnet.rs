@@ -141,6 +141,7 @@ pub static PARAMS: ChainParams = ChainParams {
     ext_pubkey: [0x04, 0x88, 0xB2, 0x1E], // xpub
     ext_secret: [0x04, 0x88, 0xAD, 0xE4], // xprv
     bip44_idx: 5,
+    bech32_hrp: "dash",
   },
   network_id: "main",
   is_test_chain: false,
