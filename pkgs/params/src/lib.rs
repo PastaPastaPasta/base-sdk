@@ -24,6 +24,8 @@ mod prelude;
 
 use crate::params::{mainnet, regtest, test3};
 
+use dash_types::type_id::Unencodable;
+
 pub use addr::AddrParams;
 pub use chain::{ChainParams, ChainTxData, MessageStart};
 pub use consensus::{BuriedDeployment, Checkpoint, ConsensusParams};
@@ -32,7 +34,7 @@ pub use genesis::GenesisParams;
 pub use llmq::LlmqType;
 
 /// Dash network identifier.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
 pub enum Network {
   /// Production network.
   Main,

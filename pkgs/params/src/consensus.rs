@@ -10,12 +10,13 @@ use crate::{Bip9Deployments, LlmqType};
 
 use bitcoin_units::BlockHeight;
 use dash_num::{Arith256, Hash256};
+use dash_types::type_id::Unencodable;
 
 /// Block height paired with its block hash.
 pub type Checkpoint = (BlockHeight, Hash256);
 
 /// Buried deployment positions with hardcoded activation heights.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
 pub enum BuriedDeployment {
   /// BIP34 (height in coinbase).
   HeightInCoinbase,
@@ -50,7 +51,7 @@ pub enum BuriedDeployment {
 }
 
 /// Parameters that influence chain consensus.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
 pub struct ConsensusParams {
   /// Hash of the genesis block.
   pub hash_genesis_block: Hash256,
