@@ -74,7 +74,7 @@ pub static PARAMS: ChainParams = ChainParams {
       },
       v24: Bip9Deployment {
         bit: 13,
-        start_time: Bip9Deployment::NEVER_ACTIVE,
+        start_time: 1_790_208_000, // 24 September 2026, midnight UTC
         timeout: Bip9Deployment::NO_TIMEOUT,
         min_activation_height: BlockHeight::from_u32(0),
         window_size: 100,
