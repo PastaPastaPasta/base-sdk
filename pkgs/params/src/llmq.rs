@@ -11,7 +11,7 @@ use crate::prelude::*;
 use bitcoin_hashes::sha256d;
 use dash_num::Hash256;
 use dash_types::codec::BaseCodec;
-use dash_types::type_id::TypeId;
+use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{enum_map, impl_num, Hashable, Numeric};
 
 enum_map! {
@@ -61,4 +61,264 @@ impl Hashable for LlmqType {
     self.encode(&mut buf);
     Hash256::from_lendian(sha256d::Hash::hash(&buf).to_byte_array())
   }
+}
+
+impl LlmqType {
+  /// DKG and signing parameters of the type, or `None` for
+  /// [`LlmqType::LlmqNone`] and unknown types.
+  pub const fn params(self) -> Option<LlmqParams> {
+    Some(match self {
+      Self::Llmq50_60 => LlmqParams::LLMQ_50_60,
+      Self::Llmq400_60 => LlmqParams::LLMQ_400_60,
+      Self::Llmq400_85 => LlmqParams::LLMQ_400_85,
+      Self::Llmq100_67 => LlmqParams::LLMQ_100_67,
+      Self::Llmq60_75 => LlmqParams::LLMQ_60_75,
+      Self::Llmq25_67 => LlmqParams::LLMQ_25_67,
+      Self::LlmqTest | Self::LlmqTestV17 | Self::LlmqTestInstantsend => LlmqParams::LLMQ_TEST,
+      Self::LlmqTestPlatform => LlmqParams::LLMQ_TEST_PLATFORM,
+      Self::LlmqTestDip0024 => LlmqParams::LLMQ_TEST_DIP0024,
+      Self::LlmqDevnet => LlmqParams::LLMQ_DEVNET,
+      Self::LlmqDevnetDip0024 => LlmqParams::LLMQ_DEVNET_DIP0024,
+      Self::LlmqDevnetPlatform => LlmqParams::LLMQ_DEVNET_PLATFORM,
+      Self::LlmqNone | Self::Unknown(_) => return None,
+    })
+  }
+}
+
+/// DKG and signing parameters of an [`LlmqType`].
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
+pub struct LlmqParams {
+  /// Whether quorums of the type rotate their members under DIP-0024.
+  pub use_rotation: bool,
+  /// Number of members.
+  pub size: u16,
+  /// Fewest valid members and signers a commitment may carry.
+  pub min_size: u16,
+  /// Number of signature shares that recover the quorum signature.
+  pub threshold: u16,
+  /// Blocks between the starts of two DKG sessions.
+  pub dkg_interval: u16,
+  /// Blocks per DKG phase.
+  pub dkg_phase_blocks: u16,
+  /// First block of the interval that must carry a commitment, inclusive.
+  pub dkg_mining_window_start: u16,
+  /// Last block of the interval that may carry a commitment, inclusive.
+  pub dkg_mining_window_end: u16,
+  /// Complaints that mark a member bad for every other member.
+  pub dkg_bad_votes_threshold: u16,
+  /// Number of recent quorums that take part in signing.
+  pub signing_active_quorum_count: u16,
+  /// Number of quorums whose intra-quorum connections a member keeps.
+  pub keep_old_connections: u16,
+  /// Number of quorums whose secret key shares a member keeps.
+  pub keep_old_keys: u16,
+  /// Members a signer sends its signature shares to before giving up.
+  pub recovery_members: u16,
+}
+
+impl LlmqParams {
+  /// Parameters of [`LlmqType::Llmq50_60`].
+  pub const LLMQ_50_60: Self = Self {
+    use_rotation: false,
+    size: 50,
+    min_size: 40,
+    threshold: 30,
+    dkg_interval: 24,
+    dkg_phase_blocks: 2,
+    dkg_mining_window_start: 10,
+    dkg_mining_window_end: 18,
+    dkg_bad_votes_threshold: 40,
+    signing_active_quorum_count: 24,
+    keep_old_connections: 25,
+    keep_old_keys: 48,
+    recovery_members: 25,
+  };
+
+  /// Parameters of [`LlmqType::Llmq400_60`].
+  pub const LLMQ_400_60: Self = Self {
+    use_rotation: false,
+    size: 400,
+    min_size: 300,
+    threshold: 240,
+    dkg_interval: 288,
+    dkg_phase_blocks: 4,
+    dkg_mining_window_start: 20,
+    dkg_mining_window_end: 28,
+    dkg_bad_votes_threshold: 300,
+    signing_active_quorum_count: 4,
+    keep_old_connections: 5,
+    keep_old_keys: 8,
+    recovery_members: 100,
+  };
+
+  /// Parameters of [`LlmqType::Llmq400_85`].
+  pub const LLMQ_400_85: Self = Self {
+    use_rotation: false,
+    size: 400,
+    min_size: 350,
+    threshold: 340,
+    dkg_interval: 576,
+    dkg_phase_blocks: 4,
+    dkg_mining_window_start: 20,
+    dkg_mining_window_end: 48,
+    dkg_bad_votes_threshold: 300,
+    signing_active_quorum_count: 4,
+    keep_old_connections: 5,
+    keep_old_keys: 8,
+    recovery_members: 100,
+  };
+
+  /// Parameters of [`LlmqType::Llmq100_67`].
+  pub const LLMQ_100_67: Self = Self {
+    use_rotation: false,
+    size: 100,
+    min_size: 80,
+    threshold: 67,
+    dkg_interval: 24,
+    dkg_phase_blocks: 2,
+    dkg_mining_window_start: 10,
+    dkg_mining_window_end: 18,
+    dkg_bad_votes_threshold: 80,
+    signing_active_quorum_count: 24,
+    keep_old_connections: 25,
+    keep_old_keys: 1440,
+    recovery_members: 50,
+  };
+
+  /// Parameters of [`LlmqType::Llmq60_75`].
+  pub const LLMQ_60_75: Self = Self {
+    use_rotation: true,
+    size: 60,
+    min_size: 50,
+    threshold: 45,
+    dkg_interval: 288,
+    dkg_phase_blocks: 2,
+    dkg_mining_window_start: 42,
+    dkg_mining_window_end: 50,
+    dkg_bad_votes_threshold: 48,
+    signing_active_quorum_count: 32,
+    keep_old_connections: 64,
+    keep_old_keys: 64,
+    recovery_members: 25,
+  };
+
+  /// Parameters of [`LlmqType::Llmq25_67`].
+  pub const LLMQ_25_67: Self = Self {
+    use_rotation: false,
+    size: 25,
+    min_size: 22,
+    threshold: 17,
+    dkg_interval: 24,
+    dkg_phase_blocks: 2,
+    dkg_mining_window_start: 10,
+    dkg_mining_window_end: 18,
+    dkg_bad_votes_threshold: 22,
+    signing_active_quorum_count: 24,
+    keep_old_connections: 25,
+    keep_old_keys: 1440,
+    recovery_members: 12,
+  };
+
+  /// Parameters of [`LlmqType::LlmqTest`], [`LlmqType::LlmqTestV17`] and
+  /// [`LlmqType::LlmqTestInstantsend`].
+  pub const LLMQ_TEST: Self = Self {
+    use_rotation: false,
+    size: 3,
+    min_size: 2,
+    threshold: 2,
+    dkg_interval: 24,
+    dkg_phase_blocks: 2,
+    dkg_mining_window_start: 10,
+    dkg_mining_window_end: 18,
+    dkg_bad_votes_threshold: 2,
+    signing_active_quorum_count: 2,
+    keep_old_connections: 3,
+    keep_old_keys: 4,
+    recovery_members: 3,
+  };
+
+  /// Parameters of [`LlmqType::LlmqTestPlatform`].
+  pub const LLMQ_TEST_PLATFORM: Self = Self {
+    use_rotation: false,
+    size: 3,
+    min_size: 2,
+    threshold: 2,
+    dkg_interval: 24,
+    dkg_phase_blocks: 2,
+    dkg_mining_window_start: 10,
+    dkg_mining_window_end: 18,
+    dkg_bad_votes_threshold: 2,
+    signing_active_quorum_count: 2,
+    keep_old_connections: 4,
+    keep_old_keys: 1440,
+    recovery_members: 3,
+  };
+
+  /// Parameters of [`LlmqType::LlmqTestDip0024`].
+  pub const LLMQ_TEST_DIP0024: Self = Self {
+    use_rotation: true,
+    size: 4,
+    min_size: 4,
+    threshold: 3,
+    dkg_interval: 24,
+    dkg_phase_blocks: 2,
+    dkg_mining_window_start: 12,
+    dkg_mining_window_end: 20,
+    dkg_bad_votes_threshold: 2,
+    signing_active_quorum_count: 2,
+    keep_old_connections: 4,
+    keep_old_keys: 4,
+    recovery_members: 3,
+  };
+
+  /// Parameters of [`LlmqType::LlmqDevnet`].
+  pub const LLMQ_DEVNET: Self = Self {
+    use_rotation: false,
+    size: 12,
+    min_size: 7,
+    threshold: 6,
+    dkg_interval: 24,
+    dkg_phase_blocks: 2,
+    dkg_mining_window_start: 10,
+    dkg_mining_window_end: 18,
+    dkg_bad_votes_threshold: 7,
+    signing_active_quorum_count: 4,
+    keep_old_connections: 5,
+    keep_old_keys: 8,
+    recovery_members: 6,
+  };
+
+  /// Parameters of [`LlmqType::LlmqDevnetDip0024`].
+  pub const LLMQ_DEVNET_DIP0024: Self = Self {
+    use_rotation: true,
+    size: 8,
+    min_size: 6,
+    threshold: 4,
+    dkg_interval: 48,
+    dkg_phase_blocks: 2,
+    dkg_mining_window_start: 12,
+    dkg_mining_window_end: 20,
+    dkg_bad_votes_threshold: 7,
+    signing_active_quorum_count: 2,
+    keep_old_connections: 4,
+    keep_old_keys: 4,
+    recovery_members: 4,
+  };
+
+  /// Parameters of [`LlmqType::LlmqDevnetPlatform`].
+  pub const LLMQ_DEVNET_PLATFORM: Self = Self {
+    use_rotation: false,
+    size: 12,
+    min_size: 9,
+    threshold: 8,
+    dkg_interval: 24,
+    dkg_phase_blocks: 2,
+    dkg_mining_window_start: 10,
+    dkg_mining_window_end: 18,
+    dkg_bad_votes_threshold: 7,
+    signing_active_quorum_count: 4,
+    keep_old_connections: 5,
+    keep_old_keys: 1440,
+    recovery_members: 6,
+  };
 }

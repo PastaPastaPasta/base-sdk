@@ -31,7 +31,7 @@ pub use chain::{ChainParams, ChainTxData, MessageStart};
 pub use consensus::{BuriedDeployment, Checkpoint, ConsensusParams};
 pub use deployment::{Bip9Deployment, Bip9Deployments};
 pub use genesis::GenesisParams;
-pub use llmq::LlmqType;
+pub use llmq::{LlmqParams, LlmqType};
 
 /// Dash network identifier.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
