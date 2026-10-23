@@ -3,31 +3,15 @@ name: "dash-pow"
 on:
   workflow_dispatch:
   push:
-    paths: &paths
-      - .cargo/config.toml
-      - .cargo/nextest.toml
-      - .github/workflows/build_msrv.yml
-      - .github/workflows/pkg_pow.yml
-      - .gitmodules
-      - Cargo.lock
-      - Cargo.toml
-      - contrib/nix/**
-      - fuzz/Cargo.lock
-      - fuzz/Cargo.toml
-      - fuzz/mod.just
-      - fuzz/pow/**
-      - Justfile
-      - pkgs/num/**
-      - pkgs/pow/**
-      - pyproject.toml
-      - rust-toolchain.toml
-      - uv.lock
   pull_request:
-    paths: *paths
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
   msrv:

@@ -26,8 +26,35 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.build == 'true' || steps.filter.outputs.msrv == 'true' || steps.filter.outputs[inputs.package_dir] == 'true' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: .github/paths.yml
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Filter paths
+        id: filter
+        uses: dorny/paths-filter@v4
+        with:
+          filters: .github/paths.yml
+
   build:
     name: Build and test
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-24.04-arm
     env:
       HAS_CODECOV: ${{ secrets.CODECOV_TOKEN != '' }}

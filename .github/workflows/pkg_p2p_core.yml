@@ -3,28 +3,15 @@ name: "dash-p2p-core"
 on:
   workflow_dispatch:
   push:
-    paths: &paths
-      - .cargo/nextest.toml
-      - .github/workflows/build_msrv.yml
-      - .github/workflows/pkg_p2p_core.yml
-      - Cargo.lock
-      - Cargo.toml
-      - contrib/nix/**
-      - pkgs/num/**
-      - pkgs/p2p_core/**
-      - pkgs/params/**
-      - pkgs/primitives/**
-      - pkgs/script/**
-      - pkgs/types/**
-      - pyproject.toml
-      - rust-toolchain.toml
-      - uv.lock
   pull_request:
-    paths: *paths
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
   msrv:
