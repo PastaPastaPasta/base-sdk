@@ -142,7 +142,6 @@ pub static PARAMS: ChainParams = ChainParams {
   },
   network_id: "test",
   is_test_chain: true,
-  require_standard: false,
   default_consistency_checks: false,
   is_mockable_chain: false,
   pool_min_participants: 2,

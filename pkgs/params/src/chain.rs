@@ -57,8 +57,6 @@ pub struct ChainParams {
   pub network_id: &'static str,
   /// Whether this is a test network.
   pub is_test_chain: bool,
-  /// Whether non-standard transactions are rejected.
-  pub require_standard: bool,
   /// Whether internal consistency checks run by default.
   pub default_consistency_checks: bool,
   /// Whether the chain allows mock time and state.
