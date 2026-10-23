@@ -9,17 +9,20 @@
 use crate::codec::codec_p2p;
 
 use dash_types::type_id::TypeId;
+use getset::CopyGetters;
 
 codec_p2p! {
 /// Offers transaction reconciliation.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, Copy, CopyGetters, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct SendTxRcncl {
   /// Reconciliation protocol version.
-  pub version: u32,
+  #[getset(get_copy = "pub")]
+  version: u32,
   /// The sender's salt for short transaction IDs.
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::str_u64"))]
-  pub salt: u64,
+  #[getset(get_copy = "pub")]
+  salt: u64,
 }
 }
 
