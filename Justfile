@@ -27,7 +27,6 @@ comb:
     {{ python }} contrib/git_filter.py --fast-fail --env NEXTEST_PROFILE=fail-fast develop HEAD -- just test lint fuzz::test
 
 lint:
-    @just --fmt --check
     {{ python }} maint/lint_all.py --exclude lint_codeql
     {{ python }} maint/lint/lint_codeql.py check
     {{ python }} maint/lint/lint_codeql.py run --lang=rust --with-suite=rust-security-and-quality

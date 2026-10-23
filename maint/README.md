@@ -19,6 +19,7 @@ use [`lint_all.py`](./lint_all.py).
 | [`lint_cargo.py`](./lint/lint_cargo.py) | Deny dependencies per [`deny.toml`](../.cargo/deny.toml), check/format TOML files against [`taplo.toml`](./taplo.toml) | `check` , `apply`, `apply-all` | `cargo-deny` (deny dependencies), `taplo` (TOML formatting) |
 | [`lint_codeql.py`](./lint/lint_codeql.py) | Query Rust sources against [`maint/codeql/rust/*.ql`](./codeql/rust) | `check`, `apply`, `apply-all`, `run`, `run-all` | `codeql`, `rustc` |
 | [`lint_javascript.py`](./lint/lint_javascript.py) | Lint Javascript sources against [`eslint.config.mjs`](js/eslint.config.mjs) | *None* | `npx` (part of Node.js), `eslint` (auto-retrieved by script) |
+| [`lint_just.py`](./lint/lint_just.py) | Lint the root `Justfile` and every module against `just --fmt` | `check`, `apply`, `apply-all` | `just`, `git` |
 | [`lint_markdown.py`](./lint/lint_markdown.py) | Lint Markdown [documentation](../docs/dev/about_docs.md) | *None* | `pymarkdownlnt` |
 | [`lint_nix.py`](./lint/lint_nix.py) | Lint Nix sources against `nixfmt`'s RFC 166 style | `check`, `apply`, `apply-all` | `nixfmt`, `git` |
 | [`lint_python.py`](./lint/lint_python.py) | Lint Python sources against `[tool.ruff]` options in [`pyproject.toml`](../pyproject.toml) | *None* | `ruff` |
