@@ -12,7 +12,6 @@ on:
       - contrib/nix/**
       - pkgs/num/**
       - pkgs/params/**
-      - pkgs/script/**
       - pkgs/types/**
       - pyproject.toml
       - rust-toolchain.toml

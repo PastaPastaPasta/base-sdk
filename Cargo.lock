@@ -470,7 +470,6 @@ dependencies = [
  "bitcoin-units",
  "bitcoin_hashes",
  "dash-num",
- "dash-script",
  "dash-types",
  "hex-conservative",
 ]
@@ -546,6 +545,7 @@ dependencies = [
  "base58ck",
  "bitcoin-consensus-encoding",
  "dash-num",
+ "dash-params",
  "dash-pkc",
  "dash-types",
  "hex-conservative",

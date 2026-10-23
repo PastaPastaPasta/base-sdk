@@ -6,9 +6,7 @@
 
 //! Chain parameters of a network.
 
-use crate::{Checkpoint, ConsensusParams, GenesisParams};
-
-use dash_script::AddrParams;
+use crate::{AddrParams, Checkpoint, ConsensusParams, GenesisParams};
 
 /// P2P network message start bytes (magic).
 pub type MessageStart = [u8; 4];

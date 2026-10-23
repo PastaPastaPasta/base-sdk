@@ -11,26 +11,10 @@ use crate::{opcode::Opcode, PubKeyHash, ScriptHash};
 
 use base58ck::decode_check;
 use dash_num::Hash160;
+use dash_params::AddrParams;
 use dash_pkc::ecdsa::EcdsaPkBytes;
 use dash_types::codec::{BaseCodec, EncodeBuf};
 use dash_types::{type_cvrt, type_id::Unencodable, Hashable, Numeric};
-
-/// Network address encoding parameters.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
-pub struct AddrParams {
-  /// P2PKH address version byte.
-  pub pubkey_addr: u8,
-  /// P2SH address version byte.
-  pub script_addr: u8,
-  /// WIF private key version byte.
-  pub secret_key: u8,
-  /// BIP32 extended public key prefix.
-  pub ext_pubkey: [u8; 4],
-  /// BIP32 extended secret key prefix.
-  pub ext_secret: [u8; 4],
-  /// BIP44 coin type index.
-  pub bip44_idx: u32,
-}
 
 /// Recipient parsed from address.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Unencodable)]
@@ -166,8 +150,8 @@ type_cvrt!(
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
-  use crate::params::MAINNET;
 
+  use dash_params::Network;
   use hex_conservative::hex;
   use rstest::rstest;
 
@@ -273,7 +257,7 @@ mod tests {
   )]
   #[case::op_return(&hex!("6a00"), None)]
   fn to_base58c_address(#[case] script: &[u8], #[case] expected: Option<&str>) {
-    let addr = Recipient::from_script(script).and_then(|r| r.to_base58c(&MAINNET));
+    let addr = Recipient::from_script(script).and_then(|r| r.to_base58c(Network::Main.addr()));
     assert_eq!(addr.as_deref(), expected);
   }
 
@@ -304,9 +288,9 @@ mod tests {
   #[case::p2pkh("XdywTHuctyLo75vU4gjnVFeve7erBRcpzP", Recipient::PubKeyHash(PubKeyHash::from([0x24; Hash160::LEN])))]
   #[case::p2sh("7VhkNn2LJ9YE35ZGbWkfPjKisrCFT7ovqy", Recipient::ScriptHash(ScriptHash::from([0x24; Hash160::LEN])))]
   fn from_base58c_round_trips(#[case] addr: &str, #[case] expected: Recipient) {
-    let recipient = Recipient::from_base58c(addr, &MAINNET).unwrap();
+    let recipient = Recipient::from_base58c(addr, Network::Main.addr()).unwrap();
     assert_eq!(recipient, expected);
-    assert_eq!(recipient.to_base58c(&MAINNET).as_deref(), Some(addr));
+    assert_eq!(recipient.to_base58c(Network::Main.addr()).as_deref(), Some(addr));
   }
 
   #[rstest]
@@ -316,6 +300,6 @@ mod tests {
   #[case::not_base58("not an address")]
   #[case::empty("")]
   fn from_base58c_rejects(#[case] addr: &str) {
-    assert!(Recipient::from_base58c(addr, &MAINNET).is_none());
+    assert!(Recipient::from_base58c(addr, Network::Main.addr()).is_none());
   }
 }

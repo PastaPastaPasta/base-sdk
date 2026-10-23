@@ -7,7 +7,8 @@
 //! Regtest chain parameters.
 
 use crate::{
-  Bip9Deployment, Bip9Deployments, ChainParams, ChainTxData, Checkpoint, ConsensusParams, GenesisParams, LlmqType,
+  AddrParams, Bip9Deployment, Bip9Deployments, ChainParams, ChainTxData, Checkpoint, ConsensusParams, GenesisParams,
+  LlmqType,
 };
 
 use bitcoin_units::{Amount, BlockHeight};
@@ -110,7 +111,14 @@ pub static PARAMS: ChainParams = ChainParams {
   assumed_blockchain_size_gb: 0,
   assumed_chain_state_size_gb: 0,
   dns_seeds: &[],
-  addr_params: dash_script::__private::params::REGTEST,
+  addr_params: AddrParams {
+    pubkey_addr: 140,                     // addresses start with 'y'
+    script_addr: 19,                      // addresses start with '8' or '9'
+    secret_key: 239,                      // keys start with '9' or 'c'
+    ext_pubkey: [0x04, 0x35, 0x87, 0xCF], // tpub
+    ext_secret: [0x04, 0x35, 0x83, 0x94], // tprv
+    bip44_idx: 1,
+  },
   network_id: "regtest",
   is_test_chain: true,
   require_standard: true,

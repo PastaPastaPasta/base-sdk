@@ -18,17 +18,14 @@ std = [
   "bitcoin_hashes/std",
   "bitcoin-units/std",
   "dash-num/std",
-  "dash-script/std",
   "dash-types/std",
 ]
 full = ["std"]
-portable = ["dash-script/portable"]
 
 [dependencies]
 bitcoin_hashes = { workspace = true, features = ["alloc"] }
 bitcoin-units = { workspace = true, features = ["alloc"] }
 dash-num = { version = "0.2.0-beta", path = "../num", features = ["codec"] }
-dash-script = { version = "0.0.0", path = "../script" }
 dash-types = { version = "0.2.0-beta", path = "../types", default-features = false, features = [
   "codec",
 ] }
@@ -38,4 +35,4 @@ hex-conservative = { workspace = true }
 workspace = true
 
 [package.metadata.docs.rs]
-features = ["portable"]
+all-features = true

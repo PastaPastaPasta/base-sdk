@@ -12,6 +12,7 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+mod addr;
 mod chain;
 mod consensus;
 mod deployment;
@@ -23,8 +24,7 @@ mod prelude;
 
 use crate::params::{mainnet, regtest, test3};
 
-use dash_script::AddrParams;
-
+pub use addr::AddrParams;
 pub use chain::{ChainParams, ChainTxData, MessageStart};
 pub use consensus::{BuriedDeployment, Checkpoint, ConsensusParams};
 pub use deployment::{Bip9Deployment, Bip9Deployments};

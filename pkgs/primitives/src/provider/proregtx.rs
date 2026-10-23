@@ -17,9 +17,10 @@ use crate::{hash_impl, TxHash};
 
 use bitcoin_primitives::script::ScriptPubKeyBuf;
 use dash_num::Hash256;
+use dash_params::AddrParams;
 use dash_pkc::bls::BlsPkBytes;
 use dash_pkc::ecdsa::{EcdsaError, ECDSA_REC_SIG_LEN};
-use dash_script::{AddrParams, PubKeyHash, Recipient};
+use dash_script::{PubKeyHash, Recipient};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
 use dash_types::{Checkable, Numeric, Signable};

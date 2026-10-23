@@ -7,7 +7,8 @@
 //! Mainnet chain parameters.
 
 use crate::{
-  Bip9Deployment, Bip9Deployments, ChainParams, ChainTxData, Checkpoint, ConsensusParams, GenesisParams, LlmqType,
+  AddrParams, Bip9Deployment, Bip9Deployments, ChainParams, ChainTxData, Checkpoint, ConsensusParams, GenesisParams,
+  LlmqType,
 };
 
 use bitcoin_units::{Amount, BlockHeight};
@@ -122,7 +123,14 @@ pub static PARAMS: ChainParams = ChainParams {
   assumed_blockchain_size_gb: 57,
   assumed_chain_state_size_gb: 1,
   dns_seeds: &["dnsseed.dash.org."],
-  addr_params: dash_script::__private::params::MAINNET,
+  addr_params: AddrParams {
+    pubkey_addr: 76,                      // addresses start with 'X'
+    script_addr: 16,                      // addresses start with '7'
+    secret_key: 204,                      // keys start with '7' or 'X'
+    ext_pubkey: [0x04, 0x88, 0xB2, 0x1E], // xpub
+    ext_secret: [0x04, 0x88, 0xAD, 0xE4], // xprv
+    bip44_idx: 5,
+  },
   network_id: "main",
   is_test_chain: false,
   require_standard: true,
