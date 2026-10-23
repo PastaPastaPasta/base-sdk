@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `impl_new!`, which declares a struct with named fields and a `new` taking every field in declaration order.
+
 ## [0.2.0-beta] - 2026-10-20
 
 ### Added
