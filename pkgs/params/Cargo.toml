@@ -14,24 +14,25 @@ bench = false
 
 [features]
 default = []
-std = ["bitcoin-primitives/std", "dash-primitives/std", "dash-script/std"]
+std = [
+  "bitcoin_hashes/std",
+  "bitcoin-units/std",
+  "dash-num/std",
+  "dash-script/std",
+  "dash-types/std",
+]
 full = ["std"]
-portable = ["dash-primitives/portable", "dash-script/portable"]
+portable = ["dash-script/portable"]
 
 [dependencies]
-bitcoin-primitives = { workspace = true, features = ["alloc"] }
+bitcoin_hashes = { workspace = true, features = ["alloc"] }
 bitcoin-units = { workspace = true, features = ["alloc"] }
 dash-num = { version = "0.2.0-beta", path = "../num", features = ["codec"] }
-dash-primitives = { version = "0.0.0", path = "../primitives" }
 dash-script = { version = "0.0.0", path = "../script" }
 dash-types = { version = "0.2.0-beta", path = "../types", default-features = false, features = [
   "codec",
 ] }
 hex-conservative = { workspace = true }
-
-[dev-dependencies]
-bitcoin-consensus-encoding = { workspace = true, features = ["alloc"] }
-rstest = { workspace = true }
 
 [lints]
 workspace = true

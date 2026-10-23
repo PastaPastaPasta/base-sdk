@@ -9,10 +9,9 @@
 use crate::codec::{codec_p2p, impl_p2p};
 use crate::prelude::*;
 
+use dash_params::LlmqType;
 use dash_pkc::bls::{BlsPkBytes, BlsSigBytes};
-use dash_primitives::{
-  hash_impl, BlockHash, Commitment, LlmqType, MnType, PlatformNodeId, ServiceV1, Transaction, TxHash,
-};
+use dash_primitives::{hash_impl, BlockHash, Commitment, MnType, PlatformNodeId, ServiceV1, Transaction, TxHash};
 use dash_script::PubKeyHash;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::{type_id::TypeId, Numeric};

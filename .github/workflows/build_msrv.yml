@@ -107,7 +107,7 @@ jobs:
       - name: Test package (with coverage)
         run: |
           "$CARGO" llvm-cov clean --workspace
-          "$CARGO" llvm-cov --no-report nextest --config-file .cargo/nextest.toml --package ${{ inputs.package }} --features full
+          "$CARGO" llvm-cov --no-report nextest --config-file .cargo/nextest.toml --package ${{ inputs.package }} --features full --no-tests=warn
           "$CARGO" llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage to Codecov

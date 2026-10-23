@@ -16,6 +16,7 @@ mod chain;
 mod consensus;
 mod deployment;
 mod genesis;
+mod llmq;
 mod params;
 #[allow(unused_imports, reason = "ergonomic shim, exports may be unused")]
 mod prelude;
@@ -28,6 +29,7 @@ pub use chain::{ChainParams, ChainTxData, MessageStart};
 pub use consensus::{BuriedDeployment, Checkpoint, ConsensusParams};
 pub use deployment::{Bip9Deployment, Bip9Deployments};
 pub use genesis::GenesisParams;
+pub use llmq::LlmqType;
 
 /// Dash network identifier.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

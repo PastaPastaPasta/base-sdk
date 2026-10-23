@@ -12,8 +12,8 @@ on:
       - contrib/nix/**
       - pkgs/num/**
       - pkgs/params/**
-      - pkgs/primitives/**
       - pkgs/script/**
+      - pkgs/types/**
       - pyproject.toml
       - rust-toolchain.toml
       - uv.lock

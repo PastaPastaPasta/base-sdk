@@ -6,11 +6,12 @@
 
 //! Mainnet chain parameters.
 
-use crate::{Bip9Deployment, Bip9Deployments, ChainParams, ChainTxData, Checkpoint, ConsensusParams, GenesisParams};
+use crate::{
+  Bip9Deployment, Bip9Deployments, ChainParams, ChainTxData, Checkpoint, ConsensusParams, GenesisParams, LlmqType,
+};
 
 use bitcoin_units::{Amount, BlockHeight};
 use dash_num::{Arith256, Hash256};
-use dash_primitives::LlmqType;
 use hex_conservative::hex;
 
 pub static PARAMS: ChainParams = ChainParams {

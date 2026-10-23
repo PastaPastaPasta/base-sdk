@@ -6,11 +6,7 @@
 
 //! Genesis block descriptor.
 
-use crate::prelude::*;
-
-use bitcoin_primitives::script::{ScriptPubKeyBuf, ScriptSigBuf};
 use bitcoin_units::Amount;
-use dash_primitives::{Block, BlockHash, BlockHeader, MerkleRoot, OutPoint, Transaction, TxHash, TxIn, TxOut, TxType};
 use hex_conservative::hex;
 
 /// Fields that define a genesis block with a single coinbase transaction.
@@ -47,41 +43,4 @@ impl GenesisParams {
     "d3eb4b10f4d4604fa08dce601aaf0f470216fe1b51850b4acf21b179c45070",
     "ac7b03a9ac"
   ));
-}
-
-impl From<&GenesisParams> for Block {
-  fn from(params: &GenesisParams) -> Self {
-    let coinbase = Transaction {
-      version: 1,
-      tx_type: TxType::Spend,
-      inputs: vec![TxIn {
-        prevout: OutPoint {
-          hash: TxHash::default(),
-          index: 0xFFFF_FFFF,
-        },
-        script_sig: ScriptSigBuf::from_bytes(params.script_sig.to_vec()),
-        sequence: 0xFFFF_FFFF,
-      }],
-      outputs: vec![TxOut {
-        value: params.reward,
-        script_pubkey: ScriptPubKeyBuf::from_bytes(params.script_pubkey.to_vec()),
-      }],
-      lock_time: 0,
-      extra_payload: Vec::new(),
-    };
-
-    let mut block = Block {
-      header: BlockHeader {
-        version: params.version,
-        prev_hash: BlockHash::default(),
-        merkle_root: MerkleRoot::default(),
-        time: params.time,
-        bits: params.bits,
-        nonce: params.nonce,
-      },
-      transactions: vec![coinbase],
-    };
-    block.header.merkle_root = block.merkle().0;
-    block
-  }
 }

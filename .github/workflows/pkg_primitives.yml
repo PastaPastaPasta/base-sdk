@@ -11,6 +11,7 @@ on:
       - Cargo.toml
       - contrib/nix/**
       - pkgs/num/**
+      - pkgs/params/**
       - pkgs/primitives/**
       - pkgs/script/**
       - pkgs/types/**

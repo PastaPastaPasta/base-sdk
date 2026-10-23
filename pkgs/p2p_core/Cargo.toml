@@ -15,6 +15,7 @@ bench = false
 [features]
 default = []
 std = [
+  "dash-params/std",
   "dash-pkc/std",
   "dash-primitives/std",
   "dash-script/std",

@@ -6,11 +6,10 @@
 
 //! Consensus parameters of a network.
 
-use crate::Bip9Deployments;
+use crate::{Bip9Deployments, LlmqType};
 
 use bitcoin_units::BlockHeight;
 use dash_num::{Arith256, Hash256};
-use dash_primitives::LlmqType;
 
 /// Block height paired with its block hash.
 pub type Checkpoint = (BlockHeight, Hash256);
