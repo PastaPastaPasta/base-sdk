@@ -69,3 +69,6 @@ predicate isNoDeriveCrate(File f) { hasPolicy(f, "no-derive") }
 
 /** Holds if file `f` is in a crate that can derive `Unencodable`. */
 predicate isUnencodableCrate(File f) { hasPolicy(f, "unencodable") }
+
+/** Holds if file `f` is in a crate whose structs hide fields behind getters. */
+predicate isGetterCrate(File f) { hasPolicy(f, "getter") }

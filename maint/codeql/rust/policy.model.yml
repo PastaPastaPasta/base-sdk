@@ -4,6 +4,7 @@ extensions:
   #
   # Available policies:
   #   `enforced`    subject to the codec and declaration ordering rules
+  #   `getter`      structs keep fields private behind getters
   #   `no-derive`   no derivations expected
   #   `no-serde`    carries no `serde` feature
   #   `opaque`      single-field wrappers hide their contents
@@ -22,7 +23,7 @@ extensions:
       - ["dash-pkc",           "enforced, unencodable, opaque"]
       - ["dash-pow",           "no-serde"]
       - ["dash-pow-fuzz",      "no-serde"]
-      - ["dash-primitives",    "enforced, unencodable"]
+      - ["dash-primitives",    "enforced, getter, unencodable"]
       - ["dash-script",        "enforced, unencodable"]
       - ["dash-types-marker",  ""]
       - ["dash-types",         "enforced"]
