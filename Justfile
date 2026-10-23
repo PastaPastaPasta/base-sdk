@@ -7,6 +7,7 @@ python := if os() == "windows" { "python" } else { "python3" }
 export RUSTDOCFLAGS := "-D warnings"
 
 mod fuzz "fuzz/mod.just"
+mod types "pkgs/types/mod.just"
 
 import "bazel/mod.just"
 

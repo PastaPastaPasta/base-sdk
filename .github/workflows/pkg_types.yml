@@ -20,3 +20,8 @@ jobs:
       package: dash-types
       package_dir: types
     secrets: inherit
+
+  bazel:
+    uses: ./.github/workflows/build_bazel.yml
+    with:
+      package_dir: types
