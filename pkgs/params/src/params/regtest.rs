@@ -77,6 +77,17 @@ pub static PARAMS: ChainParams = ChainParams {
         falloff_coeff: 5,
         use_ehf: true,
       },
+      evo_shares: Bip9Deployment {
+        bit: 14,
+        start_time: 0,
+        timeout: Bip9Deployment::NO_TIMEOUT,
+        min_activation_height: BlockHeight::from_u32(0),
+        window_size: 250,
+        threshold_start: 200, // 80% of 250
+        threshold_min: 150,   // 60% of 250
+        falloff_coeff: 5,
+        use_ehf: true,
+      },
     },
     pow_limit: Arith256::from_bendian(hex!("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")),
     pow_allow_min_difficulty_blocks: true,

@@ -48,4 +48,6 @@ pub struct Bip9Deployments {
   pub test_dummy: Bip9Deployment,
   /// Deployment parameters for the v24 upgrade.
   pub v24: Bip9Deployment,
+  /// Deployment enabling EvoNode shared collateral and multiple owner payouts.
+  pub evo_shares: Bip9Deployment,
 }
