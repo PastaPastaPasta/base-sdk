@@ -12,12 +12,12 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
-mod mainnet;
+mod params;
 #[allow(unused_imports, reason = "ergonomic shim, exports may be unused")]
 mod prelude;
-mod regtest;
-mod test3;
 mod types;
+
+use crate::params::{mainnet, regtest, test3};
 
 use dash_primitives::Block;
 use dash_script::AddrParams;
