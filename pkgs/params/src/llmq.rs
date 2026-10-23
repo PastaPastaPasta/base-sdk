@@ -46,6 +46,8 @@ enum_map! {
     LlmqTestPlatform = 106 => "llmq_test_platform",
     /// Devnet Platform quorum.
     LlmqDevnetPlatform = 107 => "llmq_devnet_platform",
+    /// No quorum type.
+    LlmqNone = 0xff => "llmq_none",
   }
 }
 
