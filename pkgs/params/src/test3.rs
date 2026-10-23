@@ -136,7 +136,6 @@ pub static PARAMS: ChainParams = ChainParams {
         use_ehf: true,
       },
     },
-    // ~uint256(0) >> 20
     pow_limit: Arith256::from_bendian(hex!("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")),
     pow_allow_min_difficulty_blocks: true,
     pow_no_retargeting: false,

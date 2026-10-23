@@ -100,8 +100,8 @@ pub static PARAMS: ChainParams = ChainParams {
     dip0024_height: BlockHeight::from_u32(1),
     dip0024_quorums_height: BlockHeight::from_u32(1),
     v19_height: BlockHeight::from_u32(1),
-    v20_height: BlockHeight::from_u32(432),   // same as dip0003_height
-    mn_rr_height: BlockHeight::from_u32(432), // same as v20_height
+    v20_height: BlockHeight::from_u32(432),   // equals dip0003_height
+    mn_rr_height: BlockHeight::from_u32(432), // equals v20_height
     withdrawals_height: BlockHeight::from_u32(600),
     min_bip9_warning_height: BlockHeight::from_u32(0),
     rule_change_activation_threshold: 108, // 75% of 144
@@ -130,7 +130,6 @@ pub static PARAMS: ChainParams = ChainParams {
         use_ehf: true,
       },
     },
-    // ~uint256(0) >> 1
     pow_limit: Arith256::from_bendian(hex!("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")),
     pow_allow_min_difficulty_blocks: true,
     pow_no_retargeting: true,

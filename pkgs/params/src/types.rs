@@ -14,8 +14,7 @@ use dash_script::AddrParams;
 /// P2P network message start bytes (magic).
 pub type MessageStart = [u8; 4];
 
-/// Block height paired with block hash, mirroring C++
-/// `std::pair<int, uint256>` from `MapCheckpoints`.
+/// Block height paired with its block hash.
 pub type Checkpoint = (BlockHeight, Hash256);
 
 /// Transaction statistics for chain sync progress estimation.
@@ -60,8 +59,11 @@ pub struct Bip9Deployment {
 }
 
 impl Bip9Deployment {
+  /// Timeout of a deployment that never fails.
   pub const NO_TIMEOUT: i64 = i64::MAX;
+  /// Start time of a deployment that is active at every height.
   pub const ALWAYS_ACTIVE: i64 = -1;
+  /// Start time of a deployment that never activates.
   pub const NEVER_ACTIVE: i64 = -2;
 }
 

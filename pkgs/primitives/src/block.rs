@@ -53,7 +53,7 @@ pub struct BlockHeader {
   pub merkle_root: MerkleRoot,
   /// Block timestamp (unix epoch seconds).
   pub time: u32,
-  /// Compact difficulty target (nBits).
+  /// Compact difficulty target.
   pub bits: u32,
   /// Nonce used for proof-of-work.
   pub nonce: u32,
