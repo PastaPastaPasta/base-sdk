@@ -15,18 +15,19 @@ extern crate std;
 mod chain;
 mod consensus;
 mod deployment;
+mod genesis;
 mod params;
 #[allow(unused_imports, reason = "ergonomic shim, exports may be unused")]
 mod prelude;
 
 use crate::params::{mainnet, regtest, test3};
 
-use dash_primitives::Block;
 use dash_script::AddrParams;
 
 pub use chain::{ChainParams, ChainTxData, MessageStart};
 pub use consensus::{BuriedDeployment, Checkpoint, ConsensusParams};
 pub use deployment::{Bip9Deployment, Bip9Deployments};
+pub use genesis::GenesisParams;
 
 /// Dash network identifier.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -57,14 +58,5 @@ impl Network {
   /// Consensus parameters for this network.
   pub const fn consensus(self) -> &'static ConsensusParams {
     &self.chain().consensus
-  }
-
-  /// Genesis block for this network.
-  pub fn genesis(self) -> Block {
-    match self {
-      Self::Main => mainnet::genesis(),
-      Self::Testnet3 => test3::genesis(),
-      Self::Regtest => regtest::genesis(),
-    }
   }
 }

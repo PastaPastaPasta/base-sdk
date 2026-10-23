@@ -6,68 +6,13 @@
 
 //! Regtest chain parameters.
 
-use crate::prelude::*;
-use crate::{Bip9Deployment, Bip9Deployments, ChainParams, ChainTxData, Checkpoint, ConsensusParams};
+use crate::{Bip9Deployment, Bip9Deployments, ChainParams, ChainTxData, Checkpoint, ConsensusParams, GenesisParams};
 
-use bitcoin_primitives::script::{ScriptPubKeyBuf, ScriptSigBuf};
-use bitcoin_units::BlockHeight;
+use bitcoin_units::{Amount, BlockHeight};
 use dash_num::{Arith256, Hash256};
-use dash_primitives::{
-  Block, BlockHash, BlockHeader, LlmqType, MerkleRoot, OutPoint, Transaction, TxHash, TxIn, TxOut, TxType,
-};
+use dash_primitives::LlmqType;
 use dash_types::Numeric;
 use hex_conservative::hex;
-
-/// Returns the regtest genesis block.
-pub fn genesis() -> Block {
-  let coinbase = Transaction {
-    version: 1,
-    tx_type: TxType::Spend,
-    inputs: vec![TxIn {
-      prevout: OutPoint {
-        hash: TxHash::default(),
-        index: 0xFFFF_FFFF,
-      },
-      script_sig: ScriptSigBuf::from_bytes(
-        hex!(concat!(
-          "04ffff001d01044c5957697265642030392f4a616e2f323031342054686520",
-          "4772616e64204578706572696d656e7420476f6573204c6976653a204f7665",
-          "7273746f636b2e636f6d204973204e6f7720416363657074696e6720426974",
-          "636f696e73"
-        ))
-        .to_vec(),
-      ),
-      sequence: 0xFFFF_FFFF,
-    }],
-    outputs: vec![TxOut {
-      value: bitcoin_units::Amount::from_btc_u16(50),
-      script_pubkey: ScriptPubKeyBuf::from_bytes(
-        hex!(concat!(
-          "41040184710fa689ad5023690c80f3a49c8f13f8d45b8c857fbcbc8bc4a8e4",
-          "d3eb4b10f4d4604fa08dce601aaf0f470216fe1b51850b4acf21b179c45070",
-          "ac7b03a9ac"
-        ))
-        .to_vec(),
-      ),
-    }],
-    lock_time: 0,
-    extra_payload: Vec::new(),
-  };
-
-  let mut block = Block {
-    header: BlockHeader {
-      version: 1,
-      prev_hash: BlockHash::default(),
-      merkle_root: MerkleRoot::default(),
-      time: 1_417_713_337,
-      bits: 0x207f_ffff,
-      nonce: 1_096_447,
-    },
-    transactions: vec![coinbase],
-  };
-  block.header.merkle_root = block.merkle().0;
-  block
-}
 
 pub static PARAMS: ChainParams = ChainParams {
   consensus: ConsensusParams {
@@ -144,6 +89,15 @@ pub static PARAMS: ChainParams = ChainParams {
     llmq_type_dip0024_instant_send: LlmqType::LlmqTestDip0024,
     llmq_type_platform: LlmqType::LlmqTestPlatform,
     llmq_type_mnhf: LlmqType::LlmqTest,
+  },
+  genesis: GenesisParams {
+    version: 1,
+    time: 1_417_713_337,
+    bits: 0x207f_ffff,
+    nonce: 1_096_447,
+    script_sig: GenesisParams::COINBASE_SCRIPT_SIG,
+    script_pubkey: GenesisParams::COINBASE_SCRIPT_PUBKEY,
+    reward: Amount::from_btc_u16(50),
   },
   message_start: [0xfc, 0xc1, 0xb7, 0xdc],
   default_port: 19899,

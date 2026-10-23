@@ -6,7 +6,7 @@
 
 //! Chain parameters of a network.
 
-use crate::{Checkpoint, ConsensusParams};
+use crate::{Checkpoint, ConsensusParams, GenesisParams};
 
 use dash_script::AddrParams;
 
@@ -29,6 +29,8 @@ pub struct ChainTxData {
 pub struct ChainParams {
   /// Consensus rules for this chain.
   pub consensus: ConsensusParams,
+  /// Descriptor of the genesis block.
+  pub genesis: GenesisParams,
   /// Four-byte magic identifying network messages.
   pub message_start: MessageStart,
   /// Default P2P listen port.
