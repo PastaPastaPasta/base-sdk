@@ -125,6 +125,12 @@ jobs:
             exit 1
           fi
 
+      - name: Free disk space
+        if: runner.os == 'Linux'
+        uses: jlumbroso/free-disk-space@v2
+        with:
+          large-packages: false
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 

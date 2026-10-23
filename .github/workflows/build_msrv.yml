@@ -54,6 +54,11 @@ jobs:
             exit 1
           fi
 
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v2
+        with:
+          large-packages: false
+
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v22
         with:
