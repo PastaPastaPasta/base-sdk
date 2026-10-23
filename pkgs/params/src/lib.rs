@@ -12,17 +12,21 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+mod chain;
+mod consensus;
+mod deployment;
 mod params;
 #[allow(unused_imports, reason = "ergonomic shim, exports may be unused")]
 mod prelude;
-mod types;
 
 use crate::params::{mainnet, regtest, test3};
 
 use dash_primitives::Block;
 use dash_script::AddrParams;
 
-pub use types::*;
+pub use chain::{ChainParams, ChainTxData, MessageStart};
+pub use consensus::{BuriedDeployment, Checkpoint, ConsensusParams};
+pub use deployment::{Bip9Deployment, Bip9Deployments};
 
 /// Dash network identifier.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

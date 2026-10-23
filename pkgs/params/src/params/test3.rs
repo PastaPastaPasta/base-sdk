@@ -7,9 +7,10 @@
 //! Testnet (v3) chain parameters.
 
 use crate::prelude::*;
-use crate::types::*;
+use crate::{Bip9Deployment, Bip9Deployments, ChainParams, ChainTxData, Checkpoint, ConsensusParams};
 
 use bitcoin_primitives::script::{ScriptPubKeyBuf, ScriptSigBuf};
+use bitcoin_units::BlockHeight;
 use dash_num::{Arith256, Hash256};
 use dash_primitives::{
   Block, BlockHash, BlockHeader, LlmqType, MerkleRoot, OutPoint, Transaction, TxHash, TxIn, TxOut, TxType,
