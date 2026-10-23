@@ -11,6 +11,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - `impl_new!`, which declares a struct with named fields and a `new` taking every field in declaration order.
+- A `get` accessor for `make_num!`-defined types, returning the inner integer.
+
+### Changed
+
+- The inner integer of `make_num!`-defined types is private. Callers construct them with `new` or `From` and read them
+  with `get` or `Numeric::to_base`.
 
 ## [0.2.0-beta] - 2026-10-20
 
