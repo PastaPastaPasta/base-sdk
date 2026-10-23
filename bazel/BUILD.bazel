@@ -1,1 +1,17 @@
-# Module fragments `MODULE.bazel` includes, one per concern.
+# This package holds the module fragments `MODULE.bazel` includes, one per
+# concern, and the helpers the crates load.
+
+# Each setting selects the Rust toolchains that mirror one Cargo profile. Keyed
+# on the compilation mode, the profile's opt-level also reaches the C that build
+# scripts compile.
+config_setting(
+    name = "build_profile_debug",
+    values = {"compilation_mode": "dbg"},
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "build_profile_release",
+    values = {"compilation_mode": "opt"},
+    visibility = ["//visibility:public"],
+)

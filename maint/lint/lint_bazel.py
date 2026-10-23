@@ -7,7 +7,7 @@
 # See the accompanying file LICENSE or https://opensource.org/license/MIT
 #
 
-"""Validate Bazel's build files and hold its crate graph to cargo's.
+"""Validate Bazel's build files and hold what Bazel builds to cargo's.
 
 The 'graph' verb queries Bazel, which fetches the toolchains, so 'lint_all'
 leaves it to its own 'just lint' step.
@@ -15,11 +15,13 @@ leaves it to its own 'just lint' step.
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 from common import (
@@ -61,6 +63,169 @@ TREE_ENTRY = re.compile(
 )
 
 Crate = tuple[str, str]
+
+# The file restating the workspace lints.
+_RUST_BZL = "bazel/rust.bzl"
+
+# The file defining profiles, target flags and Rust edition.
+_RUST_MODULE = "bazel/rust.MODULE.bazel"
+
+# The profile keys the toolchains restate. 'Cargo.toml' must pin each one, so a
+# change of Cargo's defaults cannot shift either build.
+_PROFILE_KEYS = (
+  "codegen-units",
+  "debug",
+  "debug-assertions",
+  "lto",
+  "opt-level",
+  "overflow-checks",
+  "panic",
+  "strip",
+)
+
+# The 'PROFILE_RUSTC_FLAGS' entry that restates each Cargo profile.
+_PROFILE_ARMS = {"dev": "debug", "release": "release"}
+
+# Cargo's named 'debug' levels, as the debuginfo level rustc takes.
+_DEBUG_LEVELS = {"full": 2, "limited": 1, "none": 0}
+
+# rustc's flag letter for each lint level.
+_LINT_LEVELS = {"allow": "A", "deny": "D", "forbid": "F", "warn": "W"}
+
+# A '.cargo/config.toml' target key naming one architecture.
+_TARGET_ARCH_RE = re.compile(r'^cfg\(target_arch = "(\w+)"\)$')
+
+
+def _profile_flags(settings: dict[str, object]) -> set[str]:
+  """Return the rustc flags a Cargo profile's *settings* amount to."""
+  yes = {True: "yes", False: "no"}
+  # A bool is told apart first, since 'True == 1' would read level 1 as full.
+  debug = settings["debug"]
+  if isinstance(debug, bool):
+    debug = 2 if debug else 0
+  flags = {
+    f"-Ccodegen-units={settings['codegen-units']}",
+    f"-Cdebug-assertions={yes[bool(settings['debug-assertions'])]}",
+    f"-Cdebuginfo={_DEBUG_LEVELS.get(debug, debug)}",
+    f"-Copt-level={settings['opt-level']}",
+    f"-Coverflow-checks={yes[bool(settings['overflow-checks'])]}",
+    f"-Cpanic={settings['panic']}",
+    f"-Cstrip={settings['strip']}",
+  }
+  # Cargo's 'false' leaves rustc's default, thin local LTO, in place. The
+  # string 'off' disables it with '-Clto=off'.
+  lto = settings["lto"]
+  if lto is not False:
+    flags.add(f"-Clto={'fat' if lto is True else lto}")
+  return flags
+
+
+def _rustflags(argv: list[str]) -> set[str]:
+  """Return '-C' arguments split across two items as single flags."""
+  flags: set[str] = set()
+  pending = False
+  for item in argv:
+    if item == "-C":
+      pending = True
+      continue
+    flags.add(f"-C{item}" if pending else item)
+    pending = False
+  return flags
+
+
+def _literals(path: Path) -> dict[str, object]:
+  """Return the top-level assignments of a Starlark file that are literals."""
+  found: dict[str, object] = {}
+  for node in ast.parse(path.read_text(encoding="utf-8"), str(path)).body:
+    if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+      continue
+    target = node.targets[0]
+    if not isinstance(target, ast.Name):
+      continue
+    try:
+      found[target.id] = ast.literal_eval(node.value)
+    except ValueError:
+      continue
+  return found
+
+
+def _check_sync(repo_root: Path) -> int:
+  """Hold Bazel's rustc flags and edition to the Cargo settings."""
+  lints = _literals(repo_root / _RUST_BZL)
+  defs = _literals(repo_root / _RUST_MODULE)
+  manifest = tomllib.loads(
+    (repo_root / "Cargo.toml").read_text(encoding="utf-8"),
+  )
+  config = tomllib.loads(
+    (repo_root / ".cargo" / "config.toml").read_text(encoding="utf-8"),
+  )
+
+  rows: list[tuple[str, str, str]] = []
+
+  def hold(what: str, bazel: set[str], cargo: set[str]) -> None:
+    if bazel != cargo:
+      rows.append((
+        what,
+        " ".join(sorted(bazel - cargo)) or "-",
+        " ".join(sorted(cargo - bazel)) or "-",
+      ))
+
+  profiles = manifest.get("profile", {})
+  arms = defs["PROFILE_RUSTC_FLAGS"]
+  for profile, arm in _PROFILE_ARMS.items():
+    settings = profiles.get(profile, {})
+    unpinned = [key for key in _PROFILE_KEYS if key not in settings]
+    if unpinned:
+      rows.append((f"profile.{profile}", "-", f"unpinned {' '.join(unpinned)}"))
+      continue
+    hold(f"profile.{profile}", set(arms.get(arm, [])), _profile_flags(settings))
+
+  rust_lints = manifest["workspace"]["lints"]["rust"]
+  hold(
+    "workspace.lints.rust",
+    set(lints["RUSTC_LINTS"]),
+    {
+      f"-{_LINT_LEVELS[v if isinstance(v, str) else v['level']]}{name}"
+      for name, v in rust_lints.items()
+    },
+  )
+
+  hold(
+    "workspace.package.edition",
+    {str(defs["RUST_EDITION"])},
+    {str(manifest["workspace"]["package"]["edition"])},
+  )
+
+  # Only per-architecture tables have a toolchain to restate them in.
+  if "rustflags" in config.get("build", {}):
+    rows.append(("build.rustflags", "-", "unsupported, use a target table"))
+  cargo_targets: dict[str, set[str]] = {}
+  for key, table in config.get("target", {}).items():
+    found = _TARGET_ARCH_RE.match(key)
+    if found is None:
+      rows.append((f"target.'{key}'", "-", "unsupported, key on target_arch"))
+      continue
+    cargo_targets[found.group(1)] = _rustflags(table.get("rustflags", []))
+
+  # An architecture no host toolchain builds for has nothing to compare.
+  targets = defs["TARGET_RUSTC_FLAGS"]
+  built = {triple.split("-")[0] for triple in defs["HOST_TRIPLES"].values()}
+  for arch in sorted(built | set(targets)):
+    hold(
+      f"target {arch}",
+      set(targets.get(arch, [])),
+      cargo_targets.get(arch, set()),
+    )
+
+  if not rows:
+    print("bazel matches the Cargo profiles, lints, target flags and edition")
+    return RETCODE_PASS
+  print(
+    format_table(("setting", "only in bazel", "only in cargo"), rows),
+    file=sys.stderr,
+  )
+  print(f"error: {len(rows)} setting(s) differ from cargo", file=sys.stderr)
+  return RETCODE_ERR
 
 
 def _check_format(
@@ -330,9 +495,9 @@ def _check_graph(repo_root: Path) -> int | None:
 
 def main() -> int:
   args = declare_verbs(
-    "Validate Starlark and the crate graph Bazel builds.",
+    "Validate Starlark and hold what Bazel builds to cargo's settings.",
     {
-      "check": "report every Starlark fault, changing nothing",
+      "check": "report every Starlark fault and flag drift, changing nothing",
       "apply": f"also rewrite Starlark this branch changed vs {DEFAULT_BASE}",
       "apply-all": "also rewrite every Starlark file in the tree",
       "graph": "hold the crates Bazel builds and their features to cargo's",
@@ -341,17 +506,22 @@ def main() -> int:
   repo_root = root_dir()
 
   # The graph check queries Bazel, which fetches the toolchains, so it runs
-  # only when asked; the Starlark passes are cheap enough for every lint run.
+  # only when asked; the Starlark and flag passes are cheap enough for every
+  # lint run.
   if args.verb == "graph":
     verdict = _check_graph(repo_root)
-  else:
-    fix = args.verb.startswith("apply")
-    only = (
-      touched(repo_root, STARLARK_SUFFIXES) if args.verb == "apply" else None
-    )
-    verdict = _check_format(repo_root, fix=fix, only=only)
+    return RETCODE_SKIP if verdict is None else verdict
 
-  return RETCODE_SKIP if verdict is None else verdict
+  fix = args.verb.startswith("apply")
+  only = touched(repo_root, STARLARK_SUFFIXES) if args.verb == "apply" else None
+  verdicts = [
+    _check_format(repo_root, fix=fix, only=only),
+    _check_sync(repo_root),
+  ]
+  ran = [v for v in verdicts if v is not None]
+  if not ran:
+    return RETCODE_SKIP
+  return RETCODE_ERR if any(v != RETCODE_PASS for v in ran) else RETCODE_PASS
 
 
 if __name__ == "__main__":

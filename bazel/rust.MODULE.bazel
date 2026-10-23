@@ -36,8 +36,45 @@ rust.toolchain(
     versions = [],
 )
 
-# One set per supported host. `target_compatible_with` is required, or the
-# toolchain claims every target. An empty `rustfmt_version` drops rustfmt.
+# Matches `workspace.package.edition`.
+RUST_EDITION = "2021"
+
+# Mirrors `[profile.dev]` and `[profile.release]`, with each of Cargo's
+# defaults spelled out. Keyed on the `bazel/BUILD.bazel` setting for each
+# compilation mode.
+PROFILE_RUSTC_FLAGS = {
+    "debug": [
+        "-Ccodegen-units=256",
+        "-Cdebug-assertions=yes",
+        "-Cdebuginfo=2",
+        "-Copt-level=0",
+        "-Coverflow-checks=yes",
+        "-Cpanic=unwind",
+        "-Cstrip=none",
+    ],
+    "release": [
+        "-Ccodegen-units=1",
+        "-Cdebug-assertions=no",
+        "-Cdebuginfo=0",
+        "-Clto=fat",
+        "-Copt-level=3",
+        "-Coverflow-checks=no",
+        "-Cpanic=abort",
+        "-Cstrip=symbols",
+    ],
+}
+
+# Mirrors the per-architecture `rustflags` in `.cargo/config.toml`.
+TARGET_RUSTC_FLAGS = {
+    "aarch64": ["-Ctarget-feature=+aes"],
+    "x86_64": [
+        "-Ctarget-cpu=x86-64-v3",
+        "-Ctarget-feature=+adx,+aes",
+    ],
+}
+
+# `target_compatible_with` is required, or the toolchain claims every target.
+# An empty `rustfmt_version` drops rustfmt.
 HOST_TRIPLES = {
     "rust_linux_aarch64": "aarch64-unknown-linux-gnu",
     "rust_linux_x86_64": "x86_64-unknown-linux-gnu",
@@ -45,21 +82,26 @@ HOST_TRIPLES = {
     "rust_macos_x86_64": "x86_64-apple-darwin",
 }
 
+# One set per supported host and profile. Toolchain flags reach every crate
+# built for the target.
 [
     rust.repository_set(
-        name = name,
-        edition = "2021",
+        name = "{}_{}".format(name, profile),
+        edition = RUST_EDITION,
         exec_triple = triple,
+        extra_rustc_flags = TARGET_RUSTC_FLAGS[triple.split("-")[0]] + flags,
         rustfmt_version = "",
         sha256s = RUST_SHA256S,
         target_compatible_with = [
             "@platforms//cpu:" + triple.split("-")[0],
             "@platforms//os:" + ("osx" if triple.endswith("-darwin") else "linux"),
         ],
+        target_settings = ["//bazel:build_profile_" + profile],
         target_triple = triple,
         versions = [RUST_VERSION],
     )
     for name, triple in HOST_TRIPLES.items()
+    for profile, flags in PROFILE_RUSTC_FLAGS.items()
 ]
 
 # `crate_universe` runs cargo from these tools to resolve the graph, and would
@@ -75,15 +117,23 @@ use_repo(rust_host_tools, "rust_host_tools_pinned")
 
 use_repo(
     rust,
-    "rust_linux_aarch64__aarch64-unknown-linux-gnu__stable",
-    "rust_linux_x86_64__x86_64-unknown-linux-gnu__stable",
-    "rust_macos_aarch64__aarch64-apple-darwin__stable",
-    "rust_macos_x86_64__x86_64-apple-darwin__stable",
+    "rust_linux_aarch64_debug__aarch64-unknown-linux-gnu__stable",
+    "rust_linux_aarch64_release__aarch64-unknown-linux-gnu__stable",
+    "rust_linux_x86_64_debug__x86_64-unknown-linux-gnu__stable",
+    "rust_linux_x86_64_release__x86_64-unknown-linux-gnu__stable",
+    "rust_macos_aarch64_debug__aarch64-apple-darwin__stable",
+    "rust_macos_aarch64_release__aarch64-apple-darwin__stable",
+    "rust_macos_x86_64_debug__x86_64-apple-darwin__stable",
+    "rust_macos_x86_64_release__x86_64-apple-darwin__stable",
 )
 
 register_toolchains(
-    "@rust_linux_aarch64__aarch64-unknown-linux-gnu__stable//:toolchain",
-    "@rust_linux_x86_64__x86_64-unknown-linux-gnu__stable//:toolchain",
-    "@rust_macos_aarch64__aarch64-apple-darwin__stable//:toolchain",
-    "@rust_macos_x86_64__x86_64-apple-darwin__stable//:toolchain",
+    "@rust_linux_aarch64_debug__aarch64-unknown-linux-gnu__stable//:toolchain",
+    "@rust_linux_aarch64_release__aarch64-unknown-linux-gnu__stable//:toolchain",
+    "@rust_linux_x86_64_debug__x86_64-unknown-linux-gnu__stable//:toolchain",
+    "@rust_linux_x86_64_release__x86_64-unknown-linux-gnu__stable//:toolchain",
+    "@rust_macos_aarch64_debug__aarch64-apple-darwin__stable//:toolchain",
+    "@rust_macos_aarch64_release__aarch64-apple-darwin__stable//:toolchain",
+    "@rust_macos_x86_64_debug__x86_64-apple-darwin__stable//:toolchain",
+    "@rust_macos_x86_64_release__x86_64-apple-darwin__stable//:toolchain",
 )

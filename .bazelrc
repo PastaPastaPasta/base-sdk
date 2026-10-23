@@ -32,5 +32,13 @@ build:macos --action_env=PATH=/usr/bin:/bin:/usr/sbin:/sbin
 # A failed action prints its full command line.
 build --verbose_failures
 
+# Builds follow Cargo's dev profile unless `-c opt` asks for release. No Rust
+# toolchain matches `fastbuild`, which has no Cargo counterpart.
+build --compilation_mode=dbg
+
+# Fat LTO needs bitcode in every rlib, and rules_rust asks for none. The flag
+# is single-valued, so a later setting must repeat this one.
+build --@rules_rust//rust/settings:extra_rustc_flags=-Cembed-bitcode=yes
+
 # Per-developer settings, ignored by git.
 try-import %workspace%/.bazelrc.user
