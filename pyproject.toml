@@ -69,3 +69,6 @@ line_length = 120
 heading_line_length = 120
 code_blocks = false
 tables = false
+
+[tool.pymarkdown.plugins.md024]
+siblings_only = true
