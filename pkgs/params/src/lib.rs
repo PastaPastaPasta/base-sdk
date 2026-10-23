@@ -12,20 +12,29 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
-mod mainnet;
+mod addr;
+mod chain;
+mod consensus;
+mod deployment;
+mod genesis;
+mod llmq;
+mod params;
 #[allow(unused_imports, reason = "ergonomic shim, exports may be unused")]
 mod prelude;
-mod regtest;
-mod test3;
-mod types;
 
-use dash_primitives::Block;
-use dash_script::AddrParams;
+use crate::params::{mainnet, regtest, test3};
 
-pub use types::*;
+use dash_types::type_id::Unencodable;
+
+pub use addr::AddrParams;
+pub use chain::{ChainParams, ChainTxData, MessageStart};
+pub use consensus::{BuriedDeployment, Checkpoint, ConsensusParams};
+pub use deployment::{Bip9Deployment, Bip9Deployments};
+pub use genesis::GenesisParams;
+pub use llmq::{LlmqParams, LlmqType};
 
 /// Dash network identifier.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
 pub enum Network {
   /// Production network.
   Main,
@@ -53,14 +62,5 @@ impl Network {
   /// Consensus parameters for this network.
   pub const fn consensus(self) -> &'static ConsensusParams {
     &self.chain().consensus
-  }
-
-  /// Genesis block for this network.
-  pub fn genesis(self) -> Block {
-    match self {
-      Self::Main => mainnet::genesis(),
-      Self::Testnet3 => test3::genesis(),
-      Self::Regtest => regtest::genesis(),
-    }
   }
 }

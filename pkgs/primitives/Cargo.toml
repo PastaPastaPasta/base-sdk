@@ -20,6 +20,7 @@ std = [
   "bitcoin_hashes/std",
   "bitcoin-units/std",
   "dash-num/std",
+  "dash-params/std",
   "dash-pkc/std",
   "dash-script/std",
   "dash-types/std",
@@ -43,6 +44,7 @@ bitcoin-primitives = { workspace = true, features = ["alloc"] }
 bitcoin_hashes = { workspace = true, features = ["alloc"] }
 bitcoin-units = { workspace = true, features = ["alloc"] }
 dash-num = { version = "0.2.0-beta", path = "../num", features = ["codec"] }
+dash-params = { version = "0.0.0", path = "../params" }
 dash-pkc = { version = "0.2.0-beta", path = "../pkc", default-features = false, features = [
   "bls",
   "codec",

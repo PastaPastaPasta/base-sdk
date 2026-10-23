@@ -17,6 +17,7 @@ default = []
 std = [
   "base58ck/std",
   "bitcoin-consensus-encoding/std",
+  "dash-params/std",
   "dash-pkc/std",
   "dash-types/std",
 ]
@@ -28,6 +29,7 @@ serde = ["dep:serde", "dash-pkc/serde", "dash-types/serde"]
 base58ck = { workspace = true, features = ["alloc"] }
 bitcoin-consensus-encoding = { workspace = true, features = ["alloc"] }
 dash-num = { version = "0.2.0-beta", path = "../num", default-features = false }
+dash-params = { version = "0.0.0", path = "../params" }
 dash-pkc = { version = "0.2.0-beta", path = "../pkc", default-features = false, features = [
   "codec",
 ] }

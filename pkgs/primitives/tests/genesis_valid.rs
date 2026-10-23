@@ -14,17 +14,17 @@ use rstest::rstest;
 
 #[rstest]
 #[case::mainnet(
-  Network::Main.genesis(),
+  Block::from(&Network::Main.chain().genesis),
   Network::Main.chain(),
   MerkleRoot::from_bendian(hex!("e0028eb9648db56b1ac77cf090b99048a8007e2bb64b68f092c03c7f56a662c7")),
 )]
 #[case::testnet(
-  Network::Testnet3.genesis(),
+  Block::from(&Network::Testnet3.chain().genesis),
   Network::Testnet3.chain(),
   MerkleRoot::from_bendian(hex!("e0028eb9648db56b1ac77cf090b99048a8007e2bb64b68f092c03c7f56a662c7")),
 )]
 #[case::regtest(
-  Network::Regtest.genesis(),
+  Block::from(&Network::Regtest.chain().genesis),
   Network::Regtest.chain(),
   MerkleRoot::from_bendian(hex!("e0028eb9648db56b1ac77cf090b99048a8007e2bb64b68f092c03c7f56a662c7")),
 )]

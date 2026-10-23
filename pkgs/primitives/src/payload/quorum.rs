@@ -9,9 +9,10 @@
 use crate::codec::impl_payload;
 use crate::hash_impl;
 use crate::sptx::QuorumHash;
-use crate::support::{DynBitset, LlmqType};
+use crate::support::DynBitset;
 
 use dash_num::make_hash;
+use dash_params::LlmqType;
 use dash_pkc::bls::{BlsPkBytes, BlsSigBytes};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};

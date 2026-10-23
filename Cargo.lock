@@ -467,15 +467,11 @@ dependencies = [
 name = "dash-params"
 version = "0.0.0"
 dependencies = [
- "bitcoin-consensus-encoding",
- "bitcoin-primitives",
  "bitcoin-units",
+ "bitcoin_hashes",
  "dash-num",
- "dash-primitives",
- "dash-script",
  "dash-types",
  "hex-conservative",
- "rstest",
 ]
 
 [[package]]
@@ -530,6 +526,7 @@ dependencies = [
  "cfg-if",
  "dash-dev",
  "dash-num",
+ "dash-params",
  "dash-pkc",
  "dash-pow",
  "dash-script",
@@ -548,6 +545,7 @@ dependencies = [
  "base58ck",
  "bitcoin-consensus-encoding",
  "dash-num",
+ "dash-params",
  "dash-pkc",
  "dash-types",
  "hex-conservative",

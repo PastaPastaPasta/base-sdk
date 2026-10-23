@@ -6,66 +6,14 @@
 
 //! Mainnet chain parameters.
 
-use crate::prelude::*;
-use crate::types::*;
-
-use bitcoin_primitives::script::{ScriptPubKeyBuf, ScriptSigBuf};
-use dash_num::{Arith256, Hash256};
-use dash_primitives::{
-  Block, BlockHash, BlockHeader, LlmqType, MerkleRoot, OutPoint, Transaction, TxHash, TxIn, TxOut, TxType,
+use crate::{
+  AddrParams, Bip9Deployment, Bip9Deployments, ChainParams, ChainTxData, Checkpoint, ConsensusParams, GenesisParams,
+  LlmqType,
 };
+
+use bitcoin_units::{Amount, BlockHeight};
+use dash_num::{Arith256, Hash256};
 use hex_conservative::hex;
-
-/// Returns the mainnet genesis block.
-pub fn genesis() -> Block {
-  let coinbase = Transaction {
-    version: 1,
-    tx_type: TxType::Spend,
-    inputs: vec![TxIn {
-      prevout: OutPoint {
-        hash: TxHash::default(),
-        index: 0xFFFF_FFFF,
-      },
-      script_sig: ScriptSigBuf::from_bytes(
-        hex!(concat!(
-          "04ffff001d01044c5957697265642030392f4a616e2f323031342054686520",
-          "4772616e64204578706572696d656e7420476f6573204c6976653a204f7665",
-          "7273746f636b2e636f6d204973204e6f7720416363657074696e6720426974",
-          "636f696e73"
-        ))
-        .to_vec(),
-      ),
-      sequence: 0xFFFF_FFFF,
-    }],
-    outputs: vec![TxOut {
-      value: bitcoin_units::Amount::from_btc_u16(50),
-      script_pubkey: ScriptPubKeyBuf::from_bytes(
-        hex!(concat!(
-          "41040184710fa689ad5023690c80f3a49c8f13f8d45b8c857fbcbc8bc4a8e4",
-          "d3eb4b10f4d4604fa08dce601aaf0f470216fe1b51850b4acf21b179c45070",
-          "ac7b03a9ac"
-        ))
-        .to_vec(),
-      ),
-    }],
-    lock_time: 0,
-    extra_payload: Vec::new(),
-  };
-
-  let mut block = Block {
-    header: BlockHeader {
-      version: 1,
-      prev_hash: BlockHash::default(),
-      merkle_root: MerkleRoot::default(),
-      time: 1_390_095_618,
-      bits: 0x1e0f_fff0,
-      nonce: 28_917_698,
-    },
-    transactions: vec![coinbase],
-  };
-  block.header.merkle_root = block.merkle().0;
-  block
-}
 
 pub static PARAMS: ChainParams = ChainParams {
   consensus: ConsensusParams {
@@ -127,7 +75,18 @@ pub static PARAMS: ChainParams = ChainParams {
         use_ehf: false,
       },
       v24: Bip9Deployment {
-        bit: 12,
+        bit: 13,
+        start_time: Bip9Deployment::NEVER_ACTIVE,
+        timeout: Bip9Deployment::NO_TIMEOUT,
+        min_activation_height: BlockHeight::from_u32(0),
+        window_size: 4032,
+        threshold_start: 3226, // 80% of 4032
+        threshold_min: 2420,   // 60% of 4032
+        falloff_coeff: 5,
+        use_ehf: true,
+      },
+      evo_shares: Bip9Deployment {
+        bit: 14,
         start_time: Bip9Deployment::NEVER_ACTIVE,
         timeout: Bip9Deployment::NO_TIMEOUT,
         min_activation_height: BlockHeight::from_u32(0),
@@ -138,7 +97,6 @@ pub static PARAMS: ChainParams = ChainParams {
         use_ehf: true,
       },
     },
-    // ~uint256(0) >> 20
     pow_limit: Arith256::from_bendian(hex!("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")),
     pow_allow_min_difficulty_blocks: false,
     pow_no_retargeting: false,
@@ -147,15 +105,24 @@ pub static PARAMS: ChainParams = ChainParams {
     pow_kgw_height: BlockHeight::from_u32(15_200),
     pow_dgw_height: BlockHeight::from_u32(34_140),
     minimum_chain_work: Arith256::from_bendian(hex!(
-      "00000000000000000000000000000000000000000000b567e2d53a06de194061"
+      "00000000000000000000000000000000000000000000ba7225adc3153945d14d"
     )),
     default_assume_valid: Hash256::from_bendian(hex!(
-      "00000000000000018fb7d55a2d7ab5f3d1369cf0d7eef25db727bf8c9ca7d4b2"
+      "00000000000000119fe42827219e0686d3f7b494ae65f823194c740c5dbab492"
     )),
     llmq_type_chain_locks: LlmqType::Llmq400_60,
     llmq_type_dip0024_instant_send: LlmqType::Llmq60_75,
     llmq_type_platform: LlmqType::Llmq100_67,
     llmq_type_mnhf: LlmqType::Llmq400_85,
+  },
+  genesis: GenesisParams {
+    version: 1,
+    time: 1_390_095_618,
+    bits: 0x1e0f_fff0,
+    nonce: 28_917_698,
+    script_sig: GenesisParams::COINBASE_SCRIPT_SIG,
+    script_pubkey: GenesisParams::COINBASE_SCRIPT_PUBKEY,
+    reward: Amount::from_btc_u16(50),
   },
   message_start: [0xbf, 0x0c, 0x6b, 0xbd],
   default_port: 9999,
@@ -167,10 +134,17 @@ pub static PARAMS: ChainParams = ChainParams {
   assumed_blockchain_size_gb: 57,
   assumed_chain_state_size_gb: 1,
   dns_seeds: &["dnsseed.dash.org."],
-  addr_params: dash_script::__private::params::MAINNET,
+  addr_params: AddrParams {
+    pubkey_addr: 76,                      // addresses start with 'X'
+    script_addr: 16,                      // addresses start with '7'
+    secret_key: 204,                      // keys start with '7' or 'X'
+    ext_pubkey: [0x04, 0x88, 0xB2, 0x1E], // xpub
+    ext_secret: [0x04, 0x88, 0xAD, 0xE4], // xprv
+    bip44_idx: 5,
+    bech32_hrp: "dash",
+  },
   network_id: "main",
   is_test_chain: false,
-  require_standard: true,
   default_consistency_checks: false,
   is_mockable_chain: false,
   pool_min_participants: 3,
@@ -178,14 +152,14 @@ pub static PARAMS: ChainParams = ChainParams {
   credit_pool_period_blocks: 576,
   checkpoints: &CHECKPOINTS,
   chain_tx_data: ChainTxData {
-    timestamp: 1_770_962_602,
-    tx_count: 64_859_329,
-    tx_rate: 0.9523581589072819,
+    timestamp: 1_781_318_234,
+    tx_count: 69_770_814,
+    tx_rate: 0.1569520632249578,
   },
 };
 
 #[rustfmt::skip]
-const CHECKPOINTS: [Checkpoint; 37] = [
+const CHECKPOINTS: [Checkpoint; 39] = [
   (BlockHeight::from_u32(   1_500), Hash256::from_bendian(hex!("000000aaf0300f59f49bc3e970bad15c11f961fe2347accffff19d96ec9778e3"))),
   (BlockHeight::from_u32(   4_991), Hash256::from_bendian(hex!("000000003b01809551952460744d5dbb8fcbd6cbae3c220267bf7fa43f837367"))),
   (BlockHeight::from_u32(   9_918), Hash256::from_bendian(hex!("00000000213e229f332c0ffbe34defdaa9e74de87f2d8d1f01af8d121c3c170b"))),
@@ -223,4 +197,6 @@ const CHECKPOINTS: [Checkpoint; 37] = [
   (BlockHeight::from_u32(2_216_986), Hash256::from_bendian(hex!("0000000000000010b1135dc743f27f6fc8a138c6420a9d963fc676f96c2048f4"))),
   (BlockHeight::from_u32(2_361_500), Hash256::from_bendian(hex!("0000000000000009ba1e8f47851d036bb618a4f6565eb3c32d1f647d450ff195"))),
   (BlockHeight::from_u32(2_421_800), Hash256::from_bendian(hex!("000000000000000718ed026ebd644a8b70b42d4cbd7b25304c066c9bf15f85b7"))),
+  (BlockHeight::from_u32(2_471_728), Hash256::from_bendian(hex!("000000000000001a19ad7270422a00f86123ea94e0b295a3a796d6861bd7b032"))),
+  (BlockHeight::from_u32(2_487_500), Hash256::from_bendian(hex!("00000000000000119fe42827219e0686d3f7b494ae65f823194c740c5dbab492"))),
 ];

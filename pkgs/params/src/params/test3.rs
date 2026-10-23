@@ -6,67 +6,15 @@
 
 //! Testnet (v3) chain parameters.
 
-use crate::prelude::*;
-use crate::types::*;
-
-use bitcoin_primitives::script::{ScriptPubKeyBuf, ScriptSigBuf};
-use dash_num::{Arith256, Hash256};
-use dash_primitives::{
-  Block, BlockHash, BlockHeader, LlmqType, MerkleRoot, OutPoint, Transaction, TxHash, TxIn, TxOut, TxType,
+use crate::{
+  AddrParams, Bip9Deployment, Bip9Deployments, ChainParams, ChainTxData, Checkpoint, ConsensusParams, GenesisParams,
+  LlmqType,
 };
+
+use bitcoin_units::{Amount, BlockHeight};
+use dash_num::{Arith256, Hash256};
 use dash_types::Numeric;
 use hex_conservative::hex;
-
-/// Returns the testnet genesis block.
-pub fn genesis() -> Block {
-  let coinbase = Transaction {
-    version: 1,
-    tx_type: TxType::Spend,
-    inputs: vec![TxIn {
-      prevout: OutPoint {
-        hash: TxHash::default(),
-        index: 0xFFFF_FFFF,
-      },
-      script_sig: ScriptSigBuf::from_bytes(
-        hex!(concat!(
-          "04ffff001d01044c5957697265642030392f4a616e2f323031342054686520",
-          "4772616e64204578706572696d656e7420476f6573204c6976653a204f7665",
-          "7273746f636b2e636f6d204973204e6f7720416363657074696e6720426974",
-          "636f696e73"
-        ))
-        .to_vec(),
-      ),
-      sequence: 0xFFFF_FFFF,
-    }],
-    outputs: vec![TxOut {
-      value: bitcoin_units::Amount::from_btc_u16(50),
-      script_pubkey: ScriptPubKeyBuf::from_bytes(
-        hex!(concat!(
-          "41040184710fa689ad5023690c80f3a49c8f13f8d45b8c857fbcbc8bc4a8e4",
-          "d3eb4b10f4d4604fa08dce601aaf0f470216fe1b51850b4acf21b179c45070",
-          "ac7b03a9ac"
-        ))
-        .to_vec(),
-      ),
-    }],
-    lock_time: 0,
-    extra_payload: Vec::new(),
-  };
-
-  let mut block = Block {
-    header: BlockHeader {
-      version: 1,
-      prev_hash: BlockHash::default(),
-      merkle_root: MerkleRoot::default(),
-      time: 1_390_666_206,
-      bits: 0x1e0f_fff0,
-      nonce: 3_861_367_235,
-    },
-    transactions: vec![coinbase],
-  };
-  block.header.merkle_root = block.merkle().0;
-  block
-}
 
 pub static PARAMS: ChainParams = ChainParams {
   consensus: ConsensusParams {
@@ -125,8 +73,19 @@ pub static PARAMS: ChainParams = ChainParams {
         use_ehf: false,
       },
       v24: Bip9Deployment {
-        bit: 12,
-        start_time: Bip9Deployment::NEVER_ACTIVE,
+        bit: 13,
+        start_time: 1_790_208_000, // 24 September 2026, midnight UTC
+        timeout: Bip9Deployment::NO_TIMEOUT,
+        min_activation_height: BlockHeight::from_u32(0),
+        window_size: 100,
+        threshold_start: 80, // 80% of 100
+        threshold_min: 60,   // 60% of 100
+        falloff_coeff: 5,
+        use_ehf: true,
+      },
+      evo_shares: Bip9Deployment {
+        bit: 14,
+        start_time: 1_790_208_000, // 24 September 2026, midnight UTC
         timeout: Bip9Deployment::NO_TIMEOUT,
         min_activation_height: BlockHeight::from_u32(0),
         window_size: 100,
@@ -136,7 +95,6 @@ pub static PARAMS: ChainParams = ChainParams {
         use_ehf: true,
       },
     },
-    // ~uint256(0) >> 20
     pow_limit: Arith256::from_bendian(hex!("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")),
     pow_allow_min_difficulty_blocks: true,
     pow_no_retargeting: false,
@@ -155,6 +113,15 @@ pub static PARAMS: ChainParams = ChainParams {
     llmq_type_platform: LlmqType::Llmq25_67,
     llmq_type_mnhf: LlmqType::Llmq50_60,
   },
+  genesis: GenesisParams {
+    version: 1,
+    time: 1_390_666_206,
+    bits: 0x1e0f_fff0,
+    nonce: 3_861_367_235,
+    script_sig: GenesisParams::COINBASE_SCRIPT_SIG,
+    script_pubkey: GenesisParams::COINBASE_SCRIPT_PUBKEY,
+    reward: Amount::from_btc_u16(50),
+  },
   message_start: [0xce, 0xe2, 0xca, 0xff],
   default_port: 19999,
   default_platform_p2p_port: 22000,
@@ -165,10 +132,17 @@ pub static PARAMS: ChainParams = ChainParams {
   assumed_blockchain_size_gb: 10,
   assumed_chain_state_size_gb: 1,
   dns_seeds: &["testnet-seed.dashdot.io."],
-  addr_params: dash_script::__private::params::TESTNET,
+  addr_params: AddrParams {
+    pubkey_addr: 140,                     // addresses start with 'y'
+    script_addr: 19,                      // addresses start with '8' or '9'
+    secret_key: 239,                      // keys start with '9' or 'c'
+    ext_pubkey: [0x04, 0x35, 0x87, 0xCF], // tpub
+    ext_secret: [0x04, 0x35, 0x83, 0x94], // tprv
+    bip44_idx: 1,
+    bech32_hrp: "tdash",
+  },
   network_id: "test",
   is_test_chain: true,
-  require_standard: false,
   default_consistency_checks: false,
   is_mockable_chain: false,
   pool_min_participants: 2,

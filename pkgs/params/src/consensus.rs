@@ -4,78 +4,19 @@
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
 
-//! Shared type definitions for chain parameters.
+//! Consensus parameters of a network.
 
-pub(crate) use bitcoin_units::BlockHeight;
+use crate::{Bip9Deployments, LlmqType};
+
+use bitcoin_units::BlockHeight;
 use dash_num::{Arith256, Hash256};
-use dash_primitives::LlmqType;
-use dash_script::AddrParams;
+use dash_types::type_id::Unencodable;
 
-/// P2P network message start bytes (magic).
-pub type MessageStart = [u8; 4];
-
-/// Block height paired with block hash, mirroring C++
-/// `std::pair<int, uint256>` from `MapCheckpoints`.
+/// Block height paired with its block hash.
 pub type Checkpoint = (BlockHeight, Hash256);
 
-/// Transaction statistics for chain sync progress estimation.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ChainTxData {
-  /// Unix timestamp of the last known block.
-  pub timestamp: i64,
-  /// Total number of transactions in the chain.
-  pub tx_count: i64,
-  /// Estimated transactions per second after that
-  /// timestamp.
-  pub tx_rate: f64,
-}
-
-/// Version bits deployment for a consensus rule change (BIP9).
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct Bip9Deployment {
-  /// Bit position in the block version field.
-  pub bit: i32,
-  /// Earliest median-time-past for activation
-  /// signalling.
-  pub start_time: i64,
-  /// Median-time-past after which the deployment
-  /// fails.
-  pub timeout: i64,
-  /// Earliest block height at which the deployment
-  /// can activate.
-  pub min_activation_height: BlockHeight,
-  /// Number of blocks in a signalling window.
-  pub window_size: i64,
-  /// Initial signalling threshold for the first
-  /// window.
-  pub threshold_start: i64,
-  /// Minimum signalling threshold after decay.
-  pub threshold_min: i64,
-  /// Decay coefficient applied to the threshold
-  /// each window.
-  pub falloff_coeff: i64,
-  /// Whether this deployment requires an
-  /// extended-header-field activation.
-  pub use_ehf: bool,
-}
-
-impl Bip9Deployment {
-  pub const NO_TIMEOUT: i64 = i64::MAX;
-  pub const ALWAYS_ACTIVE: i64 = -1;
-  pub const NEVER_ACTIVE: i64 = -2;
-}
-
-/// Version bits deployments indexed by deployment position.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct Bip9Deployments {
-  /// Reserved deployment used only for testing.
-  pub test_dummy: Bip9Deployment,
-  /// Deployment parameters for the v24 upgrade.
-  pub v24: Bip9Deployment,
-}
-
 /// Buried deployment positions with hardcoded activation heights.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
 pub enum BuriedDeployment {
   /// BIP34 (height in coinbase).
   HeightInCoinbase,
@@ -110,7 +51,7 @@ pub enum BuriedDeployment {
 }
 
 /// Parameters that influence chain consensus.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
 pub struct ConsensusParams {
   /// Hash of the genesis block.
   pub hash_genesis_block: Hash256,
@@ -251,56 +192,4 @@ impl ConsensusParams {
       BuriedDeployment::Withdrawals => self.withdrawals_height,
     }
   }
-}
-
-/// Complete chain parameters for a network.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ChainParams {
-  /// Consensus rules for this chain.
-  pub consensus: ConsensusParams,
-  /// Four-byte magic identifying network messages.
-  pub message_start: MessageStart,
-  /// Default P2P listen port.
-  pub default_port: u16,
-  /// Default Platform P2P port.
-  pub default_platform_p2p_port: u16,
-  /// Default Platform HTTP API port.
-  pub default_platform_http_port: u16,
-  /// Default JSON-RPC port.
-  pub rpc_port: u16,
-  /// Tor onion service target port.
-  pub onion_service_target_port: u16,
-  /// Height after which pruning may discard blocks.
-  pub prune_after_height: u64,
-  /// Estimated full blockchain size in gigabytes.
-  pub assumed_blockchain_size_gb: u64,
-  /// Estimated chain-state size in gigabytes.
-  pub assumed_chain_state_size_gb: u64,
-  /// DNS seed hostnames for peer discovery.
-  pub dns_seeds: &'static [&'static str],
-  /// Address encoding parameters.
-  pub addr_params: AddrParams,
-  /// Human-readable network identifier string.
-  pub network_id: &'static str,
-  /// Whether this is a test network.
-  pub is_test_chain: bool,
-  /// Whether non-standard transactions are
-  /// rejected.
-  pub require_standard: bool,
-  /// Whether internal consistency checks run by
-  /// default.
-  pub default_consistency_checks: bool,
-  /// Whether the chain allows mock time and state.
-  pub is_mockable_chain: bool,
-  /// Minimum participants for a CoinJoin session.
-  pub pool_min_participants: i32,
-  /// Maximum participants for a CoinJoin session.
-  pub pool_max_participants: i32,
-  /// Number of blocks in a credit-pool accounting
-  /// period.
-  pub credit_pool_period_blocks: i32,
-  /// Hard-coded checkpoints for fast validation.
-  pub checkpoints: &'static [Checkpoint],
-  /// Transaction statistics for progress estimation.
-  pub chain_tx_data: ChainTxData,
 }
