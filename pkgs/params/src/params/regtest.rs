@@ -121,7 +121,7 @@ pub static PARAMS: ChainParams = ChainParams {
   prune_after_height: 1000,
   assumed_blockchain_size_gb: 0,
   assumed_chain_state_size_gb: 0,
-  dns_seeds: &[],
+  dns_seeds: &["dummySeed.invalid."],
   addr_params: AddrParams {
     pubkey_addr: 140,                     // addresses start with 'y'
     script_addr: 19,                      // addresses start with '8' or '9'
