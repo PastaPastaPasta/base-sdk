@@ -137,6 +137,7 @@ pub static PARAMS: ChainParams = ChainParams {
   is_mockable_chain: true,
   pool_min_participants: 2,
   pool_max_participants: 20,
+  spork_address: "yj949n1UH6fDhw6HtVE5VMj2iSTaSWBMcW",
   credit_pool_period_blocks: 100,
   checkpoints: &CHECKPOINTS,
   chain_tx_data: ChainTxData {
