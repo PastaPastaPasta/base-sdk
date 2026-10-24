@@ -23,6 +23,11 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v2
+        with:
+          large-packages: false
+
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v22
         with:
@@ -39,6 +44,16 @@ jobs:
 
       - name: Initialize devshell
         run: nix develop ./contrib/nix#dev --command true
+
+      - name: Manage Bazel downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            .cache/bazel/cache/repos
+            .cache/bazelisk
+          key: bazel-probes-repos-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', 'bazel/*.MODULE.bazel') }}
+          restore-keys: |
+            bazel-probes-repos-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Validate toolchains
         run: nix develop ./contrib/nix#dev --command ./contrib/smoke_test.py
@@ -64,6 +79,11 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 1
+
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v2
+        with:
+          large-packages: false
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v22

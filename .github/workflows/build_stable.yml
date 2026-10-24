@@ -38,6 +38,11 @@ jobs:
             exit 1
           fi
 
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v2
+        with:
+          large-packages: false
+
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v22
         with:
@@ -74,6 +79,16 @@ jobs:
         with:
           path: ~/.codeql
           key: codeql-packs-${{ hashFiles('maint/codeql/*/codeql-pack.lock.yml') }}
+
+      - name: Manage Bazel downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            .cache/bazel/cache/repos
+            .cache/bazelisk
+          key: bazel-lint-repos-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', 'bazel/*.MODULE.bazel') }}
+          restore-keys: |
+            bazel-lint-repos-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Run linters
         run: just lint
@@ -124,6 +139,12 @@ jobs:
             echo "::error::PR has ${commits} commits (limit: ${MAX_PR_COMMITS})"
             exit 1
           fi
+
+      - name: Free disk space
+        if: runner.os == 'Linux'
+        uses: jlumbroso/free-disk-space@v2
+        with:
+          large-packages: false
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable

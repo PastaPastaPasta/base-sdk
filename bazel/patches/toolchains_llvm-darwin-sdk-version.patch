@@ -1,0 +1,23 @@
+Pass a Darwin sysroot through -isysroot as well
+
+Clang reads SDKSettings.json, and so the SDK version a binary records,
+only from -isysroot. Under --sysroot alone a binary records its
+deployment target as its SDK version.
+
+diff --git a/toolchain/cc_toolchain_config.bzl b/toolchain/cc_toolchain_config.bzl
+index ce95ebb..20b6a53 100644
+--- a/toolchain/cc_toolchain_config.bzl
++++ b/toolchain/cc_toolchain_config.bzl
+@@ -401,6 +401,12 @@ def cc_toolchain_config(
+     if sysroot_path:
+         sysroot_path = paths.ensure_trailing_slash(sysroot_path)
+ 
++    # Clang reads SDKSettings.json, and with it the SDK version, only through
++    # -isysroot; under --sysroot alone binaries record the deployment target.
++    if target_os == "darwin" and sysroot_path:
++        compile_flags.append("-isysroot" + sysroot_path)
++        link_flags.append("-isysroot" + sysroot_path)
++
+     # Flags related to C++ standard.
+     cxx_flags = [
+         "-std=" + cxx_standard,

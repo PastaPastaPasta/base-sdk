@@ -169,12 +169,16 @@ def formatted(
   scoped: bool,
   cwd: Path | None = None,
   output: Callable[[str, str], None] | None = None,
+  per_file: bool = False,
 ) -> int:
   """Hold *sources* to a formatter, or rewrite them, and say which happened.
 
   *command* is handed the paths and returns the argv to run. *output* is
   handed what the tool wrote, as stdout and stderr, by a caller that has to
   post-process it; left out, the tool writes to this process's own streams.
+
+  *per_file* runs *command* once per source, for a tool that takes a single
+  file, and names each source it fails on.
 
   *sources* is None where the tool finds its own files, which is the one
   case a count cannot be reported for.
@@ -183,17 +187,26 @@ def formatted(
     print(f"{script}: no {noun} was touched")
     return RETCODE_PASS
 
-  result = subprocess.run(  # noqa: S603
-    command(sources or []),
-    capture_output=output is not None,
-    check=False,
-    cwd=None if cwd is None else str(cwd),
-    text=True,
-  )
-  if output is not None:
-    output(result.stdout, result.stderr)
+  batches = [[p] for p in sources or []] if per_file else [sources or []]
+  failed = False
+  for batch in batches:
+    result = subprocess.run(  # noqa: S603
+      command(batch),
+      capture_output=output is not None,
+      check=False,
+      cwd=None if cwd is None else str(cwd),
+      text=True,
+    )
+    if per_file and result.returncode != 0:
+      name = batch[0]
+      if cwd is not None and name.is_relative_to(cwd):
+        name = name.relative_to(cwd)
+      print(f"{name}:", file=sys.stderr)
+    if output is not None:
+      output(result.stdout, result.stderr)
+    failed = failed or result.returncode != 0
 
-  if result.returncode != 0:
+  if failed:
     if not fix:
       print(
         f"hint: run 'python3 maint/lint/{script}.py apply-all' to rewrite",

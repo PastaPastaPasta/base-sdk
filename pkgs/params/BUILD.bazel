@@ -1,0 +1,14 @@
+load("//bazel:rust.bzl", "dash_rust_library")
+
+dash_rust_library(
+    name = "dash-params",
+    crate_features = [
+        "default",
+        "full",
+        "std",
+    ],
+    deps = [
+        "//pkgs/num:dash-num",
+        "//pkgs/types:dash-types",
+    ],
+)

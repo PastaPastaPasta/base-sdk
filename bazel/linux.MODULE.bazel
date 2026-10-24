@@ -1,0 +1,57 @@
+# Linux targets build against Chromium's Debian bullseye sysroots (glibc 2.31,
+# libstdc++ from GCC 10, Linux 6.1 UAPI headers).
+
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+# The files must be declared for a sandboxed action to see them. The sysroots
+# also carry Chromium's GUI libraries, which nothing here links.
+SYSROOT_BUILD = """\
+filegroup(
+    name = "sysroot",
+    srcs = glob([
+        "lib/*-linux-gnu/**",
+        "lib/ld-linux-*",
+        "lib64/**",
+        "usr/include/**",
+        "usr/lib/gcc/**",
+        "usr/lib/*/*crt*.o",
+        "usr/lib/*/libc.*",
+        "usr/lib/*/libc_nonshared.a",
+        "usr/lib/*/libdl.*",
+        "usr/lib/*/libgcc_s.*",
+        "usr/lib/*/libm.*",
+        "usr/lib/*/libmvec.*",
+        "usr/lib/*/libpthread.*",
+        "usr/lib/*/librt.*",
+        "usr/lib/*/libstdc++.*",
+        "usr/lib/*/libutil.*",
+    ], allow_empty = True),
+    visibility = ["//visibility:public"],
+)
+"""
+
+http_archive(
+    name = "sysroot_linux_aarch64",
+    build_file_content = SYSROOT_BUILD,
+    sha256 = "278c36fe3a785d7f89fbe3f46956899a3bd49fe665f68dc667d6f626a951fcd6",
+    type = "tar.xz",
+    urls = ["https://commondatastorage.googleapis.com/chrome-linux-sysroot/278c36fe3a785d7f89fbe3f46956899a3bd49fe665f68dc667d6f626a951fcd6"],
+)
+
+http_archive(
+    name = "sysroot_linux_x86_64",
+    build_file_content = SYSROOT_BUILD,
+    sha256 = "f851add76bdae472fb6c94b4f920bc4a132d85ac607951391297f636af7e934e",
+    type = "tar.xz",
+    urls = ["https://commondatastorage.googleapis.com/chrome-linux-sysroot/f851add76bdae472fb6c94b4f920bc4a132d85ac607951391297f636af7e934e"],
+)
+
+llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm")
+llvm.sysroot(
+    label = "@sysroot_linux_aarch64//:sysroot",
+    targets = ["linux-aarch64"],
+)
+llvm.sysroot(
+    label = "@sysroot_linux_x86_64//:sysroot",
+    targets = ["linux-x86_64"],
+)

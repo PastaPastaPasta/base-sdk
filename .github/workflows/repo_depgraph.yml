@@ -28,6 +28,11 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v2
+        with:
+          large-packages: false
+
       - name: Set up uv
         uses: astral-sh/setup-uv@v10.0.1
         with:

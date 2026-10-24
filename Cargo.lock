@@ -427,6 +427,17 @@ dependencies = [
 [[package]]
 name = "dash-meta-bazel"
 version = "0.0.0"
+dependencies = [
+ "dash-num",
+ "dash-p2p-core",
+ "dash-params",
+ "dash-pkc",
+ "dash-pow",
+ "dash-primitives",
+ "dash-script",
+ "dash-types",
+ "dash-types-marker",
+]
 
 [[package]]
 name = "dash-num"
