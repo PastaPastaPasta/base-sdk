@@ -74,7 +74,6 @@ pub fn merkle_root(script_sig_hex: &str, script_pubkey_hex: &str, amount_duffs: 
 
 /// Scan a batch of nonces for a valid proof-of-work hash.
 #[wasm_bindgen]
-#[expect(clippy::too_many_arguments, reason = "flat signature required by wasm_bindgen")]
 pub fn scanhash(
   version: i32,
   prev_hash_hex: &str,
