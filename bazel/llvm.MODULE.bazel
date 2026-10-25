@@ -12,6 +12,8 @@ single_version_override(
         # together, so a Linux host targeting macOS gets ELF flags, the
         # wrong libc++ and no libtool.
         "//bazel/patches:toolchains_llvm-darwin-target.patch",
+        # 1.8.0 has no MinGW target.
+        "//bazel/patches:toolchains_llvm-windows-target.patch",
     ],
 )
 
