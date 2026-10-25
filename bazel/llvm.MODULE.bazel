@@ -19,6 +19,10 @@ single_version_override(
 # with an archive for every supported host.
 llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm")
 llvm.toolchain(
+    # Replaces the macOS compiler-rt with one carrying every architecture.
+    libclang_rt = {
+        "@macos_compiler_rt//:lib/clang/20/lib/darwin/libclang_rt.osx.a": "darwin/libclang_rt.osx.a",
+    },
     llvm_version = "20.1.3",
     # The Debian sysroots carry libstdc++ as a shared library only.
     stdlib = {
