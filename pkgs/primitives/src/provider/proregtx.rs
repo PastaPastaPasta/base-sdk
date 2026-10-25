@@ -6,7 +6,7 @@
 
 //! ProRegTx registration payload (type 1).
 
-use super::share::{check_payouts, check_shares, EVO_COLLATERAL, MAX_REWARD, REGULAR_COLLATERAL};
+use super::share::{check_payout_version, check_payouts, check_shares, EVO_COLLATERAL, MAX_REWARD, REGULAR_COLLATERAL};
 use super::{CollateralShare, CollateralSig, JoinSig, PayoutShare, ProTxVersion};
 use crate::codec::{decode_items, decode_list, encode_items, encode_list, impl_payload};
 use crate::prelude::*;
@@ -317,6 +317,9 @@ impl Checkable for ProRegTx {
     if shared && self.version < ProTxVersion::ExtAddr {
       return Some(ProTxInvalid::SharesVersionTooLow { version: self.version });
     }
+    if let Some(e) = check_payout_version(self.version, &self.script_payout, &self.payouts) {
+      return Some(e);
+    }
     if shared {
       if !self.collateral_hash.is_null() {
         return Some(ProTxInvalid::ExternalSharedCollateral);
@@ -580,6 +583,11 @@ mod tests {
     shared(),
     |ptx: &mut ProRegTx| ptx.version = ProTxVersion::BasicBls,
     ProTxInvalid::SharesVersionTooLow { version: ProTxVersion::BasicBls }
+  )]
+  #[case::payout_version(
+    registration(),
+    |ptx: &mut ProRegTx| ptx.script_payout = ptx.payouts[0].script_payout().clone(),
+    ProTxInvalid::PayoutVersionMismatch { version: ProTxVersion::ExtAddr }
   )]
   fn check(#[case] mut ptx: ProRegTx, #[case] edit: fn(&mut ProRegTx), #[case] expected: ProTxInvalid) {
     assert_eq!(ptx.check(), None);

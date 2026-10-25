@@ -187,6 +187,9 @@ pub enum ProTxInvalid {
   /// Shares in a version that does not carry them.
   #[error("shares in version {version}")]
   SharesVersionTooLow { version: ProTxVersion },
+  /// A payout form that the version does not carry.
+  #[error("payout form does not match version {version}")]
+  PayoutVersionMismatch { version: ProTxVersion },
   /// `bad-prodis-sig-count`
   #[error("bad-prodis-sig-count: {count}")]
   BadDissolveSigCount { count: usize },

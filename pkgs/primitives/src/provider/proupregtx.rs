@@ -6,7 +6,7 @@
 
 //! ProUpRegTx registrar-update payload (type 3).
 
-use super::share::{check_payouts, MAX_REWARD};
+use super::share::{check_payout_version, check_payouts, MAX_REWARD};
 use super::{OwnerSig, PayoutShare, ProTxVersion};
 use crate::codec::{decode_list, encode_list, impl_payload};
 use crate::prelude::*;
@@ -141,6 +141,9 @@ impl Checkable for ProUpRegTx {
     if self.mode != 0 {
       return Some(ProTxInvalid::BadMode { mode: self.mode });
     }
+    if let Some(e) = check_payout_version(self.version, &self.script_payout, &self.payouts) {
+      return Some(e);
+    }
 
     if self.pub_key_operator.is_null() {
       return Some(ProTxInvalid::NullKey);
@@ -245,6 +248,11 @@ mod tests {
     basic_bls(),
     |ptx: &mut ProUpRegTx| ptx.script_payout = script(Recipient::PubKeyHash(ptx.key_id_voting)),
     Some(ProTxInvalid::PayoutKeyReuse)
+  )]
+  #[case::payout_version(
+    update(),
+    |ptx: &mut ProUpRegTx| ptx.script_payout = ptx.payouts[0].script_payout().clone(),
+    Some(ProTxInvalid::PayoutVersionMismatch { version: ProTxVersion::ExtAddr })
   )]
   fn check(#[case] mut ptx: ProUpRegTx, #[case] edit: fn(&mut ProUpRegTx), #[case] expected: Option<ProTxInvalid>) {
     assert_eq!(ptx.check(), None);
