@@ -7,7 +7,7 @@
 //! ProUpSharedRegTx shared registrar update payload (type 12).
 
 use super::share::MAX_SHARES;
-use super::{ProTxVersion, SharedRegistrarSig};
+use super::SharedRegistrarSig;
 use crate::codec::{decode_list, encode_list, impl_payload};
 use crate::prelude::*;
 use crate::sptx::{InputsHash, ProTxInvalid};
@@ -22,15 +22,18 @@ use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
+/// The payload version `check` accepts.
+const VERSION: u16 = 1;
+
 impl_new! {
 /// ProUpSharedRegTx -- update the keys of a shared masternode (type 12).
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ProUpSharedRegTx {
-  /// Payload version.
+  /// Payload version, read at any value.
   #[getset(get_copy = "pub")]
-  version: ProTxVersion,
+  version: u16,
   /// ProTx hash identifying the masternode.
   #[getset(get_copy = "pub")]
   pro_tx_hash: TxHash,
@@ -54,7 +57,7 @@ impl_payload!(ProUpSharedRegTx);
 impl BaseCodec for ProUpSharedRegTx {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     Ok(Self {
-      version: ProTxVersion::decode(data)?,
+      version: u16::decode(data)?,
       pro_tx_hash: TxHash::decode(data)?,
       pub_key_operator: BlsPkBytes::decode(data)?,
       key_id_voting: PubKeyHash::decode(data)?,
@@ -77,6 +80,9 @@ impl Checkable for ProUpSharedRegTx {
   type Error = ProTxInvalid;
 
   fn check(&self) -> Option<Self::Error> {
+    if self.version != VERSION {
+      return Some(ProTxInvalid::BadSharedRegistrarVersion { version: self.version });
+    }
     if self.pub_key_operator.is_null() || self.key_id_voting.is_null() {
       return Some(ProTxInvalid::NullKey);
     }
@@ -91,7 +97,7 @@ hash_impl!(ProUpSharedRegTx);
 
 impl fmt::Display for ProUpSharedRegTx {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "ProUpSharedRegTx {{ v{} }}", self.version.to_base())
+    write!(f, "ProUpSharedRegTx {{ v{} }}", self.version)
   }
 }
 
@@ -139,6 +145,21 @@ mod tests {
       ptx.sigs.clear();
     },
     Some(ProTxInvalid::NullKey)
+  )]
+  #[case::version_0(
+    |ptx: &mut ProUpSharedRegTx| ptx.version = 0,
+    Some(ProTxInvalid::BadSharedRegistrarVersion { version: 0 })
+  )]
+  #[case::version_2(
+    |ptx: &mut ProUpSharedRegTx| ptx.version = 2,
+    Some(ProTxInvalid::BadSharedRegistrarVersion { version: 2 })
+  )]
+  #[case::version_before_key(
+    |ptx: &mut ProUpSharedRegTx| {
+      ptx.version = 2;
+      null_operator(ptx);
+    },
+    Some(ProTxInvalid::BadSharedRegistrarVersion { version: 2 })
   )]
   fn check(#[case] edit: fn(&mut ProUpSharedRegTx), #[case] expected: Option<ProTxInvalid>) {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "proupsharedregtx");

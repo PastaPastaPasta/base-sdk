@@ -7,7 +7,6 @@
 //! ProUpShareTx share reward update payload (type 11).
 
 use super::share::payee;
-use super::ProTxVersion;
 use crate::codec::codec_payload;
 use crate::prelude::*;
 use crate::sptx::{InputsHash, ProTxInvalid};
@@ -21,15 +20,18 @@ use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
+/// The payload version `check` accepts.
+const VERSION: u16 = 1;
+
 codec_payload! {
 /// ProUpShareTx -- update the reward script of a share (type 11).
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ProUpShareTx {
-  /// Payload version.
+  /// Payload version, read at any value.
   #[getset(get_copy = "pub")]
-  version: ProTxVersion,
+  version: u16,
   /// ProTx hash identifying the masternode.
   #[getset(get_copy = "pub")]
   pro_tx_hash: TxHash,
@@ -53,6 +55,9 @@ impl Checkable for ProUpShareTx {
   type Error = ProTxInvalid;
 
   fn check(&self) -> Option<Self::Error> {
+    if self.version != VERSION {
+      return Some(ProTxInvalid::BadShareUpdateVersion { version: self.version });
+    }
     if self.sig.len() != ECDSA_REC_SIG_LEN {
       return Some(ProTxInvalid::BadShareUpdateSigSize { size: self.sig.len() });
     }
@@ -65,7 +70,7 @@ impl Checkable for ProUpShareTx {
 
 impl fmt::Display for ProUpShareTx {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "ProUpShareTx {{ v{} }}", self.version.to_base())
+    write!(f, "ProUpShareTx {{ v{} }}", self.version)
   }
 }
 
@@ -116,6 +121,15 @@ mod tests {
       ptx.sig.clear();
     },
     Some(ProTxInvalid::BadShareUpdateSigSize { size: 0 })
+  )]
+  #[case::version_0(|ptx: &mut ProUpShareTx| ptx.version = 0, Some(ProTxInvalid::BadShareUpdateVersion { version: 0 }))]
+  #[case::version_2(|ptx: &mut ProUpShareTx| ptx.version = 2, Some(ProTxInvalid::BadShareUpdateVersion { version: 2 }))]
+  #[case::version_before_sig(
+    |ptx: &mut ProUpShareTx| {
+      ptx.version = 2;
+      ptx.sig.clear();
+    },
+    Some(ProTxInvalid::BadShareUpdateVersion { version: 2 })
   )]
   fn check(#[case] edit: fn(&mut ProUpShareTx), #[case] expected: Option<ProTxInvalid>) {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "proupsharetx");
