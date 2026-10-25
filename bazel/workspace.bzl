@@ -55,4 +55,7 @@ HOST_TRIPLES = {
 }
 
 # Every host builds for its own triple and each of these.
-CROSS_TRIPLES = []
+CROSS_TRIPLES = [
+    "aarch64-unknown-linux-gnu",
+    "x86_64-unknown-linux-gnu",
+]
