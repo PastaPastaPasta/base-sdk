@@ -30,7 +30,7 @@ llvm.toolchain(
         "linux-x86_64": "dynamic-stdc++",
     },
 )
-use_repo(llvm, "llvm_toolchain")
+use_repo(llvm, "llvm_toolchain", "llvm_toolchain_llvm")
 
 # Registered by the root module, the LLVM toolchain outranks any C toolchain
 # a dependency module registers.

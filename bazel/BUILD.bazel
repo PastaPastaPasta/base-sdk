@@ -39,6 +39,12 @@ config_setting(
     values = {"compilation_mode": "opt"},
 )
 
+# The pinned LLVM's `ar`, which `MODULE.bazel` hands to C build scripts.
+alias(
+    name = "llvm_ar",
+    actual = "@llvm_toolchain_llvm//:ar",
+)
+
 platform(
     name = "linux_arm64",
     constraint_values = [
