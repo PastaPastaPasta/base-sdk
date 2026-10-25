@@ -375,5 +375,26 @@
         }
       }
     }
+  },
+  "quorums": {
+    // dash-cli -chain=main quorum list
+    "main": {
+      "llmq_50_60": [],
+      "llmq_400_60": [],
+      "llmq_400_85": []
+    },
+    // dash-cli -chain=test quorum list
+    "test": {
+      "llmq_50_60": [],
+      "llmq_400_60": [],
+      "llmq_400_85": []
+    },
+    // dash-cli -chain=regtest quorum list
+    "regtest": {
+      "llmq_test": [],
+      "llmq_test_instantsend": [],
+      "llmq_test_dip0024": [],
+      "llmq_test_platform": []
+    }
   }
 }

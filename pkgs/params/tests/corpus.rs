@@ -7,7 +7,7 @@
 //! Chain parameters against the reference implementation's RPC output.
 
 use dash_dev::Corpus;
-use dash_params::{Bip9Deployment, BuriedDeployment, ChainParams, Network};
+use dash_params::{Bip9Deployment, BuriedDeployment, ChainParams, LlmqType, Network};
 use rstest::rstest;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -146,4 +146,24 @@ fn deployments_match_vectors(#[case] network: Network) {
   let chain = network.chain();
   let infos = section::<DeploymentInfo>("deployments");
   assert_eq!(infos.get(chain.network_id), Some(&DeploymentInfo::from(chain)));
+}
+
+#[rstest]
+#[case::mainnet(Network::Main)]
+#[case::testnet(Network::Testnet3)]
+#[case::regtest(Network::Regtest)]
+fn chains_run_the_llmqs_enabled_at_genesis(#[case] network: Network) {
+  let consensus = network.consensus();
+  let quorums = section::<BTreeMap<String, Vec<String>>>("quorums");
+  // `quorum list` reports the types enabled at the tip, here the genesis
+  // block. A chain also runs types that are enabled later.
+  let enabled = &quorums[network.chain().network_id];
+  assert!(!enabled.is_empty());
+  for name in enabled.keys() {
+    let llmq = LlmqType::variants()
+      .iter()
+      .find(|llmq_type| llmq_type.to_string() == *name)
+      .and_then(|&llmq_type| consensus.llmq(llmq_type));
+    assert!(llmq.is_some(), "{name}");
+  }
 }
