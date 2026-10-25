@@ -15,3 +15,11 @@ msys2_sysroot(
         "https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-winpthreads-14.0.0.r495.g63ebe6cdb-1-any.pkg.tar.zst": "8162e51d99590742dc26638a20e92f870f9b010e1ab29efad78991b84bf8ed2b",
     },
 )
+
+# lld names a MinGW binary `.exe` and a DLL `.dll` whatever it is asked for,
+# and rules_cc 0.2.17 declares neither suffix for a Unix-style toolchain.
+single_version_override(
+    module_name = "rules_cc",
+    patch_strip = 1,
+    patches = ["//bazel/patches:rules_cc-mingw-artifact-names.patch"],
+)
