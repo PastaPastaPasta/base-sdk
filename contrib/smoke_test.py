@@ -86,6 +86,7 @@ PLATFORMS = [
   ("linux_x86_64", "ELF", "x86_64", ""),
   ("macos_arm64", "Mach-O", "arm64", ""),
   ("macos_x86_64", "Mach-O", "x86_64", ""),
+  ("windows_x86_64", "PE", "x86_64", ".exe"),
 ]
 
 

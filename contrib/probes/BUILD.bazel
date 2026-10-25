@@ -5,6 +5,7 @@ load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 PINNED_SYSROOT = select({
     "@platforms//os:linux": [],
     "@platforms//os:osx": [],
+    "@platforms//os:windows": [],
     "//conditions:default": ["@platforms//:incompatible"],
 })
 

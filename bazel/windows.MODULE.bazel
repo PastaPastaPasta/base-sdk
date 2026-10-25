@@ -16,6 +16,12 @@ msys2_sysroot(
     },
 )
 
+llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm")
+llvm.sysroot(
+    label = "@mingw_sysroot//mingw64:sysroot",
+    targets = ["windows-x86_64"],
+)
+
 # lld names a MinGW binary `.exe` and a DLL `.dll` whatever it is asked for,
 # and rules_cc 0.2.17 declares neither suffix for a Unix-style toolchain.
 single_version_override(

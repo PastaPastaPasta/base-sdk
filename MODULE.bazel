@@ -30,6 +30,10 @@ crate.from_cargo(
         "aarch64-apple-darwin",
         "aarch64-unknown-linux-gnu",
         "x86_64-apple-darwin",
+        # rules_rust has no windows-gnu platform, and both ABIs share its
+        # constraints, so this arm serves `x86_64-pc-windows-gnu` while no
+        # dependency picks crates by `target_env`; the graph lint holds it.
+        "x86_64-pc-windows-msvc",
         "x86_64-unknown-linux-gnu",
     ],
 )

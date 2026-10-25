@@ -29,15 +29,23 @@ llvm.toolchain(
         "darwin-aarch64": ["-mlinker-version=" + LD64_VERSION],
         "darwin-x86_64": ["-mlinker-version=" + LD64_VERSION],
     },
+    # GCC's driver adds the pthread library MinGW's libstdc++ needs, and clang
+    # does not. Named in full, as rustc does, so the static archive wins over
+    # the DLL import library.
+    extra_link_libs = {
+        "windows-x86_64": ["-l:libpthread.a"],
+    },
     # Replaces the macOS compiler-rt with one carrying every architecture.
     libclang_rt = {
         "@macos_compiler_rt//:lib/clang/20/lib/darwin/libclang_rt.osx.a": "darwin/libclang_rt.osx.a",
     },
     llvm_version = "20.1.3",
-    # The Debian sysroots carry libstdc++ as a shared library only.
+    # The Debian sysroots carry libstdc++ as a shared library only, and the
+    # MinGW one links it statically, so no DLL has to travel with a binary.
     stdlib = {
         "linux-aarch64": "dynamic-stdc++",
         "linux-x86_64": "dynamic-stdc++",
+        "windows-x86_64": "stdc++",
     },
 )
 use_repo(llvm, "llvm_toolchain", "llvm_toolchain_llvm")

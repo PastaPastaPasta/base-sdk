@@ -130,6 +130,7 @@ _TARGET_ARCH_RE = re.compile(r'^cfg\(target_arch = "(\w+)"\)$')
 # them, keyed by the parts of the triple they stand for.
 _PLATFORM_OS = {
   "apple-darwin": "macos",
+  "pc-windows-gnu": "windows",
   "unknown-linux-gnu": "linux",
 }
 _PLATFORM_ARCH = {"aarch64": "arm64", "x86_64": "x86_64"}
