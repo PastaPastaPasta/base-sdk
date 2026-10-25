@@ -1,4 +1,4 @@
-"""The workspace's Rust edition, profiles, target flags and supported hosts."""
+"""The workspace's Rust edition, profiles, target flags, hosts and cross targets."""
 
 # Matches `workspace.package.edition`.
 RUST_EDITION = "2021"
@@ -53,3 +53,6 @@ HOST_TRIPLES = {
     "rust_macos_aarch64": "aarch64-apple-darwin",
     "rust_macos_x86_64": "x86_64-apple-darwin",
 }
+
+# Every host builds for its own triple and each of these.
+CROSS_TRIPLES = []
