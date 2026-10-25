@@ -79,11 +79,13 @@ TARGETS = [
 ]
 
 # Platforms `//bazel` names, with the format, architecture and file suffix of
-# their binaries. Each probe is held to its platform's format, since a cross
-# build that quietly produced the host's binary would still exit 0.
+# their binaries. Each probe is held to them, since a cross build that quietly
+# produced the host's binary would still exit 0. Mach-O versions are Bazel's.
 PLATFORMS = [
   ("linux_arm64", "ELF", "arm64", ""),
   ("linux_x86_64", "ELF", "x86_64", ""),
+  ("macos_arm64", "Mach-O", "arm64", ""),
+  ("macos_x86_64", "Mach-O", "x86_64", ""),
 ]
 
 
@@ -368,6 +370,18 @@ def bazel(report: Report, root: Path) -> None:
   cross(report, cache, probes)
 
 
+def macos_pins(root: Path) -> tuple[str, str]:
+  """Return the deployment target and SDK version Bazel pins for macOS."""
+  bazelrc = (root / ".bazelrc").read_text(encoding="utf-8")
+  darwin = (root / "bazel" / "darwin.MODULE.bazel").read_text(encoding="utf-8")
+  minos = _MACOS_MIN_RE.search(bazelrc)
+  sdk = _MACOS_SDK_RE.search(darwin)
+  return (
+    minos.group(1) if minos else "unpinned",
+    sdk.group(1) if sdk else "unpinned",
+  )
+
+
 def host_platform() -> str:
   """Return the `//bazel` platform naming the host."""
   kind = host_kind()
@@ -376,6 +390,7 @@ def host_platform() -> str:
 
 def cross(report: Report, cache: Path, probes: dict[str, Path]) -> None:
   """Build every target for each other platform, holding the probes to it."""
+  pins = macos_pins(cache.parent)
   for platform_name, fmt, arch, suffix in PLATFORMS:
     if platform_name == host_platform():
       continue
@@ -391,19 +406,8 @@ def cross(report: Report, cache: Path, probes: dict[str, Path]) -> None:
     ):
       continue
     for lang, probe in built.items():
-      report.held(name, lang, probe, Kind(fmt, arch))
-
-
-def macos_pins(root: Path) -> tuple[str, str]:
-  """Return the deployment target and SDK version Bazel pins for macOS."""
-  bazelrc = (root / ".bazelrc").read_text(encoding="utf-8")
-  darwin = (root / "bazel" / "darwin.MODULE.bazel").read_text(encoding="utf-8")
-  minos = _MACOS_MIN_RE.search(bazelrc)
-  sdk = _MACOS_SDK_RE.search(darwin)
-  return (
-    minos.group(1) if minos else "unpinned",
-    sdk.group(1) if sdk else "unpinned",
-  )
+      want = Kind(fmt, arch, *pins) if fmt == "Mach-O" else Kind(fmt, arch)
+      report.held(name, lang, probe, want)
 
 
 def main() -> int:

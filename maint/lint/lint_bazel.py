@@ -126,6 +126,20 @@ _LINT_LEVELS = {"allow": "A", "deny": "D", "forbid": "F", "warn": "W"}
 # A '.cargo/config.toml' target key naming one architecture.
 _TARGET_ARCH_RE = re.compile(r'^cfg\(target_arch = "(\w+)"\)$')
 
+# The halves of a `//bazel` platform name, as 'bazel/BUILD.bazel' spells
+# them, keyed by the parts of the triple they stand for.
+_PLATFORM_OS = {
+  "apple-darwin": "macos",
+  "unknown-linux-gnu": "linux",
+}
+_PLATFORM_ARCH = {"aarch64": "arm64", "x86_64": "x86_64"}
+
+
+def _platform(triple: str) -> str:
+  """Return the `//bazel` platform label that builds for *triple*."""
+  arch, _, rest = triple.partition("-")
+  return f"//bazel:{_PLATFORM_OS[rest]}_{_PLATFORM_ARCH[arch]}"
+
 
 def _profile_flags(settings: dict[str, object]) -> set[str]:
   """Return the rustc flags a Cargo profile's *settings* amount to."""
@@ -344,8 +358,12 @@ def _check_format(
   )
 
 
-def _bazel_crates(bazel: str, repo_root: Path) -> dict[Crate, set[str]]:
-  """Return the features Bazel hands rustc, per crate it builds.
+def _bazel_crates(
+  bazel: str,
+  repo_root: Path,
+  platform: str,
+) -> dict[Crate, set[str]]:
+  """Return the features Bazel hands rustc, per crate it builds for *platform*.
 
   Asked of 'cquery' so a 'select()' arrives flattened to the arm this build
   takes. Third-party crates are keyed by repository, workspace crates by name.
@@ -358,6 +376,7 @@ def _bazel_crates(bazel: str, repo_root: Path) -> dict[Crate, set[str]]:
       "cquery",
       f'kind("{RUST_KINDS}", deps(//...))',
       "--output=jsonproto",
+      f"--platforms={platform}",
     ],
     capture_output=True,
     check=False,
@@ -397,8 +416,9 @@ def _cargo_crates(
   repo_root: Path,
   scope: list[str],
   edges: str,
+  triple: str,
 ) -> dict[Crate, list[set[str]]]:
-  """Return the feature sets cargo resolves for *scope*, per crate.
+  """Return the feature sets cargo resolves for *scope* on *triple*, per crate.
 
   A crate reached as a normal and as a build dependency can resolve twice,
   since cargo keeps host and target features apart; both sets are kept.
@@ -408,6 +428,7 @@ def _cargo_crates(
       cargo,
       "tree",
       *scope,
+      "--target", triple,
       "--edges", edges,
       "--format", "{p}|{f}",
       "--color", "never",
@@ -498,21 +519,16 @@ def _annotated(repo_root: Path) -> dict[str, set[str]]:
   return added
 
 
-def _check_graph(repo_root: Path) -> int | None:
-  """Hold Bazel's crates and their features to cargo's; None without a tool."""
-  try:
-    cargo = require_bin("cargo")
-    bazel = require_bin("bazel")
-  except FileNotFoundError as e:
-    print(f"{e}, skipping the crate graph check", file=sys.stderr)
-    return None
-  if sys.platform == "win32":
-    print("unsupported host, skipping the crate graph check", file=sys.stderr)
-    return None
-
-  theirs = _bazel_crates(bazel, repo_root)
+def _graph_faults(
+  cargo: str,
+  bazel: str,
+  repo_root: Path,
+  triple: str,
+  annotated: dict[str, set[str]],
+) -> list[tuple[str, ...]]:
+  """Return a row per crate Bazel builds for *triple* unlike cargo's."""
+  theirs = _bazel_crates(bazel, repo_root, _platform(triple))
   # An annotation adds a feature cargo never resolves, so it is set aside.
-  annotated = _annotated(repo_root)
   for (name, version), features in theirs.items():
     if version != "":
       features -= annotated.get(name, set())
@@ -522,7 +538,7 @@ def _check_graph(repo_root: Path) -> int | None:
   # must cover. 'crate_universe' unifies the whole workspace with every
   # feature on, which is the ceiling for third-party crates.
   anchored = _cargo_crates(
-    cargo, repo_root, ["--package", ANCHOR], "normal,build",
+    cargo, repo_root, ["--package", ANCHOR], "normal,build", triple,
   )
   scope = [arg for name in built for arg in ("--package", name)]
   scope += [
@@ -532,27 +548,37 @@ def _check_graph(repo_root: Path) -> int | None:
     for arg in ("--features", f"{name}/full")
   ]
   reached = (
-    _cargo_crates(cargo, repo_root, scope, "normal,build") if built else {}
+    _cargo_crates(cargo, repo_root, scope, "normal,build", triple)
+    if built
+    else {}
   )
   unified = _cargo_crates(
-    cargo, repo_root, ["--workspace", "--all-features"], "normal,build,dev",
+    cargo,
+    repo_root,
+    ["--workspace", "--all-features"],
+    "normal,build,dev",
+    triple,
   )
   print(
-    f"checking crate graph: {len(theirs)} crate(s) in bazel against "
-    f"{len(reached)} cargo reaches from {len(built)} mapped crate(s)",
+    f"checking crate graph for {triple}: {len(theirs)} crate(s) in bazel "
+    f"against {len(reached)} cargo reaches from {len(built)} mapped crate(s)",
   )
 
   def show(features: set[str]) -> str:
     return ",".join(sorted(features)) or "(none)"
 
-  rows = _anchor_faults(cargo, repo_root)
+  rows: list[tuple[str, ...]] = []
   for key in sorted(set(theirs) | set(reached)):
     label = f"{key[0]} {key[1]}".strip()
     if key not in theirs:
-      rows.append((label, "absent", show(reached[key][0]), "missing in bazel"))
+      rows.append(
+        (triple, label, "absent", show(reached[key][0]), "missing in bazel"),
+      )
       continue
     if key not in unified:
-      rows.append((label, show(theirs[key]), "absent", "extra in bazel"))
+      rows.append(
+        (triple, label, show(theirs[key]), "absent", "extra in bazel"),
+      )
       continue
     # Workspace crates restate their features, so they must equal what the
     # anchor resolves. A third-party crate lies between the floor and ceiling.
@@ -567,18 +593,42 @@ def _check_graph(repo_root: Path) -> int | None:
       fault = None if ok else "features exceed cargo's"
     if fault is not None:
       rows.append((
+        triple,
         label,
         show(theirs[key]),
         " or ".join(show(f) for f in expected) or "absent",
         fault,
       ))
-
   if not rows:
-    print(f"{len(theirs)} crate(s) match what cargo resolves")
+    print(f"{triple}: {len(theirs)} crate(s) match what cargo resolves")
+  return rows
+
+
+def _check_graph(repo_root: Path) -> int | None:
+  """Hold Bazel's crates and their features to cargo's; None without a tool.
+
+  Each target is held apart, since a dependency can pick crates by the
+  platform it is built for.
+  """
+  try:
+    cargo = require_bin("cargo")
+    bazel = require_bin("bazel")
+  except FileNotFoundError as e:
+    print(f"{e}, skipping the crate graph check", file=sys.stderr)
+    return None
+  if sys.platform == "win32":
+    print("unsupported host, skipping the crate graph check", file=sys.stderr)
+    return None
+
+  annotated = _annotated(repo_root)
+  rows = [("", *row) for row in _anchor_faults(cargo, repo_root)]
+  for triple in _literals(repo_root / _WORKSPACE_BZL)["CROSS_TRIPLES"]:
+    rows += _graph_faults(cargo, bazel, repo_root, triple, annotated)
+  if not rows:
     return RETCODE_PASS
 
   print(
-    format_table(("crate", "bazel", "cargo", "fault"), rows),
+    format_table(("target", "crate", "bazel", "cargo", "fault"), rows),
     file=sys.stderr,
   )
   print(f"error: {len(rows)} crate(s) differ from cargo", file=sys.stderr)

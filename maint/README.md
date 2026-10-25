@@ -15,7 +15,7 @@ use [`lint_all.py`](./lint_all.py).
 | Name | Purpose | Verbs | Depends on |
 | --- | --- | --- | --- |
 | [`lint_commit.py`](./lint/lint_commit.py) | Lint commit names against [`commit.toml`](./commit.toml) | `run` | `git` |
-| [`lint_bazel.py`](./lint/lint_bazel.py) | Lint Starlark files with `buildifier`, hold the rustc flags and edition Bazel builds with to cargo's, and the crates Bazel builds to cargo's graph | `check`, `apply`, `apply-all`, `graph` | `bazel` and `cargo` (`graph`) |
+| [`lint_bazel.py`](./lint/lint_bazel.py) | Lint Starlark files with `buildifier`, hold the rustc flags and edition Bazel builds with to cargo's, and the crates Bazel builds for each target to cargo's graph | `check`, `apply`, `apply-all`, `graph` | `bazel` and `cargo` (`graph`) |
 | [`lint_cargo.py`](./lint/lint_cargo.py) | Deny dependencies per [`deny.toml`](../.cargo/deny.toml), check/format TOML files against [`taplo.toml`](./taplo.toml) | `check` , `apply`, `apply-all` | `cargo-deny` (deny dependencies), `taplo` (TOML formatting) |
 | [`lint_clang.py`](./lint/lint_clang.py) | Check/format C and C++ sources against [`.clang-format`](./.clang-format), lint them against [`.clang-tidy`](./.clang-tidy) | `check`, `apply`, `apply-all` | `clang-format` (formatting), `clang-tidy` (lint), `git` |
 | [`lint_codeql.py`](./lint/lint_codeql.py) | Query Rust sources against [`maint/codeql/rust/*.ql`](./codeql/rust), C and C++ sources against SEI CERT C/C++ 2016 from [`codeql-coding-standards`](https://github.com/github/codeql-coding-standards) | `check`, `apply`, `apply-all`, `run`, `run-all` | `codeql`, `rustc` (Rust), `cc` (C), `c++` (C++) |

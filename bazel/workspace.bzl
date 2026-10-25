@@ -56,6 +56,8 @@ HOST_TRIPLES = {
 
 # Every host builds for its own triple and each of these.
 CROSS_TRIPLES = [
+    "aarch64-apple-darwin",
     "aarch64-unknown-linux-gnu",
+    "x86_64-apple-darwin",
     "x86_64-unknown-linux-gnu",
 ]
