@@ -6,6 +6,7 @@
 
 //! Owner payouts and collateral shares of provider payloads.
 
+use super::ProTxVersion;
 use crate::codec_type;
 use crate::sptx::ProTxInvalid;
 
@@ -115,6 +116,24 @@ pub(super) fn check_payouts(
 
   if total != u32::from(MAX_REWARD) {
     return Some(ProTxInvalid::BadPayoutRewardSum { total });
+  }
+  None
+}
+
+/// Checks that only the payout form of `version` is set. Version 3 carries the
+/// payout list, and earlier versions the payout script.
+pub(super) fn check_payout_version(
+  version: ProTxVersion,
+  script_payout: &ScriptPubKeyBuf,
+  payouts: &[PayoutShare],
+) -> Option<ProTxInvalid> {
+  let stray = if version >= ProTxVersion::ExtAddr {
+    !script_payout.is_empty()
+  } else {
+    !payouts.is_empty()
+  };
+  if stray {
+    return Some(ProTxInvalid::PayoutVersionMismatch { version });
   }
   None
 }
@@ -409,5 +428,21 @@ pub(crate) mod tests {
       check_shares(&t.shares, t.collateral, t.period, t.penalty, &key(VOTING)),
       expected
     );
+  }
+
+  #[rstest]
+  #[case::ext_addr_payouts(ProTxVersion::ExtAddr, ScriptPubKeyBuf::new(), spread(1, 10_000), None)]
+  #[case::ext_addr_script(ProTxVersion::ExtAddr, p2pkh(1), spread(1, 10_000), Some(ProTxVersion::ExtAddr))]
+  #[case::basic_bls_script(ProTxVersion::BasicBls, p2pkh(1), vec![], None)]
+  #[case::basic_bls_payouts(ProTxVersion::BasicBls, p2pkh(1), spread(1, 10_000), Some(ProTxVersion::BasicBls))]
+  #[case::legacy_bls_payouts(ProTxVersion::LegacyBls, p2pkh(1), spread(1, 10_000), Some(ProTxVersion::LegacyBls))]
+  fn check_payout_version_takes_one_form(
+    #[case] version: ProTxVersion,
+    #[case] script_payout: ScriptPubKeyBuf,
+    #[case] payouts: Vec<PayoutShare>,
+    #[case] mismatch: Option<ProTxVersion>,
+  ) {
+    let expected = mismatch.map(|version| ProTxInvalid::PayoutVersionMismatch { version });
+    assert_eq!(check_payout_version(version, &script_payout, &payouts), expected);
   }
 }
