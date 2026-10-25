@@ -32,6 +32,32 @@ impl_num!(RevocationReason, u16);
 
 hash_impl!(RevocationReason);
 
+/// A bit count and byte image that do not form a [`DynBitset`].
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, thiserror::Error)]
+pub enum DynBitsetError {
+  /// The bit count does not fit in `usize`.
+  #[error("num_bits too large")]
+  NumBitsTooLarge,
+  /// The byte image does not hold exactly the bytes the bit count needs.
+  #[error("data length mismatch: {len} bytes for {num_bits} bits (expected {expected})")]
+  LengthMismatch {
+    /// Bytes supplied.
+    len: usize,
+    /// Bit count.
+    num_bits: u64,
+    /// Bytes the bit count needs.
+    expected: usize,
+  },
+  /// A padding bit past the bit count is set in the last byte.
+  #[error("padding bits set in last byte: {byte:#04x} for {num_bits} bits")]
+  PaddingSet {
+    /// The last byte.
+    byte: u8,
+    /// Bit count.
+    num_bits: u64,
+  },
+}
+
 /// LSB-first dynamic bitset.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize))]
@@ -111,6 +137,36 @@ impl BaseCodec for DynBitset {
 hash_impl!(DynBitset);
 
 impl DynBitset {
+  /// Constructs from a bit count and its LSB-first byte image.
+  ///
+  /// # Errors
+  ///
+  /// Returns `NumBitsTooLarge` when `num_bits` does not fit in `usize`,
+  /// `LengthMismatch` when `data` is not `num_bits.div_ceil(8)` bytes, and
+  /// `PaddingSet` when a bit past `num_bits` is set.
+  pub fn new(num_bits: u64, data: Vec<u8>) -> Result<Self, DynBitsetError> {
+    let bits = usize::try_from(num_bits).map_err(|_| DynBitsetError::NumBitsTooLarge)?;
+    let required = bits.div_ceil(8);
+    if data.len() != required {
+      return Err(DynBitsetError::LengthMismatch {
+        len: data.len(),
+        num_bits,
+        expected: required,
+      });
+    }
+    let remainder = bits % 8;
+    if remainder != 0 {
+      let mask = !((1u8 << remainder) - 1);
+      if data[required - 1] & mask != 0 {
+        return Err(DynBitsetError::PaddingSet {
+          byte: data[required - 1],
+          num_bits,
+        });
+      }
+    }
+    Ok(Self { num_bits, data })
+  }
+
   /// Returns the bit at the given index.
   pub fn get(&self, index: u64) -> Option<bool> {
     if index >= self.num_bits {
@@ -154,34 +210,7 @@ impl From<DynBitset> for DynBitsetSerde {
 impl<'de> serde::Deserialize<'de> for DynBitset {
   fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
     let raw = DynBitsetSerde::deserialize(deserializer)?;
-    let num_bits: usize = raw
-      .num_bits
-      .try_into()
-      .map_err(|_| serde::de::Error::custom("DynBitset num_bits too large"))?;
-    let required = num_bits.div_ceil(8);
-    if raw.data.len() != required {
-      return Err(serde::de::Error::custom(format!(
-        "DynBitset data length mismatch: {0} bytes for {1} bits (expected {2})",
-        raw.data.len(),
-        raw.num_bits,
-        required,
-      )));
-    }
-    let remainder = num_bits % 8;
-    if remainder != 0 {
-      let mask = !((1u8 << remainder) - 1);
-      if raw.data[required - 1] & mask != 0 {
-        return Err(serde::de::Error::custom(format!(
-          "DynBitset padding bits set in last byte: {:#04x} for {1} bits",
-          raw.data[required - 1],
-          raw.num_bits,
-        )));
-      }
-    }
-    Ok(Self {
-      num_bits: raw.num_bits,
-      data: raw.data,
-    })
+    Self::new(raw.num_bits, raw.data).map_err(serde::de::Error::custom)
   }
 }
 
@@ -204,5 +233,30 @@ impl Iterator for DynBitsetIterator<'_> {
       }
     }
     None
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  use rstest::rstest;
+
+  #[rstest]
+  #[case::empty(0, vec![])]
+  #[case::whole_bytes(16, vec![0xFF, 0xFF])]
+  #[case::partial_byte(3, vec![0x07])]
+  fn new_accepts(#[case] num_bits: u64, #[case] data: Vec<u8>) {
+    assert!(DynBitset::new(num_bits, data).is_ok());
+  }
+
+  #[rstest]
+  #[case::short(9, vec![0x00], DynBitsetError::LengthMismatch { len: 1, num_bits: 9, expected: 2 })]
+  #[case::long(8, vec![0x00, 0x00], DynBitsetError::LengthMismatch { len: 2, num_bits: 8, expected: 1 })]
+  #[case::empty_with_data(0, vec![0x00], DynBitsetError::LengthMismatch { len: 1, num_bits: 0, expected: 0 })]
+  #[case::padding(3, vec![0x08], DynBitsetError::PaddingSet { byte: 0x08, num_bits: 3 })]
+  #[case::padding_high(9, vec![0xFF, 0x80], DynBitsetError::PaddingSet { byte: 0x80, num_bits: 9 })]
+  fn new_rejects(#[case] num_bits: u64, #[case] data: Vec<u8>, #[case] expected: DynBitsetError) {
+    assert_eq!(DynBitset::new(num_bits, data), Err(expected));
   }
 }
