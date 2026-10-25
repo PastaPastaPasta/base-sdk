@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_binary")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 
 # Each target OS whose sysroot Bazel pins. Elsewhere the probes would build
 # against whatever the host provides, so they are skipped instead.
@@ -8,11 +8,21 @@ PINNED_SYSROOT = select({
     "//conditions:default": ["@platforms//:incompatible"],
 })
 
+# Linking alone never runs the archiver, so the C probe takes its greeting
+# from a static library.
+cc_library(
+    name = "greeting",
+    srcs = ["greeting.c"],
+    hdrs = ["greeting.h"],
+    target_compatible_with = PINNED_SYSROOT,
+)
+
 # Probes for `contrib/smoke_test.py`; each greets through OS interfaces.
 cc_binary(
     name = "hello_c",
     srcs = ["hello.c"],
     target_compatible_with = PINNED_SYSROOT,
+    deps = [":greeting"],
 )
 
 cc_binary(

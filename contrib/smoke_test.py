@@ -78,6 +78,14 @@ TARGETS = [
   ("wasm32-unknown-unknown", "wasm", "wasm32"),
 ]
 
+# Platforms `//bazel` names, with the format, architecture and file suffix of
+# their binaries. Each probe is held to its platform's format, since a cross
+# build that quietly produced the host's binary would still exit 0.
+PLATFORMS = [
+  ("linux_arm64", "ELF", "arm64", ""),
+  ("linux_x86_64", "ELF", "x86_64", ""),
+]
+
 
 @dataclass(frozen=True)
 class Kind:
@@ -192,6 +200,9 @@ class Builder:
       "rs": out / "hello.rs",
       "free": PROBES / "free.c",
     }
+    # The C probe greets through a library Bazel archives; the drivers here
+    # compile it alongside.
+    self.c_units = [str(self.src["c"]), str(PROBES / "greeting.c")]
     self.src["rs"].write_text(HELLO_RS, encoding="utf-8")
 
   def build(self, name: str, lang: str, argv: list[str]) -> Path | None:
@@ -221,7 +232,8 @@ class Builder:
       ("cpp", os.environ.get("CXX", "c++")),
       ("rs", "rustc"),
     ):
-      binary = self.build("host", lang, [compiler, str(self.src[lang])])
+      units = self.c_units if lang == "c" else [str(self.src[lang])]
+      binary = self.build("host", lang, [compiler, *units])
       if binary is not None:
         self.report.greets("host", lang, binary, want)
 
@@ -249,7 +261,7 @@ class Builder:
       rust = ["rustc", f"--target={triple}", rs]
     else:
       langs = [
-        ("c", [cc, str(self.src["c"])] if cc else None),
+        ("c", [cc, *self.c_units] if cc else None),
         ("cpp", [cxx, str(self.src["cpp"])] if cxx else None),
       ]
       rust = None
@@ -352,6 +364,34 @@ def bazel(report: Report, root: Path) -> None:
     want = Kind(want.fmt, want.arch, *macos_pins(root))
   for lang, probe in probes.items():
     report.greets("bazel host", lang, probe, want)
+
+  cross(report, cache, probes)
+
+
+def host_platform() -> str:
+  """Return the `//bazel` platform naming the host."""
+  kind = host_kind()
+  return f"{'macos' if kind.fmt == 'Mach-O' else 'linux'}_{kind.arch}"
+
+
+def cross(report: Report, cache: Path, probes: dict[str, Path]) -> None:
+  """Build every target for each other platform, holding the probes to it."""
+  for platform_name, fmt, arch, suffix in PLATFORMS:
+    if platform_name == host_platform():
+      continue
+    name = f"bazel {platform_name}"
+    built = {
+      lang: probe.with_name(probe.name + suffix)
+      for lang, probe in probes.items()
+    }
+    for probe in built.values():
+      probe.unlink(missing_ok=True)
+    if not _bazel_build(
+      report, name, cache, f"--platforms=//bazel:{platform_name}", "//..."
+    ):
+      continue
+    for lang, probe in built.items():
+      report.held(name, lang, probe, Kind(fmt, arch))
 
 
 def macos_pins(root: Path) -> tuple[str, str]:
