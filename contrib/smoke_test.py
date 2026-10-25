@@ -306,6 +306,27 @@ def host_kind() -> Kind:
   return Kind(fmt, machine)
 
 
+def _bazel_build(report: Report, name: str, cache: Path, *args: str) -> bool:
+  """Run `bazel build`, reporting a failure under `name`."""
+  try:
+    result = _run(
+      ["bazel", "build", *args],
+      cwd=cache.parent,
+      timeout=BAZEL_TIMEOUT,
+      # Matches the bazelisk cache 'bazel/mod.just' exports.
+      env={**os.environ, "BAZELISK_HOME": str(cache / "bazelisk")},
+    )
+  except (OSError, subprocess.TimeoutExpired) as exc:
+    report.add(name, "-", _unfinished(exc), ok=False)
+    return False
+  if result.returncode != 0:
+    report.add(name, "-", "build failed", ok=False)
+    for line in (result.stdout + result.stderr).splitlines()[-LOG_TAIL:]:
+      print(f"    {line}", file=sys.stderr)
+    return False
+  return True
+
+
 def bazel(report: Report, root: Path) -> None:
   """Build the probes with Bazel, then run what it built for the host."""
   if shutil.which("bazel") is None:
@@ -323,21 +344,7 @@ def bazel(report: Report, root: Path) -> None:
   }
   for stale in probes.values():
     stale.unlink(missing_ok=True)
-  try:
-    result = _run(
-      ["bazel", "build", "//contrib/probes/..."],
-      cwd=root,
-      timeout=BAZEL_TIMEOUT,
-      # Matches the bazelisk cache 'bazel/mod.just' exports.
-      env={**os.environ, "BAZELISK_HOME": str(cache / "bazelisk")},
-    )
-  except (OSError, subprocess.TimeoutExpired) as exc:
-    report.add("bazel host", "-", _unfinished(exc), ok=False)
-    return
-  if result.returncode != 0:
-    report.add("bazel host", "-", "build failed", ok=False)
-    for line in (result.stdout + result.stderr).splitlines()[-LOG_TAIL:]:
-      print(f"    {line}", file=sys.stderr)
+  if not _bazel_build(report, "bazel host", cache, "//contrib/probes/..."):
     return
 
   want = host_kind()
