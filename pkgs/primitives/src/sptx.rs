@@ -190,15 +190,24 @@ pub enum ProTxInvalid {
   /// A payout form that the version does not carry.
   #[error("payout form does not match version {version}")]
   PayoutVersionMismatch { version: ProTxVersion },
+  /// `bad-prodis-version`
+  #[error("bad-prodis-version: {version}")]
+  BadDissolveVersion { version: u16 },
   /// `bad-prodis-sig-count`
   #[error("bad-prodis-sig-count: {count}")]
   BadDissolveSigCount { count: usize },
+  /// `bad-proupshare-version`
+  #[error("bad-proupshare-version: {version}")]
+  BadShareUpdateVersion { version: u16 },
   /// `bad-proupshare-sig-size`
   #[error("bad-proupshare-sig-size: {size}")]
   BadShareUpdateSigSize { size: usize },
   /// `bad-proupshare-payee`
   #[error("bad-proupshare-payee")]
   BadShareUpdateScript,
+  /// `bad-proupsharedreg-version`
+  #[error("bad-proupsharedreg-version: {version}")]
+  BadSharedRegistrarVersion { version: u16 },
   /// `bad-proupsharedreg-sig-count`
   #[error("bad-proupsharedreg-sig-count: {count}")]
   BadSharedRegistrarSigCount { count: usize },

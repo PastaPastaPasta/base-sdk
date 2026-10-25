@@ -7,7 +7,7 @@
 //! ProDisTx shared masternode dissolution payload (type 10).
 
 use super::share::MAX_SHARES;
-use super::{DissolveSig, ProTxVersion};
+use super::DissolveSig;
 use crate::codec::{decode_list, encode_list, impl_payload};
 use crate::prelude::*;
 use crate::sptx::ProTxInvalid;
@@ -20,15 +20,18 @@ use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
+/// The payload version `check` accepts.
+const VERSION: u16 = 1;
+
 impl_new! {
 /// ProDisTx -- dissolve a shared masternode (type 10).
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ProDisTx {
-  /// Payload version.
+  /// Payload version, read at any value.
   #[getset(get_copy = "pub")]
-  version: ProTxVersion,
+  version: u16,
   /// ProTx hash identifying the masternode.
   #[getset(get_copy = "pub")]
   pro_tx_hash: TxHash,
@@ -47,7 +50,7 @@ impl_payload!(ProDisTx);
 impl BaseCodec for ProDisTx {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     Ok(Self {
-      version: ProTxVersion::decode(data)?,
+      version: u16::decode(data)?,
       pro_tx_hash: TxHash::decode(data)?,
       actor_index: u16::decode(data)?,
       sigs: decode_list(data)?,
@@ -66,6 +69,9 @@ impl Checkable for ProDisTx {
   type Error = ProTxInvalid;
 
   fn check(&self) -> Option<Self::Error> {
+    if self.version != VERSION {
+      return Some(ProTxInvalid::BadDissolveVersion { version: self.version });
+    }
     if self.sigs.is_empty() || self.sigs.len() > MAX_SHARES {
       return Some(ProTxInvalid::BadDissolveSigCount { count: self.sigs.len() });
     }
@@ -77,7 +83,7 @@ hash_impl!(ProDisTx);
 
 impl fmt::Display for ProDisTx {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "ProDisTx {{ v{} }}", self.version.to_base())
+    write!(f, "ProDisTx {{ v{} }}", self.version)
   }
 }
 
@@ -106,6 +112,15 @@ mod tests {
   #[case::nine_sigs(
     |ptx: &mut ProDisTx| ptx.sigs.push(ptx.sigs[0]),
     Some(ProTxInvalid::BadDissolveSigCount { count: 9 })
+  )]
+  #[case::version_0(|ptx: &mut ProDisTx| ptx.version = 0, Some(ProTxInvalid::BadDissolveVersion { version: 0 }))]
+  #[case::version_2(|ptx: &mut ProDisTx| ptx.version = 2, Some(ProTxInvalid::BadDissolveVersion { version: 2 }))]
+  #[case::version_before_sig_count(
+    |ptx: &mut ProDisTx| {
+      ptx.version = 2;
+      ptx.sigs.clear();
+    },
+    Some(ProTxInvalid::BadDissolveVersion { version: 2 })
   )]
   fn check(#[case] edit: fn(&mut ProDisTx), #[case] expected: Option<ProTxInvalid>) {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "prodistx");
