@@ -480,9 +480,12 @@ version = "0.0.0"
 dependencies = [
  "bitcoin-units",
  "bitcoin_hashes",
+ "dash-dev",
  "dash-num",
  "dash-types",
  "hex-conservative",
+ "rstest",
+ "serde",
 ]
 
 [[package]]
