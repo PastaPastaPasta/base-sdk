@@ -308,6 +308,15 @@ impl Checkable for ProRegTx {
     }
 
     let shared = !self.shares.is_empty();
+    if self.join_sigs.len() != self.shares.len() {
+      return Some(ProTxInvalid::JoinSigCountMismatch {
+        sigs: self.join_sigs.len(),
+        shares: self.shares.len(),
+      });
+    }
+    if shared && self.version < ProTxVersion::ExtAddr {
+      return Some(ProTxInvalid::SharesVersionTooLow { version: self.version });
+    }
     if shared {
       if !self.collateral_hash.is_null() {
         return Some(ProTxInvalid::ExternalSharedCollateral);
@@ -551,6 +560,26 @@ mod tests {
     shared(),
     |ptx: &mut ProRegTx| ptx.mn_type = MnType::Evo,
     ProTxInvalid::BadShareAmountSum { total: REGULAR_COLLATERAL }
+  )]
+  #[case::sig_missing(
+    shared(),
+    |ptx: &mut ProRegTx| ptx.join_sigs.truncate(1),
+    ProTxInvalid::JoinSigCountMismatch { sigs: 1, shares: 2 }
+  )]
+  #[case::sig_extra(
+    shared(),
+    |ptx: &mut ProRegTx| ptx.join_sigs.push(ptx.join_sigs[0]),
+    ProTxInvalid::JoinSigCountMismatch { sigs: 3, shares: 2 }
+  )]
+  #[case::sigs_unshared(
+    shared(),
+    |ptx: &mut ProRegTx| ptx.shares.clear(),
+    ProTxInvalid::JoinSigCountMismatch { sigs: 2, shares: 0 }
+  )]
+  #[case::shares_basic_bls(
+    shared(),
+    |ptx: &mut ProRegTx| ptx.version = ProTxVersion::BasicBls,
+    ProTxInvalid::SharesVersionTooLow { version: ProTxVersion::BasicBls }
   )]
   fn check(#[case] mut ptx: ProRegTx, #[case] edit: fn(&mut ProRegTx), #[case] expected: ProTxInvalid) {
     assert_eq!(ptx.check(), None);

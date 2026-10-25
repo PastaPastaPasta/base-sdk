@@ -181,6 +181,12 @@ pub enum ProTxInvalid {
   /// `bad-protx-shares-penalty`
   #[error("bad-protx-shares-penalty: {penalty}")]
   BadEarlyPenalty { penalty: i64 },
+  /// The join signatures are not one per share.
+  #[error("join signature count {sigs} does not match share count {shares}")]
+  JoinSigCountMismatch { sigs: usize, shares: usize },
+  /// Shares in a version that does not carry them.
+  #[error("shares in version {version}")]
+  SharesVersionTooLow { version: ProTxVersion },
   /// `bad-prodis-sig-count`
   #[error("bad-prodis-sig-count: {count}")]
   BadDissolveSigCount { count: usize },
