@@ -151,9 +151,17 @@ impl BaseCodec for NIEntry {
   /// - an entry of the invalid type or an unknown type, of which only the type
   ///   is read.
   /// - a domain with a bad name or port 0.
+  /// - a service whose address is not valid.
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     match NIEntryCode::from_base(u8::decode(data)?) {
-      NIEntryCode::Service => Ok(Self::Service(ServiceV2::decode(data)?)),
+      NIEntryCode::Service => {
+        let service = ServiceV2::decode(data)?;
+        if is_valid_addr(service.addr()) {
+          Ok(Self::Service(service))
+        } else {
+          Ok(Self::Invalid)
+        }
+      }
       NIEntryCode::Domain => {
         let name_len = CompactSize::decode_len(data, DOMAIN_MAX)?;
         let name = codec::read_bytes(data, name_len)?;

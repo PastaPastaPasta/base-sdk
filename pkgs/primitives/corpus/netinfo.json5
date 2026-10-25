@@ -35,6 +35,9 @@ BOOST_AUTO_TEST_CASE(netinfo_entry_reads)
              "fe",
              "ff",
              "03" "01" "04" "01020304" "270f",
+             "01" "01" "04" "00000000" "270f",
+             "01" "07" "04" "01020304" "270f",
+             "01" "02" "10" "fd87d87eeb43" "0102030405060708090a" "270f",
              "02" "0b" "4578616d706c652e636f6d" "01bb",
              "02" "0b" "6578616d706c652e636f6d" "0000",
          }) {
@@ -93,6 +96,12 @@ BOOST_AUTO_TEST_CASE(netinfo_entry_reads)
     { "raw": "ff", "read": 1, "written": "ff", "addr_port": "[invalid entry]" },
     // Only the type byte of an unknown type is read.
     { "raw": "03010401020304270f", "read": 1, "written": "ff", "addr_port": "[invalid entry]" },
+    // A service at IPv4 0.0.0.0 is invalid.
+    { "raw": "01010400000000270f", "read": 9, "written": "ff", "addr_port": "[invalid entry]" },
+    // A service on an unknown network is invalid.
+    { "raw": "01070401020304270f", "read": 9, "written": "ff", "addr_port": "[invalid entry]" },
+    // A service at an IPv6 address with the TORv2 prefix is invalid.
+    { "raw": "010210fd87d87eeb430102030405060708090a270f", "read": 21, "written": "ff", "addr_port": "[invalid entry]" },
     // A domain with an uppercase letter is invalid.
     { "raw": "020b4578616d706c652e636f6d01bb", "read": 15, "written": "ff", "addr_port": "[invalid entry]" },
     // A domain on port 0 is invalid.
