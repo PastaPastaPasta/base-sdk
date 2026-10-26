@@ -173,7 +173,7 @@ fn decode_ephemeral(data: &mut &[u8], flag: BlsSchemeKind) -> Result<BlsPkValue,
 
 #[cfg(feature = "codec")]
 fn decode_bytes(data: &mut &[u8]) -> Result<Vec<u8>, DecodeError> {
-  let len = CompactSize::decode(data)?.into_len(data.len())?;
+  let len = CompactSize::decode_size(data)?.into_len(data.len())?;
   Ok(read_bytes(data, len)?.to_vec())
 }
 
@@ -195,16 +195,18 @@ impl BlsIesMultiBlobs {
 
   /// Core's `Unserialize` under `flag`, consuming what it reads: the
   /// ephemeral key decodes eagerly with the opposite scheme's fallback, and
-  /// the count has no cap besides the input's length.
+  /// the count and each length are `ReadCompactSize`'s, capped at
+  /// `MAX_SIZE` and by the input's length.
   ///
   /// # Errors
   ///
   /// Returns a [`DecodeError`] on truncated input, a non-canonical
-  /// `CompactSize`, or a key canonical in neither scheme.
+  /// `CompactSize` or one above `MAX_SIZE`, or a key canonical in neither
+  /// scheme.
   pub fn decode(data: &mut &[u8], flag: BlsSchemeKind) -> Result<Self, DecodeError> {
     let ephemeral = decode_ephemeral(data, flag)?;
     let iv_seed = take::<IV_SEED_LEN>(data)?;
-    let count = CompactSize::decode(data)?.into_len(data.len())?;
+    let count = CompactSize::decode_size(data)?.into_len(data.len())?;
     let mut blobs = Vec::new();
     for _ in 0..count {
       blobs.push(decode_bytes(data)?);
@@ -374,7 +376,10 @@ mod tests {
       let got = if plain.len() < 32 {
         parse_secret_key(&plain, flag)
       } else {
-        multi.decrypt_secret_key(0, &sk(2), flag)
+        let got = multi.decrypt_secret_key(0, &sk(2), flag);
+        let blob = multi.get(0).unwrap().decrypt_secret_key(0, &sk(2), flag);
+        assert_eq!(blob.map(|k| k.to_bytes(flag)), got.as_ref().map(|k| k.to_bytes(flag)));
+        got
       };
       assert_eq!(got.map(|k| k.is_valid()), want, "{flag:?} {plain:02x?}");
     }
@@ -400,5 +405,28 @@ mod tests {
     let blob = multi.get(0).unwrap();
     let bytes = blob.to_bytes(flag);
     assert_eq!(BlsIesBlobValue::decode(&mut &bytes[..], flag).unwrap(), blob);
+  }
+
+  /// A length above `MAX_SIZE` fails even with the bytes present, as
+  /// `ReadCompactSize` does. The container's count is read the same way.
+  #[cfg(feature = "codec")]
+  #[test]
+  fn lengths_above_max_size_fail() {
+    const MAX_SIZE: usize = 0x0200_0000;
+    let blob = BlsIesBlobValue {
+      ephemeral: pk(1),
+      iv_seed: [3; IV_SEED_LEN],
+      data: Vec::new(),
+    };
+    let head = blob.to_bytes(BlsSchemeKind::Basic);
+    let head = &head[..head.len() - 1];
+    for len in [MAX_SIZE, MAX_SIZE + 1] {
+      let mut wire = head.to_vec();
+      CompactSize::from(len).encode(&mut wire);
+      wire.resize(wire.len() + len, 0);
+      let mut rest = wire.as_slice();
+      let got = BlsIesBlobValue::decode(&mut rest, BlsSchemeKind::Basic);
+      assert_eq!(got.is_ok(), len == MAX_SIZE, "{len}");
+    }
   }
 }
