@@ -106,6 +106,14 @@ impl<K: BlsWire<N>, const N: usize> BlsValue<K, N> {
     self.valid
   }
 
+  /// Runs a legacy-decoded element's subgroup test once, where the object
+  /// is kept: an element in the subgroup is no longer tested by each
+  /// verification under the legacy flag, which Core runs without that test.
+  /// Equality, hashing and every verdict are unchanged.
+  pub fn resolve(&mut self) {
+    K::resolve(&mut self.element.point);
+  }
+
   /// Marks the object invalid and keeps its element, as Core's in-place
   /// operations (`SecretKeyShare`, `PublicKeyShare`, `Recover`,
   /// `DHKeyExchange`) do when they return `false`.

@@ -108,6 +108,17 @@ macro_rules! impl_usable {
           Self::Exotic => None,
         }
       }
+
+      /// Runs a legacy-decoded point's subgroup test once: a point in the
+      /// subgroup becomes `Usable`, so [`Self::usable`] no longer tests it;
+      /// any other point is kept.
+      pub fn resolve(&mut self) {
+        if let Self::OnCurve(point) = *self {
+          if point.to_projective().in_subgroup() {
+            *self = Self::Usable(point);
+          }
+        }
+      }
     }
   };
 }
@@ -174,6 +185,10 @@ pub trait BlsWire<const N: usize>: sealed::Sealed + Sized + 'static {
   /// serializes it; infinity, Core's default element, is the same in both.
   #[doc(hidden)]
   fn encode(basic: &[u8; N], scheme: BlsSchemeKind) -> [u8; N];
+
+  /// Runs a point's pending subgroup test once ([`BlsPoint::resolve`]).
+  #[doc(hidden)]
+  fn resolve(_point: &mut Self::Point) {}
 }
 
 /// A curve-point kind, the kinds Core also wraps lazily.
@@ -363,6 +378,10 @@ macro_rules! impl_wire_point {
           BlsSchemeKind::Legacy if basic[0] & FLAG_INFINITY == 0 => $to_legacy(basic),
           _ => *basic,
         }
+      }
+
+      fn resolve(point: &mut Self::Point) {
+        point.resolve();
       }
     }
 

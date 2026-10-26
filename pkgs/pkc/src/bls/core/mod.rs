@@ -340,7 +340,7 @@ pub fn make_new_key(rng: &mut impl CryptoRng) -> BlsSkValue {
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
-  use crate::bls::{BlsPublicKey, BlsScChia, BlsScIetf, BlsScheme, BlsSecretKey, BlsSignature};
+  use crate::bls::{BlsPoint, BlsPublicKey, BlsScChia, BlsScIetf, BlsScheme, BlsSecretKey, BlsSignature};
 
   use hex_conservative::hex;
   use rstest::rstest;
@@ -430,17 +430,23 @@ mod tests {
     );
   }
 
-  /// A legacy key outside the G1 subgroup (bls_wrapper's `nonsub_000`):
-  /// Core's basic checks refuse it, and under the legacy flag relic pairs
-  /// it, which the engine reproduces; the signature is not its.
+  /// A legacy key on the curve outside the G1 subgroup (bls_wrapper's
+  /// `nonsub_000`).
+  fn nonsub_key() -> BlsPkValue {
+    let bytes =
+      hex!("0589c416bd798099fb08ed6d642e04865013fbd317a1ec5ec1041e2fb4b06c404e2059fb0145504474fac768c3c3e1af");
+    BlsPkValue::from_canonical(&bytes, BlsSchemeKind::Legacy).unwrap()
+  }
+
+  /// A legacy key outside the G1 subgroup: Core's basic checks refuse it,
+  /// and under the legacy flag relic pairs it, which the engine reproduces;
+  /// the signature is not its.
   #[rstest]
   #[case::legacy(BlsSchemeKind::Legacy)]
   #[case::basic(BlsSchemeKind::Basic)]
   fn exotic_key(#[case] flag: BlsSchemeKind) {
     let want = BlsVerdict::Invalid;
-    let bytes =
-      hex!("0589c416bd798099fb08ed6d642e04865013fbd317a1ec5ec1041e2fb4b06c404e2059fb0145504474fac768c3c3e1af");
-    let exotic = BlsPkValue::from_canonical(&bytes, BlsSchemeKind::Legacy).unwrap();
+    let exotic = nonsub_key();
     assert_eq!(exotic.point().map(|p| p.usable()), Some(None));
     let msg = [5u8; 32];
     let (sig, pk) = values::<BlsScChia>(5, &msg, BlsSchemeKind::Legacy);
@@ -450,6 +456,42 @@ mod tests {
       want
     );
     assert_eq!(verify_secure_aggregated(&sig, &[&pk, &exotic], &msg, flag), want);
+  }
+
+  /// Resolving a legacy key (BS11a-4 D8) turns a subgroup point `Usable`
+  /// and keeps a point outside the subgroup as decoded; neither changes the
+  /// key's equality or any verdict.
+  #[rstest]
+  #[case::legacy(BlsSchemeKind::Legacy)]
+  #[case::basic(BlsSchemeKind::Basic)]
+  fn resolving_keys_changes_no_verdict(#[case] flag: BlsSchemeKind) {
+    let msg = [7u8; 32];
+    let (sig, pk) = values::<BlsScChia>(7, &msg, BlsSchemeKind::Legacy);
+    let (_, other) = values::<BlsScChia>(8, &[8u8; 32], BlsSchemeKind::Legacy);
+    let nonsub = nonsub_key();
+    for (key, resolves) in [(&pk, true), (&nonsub, false)] {
+      let mut resolved = key.clone();
+      resolved.resolve();
+      assert!(matches!(key.point(), Some(BlsPoint::OnCurve(_))));
+      assert_eq!(matches!(resolved.point(), Some(BlsPoint::Usable(_))), resolves);
+      assert_eq!(&resolved, key);
+      assert_eq!(
+        verify_insecure(&sig, &resolved, &msg, flag),
+        verify_insecure(&sig, key, &msg, flag)
+      );
+      assert_eq!(
+        verify_secure_aggregated(&sig, &[&resolved, &other], &msg, flag),
+        verify_secure_aggregated(&sig, &[key, &other], &msg, flag)
+      );
+    }
+    let mut resolved = pk.clone();
+    resolved.resolve();
+    let want = if flag == BlsSchemeKind::Legacy {
+      BlsVerdict::Valid
+    } else {
+      BlsVerdict::Invalid
+    };
+    assert_eq!(verify_insecure(&sig, &resolved, &msg, flag), want);
   }
 
   /// The secure verify takes an invalid object as infinity: with every key
