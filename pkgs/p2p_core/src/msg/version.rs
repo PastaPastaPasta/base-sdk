@@ -14,7 +14,8 @@ use dash_num::Hash256;
 use dash_primitives::{hash_impl, ServiceV1};
 use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{make_num, CompactSize};
+use dash_types::{impl_new, make_num, CompactSize};
+use getset::{CopyGetters, Getters};
 
 use core::fmt;
 use core::ops::{BitAnd, BitOr, BitOrAssign};
@@ -71,12 +72,15 @@ impl BitOrAssign for ServiceFlags {
   }
 }
 
+impl_new! {
 /// The user agent exceeds the 256-byte limit.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, Unencodable)]
+#[derive(Debug, Clone, CopyGetters, PartialEq, Eq, thiserror::Error, Unencodable)]
 #[error("user agent too long: {size} bytes, max {MAX_USER_AGENT}")]
 pub struct UserAgentTooLong {
   /// Actual length in bytes.
-  pub size: usize,
+  #[getset(get_copy = "pub")]
+  size: usize,
+}
 }
 
 /// CompactSize-prefixed user agent bytestring.
@@ -108,7 +112,7 @@ impl UserAgent {
   /// Returns `UserAgentTooLong` if `bytes` exceeds 256 bytes.
   pub fn new(bytes: Vec<u8>) -> Result<Self, UserAgentTooLong> {
     if bytes.len() > MAX_USER_AGENT {
-      return Err(UserAgentTooLong { size: bytes.len() });
+      return Err(UserAgentTooLong::new(bytes.len()));
     }
     Ok(Self(bytes))
   }
@@ -163,13 +167,15 @@ codec_p2p! {
 /// Network address with service flags (used inside the version message).
 ///
 /// Wire format: `u64 services` + `[u8; 16] addr` + `u16 BE port`.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct VersionAddr {
   /// Advertised services.
-  pub services: ServiceFlags,
+  #[getset(get_copy = "pub")]
+  services: ServiceFlags,
   /// IPv4-mapped IPv6 address + port.
-  pub addr: ServiceV1,
+  #[getset(get = "pub")]
+  addr: ServiceV1,
 }
 }
 
@@ -184,32 +190,43 @@ codec_p2p! {
 ///
 /// Dash extends the Bitcoin version message with two additional
 /// fields for masternode authentication.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct Version {
   /// Sender's protocol version.
-  pub protocol_version: ProtocolVersion,
+  #[getset(get_copy = "pub")]
+  protocol_version: ProtocolVersion,
   /// Sender's advertised services.
-  pub services: ServiceFlags,
+  #[getset(get_copy = "pub")]
+  services: ServiceFlags,
   /// Unix timestamp of the sender.
-  pub timestamp: i64,
+  #[getset(get_copy = "pub")]
+  timestamp: i64,
   /// Receiver's address as seen by the sender.
-  pub addr_recv: VersionAddr,
+  #[getset(get = "pub")]
+  addr_recv: VersionAddr,
   /// Sender's own address.
-  pub addr_send: VersionAddr,
+  #[getset(get = "pub")]
+  addr_send: VersionAddr,
   /// Random nonce for connection deduplication.
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::str_u64"))]
-  pub nonce: u64,
+  #[getset(get_copy = "pub")]
+  nonce: u64,
   /// User agent string.
-  pub user_agent: UserAgent,
+  #[getset(get = "pub")]
+  user_agent: UserAgent,
   /// Sender's best block height.
-  pub start_height: i32,
+  #[getset(get_copy = "pub")]
+  start_height: i32,
   /// Whether the sender wants transaction relay.
-  pub relay: bool,
+  #[getset(get_copy = "pub")]
+  relay: bool,
   /// Dash: masternode authentication challenge.
-  pub mnauth_challenge: Hash256,
+  #[getset(get_copy = "pub")]
+  mnauth_challenge: Hash256,
   /// Dash: whether the sender identifies as a masternode.
-  pub mn_connection: bool,
+  #[getset(get_copy = "pub")]
+  mn_connection: bool,
 }
 }
 

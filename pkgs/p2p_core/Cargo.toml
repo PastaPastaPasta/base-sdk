@@ -47,6 +47,7 @@ dash-primitives = { version = "0.0.0", path = "../primitives" }
 dash-types = { version = "0.2.0-beta", path = "../types", default-features = false, features = [
   "codec",
 ] }
+getset = { workspace = true }
 serde = { workspace = true, features = [
   "alloc",
   "derive",
