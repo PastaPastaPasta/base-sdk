@@ -141,6 +141,12 @@ BOOST_AUTO_TEST_CASE(netinfo_extended_reads)
              "01" "01" "00" "02" "01" "01" "04" "01020304" "270f" "01" "01" "04" "05060708" "270f",
              "01" "01" "00" "05" "01" "01" "04" "01020304" "270f" "01" "01" "04" "05060708" "270f" "01" "01" "04" "090a0b0c" "270f" "01" "01" "04" "0d0e0f10" "270f" "01" "01" "04" "11121314" "270f",
              "01" "00",
+             "01" "02" "00" "01" "01" "01" "04" "01020304" "270f" "03" "01" "01" "01" "04" "05060708" "270f",
+             "01" "02" "02" "01" "02" "0b" "6578616d706c652e636f6d" "01bb" "00" "01" "01" "01" "04" "01020304" "270f",
+             "01" "02" "00" "01" "01" "01" "04" "01020304" "270f" "00" "01" "01" "01" "04" "05060708" "270f",
+             "01" "03" "00" "01" "01" "01" "04" "01020304" "270f" "01" "01" "01" "01" "04" "01020304" "6820" "00" "01" "01" "01" "04" "05060708" "270f",
+             "01" "02" "03" "01" "01" "01" "04" "05060708" "270f" "00" "01" "01" "01" "04" "01020304" "270f",
+             "01" "02" "00" "00" "00" "01" "01" "01" "04" "01020304" "270f",
              "01" "00" "ff",
              "",
              "01",
@@ -182,6 +188,20 @@ BOOST_AUTO_TEST_CASE(netinfo_extended_reads)
     { "raw": "0101000501010401020304270f01010405060708270f010104090a0b0c270f0101040d0e0f10270f01010411121314270f", "read": 49, "written": "0101000501010401020304270f01010405060708270f010104090a0b0c270f0101040d0e0f10270f01010411121314270f", "entries": ["1.2.3.4:9999", "5.6.7.8:9999", "9.10.11.12:9999", "13.14.15.16:9999", "17.18.19.20:9999"], "empty": false },
     // No groups is empty.
     { "raw": "0100", "read": 2, "written": "0100", "entries": [], "empty": true },
+    // A purpose must be known and above the purpose before it, or the whole value is refused.
+    // https://github.com/dashpay/dash/blob/v24.0.0-rc.4/src/evo/netinfo.h#L425-L435
+    // A group of an unknown purpose is refused.
+    { "raw": "0102000101010401020304270f030101010405060708270f", "read": null, "written": null, "entries": null, "empty": null },
+    // Groups out of purpose order are refused.
+    { "raw": "01020201020b6578616d706c652e636f6d01bb000101010401020304270f", "read": null, "written": null, "entries": null, "empty": null },
+    // A repeated purpose is refused.
+    { "raw": "0102000101010401020304270f000101010405060708270f", "read": null, "written": null, "entries": null, "empty": null },
+    // A purpose repeated after another is refused.
+    { "raw": "0103000101010401020304270f0101010104010203046820000101010405060708270f", "read": null, "written": null, "entries": null, "empty": null },
+    // An unknown purpose before a known one is refused.
+    { "raw": "0102030101010405060708270f000101010401020304270f", "read": null, "written": null, "entries": null, "empty": null },
+    // A purpose repeated after an empty group is refused.
+    { "raw": "01020000000101010401020304270f", "read": null, "written": null, "entries": null, "empty": null },
     // The read stops after the last group.
     { "raw": "0100ff", "read": 2, "written": "0100", "entries": [], "empty": true },
     // An empty input is refused.

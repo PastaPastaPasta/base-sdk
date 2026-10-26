@@ -290,12 +290,14 @@ pub struct NetInfoV2 {
 impl_type!(NetInfoV2);
 
 impl BaseCodec for NetInfoV2 {
+  /// Decodes an extended network info. A group purpose that is unknown, or
+  /// not above the purpose before it, fails the decode.
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let version = u8::decode(data)?;
     let purpose_count = CompactSize::decode_len(data, MAX_SER_SIZE)?;
-    let mut groups = Vec::with_capacity(purpose_count);
+    let mut groups: Vec<(NIPurpose, Vec<NIEntry>)> = Vec::with_capacity(purpose_count);
     for _ in 0..purpose_count {
-      let purpose = NIPurpose::from_base(u8::decode(data)?);
+      let purpose = read_purpose(data, groups.last().map(|(last, _)| *last))?;
       let entry_count = CompactSize::decode_len(data, MAX_SER_SIZE)?;
       let mut group = Vec::with_capacity(entry_count);
       for _ in 0..entry_count {
@@ -329,6 +331,13 @@ impl Checkable for NetInfoV2 {
     if self.groups.is_empty() {
       return Some(NIError::Malformed);
     }
+    if self
+      .groups
+      .iter()
+      .any(|(purpose, _)| matches!(purpose, NIPurpose::Unknown(_)))
+    {
+      return Some(NIError::Malformed);
+    }
     // Duplicate purpose key detection.
     for i in 0..self.groups.len() {
       for j in (i + 1)..self.groups.len() {
@@ -336,6 +345,13 @@ impl Checkable for NetInfoV2 {
           return Some(NIError::Duplicate);
         }
       }
+    }
+    if self
+      .groups
+      .windows(2)
+      .any(|pair| pair[0].0.to_base() > pair[1].0.to_base())
+    {
+      return Some(NIError::Malformed);
     }
     // addr:port duplicates across all entries
     let all: Vec<&NIEntry> = self.groups.iter().flat_map(|(_, g)| g.iter()).collect();
@@ -450,6 +466,30 @@ impl NITrait for NetInfoV2 {
   fn stores_platform(&self) -> bool {
     true
   }
+}
+
+/// Reads a group purpose, which must be known and above `last`.
+///
+/// # Errors
+///
+/// Returns [`DecodeError::InvalidValue`] for an unknown purpose or one not
+/// above `last`, and the errors of reading a byte.
+fn read_purpose(data: &mut &[u8], last: Option<NIPurpose>) -> Result<NIPurpose, DecodeError> {
+  let value = u8::decode(data)?;
+  let is_after_last = |candidate: u8| last.is_none_or(|last| candidate > last.to_base());
+  let purpose = NIPurpose::from_base(value);
+  if !matches!(purpose, NIPurpose::Unknown(_)) && is_after_last(value) {
+    return Ok(purpose);
+  }
+  Err(DecodeError::InvalidValue {
+    expected: NIPurpose::variants()
+      .iter()
+      .map(NIPurpose::to_base)
+      .filter(|&candidate| is_after_last(candidate))
+      .map(u64::from)
+      .collect(),
+    actual: u64::from(value),
+  })
 }
 
 /// Returns `true` when two entries share the same address,
@@ -733,6 +773,19 @@ mod tests {
   }
 
   #[rstest]
+  #[case::repeated("010200000000", 0, vec![1, 2])]
+  #[case::descending("010201000000", 0, vec![2])]
+  #[case::after_last_purpose("010202000100", 1, vec![])]
+  #[case::unknown("01010300", 3, vec![0, 1, 2])]
+  fn decode_v2_purpose_refused(#[case] wire: &str, #[case] actual: u64, #[case] expected: Vec<u64>) {
+    let wire = vec_from_hex(wire);
+    assert_eq!(
+      NetInfoV2::decode(&mut wire.as_slice()),
+      Err(DecodeError::InvalidValue { expected, actual })
+    );
+  }
+
+  #[rstest]
   #[case::ipv4_valid(AddrV2::Ipv4([1, 2, 3, 4]), 9999, None)]
   #[case::ipv4_port_zero(
     AddrV2::Ipv4([1, 2, 3, 4]), 0,
@@ -926,6 +979,35 @@ mod tests {
       (NIPurpose::CoreP2p, vec![svc(AddrV2::Ipv4([10, 0, 0, 2]), 9999)]),
     ],
     Some(NIError::Duplicate),
+  )]
+  #[case::ascending_purposes(
+    vec![
+      (NIPurpose::CoreP2p, vec![svc(AddrV2::Ipv4([1, 2, 3, 4]), 9999)]),
+      (NIPurpose::PlatformHttps, vec![dom(b"example.com", 443)]),
+    ],
+    None,
+  )]
+  #[case::descending_purposes(
+    vec![
+      (NIPurpose::PlatformHttps, vec![dom(b"example.com", 443)]),
+      (NIPurpose::CoreP2p, vec![svc(AddrV2::Ipv4([1, 2, 3, 4]), 9999)]),
+    ],
+    Some(NIError::Malformed),
+  )]
+  #[case::non_adjacent_repeated_purpose(
+    vec![
+      (NIPurpose::CoreP2p, vec![svc(AddrV2::Ipv4([10, 0, 0, 1]), 9999)]),
+      (NIPurpose::PlatformP2p, vec![svc(AddrV2::Ipv4([10, 0, 0, 2]), 9999)]),
+      (NIPurpose::CoreP2p, vec![svc(AddrV2::Ipv4([10, 0, 0, 3]), 9999)]),
+    ],
+    Some(NIError::Duplicate),
+  )]
+  #[case::unknown_purpose_beside_core_p2p(
+    vec![
+      (NIPurpose::CoreP2p, vec![svc(AddrV2::Ipv4([10, 0, 0, 1]), 9999)]),
+      (NIPurpose::Unknown(0), vec![svc(AddrV2::Ipv4([10, 0, 0, 2]), 9999)]),
+    ],
+    Some(NIError::Malformed),
   )]
   #[case::duplicate_addr_port_cross_group(
     vec![
