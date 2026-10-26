@@ -299,9 +299,11 @@ class Probe:
     script.emit(op, operands, flag)
     return self.run(script)[-1]
 
-  def must(self, op: int, legacy: bool, *args: object) -> bytes:
-    """An op Core must accept."""
-    ret, out = self.call(op, legacy, *args)
+  def must(
+    self, op: int, legacy: bool, *args: object, flag: bool | None = None
+  ) -> bytes:
+    """An op Core must accept (`flag` as in `call`)."""
+    ret, out = self.call(op, legacy, *args, flag=flag)
     if ret != OK:
       msg = f"op {op} returned {ret}"
       raise OracleError(msg)

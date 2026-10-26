@@ -16,6 +16,7 @@ fails when a file and `PROVENANCE.md` disagree.
 | `oracle.py` | The script encoding (`Script`), the record reader and the probe driver (`Probe`) |
 | `gen.py` | Seeded inputs for every file but `dkg.json5`, and the JSON5 writer (`--only FILE` writes just that file) |
 | `dkg.py` | Extracts a DKG transcript from a functional-test run and has Core check every step |
+| `check_upstream.py` | Has Core reproduce every value of the upstream files directly under `pkgs/pkc/corpus/`; writes nothing |
 
 ## Regenerating
 
@@ -28,7 +29,7 @@ contrib/vectors/bls_oracle/build.sh <archive> /path/to/probe
 python3 gen.py --probe /path/to/probe --out-dir ../../../pkgs/pkc/corpus/bls_oracle
 ```
 
-Both generators are standard-library Python 3.
+Both generators, and the checker below, are standard-library Python 3.
 
 ### The DKG transcript
 
@@ -52,3 +53,23 @@ python3 dkg.py --probe /path/to/probe --run "$RUN/run" --argv "$RUN/argv.log" \
 The members' contributions are random, so a new run gives a different transcript; the checks are the same.
 
 After regenerating, update the file's section in `PROVENANCE.md`, including its sha256.
+
+## Checking the upstream files
+
+`bls_aggregate`, `bls_dh`, `bls_hash`, `bls_ies`, `bls_keygen`, `bls_llmq_100`, `bls_secure_aggregate`,
+`bls_serialize`, `bls_sign` and `bls_threshold` (`.json5`, directly under `pkgs/pkc/corpus/`) came from upstream
+without a generator, and their bytes are kept as they are. `check_upstream.py` has Core reproduce their values instead
+of writing them; from this directory:
+
+```sh
+python3 check_upstream.py --probe /path/to/probe --corpus-dir ../../../pkgs/pkc/corpus
+```
+
+A "chia" section is Core's legacy scheme and an "ietf" section its basic one. The checker prints a line per file with
+its values in five classes: reproduced (Core's output, or glue Core runs outside its BLS library over Core's outputs:
+sha256d, the uint256 byte order and its serialization layout), verified (randomness the file does not record, the
+DKG's coefficients and the operators' keys, so Core's own verification is the check), not reproduced, not reachable
+(no op or composition of ops yields it; each such field is listed with the reason) and inputs (keys, messages, ids and
+counts the file gives; Core reads the objects among them back byte for byte). `--verbose` prints every value's check.
+It exits 0 iff every reachable value reproduces. The corpus directory's `PROVENANCE.md` gives each file's origin and
+result.
