@@ -23,9 +23,9 @@ use dash_dev::{arr_from_hex, vec_from_hex, Corpus};
 use dash_pkc::bls::core::{
   aggregate_public_keys_insecure, aggregate_public_keys_insecure_pair, aggregate_secret_keys_insecure,
   aggregate_signatures_insecure, aggregate_signatures_insecure_pair, aggregate_signatures_secure, dh_key_exchange,
-  ies_key, public_key_share, recover_signature, secret_key_share, serialize_hash_vector, sub_signatures_insecure,
-  verify_insecure, verify_insecure_aggregated, verify_secure_aggregated, BlsPkElem, BlsPkValue, BlsSigElem,
-  BlsSigValue, BlsSkValue, BlsVerdict,
+  ies_key, public_key, public_key_share, recover_signature, secret_key_share, serialize_hash_vector,
+  sub_signatures_insecure, verify_insecure, verify_insecure_aggregated, verify_secure_aggregated, BlsIesBlobValue,
+  BlsIesMultiBlobs, BlsPkElem, BlsPkValue, BlsSigElem, BlsSigValue, BlsSkValue, BlsVerdict,
 };
 use dash_pkc::bls::{
   BlsEager, BlsIesBlob, BlsIesBlobBytes, BlsIesMulti, BlsIesMultiBytes, BlsLazy, BlsPublicKey, BlsScChia, BlsScIetf,
@@ -753,6 +753,14 @@ struct RelicStep {
   sk: Option<usize>,
   recv: Option<usize>,
   items: Option<Vec<usize>>,
+  sigs: Option<Vec<usize>>,
+  keys: Option<Vec<usize>>,
+  id: Option<String>,
+  ids: Option<Vec<String>>,
+  seed: Option<String>,
+  plain: Option<Vec<String>>,
+  idx: Option<usize>,
+  data: Option<String>,
   #[serde(default)]
   pair: bool,
   msg: Option<String>,
@@ -933,6 +941,36 @@ fn dh_op(label: &str, sk: &Obj, pk: &Obj, recv: Option<&Obj>) -> Obj {
   Obj::Pk(out)
 }
 
+fn sks_at<'a>(regs: &'a [Reg], items: &[usize], label: &str) -> Vec<&'a BlsSkValue> {
+  items
+    .iter()
+    .map(|&i| match &regs[i].obj {
+      Obj::Sk(v) => v,
+      _ => panic!("{label}: secret key operand {i}"),
+    })
+    .collect()
+}
+
+fn pks_at<'a>(regs: &'a [Reg], items: &[usize], label: &str) -> Vec<&'a BlsPkValue> {
+  items
+    .iter()
+    .map(|&i| match &regs[i].obj {
+      Obj::Pk(v) => v,
+      _ => panic!("{label}: key operand {i}"),
+    })
+    .collect()
+}
+
+fn sigs_at<'a>(regs: &'a [Reg], items: &[usize], label: &str) -> Vec<&'a BlsSigValue> {
+  items
+    .iter()
+    .map(|&i| match &regs[i].obj {
+      Obj::Sig(v) => v,
+      _ => panic!("{label}: signature operand {i}"),
+    })
+    .collect()
+}
+
 /// Runs a step script's every step on `BlsValue`/`BlsElem` over registers
 /// that hold what the earlier steps left, with relic's code `RLC_OK` after
 /// every step and every logged call. `gaps` counts the verifications on an
@@ -956,14 +994,23 @@ fn assert_steps(file: &str) -> usize {
         "decode" => {
           let input = need(step.input.as_deref(), &label, "input");
           let obj = match step.kind.as_deref() {
-            Some("pk") => Obj::Pk(pk_value(input, scheme)),
-            Some("sig") => Obj::Sig(sig_value(input, scheme)),
-            Some("sk") => Obj::Sk(eager(input, scheme).unwrap_or_else(|| panic!("Core reads sk {input}"))),
+            Some("pk") => eager(input, flag).map(Obj::Pk),
+            Some("sig") => eager(input, flag).map(Obj::Sig),
+            Some("sk") => eager(input, flag).map(Obj::Sk),
             other => panic!("{label}: kind {other:?}"),
           };
-          (obj.status(), obj.bytes(scheme), obj)
+          match obj {
+            Some(obj) => (obj.status(), obj.bytes(flag), obj),
+            None => (-1, Vec::new(), Obj::Empty),
+          }
         }
-        "pubkey" => (0, vec_from_hex(&step.out), Obj::Pk(pk_value(&step.out, scheme))),
+        "pubkey" => {
+          let Obj::Sk(sk) = at(step.a) else {
+            panic!("{label}: operands");
+          };
+          let obj = Obj::Pk(public_key(sk));
+          (obj.status(), obj.bytes(flag), obj)
+        }
         "sign" => (0, vec_from_hex(&step.out), Obj::Sig(sig_value(&step.out, scheme))),
         "add" | "neg" | "mul" => {
           let b = step.b.map(|_| at(step.b));
@@ -1004,6 +1051,111 @@ fn assert_steps(file: &str) -> usize {
           let eq = eq_op(&label, &step.op, at(step.a), at(step.b));
           (0, vec![u8::from(eq)], Obj::Empty)
         }
+        "agg_sk" => {
+          let items = need(step.items.as_ref(), &label, "items");
+          let obj = Obj::Sk(aggregate_secret_keys_insecure(&sks_at(&regs, items, &label)));
+          (obj.status(), obj.bytes(flag), obj)
+        }
+        "sub_sig" => match (at(step.a), at(step.b)) {
+          (Obj::Sig(a), Obj::Sig(b)) if a.is_valid() && b.is_valid() => {
+            let obj = Obj::Sig(sub_signatures_insecure(a, b));
+            (obj.status(), obj.bytes(flag), obj)
+          }
+          (Obj::Sig(_), Obj::Sig(_)) => (-4, Vec::new(), Obj::Empty),
+          _ => panic!("{label}: operands"),
+        },
+        "agg_secure" => {
+          let sigs = sigs_at(&regs, need(step.sigs.as_deref(), &label, "sigs"), &label);
+          let pks = pks_at(&regs, need(step.keys.as_deref(), &label, "keys"), &label);
+          let obj = Obj::Sig(aggregate_signatures_secure(&sigs, &pks, flag));
+          (obj.status(), obj.bytes(flag), obj)
+        }
+        "verify_sec" => {
+          let Obj::Sig(sig) = at(step.sig) else {
+            panic!("{label}: operands");
+          };
+          let pks = pks_at(&regs, need(step.keys.as_deref(), &label, "keys"), &label);
+          let h = hash(need(step.msg.as_deref(), &label, "msg"));
+          match verify_secure_aggregated(sig, &pks, &h, flag) {
+            BlsVerdict::Unsupported => gaps += 1,
+            core => assert_verdict(&label, core, None, step.status == 0),
+          }
+          (step.status, Vec::new(), Obj::Empty)
+        }
+        "sk_share" | "pk_share" | "recover_sig" => {
+          let items = need(step.items.as_ref(), &label, "items");
+          let recv = step.recv.map(|_| at(step.recv));
+          let obj = match (step.op.as_str(), recv) {
+            ("sk_share", recv) => {
+              let mut out = match recv {
+                Some(Obj::Sk(v)) => v.clone(),
+                None => BlsSkValue::invalid(),
+                _ => panic!("{label}: receiver"),
+              };
+              let id = hash(need(step.id.as_deref(), &label, "id"));
+              let ok = secret_key_share(&mut out, &sks_at(&regs, items, &label), &id);
+              assert_eq!(ok, out.is_valid(), "{label}: the receiver");
+              Obj::Sk(out)
+            }
+            ("pk_share", recv) => {
+              let mut out = match recv {
+                Some(Obj::Pk(v)) => v.clone(),
+                None => BlsPkValue::invalid(),
+                _ => panic!("{label}: receiver"),
+              };
+              let id = hash(need(step.id.as_deref(), &label, "id"));
+              let ok = public_key_share(&mut out, &pks_at(&regs, items, &label), &id);
+              assert_eq!(ok, out.is_valid(), "{label}: the receiver");
+              Obj::Pk(out)
+            }
+            (_, recv) => {
+              let mut out = match recv {
+                Some(Obj::Sig(v)) => v.clone(),
+                None => BlsSigValue::invalid(),
+                _ => panic!("{label}: receiver"),
+              };
+              let ids: Vec<[u8; 32]> = need(step.ids.as_ref(), &label, "ids").iter().map(|i| hash(i)).collect();
+              let ok = recover_signature(&mut out, &sigs_at(&regs, items, &label), &ids);
+              assert_eq!(ok, out.is_valid(), "{label}: the receiver");
+              Obj::Sig(out)
+            }
+          };
+          (obj.status(), obj.bytes(flag), obj)
+        }
+        "ies_encrypt" => {
+          let Obj::Sk(eph) = at(step.sk) else {
+            panic!("{label}: operands");
+          };
+          let seed = hash(need(step.seed.as_deref(), &label, "seed"));
+          let pks = pks_at(&regs, need(step.keys.as_deref(), &label, "keys"), &label);
+          let plain: Vec<Vec<u8>> = need(step.plain.as_ref(), &label, "plain")
+            .iter()
+            .map(|p| vec_from_hex(p))
+            .collect();
+          let recipients: Vec<(&BlsPkValue, &[u8])> =
+            pks.iter().copied().zip(plain.iter().map(Vec::as_slice)).collect();
+          let (multi, ok) = BlsIesMultiBlobs::encrypt_with(eph, &seed, &recipients);
+          (i32::from(!ok), multi.to_bytes(flag), Obj::Empty)
+        }
+        "ies_decrypt" | "ies_decrypt_blob" => {
+          let Obj::Sk(sk) = at(step.sk) else {
+            panic!("{label}: operands");
+          };
+          let data = vec_from_hex(need(step.data.as_deref(), &label, "data"));
+          let idx = *need(step.idx.as_ref(), &label, "idx");
+          let mut rest = data.as_slice();
+          let opened = if step.op == "ies_decrypt" {
+            BlsIesMultiBlobs::decode(&mut rest, flag).map(|m| m.decrypt(idx, sk))
+          } else {
+            BlsIesBlobValue::decode(&mut rest, flag).map(|b| b.decrypt(idx, sk))
+          };
+          match opened {
+            Err(_) => (-1, Vec::new(), Obj::Empty),
+            Ok(_) if !rest.is_empty() => (-6, Vec::new(), Obj::Empty),
+            Ok(Some(plain)) => (0, plain.to_vec(), Obj::Empty),
+            Ok(None) => (1, Vec::new(), Obj::Empty),
+          }
+        }
         "verify" => {
           let (Obj::Sig(sig), Obj::Pk(pk)) = (at(step.sig), at(step.pk)) else {
             panic!("{label}: operands");
@@ -1043,6 +1195,21 @@ fn assert_relic() {
 /// aggregations, DH and its IES key, and `SER_HASH`'s cache.
 fn assert_arith() {
   assert_eq!(assert_steps("arith"), 0);
+}
+
+/// Core's wrapper operations BS11b ports: secret key sums, SubInsecure,
+/// AggregateSecure and its verify, threshold shares and recovery, and
+/// multi-recipient IES.
+fn assert_ops() {
+  assert_eq!(assert_steps("ops"), 0);
+}
+
+/// Quirk 22: bytes that are canonical only under the opposite flag decode to
+/// an invalid object and legacy encodings get no curve or subgroup checks;
+/// every wrapper operation on such objects answers as Core's, without a gap.
+#[test]
+fn quirk_22_bls_opposite_scheme_and_legacy_checks() {
+  assert_eq!(assert_steps("quirk22"), 0);
 }
 
 // dkg.json5
@@ -1363,8 +1530,9 @@ fn assert_dkg() {
 
 // The files and their provenance.
 
-/// Every corpus file, each checked by its own case below.
-const FILES: [&str; 11] = [
+/// Every corpus file, each checked by its own case below (`quirk22` by
+/// `quirk_22_bls_opposite_scheme_and_legacy_checks`).
+const FILES: [&str; 13] = [
   "hash_to_g2",
   "sign",
   "aggregate",
@@ -1375,6 +1543,8 @@ const FILES: [&str; 11] = [
   "edge",
   "relic",
   "arith",
+  "ops",
+  "quirk22",
   "dkg",
 ];
 
@@ -1389,6 +1559,7 @@ const FILES: [&str; 11] = [
 #[case::edge(assert_edge)]
 #[case::relic(assert_relic)]
 #[case::arith(assert_arith)]
+#[case::ops(assert_ops)]
 #[case::dkg(assert_dkg)]
 fn core_bls_corpus(#[case] check: fn()) {
   check();
