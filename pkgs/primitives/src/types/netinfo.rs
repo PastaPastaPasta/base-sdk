@@ -29,6 +29,8 @@ const DOMAIN_LABEL_MAX: usize = 63;
 const DOMAIN_MAX: usize = 253;
 /// Minimum FQDN length.
 const DOMAIN_MIN: usize = 3;
+/// Privileged port allowed for Platform HTTPS.
+const PLATFORM_HTTPS_PORT: u16 = 443;
 /// The tag Core writes for an entry it marked invalid.
 const ENTRY_INVALID: u8 = 0xff;
 /// An IPv4 address embedded in the legacy IPv6 form.
@@ -353,7 +355,7 @@ impl Checkable for NIEntry {
         None
       }
       Self::Domain { name, port } => {
-        if *port == 0 || (is_bad_port(*port) && *port != 443) {
+        if *port == 0 || (is_bad_port(*port) && *port != PLATFORM_HTTPS_PORT) {
           return Some(NIError::BadPort { port: *port });
         }
         check_domain(name)
@@ -519,8 +521,12 @@ impl Checkable for NetInfoV2 {
         if matches!(entry, NIEntry::Domain { .. }) && *purpose != NIPurpose::PlatformHttps {
           return Some(NIError::BadType { entry_type: 0x02 });
         }
-        if let Some(e) = entry.check() {
-          return Some(e);
+        match entry.check() {
+          Some(NIError::BadPort {
+            port: PLATFORM_HTTPS_PORT,
+          }) if *purpose == NIPurpose::PlatformHttps => {}
+          Some(e) => return Some(e),
+          None => {}
         }
       }
     }
@@ -1047,6 +1053,22 @@ mod tests {
     NIPurpose::CoreP2p,
     vec![svc(AddrV2::Ipv4([1, 2, 3, 4]), 0)],
     Some(NIError::BadAddr { error: NetAddrError::BadPort { port: 0 } }),
+  )]
+  #[case::service_https_port_443(NIPurpose::PlatformHttps, vec![svc(AddrV2::Ipv4([1, 2, 3, 4]), 443)], None)]
+  #[case::service_core_p2p_port_443(
+    NIPurpose::CoreP2p,
+    vec![svc(AddrV2::Ipv4([1, 2, 3, 4]), 443)],
+    Some(NIError::BadPort { port: 443 }),
+  )]
+  #[case::service_https_port_80(
+    NIPurpose::PlatformHttps,
+    vec![svc(AddrV2::Ipv4([1, 2, 3, 4]), 80)],
+    Some(NIError::BadPort { port: 80 }),
+  )]
+  #[case::i2p_https_port_443(
+    NIPurpose::PlatformHttps,
+    vec![svc(AddrV2::I2p([1; 32]), 443)],
+    Some(NIError::BadAddr { error: NetAddrError::BadPort { port: 443 } }),
   )]
   #[case::duplicate_addr_same_group(
     NIPurpose::CoreP2p,
