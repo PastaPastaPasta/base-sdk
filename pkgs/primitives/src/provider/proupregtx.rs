@@ -54,8 +54,9 @@ pub struct ProUpRegTx {
   #[getset(get_copy = "pub")]
   inputs_hash: InputsHash,
   /// Owner ECDSA signature.
+  #[cfg_attr(feature = "serde", serde(rename = "vchSig"))]
   #[getset(get = "pub")]
-  vch_sig: OwnerSig,
+  sig: OwnerSig,
 }
 }
 
@@ -65,22 +66,22 @@ impl Signable for ProUpRegTx {
   type Error = EcdsaError;
 
   fn payload(&self, _ctx: &()) -> Vec<u8> {
-    unsigned_digest(self, &self.vch_sig).to_vec()
+    unsigned_digest(self, &self.sig).to_vec()
   }
 
   fn set_signature(&mut self, sig: &[u8], key: &PubKeyHash, _ctx: &()) -> Result<(), EcdsaError> {
     let sig = <[u8; ECDSA_REC_SIG_LEN]>::try_from(sig).map_err(|_| EcdsaError::InvalidSignature)?;
     verify_compact(&self.payload(&()), &sig, key)?;
-    self.vch_sig = OwnerSig::new(sig);
+    self.sig = OwnerSig::new(sig);
     Ok(())
   }
 
   fn reset_signature(&mut self) {
-    self.vch_sig = OwnerSig::default();
+    self.sig = OwnerSig::default();
   }
 
   fn verify(&self, key: &PubKeyHash, _ctx: &()) -> Option<EcdsaError> {
-    let sig = self.vch_sig.as_bytes().ok_or(EcdsaError::InvalidSignature);
+    let sig = self.sig.as_bytes().ok_or(EcdsaError::InvalidSignature);
     sig.and_then(|sig| verify_compact(&self.payload(&()), sig, key)).err()
   }
 }
@@ -132,7 +133,7 @@ impl ProUpRegTx {
       key_id_voting,
       script_payout,
       inputs_hash,
-      vch_sig: OwnerSig::default(),
+      sig: OwnerSig::default(),
     }
   }
 }

@@ -86,8 +86,9 @@ pub struct ProRegTx {
   #[getset(get_copy = "pub")]
   platform_http_port: Option<u16>,
   /// Collateral owner ECDSA signature.
+  #[cfg_attr(feature = "serde", serde(rename = "vchSig"))]
   #[getset(get = "pub")]
-  vch_sig: CollateralSig,
+  sig: CollateralSig,
 }
 
 impl_payload!(ProRegTx);
@@ -162,7 +163,7 @@ impl BaseCodec for ProRegTx {
       platform_node_id,
       platform_p2p_port,
       platform_http_port,
-      vch_sig: CollateralSig::decode(data)?,
+      sig: CollateralSig::decode(data)?,
     })
   }
 
@@ -194,7 +195,7 @@ impl BaseCodec for ProRegTx {
         self.platform_http_port.unwrap_or(0).encode(buf);
       }
     }
-    self.vch_sig.encode(buf);
+    self.sig.encode(buf);
   }
 }
 
@@ -213,7 +214,7 @@ impl Signable for ProRegTx {
       self.operator_reward,
       self.key_id_owner.to_base58c(ctx.pubkey_addr),
       self.key_id_voting.to_base58c(ctx.pubkey_addr),
-      Hash256::from_lendian(unsigned_digest(self, &self.vch_sig)),
+      Hash256::from_lendian(unsigned_digest(self, &self.sig)),
     );
     message_digest(msg.as_bytes()).to_vec()
   }
@@ -221,16 +222,16 @@ impl Signable for ProRegTx {
   fn set_signature(&mut self, sig: &[u8], key: &PubKeyHash, ctx: &AddrParams) -> Result<(), EcdsaError> {
     let sig = <[u8; ECDSA_REC_SIG_LEN]>::try_from(sig).map_err(|_| EcdsaError::InvalidSignature)?;
     verify_compact(&self.payload(ctx), &sig, key)?;
-    self.vch_sig = CollateralSig::new(sig);
+    self.sig = CollateralSig::new(sig);
     Ok(())
   }
 
   fn reset_signature(&mut self) {
-    self.vch_sig = CollateralSig::default();
+    self.sig = CollateralSig::default();
   }
 
   fn verify(&self, key: &PubKeyHash, ctx: &AddrParams) -> Option<EcdsaError> {
-    let sig = self.vch_sig.as_bytes().ok_or(EcdsaError::InvalidSignature);
+    let sig = self.sig.as_bytes().ok_or(EcdsaError::InvalidSignature);
     sig.and_then(|sig| verify_compact(&self.payload(ctx), sig, key)).err()
   }
 }
@@ -347,7 +348,7 @@ impl ProRegTx {
       platform_node_id,
       platform_p2p_port,
       platform_http_port,
-      vch_sig: CollateralSig::default(),
+      sig: CollateralSig::default(),
     }
   }
 }
