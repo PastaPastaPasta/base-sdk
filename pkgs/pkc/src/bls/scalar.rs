@@ -47,14 +47,21 @@ impl Fr {
   ///
   /// Returns `ZeroScalar` when the input reduces to zero.
   pub fn from_bendian_reduce(bytes: &[u8; 32]) -> Result<Self, BlsError> {
-    let mut scalar = super::blst_ffi::scalar_from_bendian(bytes);
-    let reduced = Self::from(&scalar);
-    scalar.b.zeroize();
-
+    let reduced = Self::from_bendian_mod(bytes);
     if bool::from(reduced.is_zero()) {
       return Err(BlsError::ZeroScalar);
     }
     Ok(reduced)
+  }
+
+  /// Reads a big-endian integer modulo `r`, zero included, with no branch on
+  /// the value: relic's `bn_read_bin` then `bn_mod` of a secret key or an id
+  /// (`threshold.cpp:98`, `privatekey.cpp:237-255`).
+  pub(crate) fn from_bendian_mod(bytes: &[u8; 32]) -> Self {
+    let mut scalar = super::blst_ffi::scalar_from_bendian(bytes);
+    let reduced = Self::from(&scalar);
+    scalar.b.zeroize();
+    reduced
   }
 
   /// Emits the canonical big-endian encoding.
@@ -449,6 +456,28 @@ mod tests {
   #[case::order(GROUP_ORDER)]
   fn share_id_rejects_the_zero_residue(#[case] bytes: [u8; 32]) {
     assert_eq!(Fr::from_bendian_reduce(&bytes), Err(BlsError::ZeroScalar));
+  }
+
+  /// Core's reading of a stored key or id keeps the zero residue and
+  /// reduces every 256-bit value: `r` and `2r` read as zero, and
+  /// `2^256 - 1` as its residue `2^256 - 1 - 2r`.
+  #[rstest]
+  fn bendian_mod_reads_every_integer() {
+    let mut twice = [0u8; 32];
+    let mut carry = 0u16;
+    for (out, b) in twice.iter_mut().zip(GROUP_ORDER).rev() {
+      let sum = u16::from(b) * 2 + carry;
+      *out = sum as u8;
+      carry = sum >> 8;
+    }
+    assert_eq!(carry, 0);
+    for zero in [[0u8; 32], GROUP_ORDER, twice] {
+      assert_eq!(Fr::from_bendian_mod(&zero), Fr::ZERO);
+    }
+    let rest = twice.map(|b| !b);
+    assert_eq!(Fr::from_bendian_mod(&[0xff; 32]), Fr::from_bendian_mod(&rest));
+    assert_eq!(*Fr::from_bendian_mod(&rest).to_bendian(), rest);
+    assert_eq!(Fr::from_bendian_mod(make_id(7).as_bytes()), Fr::from(7));
   }
 
   /// Read a secret key back as the field element it is: the wire form is

@@ -21,7 +21,10 @@ use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::sha256d::Hash as Sha256d;
 use dash_dev::{arr_from_hex, vec_from_hex, Corpus};
 use dash_pkc::bls::core::{
-  ies_key, verify_insecure, verify_insecure_aggregated, verify_secure_aggregated, BlsPkElem, BlsPkValue, BlsSigElem,
+  aggregate_public_keys_insecure, aggregate_public_keys_insecure_pair, aggregate_secret_keys_insecure,
+  aggregate_signatures_insecure, aggregate_signatures_insecure_pair, aggregate_signatures_secure, dh_key_exchange,
+  ies_key, public_key_share, recover_signature, secret_key_share, serialize_hash_vector, sub_signatures_insecure,
+  verify_insecure, verify_insecure_aggregated, verify_secure_aggregated, BlsPkElem, BlsPkValue, BlsSigElem,
   BlsSigValue, BlsSkValue, BlsVerdict,
 };
 use dash_pkc::bls::{
@@ -66,6 +69,23 @@ fn pk_value(hex: &str, kind: BlsSchemeKind) -> BlsPkValue {
 
 fn sig_value(hex: &str, kind: BlsSchemeKind) -> BlsSigValue {
   eager(hex, kind).unwrap_or_else(|| panic!("Core reads sig {hex}"))
+}
+
+fn sk_value(hex: &str, kind: BlsSchemeKind) -> BlsSkValue {
+  eager(hex, kind).unwrap_or_else(|| panic!("Core reads sk {hex}"))
+}
+
+/// Each object as Core's eager wrapper reads it under `kind`.
+fn read_all<T>(hexes: &[String], kind: BlsSchemeKind, read: fn(&str, BlsSchemeKind) -> T) -> Vec<T> {
+  hexes.iter().map(|h| read(h, kind)).collect()
+}
+
+/// A valid object's serialization under `kind`, `None` for an invalid one.
+fn valid_hex<K: BlsWire<N>, const N: usize>(
+  value: &dash_pkc::bls::BlsValue<K, N>,
+  kind: BlsSchemeKind,
+) -> Option<String> {
+  value.is_valid().then(|| value.to_bytes(kind).to_lower_hex_string())
 }
 
 fn hash(hex: &str) -> [u8; 32] {
@@ -240,17 +260,41 @@ fn assert_aggregate<S: BlsScheme>(kind: BlsSchemeKind) {
     let agg = BlsSecretKey::aggregate(&sks.iter().collect::<Vec<_>>()).ok();
     let got = agg.map(|sk| sk.to_bytes().to_lower_hex_string());
     assert_eq!(got, row.agg, "aggregate of {} secret keys", row.sks.len());
+    let values = read_all(&row.sks, kind, sk_value);
+    let core = aggregate_secret_keys_insecure(&values.iter().collect::<Vec<_>>());
+    assert_eq!(
+      valid_hex(&core, kind),
+      row.agg,
+      "bls::core: {} secret keys",
+      row.sks.len()
+    );
   }
   for row in c.vectors::<AggPkRow>("pk") {
     let pks = typed_pks::<S>(&row.pks);
     let agg = BlsPublicKey::aggregate(&pks.iter().collect::<Vec<_>>()).ok();
     let got = agg.map(|pk| pk.to_bytes().to_lower_hex_string());
     assert_eq!(got, row.agg, "aggregate of {} public keys", row.pks.len());
+    let values = read_all(&row.pks, kind, pk_value);
+    let core = aggregate_public_keys_insecure(&values.iter().collect::<Vec<_>>());
+    assert_eq!(
+      valid_hex(&core, kind),
+      row.agg,
+      "bls::core: {} public keys",
+      row.pks.len()
+    );
   }
   for row in c.vectors::<AggSigRow>("sig") {
     let sigs = typed_sigs::<S>(&row.sigs);
     let agg = BlsSignature::aggregate(&sigs.iter().collect::<Vec<_>>()).unwrap_or_else(|e| panic!("{e:?}"));
     assert_eq!(agg.to_bytes().to_lower_hex_string(), row.agg);
+    let values = read_all(&row.sigs, kind, sig_value);
+    let core = aggregate_signatures_insecure(&values.iter().collect::<Vec<_>>());
+    assert_eq!(
+      valid_hex(&core, kind).as_ref(),
+      Some(&row.agg),
+      "bls::core: {} signatures",
+      row.sigs.len()
+    );
   }
   for row in c.vectors::<SubRow>("sub") {
     let (sig, other) = (
@@ -262,6 +306,8 @@ fn assert_aggregate<S: BlsScheme>(kind: BlsSchemeKind) {
       .ok()
       .map(|s| s.to_bytes().to_lower_hex_string());
     assert_eq!(got, row.out, "SubInsecure");
+    let core = sub_signatures_insecure(&sig_value(&row.sig, kind), &sig_value(&row.other, kind));
+    assert_eq!(valid_hex(&core, kind), row.out, "bls::core SubInsecure");
   }
   for row in c.vectors::<SameMsgRow>("same_msg") {
     // Core's same-message check: VerifyInsecure against the summed key.
@@ -321,6 +367,9 @@ fn assert_secure<S: BlsScheme>(kind: BlsSchemeKind) {
     let agg = BlsSignature::secure_aggregate(&sigs.iter().collect::<Vec<_>>(), &pks.iter().collect::<Vec<_>>()).ok();
     let got = agg.map(|s| s.to_bytes().to_lower_hex_string());
     assert_eq!(got, row.agg, "{}", row.note);
+    let (sigs, pks) = (read_all(&row.sigs, kind, sig_value), read_all(&row.pks, kind, pk_value));
+    let core = aggregate_signatures_secure(&sigs.iter().collect::<Vec<_>>(), &pks.iter().collect::<Vec<_>>(), kind);
+    assert_eq!(valid_hex(&core, kind), row.agg, "bls::core: {}", row.note);
   }
   for row in c.vectors::<SecureVerifyRow>("verify") {
     let h = hash(&row.msg);
@@ -374,6 +423,27 @@ fn assert_threshold<S: BlsScheme>(kind: BlsSchemeKind) {
     );
     let msk_refs: Vec<&BlsSecretKey<S>> = msk.iter().collect();
     let mpk_refs: Vec<&BlsPublicKey<S>> = mpk.iter().collect();
+    let (msk_values, mpk_values) = (read_all(&case.msk, kind, sk_value), read_all(&case.mpk, kind, pk_value));
+    let ids: Vec<[u8; 32]> = case.ids.iter().map(|id| arr_from_hex(id)).collect();
+    for (i, id) in ids.iter().enumerate() {
+      // Core keeps a failed receiver's element; a fresh one holds the default.
+      let mut sk = BlsSkValue::invalid();
+      let ok = secret_key_share(&mut sk, &msk_values.iter().collect::<Vec<_>>(), id);
+      assert_eq!(ok, sk.is_valid(), "{label}: bls::core secret key share {i}");
+      assert_eq!(
+        valid_hex(&sk, kind),
+        case.sk_shares[i],
+        "{label}: bls::core secret key share {i}"
+      );
+      let mut pk = BlsPkValue::invalid();
+      let ok = public_key_share(&mut pk, &mpk_values.iter().collect::<Vec<_>>(), id);
+      assert_eq!(ok, pk.is_valid(), "{label}: bls::core public key share {i}");
+      assert_eq!(
+        valid_hex(&pk, kind),
+        case.pk_shares[i],
+        "{label}: bls::core public key share {i}"
+      );
+    }
     for (i, id) in case.ids.iter().enumerate() {
       let id = share_id(id);
       let sk = BlsSecretKey::derive_share(&msk_refs, &id)
@@ -403,6 +473,26 @@ fn assert_threshold<S: BlsScheme>(kind: BlsSchemeKind) {
       let got = BlsSignature::recover_shares(&shares.iter().collect::<Vec<_>>()).ok();
       let got = got.map(|s| s.to_bytes().to_lower_hex_string());
       assert_eq!(got, row.sig, "{label}: recovery from {:?}", row.subset);
+      let sigs: Vec<BlsSigValue> = row
+        .subset
+        .iter()
+        .map(|&i| sig_value(need(case.sig_shares[i].as_deref(), &label, "share"), kind))
+        .collect();
+      let subset_ids: Vec<[u8; 32]> = row.subset.iter().map(|&i| ids[i]).collect();
+      let mut recovered = BlsSigValue::invalid();
+      let ok = recover_signature(&mut recovered, &sigs.iter().collect::<Vec<_>>(), &subset_ids);
+      assert_eq!(
+        ok,
+        recovered.is_valid(),
+        "{label}: bls::core recovery from {:?}",
+        row.subset
+      );
+      assert_eq!(
+        valid_hex(&recovered, kind),
+        row.sig,
+        "{label}: bls::core recovery from {:?}",
+        row.subset
+      );
       assert_eq!(row.sig.as_deref() == Some(&case.master_sig[..]), row.is_master);
     }
   }
@@ -719,6 +809,17 @@ impl Obj {
     }
   }
 
+  /// `GetHash()` under `kind`, uncached.
+  fn serialize_hash(&self, kind: BlsSchemeKind) -> [u8; 32] {
+    match self {
+      Self::Empty => panic!("an empty register"),
+      Self::Sk(v) => v.serialize_hash(kind),
+      Self::Pk(v) => v.serialize_hash(kind),
+      Self::Sig(v) => v.serialize_hash(kind),
+    }
+    .to_lendian()
+  }
+
   /// Core's status for a destination op: `ORACLE_OK` when the object is
   /// valid, else `ORACLE_REJECT`.
   fn status(&self) -> i32 {
@@ -793,12 +894,21 @@ fn agg_op(label: &str, op: &str, items: &[&Obj], pair: bool) -> Option<Obj> {
     .iter()
     .map(|o| if let Obj::Sig(v) = o { Some(v) } else { None })
     .collect();
-  Some(if op == "agg_pk" {
-    let pks = need(pks.as_ref(), label, "keys");
-    Obj::Pk(BlsPkElem::aggregate_insecure(pks.iter().copied()).map_or_else(BlsPkValue::invalid, Into::into))
-  } else {
-    let sigs = need(sigs.as_ref(), label, "signatures");
-    Obj::Sig(BlsSigElem::aggregate_insecure(sigs.iter().copied()).map_or_else(BlsSigValue::invalid, Into::into))
+  Some(match (op, pair) {
+    ("agg_pk", false) => Obj::Pk(aggregate_public_keys_insecure(need(pks.as_deref(), label, "keys"))),
+    ("agg_pk", true) => match need(pks.as_deref(), label, "keys") {
+      [a, b] => Obj::Pk(aggregate_public_keys_insecure_pair(a, b)),
+      _ => panic!("{label}: a pair"),
+    },
+    (_, false) => Obj::Sig(aggregate_signatures_insecure(need(
+      sigs.as_deref(),
+      label,
+      "signatures",
+    ))),
+    (_, true) => match need(sigs.as_deref(), label, "signatures") {
+      [a, b] => Obj::Sig(aggregate_signatures_insecure_pair(a, b)),
+      _ => panic!("{label}: a pair"),
+    },
   })
 }
 
@@ -809,18 +919,18 @@ fn dh_op(label: &str, sk: &Obj, pk: &Obj, recv: Option<&Obj>) -> Obj {
   let (Obj::Sk(sk), Obj::Pk(pk)) = (sk, pk) else {
     panic!("{label}: operands");
   };
-  let Some(key) = ies_key(sk, pk) else {
-    let mut kept = match recv {
-      Some(Obj::Pk(v)) => v.clone(),
-      None => BlsPkValue::invalid(),
-      _ => panic!("{label}: receiver"),
-    };
-    kept.invalidate();
-    return Obj::Pk(kept);
+  let mut out = match recv {
+    Some(Obj::Pk(v)) => v.clone(),
+    None => BlsPkValue::invalid(),
+    _ => panic!("{label}: receiver"),
   };
-  let product: BlsPkValue = BlsPkElem::from_impl(pk).mul(&sk.to_bytes(BASIC)).into();
-  assert_eq!(key[..], product.to_bytes(BASIC)[..32], "{label}: the IES key");
-  Obj::Pk(product)
+  let ok = dh_key_exchange(&mut out, sk, pk);
+  assert_eq!(ok, out.is_valid(), "{label}: the receiver");
+  match ies_key(sk, pk) {
+    Some(key) => assert_eq!(key[..], out.to_bytes(BASIC)[..32], "{label}: the IES key"),
+    None => assert!(!ok, "{label}: the IES key"),
+  }
+  Obj::Pk(out)
 }
 
 /// Runs a step script's every step on `BlsValue`/`BlsElem` over registers
@@ -883,7 +993,7 @@ fn assert_steps(file: &str) -> usize {
           let index = *need(step.a.as_ref(), &label, "operand");
           let reg = &mut regs[index];
           let bytes = reg.obj.bytes(flag);
-          let hash = *reg.hash.get_or_insert_with(|| Sha256d::hash(&bytes).to_byte_array());
+          let hash = *reg.hash.get_or_insert_with(|| reg.obj.serialize_hash(flag));
           (reg.obj.status(), [bytes, hash.to_vec()].concat(), Obj::Empty)
         }
         "is_valid" => {
@@ -1139,6 +1249,13 @@ fn assert_dkg() {
     assert_eq!(
       Sha256d::hash(&ser).to_byte_array().to_lower_hex_string() == f.vvec_hash,
       f.vvec_hash_ok
+    );
+    let qvvec_values = read_all(&f.quorum_vvec, BASIC, pk_value);
+    let core = serialize_hash_vector(&qvvec_values, BASIC).to_lendian();
+    assert_eq!(
+      core.to_lower_hex_string() == f.vvec_hash,
+      f.vvec_hash_ok,
+      "bls::core vvec hash"
     );
     assert_eq!(qvvec[0].to_bytes().to_lower_hex_string() == f.quorum_pk, f.quorum_pk_ok);
     // BuildQuorumVerificationVector: the valid members' vectors summed.

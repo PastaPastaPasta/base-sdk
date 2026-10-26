@@ -106,7 +106,6 @@ impl BlsElem<G1, BLS_PK_LEN> {
   /// element only blst's constant-time code sees the secret multiple.
   /// [`Self::mul`] and the `From` conversion are for public scalars
   /// (BS11a-3 D34).
-  #[cfg_attr(not(test), expect(dead_code, reason = "BS11b's DHKeyExchange"))]
   pub(crate) fn mul_secret_value(&self, k: &[u8; 32]) -> BlsValue<G1, BLS_PK_LEN> {
     let product = self.mul_secret(k);
     let basic = product.secret_basic();

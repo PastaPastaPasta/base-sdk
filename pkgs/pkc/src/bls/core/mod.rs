@@ -4,9 +4,15 @@
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
 
-//! Core's three signature verifications, on the calling thread alone.
+//! Core's BLS wrapper operations on its objects as Core holds them, on the
+//! calling thread alone: the three signature verifications, the aggregates,
+//! the threshold operations and `DHKeyExchange`.
 //!
-//! Each function is a `CBLSSignature` method taking the verify flag apart
+//! Unlike the typed API, these give Core's results where it refuses them:
+//! valid zero secret keys and valid infinities from aggregates, shares,
+//! recovery, `SubInsecure` and DH, and an id that reduces to zero.
+//!
+//! Each verification is a `CBLSSignature` method taking the verify flag apart
 //! from the scheme its objects were decoded under, as Core does. They follow
 //! Core's code rather than blst's verification API:
 //!
@@ -35,12 +41,45 @@ use super::{BlsSchemeKind, BlsValue, BLS_PK_LEN, BLS_SIG_LEN, BLS_SK_LEN};
 use crate::prelude::*;
 
 #[cfg(feature = "codec")]
+use super::wrap_codec::BlsWire;
+#[cfg(feature = "codec")]
+use bitcoin_hashes::sha256d::Hash as Sha256d;
+#[cfg(feature = "codec")]
+use dash_num::Hash256;
+#[cfg(feature = "codec")]
+use dash_types::codec::BaseCodec;
+#[cfg(feature = "codec")]
 use dash_types::type_id::Unencodable;
-use zeroize::Zeroizing;
+#[cfg(feature = "codec")]
+use dash_types::CompactSize;
+#[cfg(feature = "codec")]
+use dash_types::Numeric;
+use hex_conservative::hex;
+use rand_core::CryptoRng;
+use zeroize::{Zeroize, Zeroizing};
+
+mod aggregate;
+mod batch;
+mod ies;
+mod threshold;
+mod worker;
 
 pub use super::elem::BlsElem;
 #[doc(hidden)]
 pub use super::elem::BlsShape;
+pub use aggregate::{
+  aggregate_public_keys_insecure, aggregate_public_keys_insecure_pair, aggregate_secret_keys_insecure,
+  aggregate_secret_keys_insecure_pair, aggregate_signatures_insecure, aggregate_signatures_insecure_pair,
+  aggregate_signatures_secure, sub_signatures_insecure,
+};
+pub use batch::BlsBatchVerifier;
+pub use ies::{BlsIesBlobValue, BlsIesMultiBlobs};
+pub use threshold::{public_key_share, recover_signature, secret_key_share};
+pub use worker::{
+  aggregate_public_keys, aggregate_secret_keys, aggregate_signatures, build_pub_key_share,
+  build_quorum_verification_vector, generate_contributions, verify_contribution_share, verify_contribution_shares,
+  verify_vector, verify_verification_vectors, CONTRIBUTION_VERIFY_BATCH_SIZE,
+};
 
 /// A secret key as Core's wrapper holds it.
 pub type BlsSkValue = BlsValue<Fr, BLS_SK_LEN>;
@@ -224,6 +263,84 @@ pub fn ies_key(sk: &BlsSkValue, pk: &BlsPkValue) -> Option<Zeroizing<[u8; 32]>> 
   Some(key)
 }
 
+/// `CBLSPublicKey::DHKeyExchange(sk, pk)` (`bls.cpp:208-220`) into `out`:
+/// `false` with `out` invalid and its element kept when either value is
+/// invalid; otherwise `out` is the product with `sk`'s stored bytes, valid
+/// even when infinite (a basic key equal to `r`). It does not depend on the
+/// flag. A subgroup key stays on blst, constant-time; an Exotic one runs the
+/// engine, which is variable-time, as relic is in Core.
+pub fn dh_key_exchange(out: &mut BlsPkValue, sk: &BlsSkValue, pk: &BlsPkValue) -> bool {
+  out.invalidate();
+  if !sk.is_valid() || !pk.is_valid() {
+    return false;
+  }
+  let (k, (), ()) = sk.parts();
+  *out = BlsPkElem::from_impl(pk).mul_secret_value(k);
+  true
+}
+
+/// `SerializeHash` of a vector of objects, the DKG's `quorumVvecHash`
+/// (`llmq/dkgsession.cpp:596-600`): SHA-256d of the count as a CompactSize
+/// and each object's `ToBytes` under `flag`, zeros for an invalid one.
+#[cfg(feature = "codec")]
+pub fn serialize_hash_vector<'a, K, const N: usize, I>(values: I, flag: BlsSchemeKind) -> Hash256
+where
+  K: BlsWire<N>,
+  I: IntoIterator<Item = &'a BlsValue<K, N>>,
+  I::IntoIter: ExactSizeIterator,
+{
+  let values = values.into_iter();
+  let mut buf = Zeroizing::new(Vec::with_capacity(9 + values.len() * N));
+  CompactSize::from(values.len()).encode(&mut *buf);
+  for value in values {
+    let mut bytes = value.to_bytes(flag);
+    bytes.encode(&mut *buf);
+    bytes.zeroize();
+  }
+  Hash256::from_lendian(Sha256d::hash(&buf).to_byte_array())
+}
+
+/// A secret key's element, its stored bytes read modulo `r` (BS11b D4).
+fn sk_scalar(sk: &BlsSkValue) -> Fr {
+  let (k, (), ()) = sk.parts();
+  Fr::from_bendian_mod(k)
+}
+
+/// A valid secret key holding `k`, which is wiped.
+fn sk_value(k: &mut Fr) -> BlsSkValue {
+  let value = BlsValue::with_element(*k.to_bendian(), (), ());
+  k.zeroize();
+  value
+}
+
+/// The G1 generator, compressed in the basic layout.
+const G1_GENERATOR: [u8; BLS_PK_LEN] =
+  hex!("97f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb");
+
+/// `CBLSSecretKey::GetPublicKey`: the generator times the key, valid even
+/// when infinite (a basic key equal to `r`), or the invalid key.
+pub fn public_key(sk: &BlsSkValue) -> BlsPkValue {
+  match BlsPkValue::from_canonical(&G1_GENERATOR, BlsSchemeKind::Basic) {
+    Some(g) if sk.is_valid() => {
+      let (k, (), ()) = sk.parts();
+      BlsPkElem::from_impl(&g).mul_secret_value(k)
+    }
+    _ => BlsPkValue::invalid(),
+  }
+}
+
+/// `CBLSSecretKey::MakeNewKey`: 32 random bytes until they decode as a
+/// basic secret key other than zero, so at most `r`.
+pub fn make_new_key(rng: &mut impl CryptoRng) -> BlsSkValue {
+  loop {
+    let mut bytes = Zeroizing::new([0u8; BLS_SK_LEN]);
+    rng.fill_bytes(bytes.as_mut());
+    if let Some(key) = BlsSkValue::from_canonical(&bytes, BlsSchemeKind::Basic) {
+      return key;
+    }
+  }
+}
+
 #[cfg(test)]
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
@@ -233,7 +350,7 @@ mod tests {
   use hex_conservative::hex;
   use rstest::rstest;
 
-  fn values<S: BlsScheme>(seed: u8, msg: &[u8; 32], kind: BlsSchemeKind) -> (BlsSigValue, BlsPkValue) {
+  pub(super) fn values<S: BlsScheme>(seed: u8, msg: &[u8; 32], kind: BlsSchemeKind) -> (BlsSigValue, BlsPkValue) {
     let sk = BlsSecretKey::<S>::from_ikm(&[seed; 32]).unwrap();
     let sig = sk.sign(S::msg_ref(msg)).to_bytes();
     let pk = sk.public_key().to_bytes();
@@ -241,6 +358,14 @@ mod tests {
       BlsValue::from_canonical(&sig, kind).unwrap(),
       BlsValue::from_canonical(&pk, kind).unwrap(),
     )
+  }
+
+  /// [`values`] in the scheme `kind` decodes.
+  pub(super) fn values_of(seed: u8, msg: &[u8; 32], kind: BlsSchemeKind) -> (BlsSigValue, BlsPkValue) {
+    match kind {
+      BlsSchemeKind::Legacy => values::<BlsScChia>(seed, msg, kind),
+      BlsSchemeKind::Basic => values::<BlsScIetf>(seed, msg, kind),
+    }
   }
 
   fn assert_core_rules<S: BlsScheme>(kind: BlsSchemeKind) {
@@ -379,5 +504,128 @@ mod tests {
     let mut infinity = [0u8; 32];
     infinity[0] = 0xc0;
     assert_eq!(*ies_key(&sk, &pk).unwrap(), infinity);
+  }
+
+  /// The product is the typed exchange's in the scheme's own encoding, and
+  /// its basic encoding begins with the IES key.
+  fn assert_dh<S: BlsScheme>(kind: BlsSchemeKind) {
+    let sk = BlsSecretKey::<S>::from_ikm(&[5; 32]).unwrap();
+    let peer = BlsSecretKey::<S>::from_ikm(&[6; 32]).unwrap().public_key();
+    let typed = sk.dh_exchange(&peer).unwrap();
+    let sk_value = BlsSkValue::from_canonical(&sk.to_bytes(), kind).unwrap();
+    let pk_value = BlsPkValue::from_canonical(&peer.to_bytes(), kind).unwrap();
+    let mut out = BlsPkValue::invalid();
+    assert!(dh_key_exchange(&mut out, &sk_value, &pk_value));
+    assert_eq!(out.to_bytes(kind), *typed.as_bytes());
+    let key = ies_key(&sk_value, &pk_value).unwrap();
+    assert_eq!(key[..], out.to_bytes(BlsSchemeKind::Basic)[..32]);
+  }
+
+  #[rstest]
+  #[case::legacy(assert_dh::<BlsScChia>, BlsSchemeKind::Legacy)]
+  #[case::basic(assert_dh::<BlsScIetf>, BlsSchemeKind::Basic)]
+  fn dh_agrees_with_the_typed_api(#[case] assertion: fn(BlsSchemeKind), #[case] kind: BlsSchemeKind) {
+    assertion(kind);
+  }
+
+  /// An invalid side fails and the receiver keeps its element; on success
+  /// the receiver is replaced.
+  #[rstest]
+  #[case::legacy(BlsSchemeKind::Legacy)]
+  #[case::basic(BlsSchemeKind::Basic)]
+  fn dh_failure_keeps_the_receivers_element(#[case] kind: BlsSchemeKind) {
+    let (_, pk) = values_of(7, &[7; 32], kind);
+    let sk = BlsSkValue::from_canonical(&[7; 32], kind).unwrap();
+    for (sk, pk) in [(&BlsSkValue::invalid(), &pk), (&sk, &BlsPkValue::invalid())] {
+      let mut out = pk.clone();
+      assert!(!dh_key_exchange(&mut out, sk, pk));
+      assert!(!out.is_valid());
+      assert_eq!(out.element(kind), pk.element(kind));
+    }
+    let mut out = pk.clone();
+    assert!(dh_key_exchange(&mut out, &sk, &pk));
+    let want: BlsPkValue = BlsPkElem::from_impl(&pk).mul(&[7; 32]).into();
+    assert_eq!(out, want);
+  }
+
+  /// A basic key equal to `r` gives a valid infinity, and an Exotic legacy
+  /// key goes through the engine as the public product does.
+  #[test]
+  fn dh_infinity_and_exotic_keys() {
+    let r = hex!("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001");
+    let sk = BlsSkValue::from_canonical(&r, BlsSchemeKind::Basic).unwrap();
+    let (_, pk) = values::<BlsScIetf>(1, &[0; 32], BlsSchemeKind::Basic);
+    let mut out = BlsPkValue::invalid();
+    assert!(dh_key_exchange(&mut out, &sk, &pk));
+    assert!(out.is_valid());
+    assert_eq!(
+      out.to_bytes(BlsSchemeKind::Basic),
+      BlsPkValue::invalid().element(BlsSchemeKind::Basic).0
+    );
+
+    let bytes =
+      hex!("0589c416bd798099fb08ed6d642e04865013fbd317a1ec5ec1041e2fb4b06c404e2059fb0145504474fac768c3c3e1af");
+    let exotic = BlsPkValue::from_canonical(&bytes, BlsSchemeKind::Legacy).unwrap();
+    let sk = BlsSkValue::from_canonical(&[3; 32], BlsSchemeKind::Legacy).unwrap();
+    assert!(dh_key_exchange(&mut out, &sk, &exotic));
+    let want = BlsPkElem::from_impl(&exotic).mul(&[3; 32]);
+    assert!(BlsPkElem::from_impl(&out).__is_relic());
+    assert!(BlsPkElem::from_impl(&out).core_eq(&want));
+    assert_eq!(
+      out.to_bytes(BlsSchemeKind::Legacy),
+      want.to_bytes(BlsSchemeKind::Legacy)
+    );
+  }
+
+  /// `GetHash` hashes the serialization under the scheme asked, zeros for
+  /// an invalid object, as the lazy wrapper does for a decoded one.
+  #[rstest]
+  #[case::legacy(BlsSchemeKind::Legacy)]
+  #[case::basic(BlsSchemeKind::Basic)]
+  fn serialize_hash_is_the_serializations(#[case] kind: BlsSchemeKind) {
+    use crate::bls::{BlsLazy, BlsSchemeSource};
+    use bitcoin_hashes::sha256d::Hash as Sha256d;
+    use dash_num::Hash256;
+    use dash_types::Numeric;
+
+    let (sig, pk) = values_of(8, &[8; 32], kind);
+    let lazy = BlsLazy::<G1, BLS_PK_LEN>::from_bytes(&pk.to_bytes(kind), BlsSchemeSource::Version(kind));
+    assert_eq!(pk.serialize_hash(kind), lazy.serialize_hash());
+    let sha = |bytes: &[u8]| Hash256::from_lendian(Sha256d::hash(bytes).to_byte_array());
+    for other in [BlsSchemeKind::Legacy, BlsSchemeKind::Basic] {
+      assert_eq!(sig.serialize_hash(other), sha(&sig.to_bytes(other)));
+    }
+    let mut kept = pk.clone();
+    kept.invalidate();
+    assert_eq!(kept.serialize_hash(kind), sha(&[0; BLS_PK_LEN]));
+    let sk = BlsSkValue::from_canonical(&[9; 32], kind).unwrap();
+    assert_eq!(sk.serialize_hash(kind), sha(&[9; 32]));
+  }
+
+  /// The vector hash covers the count as a CompactSize and each
+  /// serialization, zeros for an invalid entry.
+  #[cfg(feature = "codec")]
+  #[rstest]
+  #[case::legacy(BlsSchemeKind::Legacy)]
+  #[case::basic(BlsSchemeKind::Basic)]
+  fn serialize_hash_vector_prefixes_the_count(#[case] kind: BlsSchemeKind) {
+    use bitcoin_hashes::sha256d::Hash as Sha256d;
+    use dash_num::Hash256;
+    use dash_types::Numeric;
+
+    let sha = |bytes: &[u8]| Hash256::from_lendian(Sha256d::hash(bytes).to_byte_array());
+    let empty: [BlsPkValue; 0] = [];
+    assert_eq!(serialize_hash_vector(&empty, kind), sha(&[0]));
+    let vvec: Vec<BlsPkValue> = (1..=3)
+      .map(|i| values_of(i, &[i; 32], kind).1)
+      .chain([BlsPkValue::invalid()])
+      .collect();
+    let mut buf = vec![4u8];
+    for pk in &vvec {
+      buf.extend(pk.to_bytes(kind));
+    }
+    assert_eq!(serialize_hash_vector(&vvec, kind), sha(&buf));
+    let refs: Vec<&BlsPkValue> = vvec.iter().collect();
+    assert_eq!(serialize_hash_vector(refs.iter().copied(), kind), sha(&buf));
   }
 }
