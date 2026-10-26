@@ -140,10 +140,12 @@ pub fn verify_contribution_share(
 /// All `false` when [`verify_verification_vectors`] fails. Otherwise, when
 /// `aggregated`, each batch of [`CONTRIBUTION_VERIFY_BATCH_SIZE`] is checked
 /// as the sum of its vectors against the sum of its shares; a batch whose
-/// vectors are empty or whose share sum is invalid is all `false`, and a
-/// batch that fails is checked one by one. Without `aggregated`, every
-/// contribution is checked alone. `vvecs` and `shares` are as long as each
-/// other; otherwise all answers are `false`.
+/// vectors are empty is all `false`, and a batch that fails is checked one
+/// by one. Without `aggregated`, every contribution is checked alone.
+///
+/// Callers pass valid shares: this function answers all `false` for a
+/// batch holding an invalid one, and for `vvecs` and `shares` of different
+/// lengths.
 pub fn verify_contribution_shares(
   for_id: &[u8; 32],
   vvecs: &[Option<&[BlsPkValue]>],
@@ -265,6 +267,13 @@ mod tests {
       vec![false; 10]
     );
     assert!(!verify_contribution_share(&id, None, &shares[0], flag));
+    // Unequal spans fail them all.
+    for aggregated in [false, true] {
+      assert_eq!(
+        verify_contribution_shares(&id, &vvecs, &refs[..9], aggregated, flag),
+        vec![false; 10]
+      );
+    }
     assert!(verify_contribution_shares(&id, &[], &[], true, flag).is_empty());
   }
 
@@ -318,6 +327,20 @@ mod tests {
     ));
     let sigs: [&BlsSigValue; 0] = [];
     assert!(!aggregate_signatures(&sigs, flag).is_valid());
+  }
+
+  /// A vector repeating an object is refused before the share is checked,
+  /// though the share matches it (`VerifyVerificationVector`).
+  #[test]
+  fn a_repeated_vector_object_fails_its_share() {
+    let flag = BlsSchemeKind::Basic;
+    let k = dkg(1, 2)[0].1[0].clone();
+    let vvec = [public_key(&k), public_key(&k)];
+    let id = ids(1)[0];
+    let mut share = BlsSkValue::invalid();
+    assert!(secret_key_share(&mut share, &[&k, &k], &id));
+    assert!(verify_share(&id, &vvec, &share));
+    assert!(!verify_contribution_share(&id, Some(&vvec), &share, flag));
   }
 
   #[test]
