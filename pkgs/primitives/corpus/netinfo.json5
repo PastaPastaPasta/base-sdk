@@ -194,6 +194,11 @@ BOOST_AUTO_TEST_CASE(netinfo_extended_reads)
              "01" "01" "00" "01" + long_domain(254),
              "01" "01" "00" "02" "00" "01" "01" "04" "01020304" "270f",
              "01" "01" "00" "00",
+             "01" "01" "00" "02" + long_domain(254) + "01" "01" "04" "01020304" "270f",
+             "01" "01" "00" "01" "02" "fdffff" "616263",
+             "01" "01" "00" "01" "02" "14" "61616161616161616161",
+             "01" "01" "00" "01" "02" "0b" "6578616d706c652e636f6d" "01",
+             "01" "01" "00" "02" "02" "04" "612e2e62" "01bb" "01" "01" "04" "01020304" "270f",
          }) {
         const auto raw{ParseHex(hex)};
         CDataStream ds(raw, SER_NETWORK, CLIENT_VERSION);
@@ -259,5 +264,19 @@ BOOST_AUTO_TEST_CASE(netinfo_extended_reads)
     { "raw": "010100020001010401020304270f", "read": 14, "written": "01010002ff01010401020304270f", "entries": ["[invalid entry]", "1.2.3.4:9999"], "empty": false },
     // One empty group is not empty.
     { "raw": "01010000", "read": 4, "written": "01010000", "entries": [], "empty": false },
+    // A domain entry that is too long or cut short refuses the whole value.
+    // https://github.com/dashpay/dash/blob/v24.0.0-rc.4/src/evo/netinfo.h#L253-L261
+    // A domain of 254 bytes before a service is refused.
+    { "raw": "0101000202fdfe006161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616161616161612e6161616101bb01010401020304270f", "read": null, "written": null, "entries": null, "empty": null },
+    // A domain length of 65535 is refused.
+    { "raw": "0101000102fdffff616263", "read": null, "written": null, "entries": null, "empty": null },
+    // A domain shorter than its length is refused.
+    { "raw": "01010001021461616161616161616161", "read": null, "written": null, "entries": null, "empty": null },
+    // A domain with a short port is refused.
+    { "raw": "01010001020b6578616d706c652e636f6d01", "read": null, "written": null, "entries": null, "empty": null },
+    // A domain with an empty label is an invalid entry, and the next entry is read.
+    // https://github.com/dashpay/dash/blob/v24.0.0-rc.4/src/evo/netinfo.cpp#L105-L107
+    // https://github.com/dashpay/dash/blob/v24.0.0-rc.4/src/evo/netinfo.h#L261
+    { "raw": "010100020204612e2e6201bb01010401020304270f", "read": 21, "written": "01010002ff01010401020304270f", "entries": ["[invalid entry]", "1.2.3.4:9999"], "empty": false },
   ],
 }

@@ -878,6 +878,7 @@ mod tests {
   #[case::port_above_threshold(b"example.com", 9999, None)]
   // RFC 1035 syntax
   #[case::small_label(b"r.server-1.ab.cd", 443, None)]
+  #[case::two_one_letter_labels(b"a.b", 443, None)]
   #[case::numeric_label_rfc1123(b"9998.9example7.ab", 443, None)]
   #[case::uppercase(b"Example.com", 443, Some(NIError::Malformed))]
   #[case::too_short(b"ab", 443, Some(NIError::Malformed))]
