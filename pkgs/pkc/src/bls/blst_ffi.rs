@@ -49,35 +49,20 @@ pub(crate) fn pairings_equal_with_g1_generator_prod(lhs_g2: &G2Affine, rhs_g2: &
   }
 }
 
-/// Whether the product of `e(g1, g2)` over the pairs is one, dashbls
-/// `CoreMPL::NativeVerify`. A pair with an infinity side is skipped, as
-/// relic's `pc_map_sim` skips it, so an empty product is one.
-pub(crate) fn pairing_product_is_one(pairs: &[(G1Affine, G2Affine)]) -> bool {
-  let mut acc = unsafe { *blst_fp12_one() };
+/// blst's Miller value for the pairs: the product of `e(g1, g2)` before the
+/// final exponentiation. A pair with an infinity side is skipped, as relic's
+/// `pp_map_sim_oatep_k12` drops it, so no pair gives one.
+pub(crate) fn miller_product(pairs: &[(G1Affine, G2Affine)]) -> Fp12 {
+  let mut acc = Fp12::one();
   for (g1, g2) in pairs {
     if g1.is_inf() || g2.is_inf() {
       continue;
     }
-    let mut term = blst_fp12::default();
-    let prev = acc;
-    unsafe {
-      blst_miller_loop(&mut term, &g2.0, &g1.0);
-      blst_fp12_mul(&mut acc, &prev, &term);
-    }
+    let mut term = Fp12::ZERO;
+    unsafe { blst_miller_loop(&mut term.0, &g2.0, &g1.0) };
+    acc = acc * term;
   }
-  let mut out = blst_fp12::default();
-  unsafe {
-    blst_final_exp(&mut out, &acc);
-    blst_fp12_is_one(&out)
-  }
-}
-
-/// blst's Miller value for one pair, for comparing the relic engine's.
-#[cfg(test)]
-pub(crate) fn miller_loop(p: &G1Affine, q: &G2Affine) -> Fp12 {
-  let mut out = Fp12::ZERO;
-  unsafe { blst_miller_loop(&mut out.0, &q.0, &p.0) };
-  out
+  acc
 }
 
 /// Hash a message to G2 under a ciphersuite tag, `G2Element::FromMessage`.
@@ -375,7 +360,6 @@ impl Sub for Fp2 {
   }
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "BS11a-4 4b routes the verifies through it"))]
 impl Fp12 {
   /// One.
   pub(crate) fn one() -> Self {

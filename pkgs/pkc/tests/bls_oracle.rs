@@ -12,7 +12,9 @@
 //! `bls::core` (serial, Core's rules) always, and the pooled typed verify
 //! wherever both decode the operands. Where the crate does not yet compute
 //! what Core computes, the row is named in a known-gap list with the slice
-//! that closes it, and the test fails once the gap closes.
+//! that closes it, and the test fails once the gap closes. Verifications on
+//! exotic operands have none since BS11a-4: `bls::core` pairs them with
+//! relic's arithmetic, as Core does.
 
 #![cfg(feature = "bls")]
 #![expect(clippy::panic, reason = "test code")]
@@ -693,13 +695,12 @@ fn scheme_named(name: &str) -> BlsSchemeKind {
 }
 
 /// Verifications over invalid and exotic operands, decoded under one scheme
-/// and verified under either flag. An exotic operand under the legacy flag
-/// is a known gap: Core pairs it with relic's arithmetic, which the crate
-/// does not reproduce yet (BS11a-4), so `bls::core` must answer
-/// `Unsupported` there until that lands.
+/// and verified under either flag. Under the legacy flag Core pairs an
+/// exotic operand with relic's arithmetic, which `bls::core` reproduces
+/// (BS11a-4); some rows must reach it.
 fn assert_edge() {
   let rows = corpus("edge").vectors::<EdgeRow>("rows");
-  let mut gaps = 0;
+  let mut engine = 0;
   for row in &rows {
     let (decode, flag) = (scheme_named(&row.decode), scheme_named(&row.flag));
     let sig = sig_value(&row.sig, decode);
@@ -715,16 +716,12 @@ fn assert_edge() {
     let label = format!("{} {} under {}: {}", row.op, row.decode, row.flag, row.note);
     let exotic = sig.point().is_some_and(|p| p.usable().is_none())
       || pks.iter().any(|pk| pk.point().is_some_and(|p| p.usable().is_none()));
-    if flag == LEGACY && exotic {
-      gaps += 1;
-      assert_eq!(core, BlsVerdict::Unsupported, "{label}: the relic gap closed");
-    } else {
-      assert_verdict(&label, core, None, row.ok);
-    }
+    engine += usize::from(flag == LEGACY && exotic);
+    assert_verdict(&label, core, None, row.ok);
   }
   assert!(
-    0 < gaps && gaps < rows.len(),
-    "{gaps} of {} rows in the relic gap",
+    0 < engine && engine < rows.len(),
+    "{engine} of {} rows pair an exotic operand under the legacy flag",
     rows.len()
   );
 }
@@ -973,11 +970,11 @@ fn sigs_at<'a>(regs: &'a [Reg], items: &[usize], label: &str) -> Vec<&'a BlsSigV
 
 /// Runs a step script's every step on `BlsValue`/`BlsElem` over registers
 /// that hold what the earlier steps left, with relic's code `RLC_OK` after
-/// every step and every logged call. `gaps` counts the verifications on an
-/// exotic operand under the legacy flag, `Unsupported` until BS11a-4.
+/// every step and every logged call. Returns how many verifications pair an
+/// exotic operand under the legacy flag, which BS11a-4's engine answers.
 fn assert_steps(file: &str) -> usize {
   let rows = corpus(file).vectors::<RelicRow>("rows");
-  let mut gaps = 0;
+  let mut engine = 0;
   for row in &rows {
     let scheme = scheme_named(&row.scheme);
     let mut regs: Vec<Reg> = Vec::new();
@@ -1076,10 +1073,11 @@ fn assert_steps(file: &str) -> usize {
           };
           let pks = pks_at(&regs, need(step.keys.as_deref(), &label, "keys"), &label);
           let h = hash(need(step.msg.as_deref(), &label, "msg"));
-          match verify_secure_aggregated(sig, &pks, &h, flag) {
-            BlsVerdict::Unsupported => gaps += 1,
-            core => assert_verdict(&label, core, None, step.status == 0),
-          }
+          let core = verify_secure_aggregated(sig, &pks, &h, flag);
+          let exotic = sig.point().is_some_and(|p| p.usable().is_none())
+            || pks.iter().any(|pk| pk.point().is_some_and(|p| p.usable().is_none()));
+          engine += usize::from(flag == LEGACY && exotic);
+          assert_verdict(&label, core, None, step.status == 0);
           (step.status, Vec::new(), Obj::Empty)
         }
         "sk_share" | "pk_share" | "recover_sig" => {
@@ -1162,13 +1160,10 @@ fn assert_steps(file: &str) -> usize {
           };
           let h = hash(need(step.msg.as_deref(), &label, "msg"));
           let core = verify_insecure(sig, pk, &h, flag);
-          let exotic = sig.point().is_some_and(|p| p.usable().is_none());
-          if flag == LEGACY && exotic {
-            gaps += 1;
-            assert_eq!(core, BlsVerdict::Unsupported, "{label}: the relic gap closed");
-          } else {
-            assert_verdict(&label, core, None, step.status == 0);
-          }
+          let exotic =
+            sig.point().is_some_and(|p| p.usable().is_none()) || pk.point().is_some_and(|p| p.usable().is_none());
+          engine += usize::from(flag == LEGACY && exotic);
+          assert_verdict(&label, core, None, step.status == 0);
           (step.status, Vec::new(), Obj::Empty)
         }
         other => panic!("{label}: op {other}"),
@@ -1181,27 +1176,27 @@ fn assert_steps(file: &str) -> usize {
       regs.push(made.into());
     }
   }
-  gaps
+  engine
 }
 
 /// The reference implementation's relic arithmetic on points outside the
 /// subgroup (the BS11a design's probes P1 to P5 and its fixed vectors).
 fn assert_relic() {
-  assert!(assert_steps("relic") > 0, "no step in the relic gap");
+  assert!(assert_steps("relic") > 0, "no verification reaches the engine");
 }
 
 /// Core's element operations over mixed registers (BS11a-3 D17): the shape
 /// table against Exotic values and engine results, the scalar classes, the
 /// aggregations, DH and its IES key, and `SER_HASH`'s cache.
 fn assert_arith() {
-  assert_eq!(assert_steps("arith"), 0);
+  assert_steps("arith");
 }
 
 /// Core's wrapper operations BS11b ports: secret key sums, SubInsecure,
 /// AggregateSecure and its verify, threshold shares and recovery, and
 /// multi-recipient IES.
 fn assert_ops() {
-  assert_eq!(assert_steps("ops"), 0);
+  assert_steps("ops");
 }
 
 /// Quirk 22: bytes that are canonical only under the opposite flag decode to
@@ -1209,7 +1204,17 @@ fn assert_ops() {
 /// every wrapper operation on such objects answers as Core's, without a gap.
 #[test]
 fn quirk_22_bls_opposite_scheme_and_legacy_checks() {
-  assert_eq!(assert_steps("quirk22"), 0);
+  assert_steps("quirk22");
+}
+
+/// Quirk 45 (BS11a-4 D12): the three direct verifications over the flag ×
+/// class matrix, Exotic operands refused under the basic flag and paired
+/// with relic's arithmetic under the legacy one, without a gap. Core's
+/// aggregation, DH and IES key over Exotic values are `arith`'s rows; the
+/// aggregate-then-verify scripts are `diff_bls_verify`'s (D10).
+#[test]
+fn quirk_45_exotic_bls_operands_by_flag() {
+  assert_edge();
 }
 
 // dkg.json5
@@ -1531,7 +1536,8 @@ fn assert_dkg() {
 // The files and their provenance.
 
 /// Every corpus file, each checked by its own case below (`quirk22` by
-/// `quirk_22_bls_opposite_scheme_and_legacy_checks`).
+/// `quirk_22_bls_opposite_scheme_and_legacy_checks`, `edge` by
+/// `quirk_45_exotic_bls_operands_by_flag`).
 const FILES: [&str; 13] = [
   "hash_to_g2",
   "sign",
@@ -1556,7 +1562,6 @@ const FILES: [&str; 13] = [
 #[case::threshold(|| { assert_threshold::<BlsScChia>(LEGACY); assert_threshold::<BlsScIetf>(BASIC); })]
 #[case::ies(|| { assert_ies::<BlsScChia>(LEGACY); assert_ies::<BlsScIetf>(BASIC); })]
 #[case::decode(assert_decode)]
-#[case::edge(assert_edge)]
 #[case::relic(assert_relic)]
 #[case::arith(assert_arith)]
 #[case::ops(assert_ops)]

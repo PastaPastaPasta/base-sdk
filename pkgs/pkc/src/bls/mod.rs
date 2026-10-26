@@ -36,6 +36,7 @@ cfg_if::cfg_if! {
     mod elem;
     mod ies_ops;
     mod macros;
+    mod native;
     mod public_ops;
     mod scheme_chia;
     mod scheme_ietf;

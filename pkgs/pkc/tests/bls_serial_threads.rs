@@ -104,7 +104,30 @@ impl<S: BlsScheme> Fixture<S> {
       "a verdict is wrong: {verdicts:?}"
     );
   }
+
+  /// The legacy verifications on a key outside the G1 subgroup, which run
+  /// the relic engine's pairing and its arithmetic.
+  fn verify_engine(&self) {
+    let kind = BlsSchemeKind::Legacy;
+    let exotic: BlsPkValue = value(&G1_OFF_SUBGROUP, kind);
+    let pk: BlsPkValue = value(&self.pks[0].to_bytes(), kind);
+    let sig: BlsSigValue = value(&self.sigs[0].to_bytes(), kind);
+    let m0 = &self.msgs[0];
+    let verdicts = [
+      verify_insecure(&sig, &exotic, m0, kind),
+      verify_insecure_aggregated(&sig, &[&pk, &exotic], &self.msgs[..2], kind),
+      verify_secure_aggregated(&sig, &[&pk, &exotic], m0, kind),
+    ];
+    assert_eq!(verdicts, [BlsVerdict::Invalid; 3]);
+  }
 }
+
+/// A legacy G1 key on the curve and outside the subgroup, x = 4.
+const G1_OFF_SUBGROUP: [u8; 48] = {
+  let mut bytes = [0u8; 48];
+  bytes[47] = 4;
+  bytes
+};
 
 /// A canonical object under `kind`.
 fn value<K: dash_pkc::bls::BlsWire<N>, const N: usize>(bytes: &[u8; N], kind: BlsSchemeKind) -> BlsValue<K, N> {
@@ -123,6 +146,7 @@ fn core_verify_starts_no_thread() {
   for _ in 0..3 {
     chia.verify_core(BlsSchemeKind::Legacy);
     ietf.verify_core(BlsSchemeKind::Basic);
+    chia.verify_engine();
   }
   let after = threads();
   assert_eq!(

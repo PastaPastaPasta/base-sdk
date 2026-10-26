@@ -16,6 +16,7 @@
 
 use super::blst_ffi;
 use super::group::{G1Affine, G2Affine, Point, G1, G2};
+use super::native::Operand;
 use super::relic::ep::Ep;
 use super::relic::ep2::Ep2;
 use super::relic::{Bn, Coord};
@@ -110,6 +111,42 @@ impl BlsElem<G1, BLS_PK_LEN> {
     let product = self.mul_secret(k);
     let basic = product.secret_basic();
     product.into_value(basic)
+  }
+
+  /// The key `VerifySecure` pairs: Core serializes each key under the flag
+  /// and reads the bytes back with `G1Element::FromBytes(bytes, flag)`
+  /// (`schemes.cpp:237-252`, `elements.cpp:24-87`). Under the legacy flag
+  /// that reading checks nothing and resets relic's error code, so it throws
+  /// on no bytes the serialization wrote (BL-399); under the basic flag it
+  /// throws, here `None`, unless the point is valid.
+  ///
+  /// It reads x and y's sign with the `BASIC` tag. A point on the curve
+  /// comes back as itself; an engine point off it is read again from its
+  /// bytes, and relic's square root may put that on the curve. All-zero
+  /// legacy bytes, which no wrapper decodes, read as the order-3 point
+  /// (0, 2).
+  pub(crate) fn redecode(value: &BlsValue<G1, BLS_PK_LEN>, flag: BlsSchemeKind) -> Option<Self> {
+    let (basic, point, _) = value.parts();
+    let read;
+    let (basic, point) = match point {
+      BlsPoint::Exotic => {
+        match G1::decode_canonical(&G1::encode(basic, BlsSchemeKind::Legacy), BlsSchemeKind::Legacy) {
+          Some(decoded) => {
+            read = decoded;
+            (&read.0, &read.1)
+          }
+          // The Exotic rebuild reads the bytes as relic does, so any x = 0
+          // with a clear sign comes back as (0, 2).
+          None => (basic, point),
+        }
+      }
+      _ => (basic, point),
+    };
+    let key = Self::from_point(basic, point, Coord::Basic);
+    match flag {
+      BlsSchemeKind::Legacy => Some(key),
+      BlsSchemeKind::Basic => key.is_valid().then_some(key),
+    }
   }
 }
 
@@ -315,6 +352,12 @@ macro_rules! impl_elem {
           BlsRepr::Basic => Coord::Basic,
           BlsRepr::Projc => Coord::Projc,
         };
+        Self::from_point(basic, point, tag)
+      }
+
+      /// The element a decoded point with basic bytes `basic` holds under
+      /// `tag`.
+      fn from_point(basic: &[u8; $len], point: &BlsPoint<$affine>, tag: Coord) -> Self {
         match point {
           BlsPoint::Usable(a) => Self::group(a.to_projective(), tag),
           BlsPoint::OnCurve(a) => {
@@ -326,6 +369,27 @@ macro_rules! impl_elem {
             }
           }
           BlsPoint::Exotic => Self(BlsArith::Relic($exotic(basic))),
+        }
+      }
+
+      /// The element as `NativeVerify` pairs it (BS11a-4 D1): a Group value
+      /// on blst, otherwise relic's coordinates.
+      pub(crate) fn into_operand(self) -> Operand<$affine, $engine> {
+        match self.0 {
+          BlsArith::Group { point, .. } => Operand::Group(point.to_affine()),
+          BlsArith::Relic(e) => Operand::Engine(e),
+        }
+      }
+
+      /// A wrapper's element whatever its validity, as `NativeVerify` pairs
+      /// it: the point blst holds when it is in the subgroup, whatever the
+      /// coordinates Core keeps for it, since relic normalizes before
+      /// pairing; otherwise relic's coordinates. [`Operand::Group`] exactly
+      /// when the element passes `IsValid`.
+      pub(crate) fn pairing_operand(value: &BlsValue<$group, $len>) -> Operand<$affine, $engine> {
+        match value.parts().1.usable() {
+          Some(point) => Operand::Group(*point),
+          None => Self::from_impl(value).into_operand(),
         }
       }
 
@@ -509,6 +573,7 @@ impl_elem!(
 );
 
 #[cfg(test)]
+#[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::super::tests::{G1_OFF_SUBGROUP_CHIA, G2_OFF_SUBGROUP_CHIA, GROUP_ORDER};
   use super::*;
@@ -909,6 +974,72 @@ mod tests {
         assert_eq!(secret.__shape(), public.__shape());
         assert_eq!(secret.to_bytes(BASIC), public.to_bytes(BASIC));
       }
+    }
+  }
+
+  /// BL-399: `VerifySecure` reads each key back from its bytes. The
+  /// order-3 point (0, 2) writes all-zero legacy bytes, which no wrapper
+  /// decodes, and reads back as itself under the legacy flag and as nothing
+  /// under the basic one. Engine results off the curve read back as their
+  /// bytes decode, some on the curve; a subgroup key reads back as itself.
+  #[test]
+  fn redecode_reads_back_what_relic_wrote() {
+    let mut order3 = [0u8; 48];
+    order3[0] = 0x80;
+    let minus = Pk::from_impl(&legacy_pk(&order3));
+    let plus = minus.neg();
+    let plus_value = PkValue::from(plus.clone());
+    assert_eq!(plus_value.to_bytes(LEGACY), [0u8; 48]);
+    assert!(PkValue::from_canonical(&[0u8; 48], LEGACY).is_none());
+    let back = Pk::redecode(&plus_value, LEGACY).unwrap();
+    assert!(back.core_eq(&plus) && !back.core_eq(&minus));
+    assert!(Pk::redecode(&plus_value, BASIC).is_none());
+
+    // relic's mixed addition of (x, 0) and a subgroup Q with x_Q = -2x has
+    // X = 0 and a y other than ±2: its legacy bytes are zero but for the
+    // sign, and it reads back as (0, 2) or (0, -2).
+    for k in 1..=3 {
+      let g = g1().mul(&scalar(k));
+      for q in [g.clone(), g.neg()] {
+        let p = Ep {
+          x: -q.engine(1).norm().x,
+          y: Fp::default(),
+          z: Fp::from_u64(2),
+          coord: Coord::Projc,
+        };
+        let sum = BlsElem::<G1, BLS_PK_LEN>(BlsArith::Relic(p.norm())).add(&q);
+        let value = PkValue::from(sum.clone());
+        let bytes = value.to_bytes(LEGACY);
+        assert!(bytes[0] & 0x7f == 0 && bytes[1..] == [0u8; 47], "k = {k}");
+        let want = if bytes[0] == 0 { &plus } else { &minus };
+        assert!(!sum.core_eq(want), "k = {k}");
+        assert!(Pk::redecode(&value, LEGACY).unwrap().core_eq(want), "k = {k}");
+      }
+    }
+
+    let off = Pk::from_impl(&legacy_pk(&ZZ_X1));
+    let mut on_curve = 0;
+    for k in 1..=64 {
+      let value = PkValue::from(off.add(&g1().mul(&scalar(k))));
+      assert!(matches!(value.parts().1, BlsPoint::Exotic));
+      let bytes = value.to_bytes(LEGACY);
+      let decoded = legacy_pk(&bytes);
+      on_curve += usize::from(matches!(decoded.parts().1, BlsPoint::OnCurve(_)));
+      let back = Pk::redecode(&value, LEGACY).unwrap();
+      assert!(back.core_eq(&Pk::from_impl(&decoded)), "k = {k}");
+      assert!(!back.__shape().projc);
+      let basic = PkValue::from_canonical(&value.to_bytes(BASIC), BASIC).map(|v| Pk::from_impl(&v));
+      match (Pk::redecode(&value, BASIC), basic) {
+        (Some(back), Some(want)) => assert!(back.core_eq(&want), "k = {k}"),
+        (back, want) => assert_eq!(back.is_some(), want.is_some(), "k = {k}"),
+      }
+    }
+    assert!(0 < on_curve && on_curve < 64, "{on_curve} of 64 read back on the curve");
+
+    let g = PkValue::from(g1());
+    for flag in [LEGACY, BASIC] {
+      let back = Pk::redecode(&g, flag).unwrap();
+      assert!(back.core_eq(&g1()) && !back.__is_relic());
     }
   }
 }

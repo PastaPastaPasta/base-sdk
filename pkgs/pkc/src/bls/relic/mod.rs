@@ -15,7 +15,6 @@
 pub(crate) mod ep;
 pub(crate) mod ep2;
 mod field;
-#[cfg_attr(not(test), expect(dead_code, reason = "BS11a-4 4b routes the verifies through it"))]
 pub(crate) mod pp;
 mod recode;
 

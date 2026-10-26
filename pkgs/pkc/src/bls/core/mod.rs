@@ -23,9 +23,13 @@
 //! - `NativeVerify`'s product of pairings, which skips a pair with an infinity
 //!   side.
 //!
+//! Under the legacy flag a point off the curve or outside the subgroup is
+//! paired as Core pairs it, by relic's Miller loop on the crate's relic
+//! engine (BS11a-4).
+//!
 //! Only serial blst calls are made (Miller loops, the final exponentiation,
-//! hashing to G2 and point arithmetic), so no thread is ever started or
-//! woken.
+//! hashing to G2, point arithmetic, and the field arithmetic under the relic
+//! engine), so no thread is ever started or woken.
 //!
 //! The module shares the language crate's name: inside it, `::core::` is
 //! that crate; elsewhere, name its items rather than glob-importing
@@ -37,9 +41,10 @@ mod ies;
 mod threshold;
 mod worker;
 
-use super::blst_ffi::{hash_to_g2, pairing_product_is_one};
+use super::blst_ffi::hash_to_g2;
 use super::chia_h2c;
-use super::group::{G1Affine, G2Affine, Point, G1, G2};
+use super::group::{G1, G2};
+use super::native::{native_verify, G1Operand, G2Operand, Operand};
 use super::scalar::Fr;
 use super::scheme_ietf::DST_BASIC;
 use super::scheme_ops::secure_weights;
@@ -102,9 +107,10 @@ pub enum BlsVerdict {
   Valid,
   /// Core rejects the signature.
   Invalid,
-  /// Core computes the answer with relic's arithmetic on a point off the
-  /// curve or outside the prime-order subgroup, which this crate does not
-  /// reproduce yet.
+  /// Never returned: the crate computed no verdict here before it
+  /// reproduced relic's pairing on points off the curve or outside the
+  /// prime-order subgroup. Kept for the matches downstream until BL-400
+  /// removes it.
   Unsupported,
 }
 
@@ -127,39 +133,31 @@ impl From<bool> for BlsVerdict {
 
 /// `CBLSSignature::VerifyInsecure(pk, h, flag)`.
 pub fn verify_insecure(sig: &BlsSigValue, pk: &BlsPkValue, h: &[u8; 32], flag: BlsSchemeKind) -> BlsVerdict {
-  let (Some(sig), Some(pk)) = (sig.point(), pk.point()) else {
+  if !sig.is_valid() || !pk.is_valid() {
     return BlsVerdict::Invalid;
-  };
+  }
   aggregate_verify(
     flag,
-    sig.usable().copied(),
-    &[pk.usable().copied()],
+    BlsSigElem::pairing_operand(sig),
+    &[BlsPkElem::pairing_operand(pk)],
     ::core::slice::from_ref(h),
   )
 }
 
 /// `CBLSSignature::VerifyInsecureAggregated(pks, hs)` under the verify
-/// flag.
+/// flag. Core asserts non-empty lists of equal length (`bls.cpp:319`); the
+/// port answers `Invalid` there.
 pub fn verify_insecure_aggregated(
   sig: &BlsSigValue,
   pks: &[&BlsPkValue],
   hs: &[[u8; 32]],
   flag: BlsSchemeKind,
 ) -> BlsVerdict {
-  let Some(sig) = sig.point() else {
-    return BlsVerdict::Invalid;
-  };
-  if pks.is_empty() || pks.len() != hs.len() {
+  if !sig.is_valid() || pks.is_empty() || pks.len() != hs.len() || !pks.iter().all(|pk| pk.is_valid()) {
     return BlsVerdict::Invalid;
   }
-  let Some(points) = pks
-    .iter()
-    .map(|pk| pk.point().map(|p| p.usable().copied()))
-    .collect::<Option<Vec<_>>>()
-  else {
-    return BlsVerdict::Invalid;
-  };
-  aggregate_verify(flag, sig.usable().copied(), &points, hs)
+  let pks: Vec<G1Operand> = pks.iter().map(|pk| BlsPkElem::pairing_operand(pk)).collect();
+  aggregate_verify(flag, BlsSigElem::pairing_operand(sig), &pks, hs)
 }
 
 /// `CBLSSignature::VerifySecureAggregated(pks, h)` under the verify flag.
@@ -176,71 +174,62 @@ pub fn verify_secure_aggregated(
   if pks.is_empty() {
     return BlsVerdict::Invalid;
   }
-  let sig = sig.element(flag).1.usable().copied();
+  let sig = BlsSigElem::pairing_operand(sig);
 
   // HashPubKeys weighs the keys in the order of their serializations under
-  // the flag, and Core then decodes each serialization again. Under the
-  // basic flag that decoding checks the point and throws for an exotic one,
-  // which Core reports as false; under the legacy flag the point survives
-  // and is left to relic's arithmetic.
-  let mut keyed = Vec::with_capacity(pks.len());
-  for pk in pks {
-    let (bytes, point) = pk.element(flag);
-    let Some(point) = point.usable() else {
-      return match flag {
-        BlsSchemeKind::Basic => BlsVerdict::Invalid,
-        BlsSchemeKind::Legacy => BlsVerdict::Unsupported,
-      };
-    };
-    keyed.push((bytes, point.to_projective()));
-  }
+  // the flag, Core reads each serialization back, and folds
+  // `publicKey += g1 * t` from the default element with relic's arithmetic,
+  // which stays on blst while every key is in the subgroup
+  // (`schemes.cpp:231-254`; BS11a-4 D7). The basic reading throws for a
+  // point that is not valid, which Core reports as false.
+  let mut keyed: Vec<([u8; BLS_PK_LEN], &BlsPkValue)> = pks.iter().map(|pk| (pk.element(flag).0, *pk)).collect();
   keyed.sort_unstable_by_key(|(bytes, _)| *bytes);
   let sorted: Vec<[u8; BLS_PK_LEN]> = keyed.iter().map(|(bytes, _)| *bytes).collect();
-
-  let mut sum = G1::identity();
-  for ((_, point), weight) in keyed.iter().zip(secure_weights(&sorted)) {
-    sum += point.mul_scalar(&weight.b, 256);
-  }
-  aggregate_verify(flag, sig, &[Some(sum.to_affine())], ::core::slice::from_ref(h))
+  let Some(keys) = keyed
+    .iter()
+    .map(|(_, pk)| BlsPkElem::redecode(pk, flag))
+    .collect::<Option<Vec<_>>>()
+  else {
+    return BlsVerdict::Invalid;
+  };
+  let sum = keys
+    .iter()
+    .zip(secure_weights(&sorted))
+    .fold(BlsPkElem::default(), |sum, (key, t)| {
+      sum.add(&key.mul(&Fr::from(&t).to_bendian()))
+    })
+    .into_operand();
+  aggregate_verify(flag, sig, &[sum], ::core::slice::from_ref(h))
 }
 
 /// The scheme's `AggregateVerify` (its `Verify` for one key) over
-/// non-empty lists of equal length. `None` stands for a point no pairing
-/// accepts.
-fn aggregate_verify(
-  flag: BlsSchemeKind,
-  sig: Option<G2Affine>,
-  pks: &[Option<G1Affine>],
-  hs: &[[u8; 32]],
-) -> BlsVerdict {
+/// non-empty lists of equal length, Core's elements as `NativeVerify`
+/// pairs them.
+fn aggregate_verify(flag: BlsSchemeKind, sig: G2Operand, pks: &[G1Operand], hs: &[[u8; 32]]) -> BlsVerdict {
   // dashbls `IsValid` rejects a point off the curve or outside the
   // subgroup, after the messages are found distinct; the legacy scheme
-  // pairs whatever points it holds.
+  // pairs whatever points it holds. A basic-flag secure fold holds only
+  // Group keys, as the basic re-read refuses the rest, so `is_group` is
+  // `IsValid` on its sum too.
   if flag == BlsSchemeKind::Basic {
     let mut distinct = hs.to_vec();
     distinct.sort_unstable();
     distinct.dedup();
-    if distinct.len() != hs.len() {
+    if distinct.len() != hs.len() || !sig.is_group() || !pks.iter().all(Operand::is_group) {
       return BlsVerdict::Invalid;
     }
   }
-  let (Some(sig), Some(pks)) = (sig, pks.iter().copied().collect::<Option<Vec<_>>>()) else {
-    return match flag {
-      BlsSchemeKind::Basic => BlsVerdict::Invalid,
-      BlsSchemeKind::Legacy => BlsVerdict::Unsupported,
-    };
-  };
 
   let mut pairs = Vec::with_capacity(pks.len() + 1);
-  pairs.push(((-G1::generator()).to_affine(), sig));
-  for (pk, h) in pks.into_iter().zip(hs) {
+  pairs.push((Operand::Group((-G1::generator()).to_affine()), sig));
+  for (pk, h) in pks.iter().copied().zip(hs) {
     let hashed = match flag {
       BlsSchemeKind::Legacy => chia_h2c::hash_to_g2(h),
       BlsSchemeKind::Basic => hash_to_g2(h, DST_BASIC),
     };
-    pairs.push((pk, hashed.to_affine()));
+    pairs.push((pk, Operand::Group(hashed.to_affine())));
   }
-  pairing_product_is_one(&pairs).into()
+  native_verify(&pairs).into()
 }
 
 /// The BLS-IES symmetric key for `sk` and a peer key: the product
@@ -408,12 +397,47 @@ mod tests {
     assertion(kind);
   }
 
-  /// A legacy key outside the G1 subgroup (bls_wrapper's `nonsub_000`):
-  /// Core's basic checks refuse it, and its legacy pairing is relic's.
+  /// Core checks the wrappers before pairing: an object invalidated in
+  /// place keeps an element that would verify and still gives false. Core
+  /// asserts non-empty lists of equal length (`bls.cpp:319`); the port
+  /// answers `Invalid` there, for more keys than hashes and for an empty
+  /// list with a valid infinite signature, whose pairings alone would pass.
   #[rstest]
-  #[case::legacy(BlsSchemeKind::Legacy, BlsVerdict::Unsupported)]
-  #[case::basic(BlsSchemeKind::Basic, BlsVerdict::Invalid)]
-  fn exotic_key(#[case] flag: BlsSchemeKind, #[case] want: BlsVerdict) {
+  #[case::legacy(BlsSchemeKind::Legacy)]
+  #[case::basic(BlsSchemeKind::Basic)]
+  fn wrapper_checks_come_before_the_pairing(#[case] kind: BlsSchemeKind) {
+    let (m0, m1) = ([1u8; 32], [2u8; 32]);
+    let (sig, pk) = values_of(1, &m0, kind);
+    let (_, pk1) = values_of(2, &m1, kind);
+    assert_eq!(verify_insecure(&sig, &pk, &m0, kind), BlsVerdict::Valid);
+    assert_eq!(verify_insecure_aggregated(&sig, &[&pk], &[m0], kind), BlsVerdict::Valid);
+    let (mut no_sig, mut no_pk) = (sig.clone(), pk.clone());
+    no_sig.invalidate();
+    no_pk.invalidate();
+    for (s, p) in [(&no_sig, &pk), (&sig, &no_pk)] {
+      assert_eq!(verify_insecure(s, p, &m0, kind), BlsVerdict::Invalid);
+      assert_eq!(verify_insecure_aggregated(s, &[p], &[m0], kind), BlsVerdict::Invalid);
+    }
+    assert_eq!(
+      verify_insecure_aggregated(&sig, &[&pk, &pk1], &[m0], kind),
+      BlsVerdict::Invalid
+    );
+    let infinity = BlsSigValue::from(BlsSigElem::default());
+    assert!(infinity.is_valid());
+    assert_eq!(
+      verify_insecure_aggregated(&infinity, &[], &[], kind),
+      BlsVerdict::Invalid
+    );
+  }
+
+  /// A legacy key outside the G1 subgroup (bls_wrapper's `nonsub_000`):
+  /// Core's basic checks refuse it, and under the legacy flag relic pairs
+  /// it, which the engine reproduces; the signature is not its.
+  #[rstest]
+  #[case::legacy(BlsSchemeKind::Legacy)]
+  #[case::basic(BlsSchemeKind::Basic)]
+  fn exotic_key(#[case] flag: BlsSchemeKind) {
+    let want = BlsVerdict::Invalid;
     let bytes =
       hex!("0589c416bd798099fb08ed6d642e04865013fbd317a1ec5ec1041e2fb4b06c404e2059fb0145504474fac768c3c3e1af");
     let exotic = BlsPkValue::from_canonical(&bytes, BlsSchemeKind::Legacy).unwrap();

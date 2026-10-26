@@ -43,7 +43,6 @@ pub struct BlsBatchVerifier<S: Ord + Clone, M: Ord + Clone> {
   by_source: BTreeMap<S, Vec<M>>,
   bad_sources: BTreeSet<S>,
   bad_messages: BTreeSet<M>,
-  unsupported: bool,
 }
 
 impl<S: Ord + Clone, M: Ord + Clone> BlsBatchVerifier<S, M> {
@@ -59,7 +58,6 @@ impl<S: Ord + Clone, M: Ord + Clone> BlsBatchVerifier<S, M> {
       by_source: BTreeMap::new(),
       bad_sources: BTreeSet::new(),
       bad_messages: BTreeSet::new(),
-      unsupported: false,
     }
   }
 
@@ -108,47 +106,35 @@ impl<S: Ord + Clone, M: Ord + Clone> BlsBatchVerifier<S, M> {
     &self.bad_messages
   }
 
-  /// Whether a verification so far met an operand Core checks with relic's
-  /// arithmetic off the subgroup ([`BlsVerdict::Unsupported`]). The bad
-  /// sets are then unspecified.
+  /// Always `false`: every verification has Core's answer, so none is
+  /// [`BlsVerdict::Unsupported`]. Kept with that variant until BL-400.
   pub fn unsupported(&self) -> bool {
-    self.unsupported
+    false
   }
 
   /// `Verify`: the whole batch, then, if it fails, each source in order,
   /// re-batched unless it is the only one, and each bad source's messages
   /// one by one with the per-message fallback. The messages are kept.
   ///
-  /// Returns whether the whole batch passed, or [`BlsVerdict::Unsupported`]
-  /// when any check this call made was unsupported.
+  /// Returns whether the whole batch passed.
   pub fn verify(&mut self) -> BlsVerdict {
     let whole = self.verify_batch(self.messages.keys());
-    let mut unsupported = whole == BlsVerdict::Unsupported;
     if !whole.is_valid() {
-      let (sources, messages, fallback_unsupported) = self.fall_back();
+      let (sources, messages) = self.fall_back();
       self.bad_sources.extend(sources);
       self.bad_messages.extend(messages);
-      unsupported |= fallback_unsupported;
     }
-    self.unsupported |= unsupported;
-    if unsupported {
-      BlsVerdict::Unsupported
-    } else {
-      whole
-    }
+    whole
   }
 
-  /// `Verify`'s fallback: the bad sources and messages it finds, and
-  /// whether any check it made was unsupported.
-  fn fall_back(&self) -> (Vec<S>, Vec<M>, bool) {
+  /// `Verify`'s fallback: the bad sources and messages it finds.
+  fn fall_back(&self) -> (Vec<S>, Vec<M>) {
     let mut bad_sources = Vec::new();
     let mut bad_messages: Vec<M> = Vec::new();
-    let mut unsupported = false;
     for (source, ids) in &self.by_source {
       let mut valid = BlsVerdict::Invalid;
       if self.by_source.len() != 1 {
         valid = self.verify_batch(ids.iter());
-        unsupported |= valid == BlsVerdict::Unsupported;
       }
       if valid.is_valid() {
         continue;
@@ -166,14 +152,12 @@ impl<S: Ord + Clone, M: Ord + Clone> BlsBatchVerifier<S, M> {
           continue;
         }
         let msg = &self.messages[id];
-        let verdict = verify_insecure(&msg.sig, &msg.pk, &msg.hash, self.flag);
-        unsupported |= verdict == BlsVerdict::Unsupported;
-        if !verdict.is_valid() {
+        if !verify_insecure(&msg.sig, &msg.pk, &msg.hash, self.flag).is_valid() {
           bad_messages.push(id.clone());
         }
       }
     }
-    (bad_sources, bad_messages, unsupported)
+    (bad_sources, bad_messages)
   }
 
   /// The messages `ids` name, grouped by hash, checked by the secure or the
@@ -254,7 +238,6 @@ impl<S: Ord + Clone, M: Ord + Clone> BlsBatchVerifier<S, M> {
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
-  use crate::bls::core::BlsPkElem;
   use crate::bls::tests::G1_OFF_SUBGROUP_CHIA;
   use crate::bls::{BlsScChia, BlsScIetf, BlsScheme, BlsSecretKey};
 
@@ -386,56 +369,37 @@ mod tests {
     assert_eq!(verifier.bad_messages(), &BTreeSet::from([1]));
   }
 
-  /// A legacy key outside the G1 subgroup and its negation: their sum under
-  /// one hash is in the subgroup, so a batch holding both is answered, while
-  /// a check of either alone is relic's arithmetic.
-  fn cancelling_keys() -> (BlsPkValue, BlsPkValue) {
-    let exotic = BlsPkValue::from_canonical(&G1_OFF_SUBGROUP_CHIA, BlsSchemeKind::Legacy).unwrap();
+  /// Legacy messages under distinct hashes, the second carrying a key
+  /// outside the G1 subgroup that did not sign it.
+  fn exotic_messages() -> Vec<Msg> {
+    let kind = BlsSchemeKind::Legacy;
+    let exotic = BlsPkValue::from_canonical(&G1_OFF_SUBGROUP_CHIA, kind).unwrap();
     assert_eq!(exotic.point().map(|p| p.usable()), Some(None));
-    let negated: BlsPkValue = BlsPkElem::from_impl(&exotic).neg().into();
-    (exotic, negated)
-  }
-
-  /// The whole batch fails with an answer, and a source's own batch is
-  /// unsupported: the verdict and the flag say so.
-  #[test]
-  fn an_unsupported_source_batch_makes_the_verdict_unsupported() {
-    let kind = BlsSchemeKind::Legacy;
-    let (exotic, negated) = cancelling_keys();
     let mut msgs = Vec::new();
     add::<BlsScChia>(&mut msgs, 1, 1, 1, true, kind);
-    add::<BlsScChia>(&mut msgs, 2, 2, 1, true, kind);
-    add::<BlsScChia>(&mut msgs, 3, 3, 3, false, kind);
-    msgs[0].pk = exotic;
-    msgs[1].pk = negated;
-    let mut verifier = BlsBatchVerifier::new(false, false, 0, kind);
+    add::<BlsScChia>(&mut msgs, 2, 2, 2, true, kind);
+    add::<BlsScChia>(&mut msgs, 3, 3, 3, true, kind);
+    msgs[1].pk = exotic;
+    msgs
+  }
+
+  /// Core's insecure batch adds the keys under each hash and verifies the
+  /// aggregate; its secure batch verifies one message per hash in each
+  /// round; either falls back per source, then per message
+  /// (`bls_batchverifier.h:71-119,146-228`). The key outside the subgroup
+  /// is paired through the engine at each step.
+  #[rstest]
+  #[case::insecure(false)]
+  #[case::secure(true)]
+  fn exotic_keys_are_answered(#[case] secure: bool) {
+    let msgs = exotic_messages();
+    let mut verifier = BlsBatchVerifier::new(secure, true, 0, BlsSchemeKind::Legacy);
     for m in &msgs {
       assert!(verifier.push_message(m.source, m.id, m.hash, &m.sig, &m.pk));
     }
+    assert_eq!(verifier.verify(), BlsVerdict::Invalid);
+    assert_eq!(verifier.bad_sources(), &BTreeSet::from([2]));
+    assert_eq!(verifier.bad_messages(), &BTreeSet::from([2]));
     assert!(!verifier.unsupported());
-    assert_eq!(verifier.verify(), BlsVerdict::Unsupported);
-    assert!(verifier.unsupported());
-  }
-
-  /// A source's batch fails with an answer, and one of its messages alone
-  /// is unsupported in the per-message fallback.
-  #[test]
-  fn an_unsupported_message_makes_the_verdict_unsupported() {
-    let kind = BlsSchemeKind::Legacy;
-    let (exotic, negated) = cancelling_keys();
-    let mut msgs = Vec::new();
-    add::<BlsScChia>(&mut msgs, 1, 1, 1, true, kind);
-    add::<BlsScChia>(&mut msgs, 1, 2, 1, true, kind);
-    add::<BlsScChia>(&mut msgs, 1, 3, 3, false, kind);
-    add::<BlsScChia>(&mut msgs, 2, 4, 4, true, kind);
-    msgs[0].pk = exotic;
-    msgs[1].pk = negated;
-    let mut verifier = BlsBatchVerifier::new(false, true, 0, kind);
-    for m in &msgs {
-      assert!(verifier.push_message(m.source, m.id, m.hash, &m.sig, &m.pk));
-    }
-    assert_eq!(verifier.verify(), BlsVerdict::Unsupported);
-    assert!(verifier.unsupported());
-    assert_eq!(verifier.bad_sources(), &BTreeSet::from([1]));
   }
 }

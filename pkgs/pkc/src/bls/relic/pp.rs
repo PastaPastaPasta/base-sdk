@@ -158,7 +158,7 @@ pub(crate) fn map_sim(pairs: &[(Ep, Ep2)]) -> Fp12 {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::bls::blst_ffi::miller_loop;
+  use crate::bls::blst_ffi::miller_product;
   use crate::bls::group::{G1Affine, G2Affine, Point, G1, G2};
 
   use dash_dev::{arr_from_hex, Corpus};
@@ -184,9 +184,8 @@ mod tests {
 
   /// blst's Miller value for subgroup pairs [a]G1, [b]G2.
   fn blst_mil(pairs: &[(u64, u64)]) -> Fp12 {
-    pairs.iter().fold(Fp12::one(), |acc, &(a, b)| {
-      acc * miller_loop(&g1_affine(a), &g2_affine(b))
-    })
+    let pairs: Vec<(G1Affine, G2Affine)> = pairs.iter().map(|&(a, b)| (g1_affine(a), g2_affine(b))).collect();
+    miller_product(&pairs)
   }
 
   /// The engine's Miller value for the same pairs.

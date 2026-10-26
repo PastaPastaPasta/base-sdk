@@ -265,6 +265,13 @@ predicate isSuppressed(TypeItem t, string trait) {
   isOpaqueCrate(fileOf(t)) and
   nameOf(t) = ["BlsRepr", "Ep", "Ep2"] and
   trait = ["Eq", "Hash", "PartialEq"]
+  or
+  // A pairing operand may hold relic's coordinates, as above: suppress Eq,
+  // Hash and PartialEq
+  isOpaqueCrate(fileOf(t)) and
+  nameOf(t) = "Operand" and
+  fileOf(t).getAbsolutePath().matches("%/pkc/src/bls/native.rs") and
+  trait = ["Eq", "Hash", "PartialEq"]
 }
 
 /** Holds if `t` is exempt from serde derivation requirements. */
