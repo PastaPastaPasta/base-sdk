@@ -6,6 +6,12 @@ The ten files from `bls_aggregate.json5` on came from upstream (Kittywhiskers Va
 bytes are kept as they are. `contrib/vectors/bls_oracle/check_upstream.py` has Core reproduce their values through
 the consensus oracle (its README, "Checking the upstream files", gives the classes it reports):
 
+- Upstream revision: the copies checked are upstream `33fcc59e` (2026-10-04)'s, `bls_dh.json5` aside (its section
+  gives this fork's change). Upstream `7f6b0ea6` (2026-10-14) later adds `sign_message` to `bls_sign.json5` and
+  `verify_message` to `bls_aggregate.json5` and `bls_secure_aggregate.json5`: raw-message signing, where Core signs
+  a uint256, so some of those values may not be reachable. The checker has no checks for them yet and stops on those
+  files when run on that revision's copies.
+
 - Dash Core commit `77dbec82427cfa91d420825235ca0f7abf5c984e` (branch `node/bl211-oracle-v24.0`): v24.0.0-rc.3 plus
   the oracle shim, ABI 28. `src/bls/`, `src/dashbls/`, `src/llmq/commitment.cpp` and `src/active/dkgsession.cpp` are
   unchanged from v24.0.0-rc.3.

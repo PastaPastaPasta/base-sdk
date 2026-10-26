@@ -66,10 +66,11 @@ python3 check_upstream.py --probe /path/to/probe --corpus-dir ../../../pkgs/pkc/
 ```
 
 A "chia" section is Core's legacy scheme and an "ietf" section its basic one. The checker prints a line per file with
-its values in five classes: reproduced (Core's output, or glue Core runs outside its BLS library over Core's outputs:
-sha256d, the uint256 byte order and its serialization layout), verified (randomness the file does not record, the
-DKG's coefficients and the operators' keys, so Core's own verification is the check), not reproduced, not reachable
-(no op or composition of ops yields it; each such field is listed with the reason) and inputs (keys, messages, ids and
-counts the file gives; Core reads the objects among them back byte for byte). `--verbose` prints every value's check.
-It exits 0 iff every reachable value reproduces. The corpus directory's `PROVENANCE.md` gives each file's origin and
-result.
+its values in five classes: reproduced (Core's output, or the checker's copy of the glue Core runs outside its BLS
+library, over Core's outputs: sha256d, the uint256 byte order and its serialization layout), verified (randomness the
+file does not record, the DKG's coefficients and the operators' keys, so Core's own verification is the check), not
+reproduced, not reachable (no op or composition of ops yields it; each such field is listed with the reason) and inputs
+(keys, messages, ids and counts the file gives; Core reads the objects among them back byte for byte). `--verbose`
+prints every value's check. It exits 0 iff every reachable value reproduces, and refuses a probe that is not the Core
+build `PROVENANCE.md` names unless given `--any-core`. The corpus directory's `PROVENANCE.md` gives each file's origin
+and result.

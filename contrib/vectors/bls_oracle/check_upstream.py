@@ -62,8 +62,10 @@ IES_BYTES_EPH_SK = bytes.fromhex(
 # Their IV seed: RSEED[1], 0x01 * 32, which ies_bytes.rs asserts.
 IES_BYTES_SEED = b"\x01" * 32
 
-# The ABI PROVENANCE.md names (the oracle shim at 77dbec824).
+# The ABI and the Core build PROVENANCE.md names (the oracle shim at 77dbec824):
+# its counts hold for that build, so another one is refused without --any-core.
 ABI = 28
+CORE = "77dbec82427c"
 
 REPRODUCED, GLUE, VERIFIED, INPUT, UNREACHABLE = range(5)
 NAMES = {
@@ -921,6 +923,11 @@ def main() -> int:
   ap.add_argument("--probe", required=True)
   ap.add_argument("--corpus-dir", type=Path, required=True)
   ap.add_argument("--verbose", action="store_true", help="every value's check")
+  ap.add_argument(
+    "--any-core",
+    action="store_true",
+    help=f"run against a Core build other than {CORE}",
+  )
   args = ap.parse_args()
 
   probe = o.Probe(args.probe)
@@ -928,6 +935,11 @@ def main() -> int:
   if probe.abi < ABI:
     probe.close()
     ap.error(f"the probe has ABI {probe.abi}; the checks need {ABI} or later")
+  if CORE not in probe.core_version and not args.any_core:
+    probe.close()
+    ap.error(
+      f"the probe is not Core {CORE}, which PROVENANCE.md names (--any-core)"
+    )
   core = Core(probe)
   trees = {
     name: load_json5(args.corpus_dir / f"{name}.json5") for name in CHECKS

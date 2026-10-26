@@ -274,15 +274,44 @@ fn check_valid_legacy_g2() {
   }
 }
 
-/// `corpus/PROVENANCE.md` records the file's sha256.
+/// The BLS files directly under `corpus/` with a `PROVENANCE.md` section:
+/// every one but `bls_wrapper.json5`, whose header records its origin.
+const PROVENANCE_FILES: [&str; 12] = [
+  "bls_aggregate",
+  "bls_dashbls",
+  "bls_dh",
+  "bls_hash",
+  "bls_ies",
+  "bls_keygen",
+  "bls_llmq_100",
+  "bls_pairing",
+  "bls_secure_aggregate",
+  "bls_serialize",
+  "bls_sign",
+  "bls_threshold",
+];
+
+/// `corpus/PROVENANCE.md` has a section for every BLS file directly under
+/// `corpus/` but `bls_wrapper.json5`, and the sha256 it records is the
+/// file's, so a changed or new file fails until its section follows.
 #[test]
 fn corpus_has_provenance() {
   let dir = format!("{}/corpus", env!("CARGO_MANIFEST_DIR"));
   let provenance = std::fs::read_to_string(format!("{dir}/PROVENANCE.md")).unwrap();
-  let bytes = std::fs::read(format!("{dir}/bls_dashbls.json5")).unwrap();
-  let entry = format!(
-    "`bls_dashbls.json5` sha256 `{}`",
-    Sha256::hash(&bytes).to_byte_array().to_lower_hex_string()
-  );
-  assert!(provenance.contains(&entry), "PROVENANCE.md lacks: {entry}");
+  let mut on_disk: Vec<String> = std::fs::read_dir(&dir)
+    .unwrap()
+    .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+    .filter_map(|name| name.strip_suffix(".json5").map(str::to_owned))
+    .filter(|name| name.starts_with("bls_") && name != "bls_wrapper")
+    .collect();
+  on_disk.sort();
+  let mut listed = PROVENANCE_FILES.map(str::to_owned).to_vec();
+  listed.sort();
+  assert_eq!(on_disk, listed, "corpus files vs the test's list");
+  for file in PROVENANCE_FILES {
+    let bytes = std::fs::read(format!("{dir}/{file}.json5")).unwrap();
+    let digest = Sha256::hash(&bytes).to_byte_array().to_lower_hex_string();
+    let entry = format!("`{file}.json5` sha256 `{digest}`");
+    assert!(provenance.contains(&entry), "PROVENANCE.md lacks: {entry}");
+  }
 }
