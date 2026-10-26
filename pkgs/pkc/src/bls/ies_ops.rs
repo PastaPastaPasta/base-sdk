@@ -41,7 +41,7 @@ fn sha256d(input: &[u8]) -> [u8; IV_SEED_LEN] {
 
 /// Advances the IV chain to a recipient index. The seed is hashed once per
 /// index, so index 0 is the seed itself.
-fn iv_chain(iv_seed: &[u8; IV_SEED_LEN], index: usize) -> [u8; IV_SEED_LEN] {
+pub(crate) fn iv_chain(iv_seed: &[u8; IV_SEED_LEN], index: usize) -> [u8; IV_SEED_LEN] {
   let mut chain = *iv_seed;
   for _ in 0..index {
     chain = sha256d(&chain);
@@ -50,7 +50,7 @@ fn iv_chain(iv_seed: &[u8; IV_SEED_LEN], index: usize) -> [u8; IV_SEED_LEN] {
 }
 
 /// The leading block of a chain value, which is all the cipher takes.
-fn iv_of(chain: &[u8; IV_SEED_LEN]) -> [u8; AES_BLOCK_LEN] {
+pub(crate) fn iv_of(chain: &[u8; IV_SEED_LEN]) -> [u8; AES_BLOCK_LEN] {
   array::from_fn(|i| chain[i])
 }
 

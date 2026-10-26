@@ -9,8 +9,11 @@
 use super::scheme_ctx::BlsSchemeKind;
 use super::wrap_codec::BlsWire;
 
+use bitcoin_hashes::sha256d::Hash as Sha256d;
+use dash_num::Hash256;
 #[cfg(feature = "codec")]
 use dash_types::type_id::Unencodable;
+use dash_types::Numeric;
 use hex_conservative::DisplayHex;
 use subtle::ConstantTimeEq;
 use zeroize::Zeroize;
@@ -129,6 +132,17 @@ impl<K: BlsWire<N>, const N: usize> BlsValue<K, N> {
     } else {
       [0u8; N]
     }
+  }
+
+  /// `GetHash()` under `scheme`: SHA-256d of [`Self::to_bytes`], zeros for
+  /// an invalid object (`bls.h:141-147`). Core caches the hash with the
+  /// flag of its first call and keeps it across a flag change; a caller that
+  /// needs that keeps the hash itself.
+  pub fn serialize_hash(&self, scheme: BlsSchemeKind) -> Hash256 {
+    let mut bytes = self.to_bytes(scheme);
+    let hash = Hash256::from_lendian(Sha256d::hash(&bytes).to_byte_array());
+    bytes.zeroize();
+    hash
   }
 }
 
