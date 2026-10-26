@@ -120,8 +120,8 @@ pub fn build_pub_key_share(vvec: &[BlsPkValue], id: &[u8; 32]) -> BlsPkValue {
 /// `ContributionVerifier::Verify`: the key share `vvec` gives `id` against
 /// the share's public key, by the wrapper's `==`.
 fn verify_share(id: &[u8; 32], vvec: &[BlsPkValue], share: &BlsSkValue) -> bool {
-  let mut pk = BlsPkValue::invalid();
-  public_key_share(&mut pk, &vvec.iter().collect::<Vec<_>>(), id) && pk.core_eq(&public_key(share))
+  let pk = build_pub_key_share(vvec, id);
+  pk.is_valid() && pk.core_eq(&public_key(share))
 }
 
 /// `CBLSWorker::AsyncVerifyContributionShare` (`bls_worker.cpp:721-745`):
