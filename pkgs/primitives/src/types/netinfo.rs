@@ -17,6 +17,7 @@ use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::Numeric;
 use dash_types::{enum_map, impl_num, impl_type, Checkable, CompactSize};
 
+use core::cmp::Ordering;
 use core::fmt;
 
 /// Maximum entries per purpose.
@@ -29,6 +30,8 @@ const DOMAIN_LABEL_MAX: usize = 63;
 const DOMAIN_MAX: usize = 253;
 /// Minimum FQDN length.
 const DOMAIN_MIN: usize = 3;
+/// Privileged port allowed for Platform HTTPS.
+const PLATFORM_HTTPS_PORT: u16 = 443;
 /// The tag Core writes for an entry it marked invalid.
 const ENTRY_INVALID: u8 = 0xff;
 /// An IPv4 address embedded in the legacy IPv6 form.
@@ -338,22 +341,26 @@ fn check_domain(name: &[u8]) -> Option<NIError> {
   None
 }
 
+/// Checks a service, in the group of `purpose` if there is one.
+fn check_service(svc: &ServiceV2, purpose: Option<NIPurpose>) -> Option<NIError> {
+  if let Some(error) = svc.check() {
+    return Some(NIError::BadAddr { error });
+  }
+  let is_https_port = purpose == Some(NIPurpose::PlatformHttps) && svc.port == PLATFORM_HTTPS_PORT;
+  if !svc.addr.is_i2p() && is_bad_port(svc.port) && !is_https_port {
+    return Some(NIError::BadPort { port: svc.port });
+  }
+  None
+}
+
 impl Checkable for NIEntry {
   type Error = NIError;
 
   fn check(&self) -> Option<Self::Error> {
     match self {
-      Self::Service(svc) => {
-        if let Some(error) = svc.check() {
-          return Some(NIError::BadAddr { error });
-        }
-        if !svc.addr.is_i2p() && is_bad_port(svc.port) {
-          return Some(NIError::BadPort { port: svc.port });
-        }
-        None
-      }
+      Self::Service(svc) => check_service(svc, None),
       Self::Domain { name, port } => {
-        if *port == 0 || (is_bad_port(*port) && *port != 443) {
+        if *port == 0 || (is_bad_port(*port) && *port != PLATFORM_HTTPS_PORT) {
           return Some(NIError::BadPort { port: *port });
         }
         check_domain(name)
@@ -407,12 +414,11 @@ pub trait NITrait: fmt::Display {
 pub struct NetInfoV2 {
   /// Format version.
   pub version: u8,
-  /// Purpose-grouped entries, one group per purpose in purpose order.
+  /// Purpose-grouped entries. Decoding reads only known purposes, in
+  /// ascending order.
   ///
-  /// A decoded value keeps the first group the payload gave for a purpose, as
-  /// Core's `std::map` does, so the groups, their order and the map framing
-  /// re-encode as Core's do. An entry Core marks invalid is
-  /// [`NIEntry::Invalid`]. A version Core does not know has no groups.
+  /// An entry Core marks invalid is [`NIEntry::Invalid`]. A version Core does
+  /// not know has no groups.
   pub entries: Vec<(NIPurpose, Vec<NIEntry>)>,
 }
 
@@ -428,19 +434,13 @@ impl BaseCodec for NetInfoV2 {
         entries: Vec::new(),
       });
     }
-    // Core reads a `std::map`: a repeated purpose is read and dropped, and the
-    // groups come out in purpose order. Each group takes 2 bytes or more.
+    // Each group takes 2 bytes or more.
     let purpose_count = CompactSize::decode_size(data)?.into_len(data.len() / MIN_GROUP_LEN)?;
-    let mut groups = BTreeMap::new();
+    let mut entries: Vec<(NIPurpose, Vec<NIEntry>)> = Vec::new();
     for _ in 0..purpose_count {
-      let purpose = u8::decode(data)?;
-      let group = Vec::<NIEntry>::decode(data)?;
-      groups.entry(purpose).or_insert(group);
+      let purpose = read_purpose(data, entries.last().map(|(last, _)| *last))?;
+      entries.push((purpose, Vec::<NIEntry>::decode(data)?));
     }
-    let entries = groups
-      .into_iter()
-      .map(|(purpose, group)| (NIPurpose::from_base(purpose), group))
-      .collect();
     Ok(Self { version, entries })
   }
 
@@ -470,12 +470,11 @@ impl Checkable for NetInfoV2 {
     if self.entries.is_empty() {
       return Some(NIError::Malformed);
     }
-    // Duplicate purpose key detection.
-    for i in 0..self.entries.len() {
-      for j in (i + 1)..self.entries.len() {
-        if self.entries[i].0 == self.entries[j].0 {
-          return Some(NIError::Duplicate);
-        }
+    for pair in self.entries.windows(2) {
+      match pair[0].0.to_base().cmp(&pair[1].0.to_base()) {
+        Ordering::Less => {}
+        Ordering::Equal => return Some(NIError::Duplicate),
+        Ordering::Greater => return Some(NIError::Malformed),
       }
     }
     // addr:port duplicates across all entries
@@ -519,7 +518,11 @@ impl Checkable for NetInfoV2 {
         if matches!(entry, NIEntry::Domain { .. }) && *purpose != NIPurpose::PlatformHttps {
           return Some(NIError::BadType { entry_type: 0x02 });
         }
-        if let Some(e) = entry.check() {
+        let error = match entry {
+          NIEntry::Service(svc) => check_service(svc, Some(*purpose)),
+          _ => entry.check(),
+        };
+        if let Some(e) = error {
           return Some(e);
         }
       }
@@ -598,6 +601,30 @@ impl NITrait for NetInfoV2 {
   fn stores_platform(&self) -> bool {
     true
   }
+}
+
+/// Reads a group purpose, which must be known and above `last`.
+///
+/// # Errors
+///
+/// Returns [`DecodeError::InvalidValue`] for an unknown purpose or one not
+/// above `last`, and the errors of reading a byte.
+fn read_purpose(data: &mut &[u8], last: Option<NIPurpose>) -> Result<NIPurpose, DecodeError> {
+  let value = u8::decode(data)?;
+  let is_after_last = |candidate: u8| last.is_none_or(|last| candidate > last.to_base());
+  let purpose = NIPurpose::from_base(value);
+  if !matches!(purpose, NIPurpose::Unknown(_)) && is_after_last(value) {
+    return Ok(purpose);
+  }
+  Err(DecodeError::InvalidValue {
+    expected: NIPurpose::variants()
+      .iter()
+      .map(NIPurpose::to_base)
+      .filter(|&candidate| is_after_last(candidate))
+      .map(u64::from)
+      .collect(),
+    actual: u64::from(value),
+  })
 }
 
 /// Returns `true` when two entries share the same address,
@@ -769,10 +796,12 @@ mod tests {
   use super::*;
   use crate::types::{AddrV1, AddrV2};
 
+  use dash_dev::{vec_from_hex, Corpus};
   use dash_types::codec::BaseCodec;
   use dash_types::Checkable;
-  use hex_conservative::hex;
+  use hex_conservative::{hex, DisplayHex};
   use rstest::rstest;
+  use serde::Deserialize;
 
   #[rstest]
   #[case::ipv4(
@@ -893,6 +922,19 @@ mod tests {
   }
 
   #[rstest]
+  #[case::repeated("010200000000", 0, vec![1, 2])]
+  #[case::descending("010201000000", 0, vec![2])]
+  #[case::after_last_purpose("010202000100", 1, vec![])]
+  #[case::unknown("01010300", 3, vec![0, 1, 2])]
+  fn decode_v2_purpose_refused(#[case] wire: &str, #[case] actual: u64, #[case] expected: Vec<u64>) {
+    let wire = vec_from_hex(wire);
+    assert_eq!(
+      NetInfoV2::decode(&mut wire.as_slice()),
+      Err(DecodeError::InvalidValue { expected, actual })
+    );
+  }
+
+  #[rstest]
   #[case::ipv4_valid(AddrV2::Ipv4([1, 2, 3, 4]), 9999, None)]
   #[case::ipv4_port_zero(
     AddrV2::Ipv4([1, 2, 3, 4]), 0,
@@ -911,6 +953,7 @@ mod tests {
   )]
   #[case::tor_port_valid(AddrV2::TorV3([1; 32]), 9998, None)]
   #[case::cjdns_valid(AddrV2::Cjdns(hex!("fc000000000000000000000000000001")), 9998, None)]
+  #[case::ipv4_port_443(AddrV2::Ipv4([1, 2, 3, 4]), 443, Some(NIError::BadPort { port: 443 }))]
   fn check_entry_service(#[case] addr: AddrV2, #[case] port: u16, #[case] expected: Option<NIError>) {
     let entry = NIEntry::Service(ServiceV2 { addr, port });
     assert_eq!(entry.check(), expected);
@@ -1048,6 +1091,22 @@ mod tests {
     vec![svc(AddrV2::Ipv4([1, 2, 3, 4]), 0)],
     Some(NIError::BadAddr { error: NetAddrError::BadPort { port: 0 } }),
   )]
+  #[case::service_https_port_443(NIPurpose::PlatformHttps, vec![svc(AddrV2::Ipv4([1, 2, 3, 4]), 443)], None)]
+  #[case::service_core_p2p_port_443(
+    NIPurpose::CoreP2p,
+    vec![svc(AddrV2::Ipv4([1, 2, 3, 4]), 443)],
+    Some(NIError::BadPort { port: 443 }),
+  )]
+  #[case::service_https_port_80(
+    NIPurpose::PlatformHttps,
+    vec![svc(AddrV2::Ipv4([1, 2, 3, 4]), 80)],
+    Some(NIError::BadPort { port: 80 }),
+  )]
+  #[case::i2p_https_port_443(
+    NIPurpose::PlatformHttps,
+    vec![svc(AddrV2::I2p([1; 32]), 443)],
+    Some(NIError::BadAddr { error: NetAddrError::BadPort { port: 443 } }),
+  )]
   #[case::duplicate_addr_same_group(
     NIPurpose::CoreP2p,
     vec![svc(AddrV2::Ipv4([1, 2, 3, 4]), 9999), svc(AddrV2::Ipv4([1, 2, 3, 4]), 8888)],
@@ -1069,6 +1128,20 @@ mod tests {
       (NIPurpose::CoreP2p, vec![svc(AddrV2::Ipv4([10, 0, 0, 2]), 9999)]),
     ],
     Some(NIError::Duplicate),
+  )]
+  #[case::ascending_purposes(
+    vec![
+      (NIPurpose::CoreP2p, vec![svc(AddrV2::Ipv4([1, 2, 3, 4]), 9999)]),
+      (NIPurpose::PlatformHttps, vec![dom(b"example.com", 443)]),
+    ],
+    None,
+  )]
+  #[case::descending_purposes(
+    vec![
+      (NIPurpose::PlatformHttps, vec![dom(b"example.com", 443)]),
+      (NIPurpose::CoreP2p, vec![svc(AddrV2::Ipv4([1, 2, 3, 4]), 9999)]),
+    ],
+    Some(NIError::Malformed),
   )]
   #[case::duplicate_addr_port_cross_group(
     vec![
@@ -1194,5 +1267,84 @@ mod tests {
     assert!(v2.has_entries(NIPurpose::CoreP2p));
     assert!(v2.stores_platform());
     assert!(v2.primary().is_some());
+  }
+
+  #[derive(Deserialize)]
+  struct EntryVector {
+    raw: String,
+    read: Option<usize>,
+    written: Option<String>,
+    addr_port: Option<String>,
+  }
+
+  #[derive(Deserialize)]
+  struct InfoVector {
+    raw: String,
+    read: Option<usize>,
+    written: Option<String>,
+    entries: Option<Vec<String>>,
+    empty: Option<bool>,
+  }
+
+  /// Reads a `T` from the hex `raw`, returning the bytes read, the value
+  /// written back as hex and the value, each `None` when the read fails.
+  fn read<T: BaseCodec>(raw: &str) -> (Option<usize>, Option<String>, Option<T>) {
+    let raw = vec_from_hex(raw);
+    let mut data = raw.as_slice();
+    let Ok(value) = T::decode(&mut data) else {
+      return (None, None, None);
+    };
+    let mut written = Vec::new();
+    value.encode(&mut written);
+    (
+      Some(raw.len() - data.len()),
+      Some(written.to_lower_hex_string()),
+      Some(value),
+    )
+  }
+
+  type InfoRead = (Option<usize>, Option<String>, Option<Vec<String>>, Option<bool>);
+
+  fn read_info<T: BaseCodec + NITrait>(raw: &str) -> InfoRead {
+    let (len, written, info) = read::<T>(raw);
+    let entries = info
+      .as_ref()
+      .map(|info| info.entries(None).map(|entry| entry.to_string()).collect());
+    (len, written, entries, info.map(|info| info.is_empty()))
+  }
+
+  #[rstest]
+  fn entry_reads_match_vectors() {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "netinfo");
+    for v in corpus.vectors::<EntryVector>("entry") {
+      let (len, written, entry) = read::<NIEntry>(&v.raw);
+      let got = (len, written, entry.map(|entry| entry.to_string()));
+      assert_eq!(got, (v.read, v.written, v.addr_port), "{}", v.raw);
+    }
+  }
+
+  #[derive(Deserialize)]
+  struct CheckVector {
+    raw: String,
+    valid: bool,
+  }
+
+  #[rstest]
+  fn extended_checks_match_vectors() {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "netinfo");
+    for v in corpus.vectors::<CheckVector>("extended_check") {
+      let info = NetInfoV2::decode(&mut vec_from_hex(&v.raw).as_slice()).unwrap();
+      assert_eq!(info.check().is_none(), v.valid, "{}", v.raw);
+    }
+  }
+
+  #[rstest]
+  #[case::legacy("legacy", read_info::<NetInfoV1>)]
+  #[case::extended("extended", read_info::<NetInfoV2>)]
+  fn info_reads_match_vectors(#[case] section: &str, #[case] read_info: fn(&str) -> InfoRead) {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "netinfo");
+    for v in corpus.vectors::<InfoVector>(section) {
+      assert_eq!(read_info(&v.raw), (v.read, v.written, v.entries, v.empty), "{}", v.raw);
+    }
   }
 }
