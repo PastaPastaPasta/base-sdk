@@ -73,7 +73,7 @@ pub fn public_key_share(out: &mut BlsPkValue, mpk: &[&BlsPkValue], id: &[u8; 32]
 /// (`threshold.cpp:190-248`). The result is valid even when infinite.
 pub fn recover_signature(out: &mut BlsSigValue, sigs: &[&BlsSigValue], ids: &[[u8; 32]]) -> bool {
   out.invalidate();
-  if sigs.is_empty() || sigs.len() != ids.len() || sigs.iter().any(|sig| !sig.is_valid()) || sigs.len() < 2 {
+  if sigs.len() < 2 || sigs.len() != ids.len() || sigs.iter().any(|sig| !sig.is_valid()) {
     return false;
   }
   let Some(deltas) = lagrange_at_zero(ids) else {

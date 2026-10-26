@@ -122,11 +122,7 @@ impl<S: Ord + Clone, M: Ord + Clone> BlsBatchVerifier<S, M> {
   /// Returns whether the whole batch passed, or [`BlsVerdict::Unsupported`]
   /// when any check this call made was unsupported.
   pub fn verify(&mut self) -> BlsVerdict {
-    let mut by_hash: BTreeMap<[u8; 32], Vec<&M>> = BTreeMap::new();
-    for (id, msg) in &self.messages {
-      by_hash.entry(msg.hash).or_default().push(id);
-    }
-    let whole = self.verify_batch(by_hash);
+    let whole = self.verify_batch(self.messages.keys());
     let mut unsupported = whole == BlsVerdict::Unsupported;
     if !whole.is_valid() {
       let (sources, messages, fallback_unsupported) = self.fall_back();
@@ -151,11 +147,7 @@ impl<S: Ord + Clone, M: Ord + Clone> BlsBatchVerifier<S, M> {
     for (source, ids) in &self.by_source {
       let mut valid = BlsVerdict::Invalid;
       if self.by_source.len() != 1 {
-        let mut by_hash: BTreeMap<[u8; 32], Vec<&M>> = BTreeMap::new();
-        for id in ids {
-          by_hash.entry(self.messages[id].hash).or_default().push(id);
-        }
-        valid = self.verify_batch(by_hash);
+        valid = self.verify_batch(ids.iter());
         unsupported |= valid == BlsVerdict::Unsupported;
       }
       if valid.is_valid() {
@@ -184,7 +176,13 @@ impl<S: Ord + Clone, M: Ord + Clone> BlsBatchVerifier<S, M> {
     (bad_sources, bad_messages, unsupported)
   }
 
-  fn verify_batch(&self, by_hash: BTreeMap<[u8; 32], Vec<&M>>) -> BlsVerdict {
+  /// The messages `ids` name, grouped by hash, checked by the secure or the
+  /// insecure batch.
+  fn verify_batch<'a>(&'a self, ids: impl Iterator<Item = &'a M>) -> BlsVerdict {
+    let mut by_hash: BTreeMap<[u8; 32], Vec<&M>> = BTreeMap::new();
+    for id in ids {
+      by_hash.entry(self.messages[id].hash).or_default().push(id);
+    }
     if self.secure {
       self.verify_batch_secure(by_hash)
     } else {
