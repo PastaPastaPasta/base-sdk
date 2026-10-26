@@ -577,6 +577,77 @@ class Steps:
       o.DH, "dh", operands, extra=o.INPLACE, sk=sk, pk=pk, recv=recv
     )
 
+  def rl(self, steps: list[int]) -> bytes:
+    return o.vec(self.r(s) for s in steps)
+
+  def agg_sk(self, items: list[int]) -> int:
+    return self.add(o.AGGREGATE_SK, "agg_sk", self.rl(items), items=items)
+
+  def sub_sig(self, a: int, b: int) -> int:
+    return self.binary(o.SUB_SIG, "sub_sig", a, b)
+
+  def agg_secure(self, sigs: list[int], keys: list[int], msg: bytes) -> int:
+    operands = self.rl(sigs) + self.rl(keys) + msg
+    return self.add(
+      o.AGGREGATE_SECURE, "agg_secure", operands, sigs=sigs, keys=keys,
+      msg=msg.hex(),
+    )  # fmt: skip
+
+  def verify_sec(self, sig: int, keys: list[int], msg: bytes) -> int:
+    operands = self.r(sig) + self.rl(keys) + msg
+    return self.add(
+      o.VERIFY_SECURE, "verify_sec", operands, sig=sig, keys=keys,
+      msg=msg.hex(),
+    )  # fmt: skip
+
+  def share(
+    self, kind: str, items: list[int], ident: bytes, recv: int | None = None
+  ) -> int:
+    op = o.SK_SHARE if kind == "sk" else o.PK_SHARE
+    fields: dict[str, object] = {"items": items, "id": ident.hex()}
+    operands = self.rl(items) + ident
+    if recv is None:
+      return self.add(op, f"{kind}_share", operands, **fields)
+    return self.add(
+      op, f"{kind}_share", self.r(recv) + operands, extra=o.INPLACE,
+      recv=recv, **fields,
+    )  # fmt: skip
+
+  def recover(
+    self, items: list[int], ids: list[bytes], recv: int | None = None
+  ) -> int:
+    fields: dict[str, object] = {"items": items, "ids": [i.hex() for i in ids]}
+    operands = self.rl(items) + o.hashes(ids)
+    if recv is None:
+      return self.add(o.RECOVER_SIG, "recover_sig", operands, **fields)
+    return self.add(
+      o.RECOVER_SIG, "recover_sig", self.r(recv) + operands, extra=o.INPLACE,
+      recv=recv, **fields,
+    )  # fmt: skip
+
+  def ies_encrypt(
+    self, sk: int, seed: bytes, keys: list[int], plain: list[bytes]
+  ) -> int:
+    operands = self.r(sk) + seed + self.rl(keys) + o.blobs(plain)
+    return self.add(
+      o.IES_ENCRYPT, "ies_encrypt", operands, sk=sk, seed=seed.hex(),
+      keys=keys, plain=[x.hex() for x in plain],
+    )  # fmt: skip
+
+  def ies_decrypt(self, blob: bool, idx: int, sk: int, data: bytes) -> int:
+    op = o.IES_DECRYPT_BLOB if blob else o.IES_DECRYPT
+    name = "ies_decrypt_blob" if blob else "ies_decrypt"
+    operands = o.u32(idx) + self.r(sk) + o.blob(data)
+    return self.add(op, name, operands, idx=idx, sk=sk, data=data.hex())
+
+  def decode_as(self, kind: str, raw: bytes, flag: bool) -> int:
+    """`DECODE` under `flag` rather than the script's scheme."""
+    code = {"sk": o.SK, "pk": o.PK, "sig": o.SIG}[kind]
+    operands = bytes([code, o.EAGER]) + o.blob(raw)
+    return self.add(
+      o.DECODE, "decode", operands, flag, kind=kind, input=raw.hex()
+    )
+
   def run(self, probe: o.Probe) -> list[Row]:
     records = probe.exec(self.script)
     if len(records) != len(self.steps):
@@ -869,6 +940,284 @@ def arith_rows(probe: o.Probe, decoded: list[Row]) -> list[Row]:
   return rows
 
 
+def be(v: int) -> bytes:
+  return (v % (1 << 256)).to_bytes(32, "big")
+
+
+def warmed(probe: o.Probe, name: str) -> None:
+  """Signs once under the legacy scheme, so call logs compare (relic.json5)."""
+  if probe.abi < o.ARITH_ABI:
+    msg = f"{name}.json5 needs ABI {o.ARITH_ABI}, the probe has {probe.abi}"
+    raise o.OracleError(msg)
+  warm = Steps(legacy=True)
+  warm.sign(warm.decode("sk", (1).to_bytes(32, "big")), h("warm"))
+  warm.run(probe)
+
+
+def scripted(
+  probe: o.Probe, builders: dict[str, Callable[[Steps], str]]
+) -> list[Row]:
+  """One row per builder and scheme; each builder returns its note."""
+  rows: list[Row] = []
+  for name, build in builders.items():
+    for scheme, legacy in SCHEMES.items():
+      s = Steps(legacy)
+      note = build(s)
+      rows.append(
+        {"probe": name, "scheme": scheme, "note": note, "steps": s.run(probe)}
+      )
+  return rows
+
+
+def ies_outputs(probe: o.Probe, s: Steps, steps: list[int]) -> list[bytes]:
+  """The outputs `steps` give when `s` runs so far: IES containers fed back
+  as decrypt operands. The steps are deterministic, so the full run
+  reproduces them."""
+  trial = Steps(s.script.legacy)
+  trial.script.code = bytearray(s.script.code)
+  trial.script.regs = s.script.regs
+  trial.script.logged = list(s.script.logged)
+  trial.steps = [dict(step) for step in s.steps]
+  done = trial.run(probe)
+  return [bytes.fromhex(str(done[i]["out"])) for i in steps]
+
+
+def ops_rows(probe: o.Probe) -> list[Row]:
+  """Core's wrapper operations BS11b ports (its notes, D5 to D17): secret
+  key sums, SubInsecure, AggregateSecure and its verify, threshold shares
+  and recovery, and multi-recipient IES, over valid, invalid and
+  kept-element operands, each step logged as in arith.json5."""
+  warmed(probe, "ops")
+  msg = h("ops msg")
+
+  def aggregates(s: Steps) -> str:
+    k1 = sk_of("ops", 1)
+    a, b = s.decode("sk", k1), s.decode("sk", sk_of("ops", 2))
+    neg = s.decode("sk", be(R - int.from_bytes(k1, "big")))
+    zero = s.decode("sk", bytes(32))
+    s.agg_sk([a, b])
+    s.agg_sk([a])
+    s.agg_sk([])
+    s.agg_sk([a, zero])
+    total = s.agg_sk([a, neg])
+    s.unary(o.SER, "ser", total)
+    s.pubkey(total)
+    if not s.script.legacy:
+      order = s.decode("sk", be(R))
+      s.agg_sk([order, a])
+      s.pubkey(order)
+    x, y = s.sign(a, msg), s.sign(b, msg)
+    s.sub_sig(x, y)
+    s.sub_sig(x, x)
+    s.sub_sig(x, s.decode("sig", bytes(96)))
+    return "secret key sums (zero, r, an invalid operand), SubInsecure"
+
+  def secure(s: Steps) -> str:
+    keys = [s.decode("sk", sk_of("ops sec", i)) for i in range(3)]
+    pks = [s.pubkey(k) for k in keys]
+    sigs_ = [s.sign(k, msg) for k in keys]
+    no_pk = s.decode("pk", bytes(48))
+    for n in (1, 2, 3):
+      agg = s.agg_secure(sigs_[:n], pks[:n], msg)
+      s.verify_sec(agg, pks[:n], msg)
+      s.verify_sec(agg, list(reversed(pks[:n])), msg)
+    s.agg_secure(sigs_[:2], [pks[0], pks[0]], msg)
+    s.agg_secure([sigs_[1], sigs_[0]], [pks[0], pks[0]], msg)
+    agg = s.agg_secure(sigs_[:2], [pks[0], no_pk], msg)
+    s.verify_sec(agg, [pks[0], no_pk], msg)
+    s.agg_secure(sigs_[:2], pks[:1], msg)
+    s.agg_secure([], [], msg)
+    return (
+      "AggregateSecure of 1 to 3 signers and its verify, a repeated key,"
+      " an invalid key, unequal and empty lists"
+    )
+
+  def shares(s: Steps) -> str:
+    msk = [s.decode("sk", sk_of("ops msk", i)) for i in range(3)]
+    mpk = [s.pubkey(k) for k in msk]
+    rnd = h("ops id")
+    shifted = be(int.from_bytes(rnd, "big") % R + R)
+    for ident in (bytes(32), be(R), be(R + 5), be(5), rnd, shifted):
+      sk = s.share("sk", msk, ident)
+      pk = s.share("pk", mpk, ident)
+      s.binary(o.EQ, "eq", s.pubkey(sk), pk)
+    five = be(5)
+    s.share("sk", msk[:1], five)
+    s.share("pk", mpk[:1], five)
+    s.share("sk", [], five)
+    no_sk, no_pk = s.decode("sk", bytes(32)), s.decode("pk", bytes(48))
+    s.share("sk", [msk[0], no_sk], five)
+    s.share("pk", [mpk[0], no_pk], five)
+    s.share("pk", [mpk[0], no_pk], five, recv=mpk[2])
+    s.share("pk", mpk, five, recv=mpk[2])
+    s.share("sk", [msk[0], no_sk], five, recv=msk[2])
+    s.share("sk", msk, five, recv=msk[2])
+    return (
+      "SecretKeyShare and PublicKeyShare at ids 0, r, r + 5, 5, a random id"
+      " and its r-shift; one and no coefficients; an invalid one; INPLACE"
+    )
+
+  def recovery(s: Steps) -> str:
+    msk = [s.decode("sk", sk_of("ops rec", i)) for i in range(3)]
+    mpk = s.pubkey(msk[0])
+    ids = [h("ops rec id", i) for i in range(5)]
+    sigs_ = [s.sign(s.share("sk", msk, i), msg) for i in ids]
+    s.verify(s.recover(sigs_[:3], ids[:3]), mpk, msg)
+    s.verify(s.recover(sigs_[2:5], ids[2:5]), mpk, msg)
+    s.verify(s.recover(sigs_[:2], ids[:2]), mpk, msg)
+    s.recover(sigs_, ids)
+    s.recover(sigs_[:1], ids[:1])
+    s.recover([], [])
+    s.recover(sigs_[:3], ids[:2])
+    dup = be(int.from_bytes(ids[0], "big") % R + R)
+    s.recover(sigs_[:3], [ids[0], dup, ids[2]])
+    s.recover(sigs_[:3], [ids[0], bytes(32), ids[2]])
+    s.recover(sigs_[:3], [ids[0], be(R), ids[2]])
+    no_sig = s.decode("sig", bytes(96))
+    s.recover([sigs_[0], no_sig, sigs_[2]], ids[:3])
+    s.recover([sigs_[0], no_sig, sigs_[2]], ids[:3], recv=sigs_[4])
+    s.recover(sigs_[:3], ids[:3], recv=sigs_[4])
+    return (
+      "Recover of full, other, short and long subsets, one share, none,"
+      " unequal lists, ids equal mod r, zero and r ids, an invalid share,"
+      " INPLACE"
+    )
+
+  def ies(s: Steps) -> str:
+    keys = [s.decode("sk", sk_of("ops ies", i)) for i in range(3)]
+    pks = [s.pubkey(k) for k in keys]
+    eph = s.decode("sk", sk_of("ops ies eph"))
+    seed = h("ops ies seed")
+    no_pk = s.decode("pk", bytes(48))
+    data = [h("ops ies", i) for i in range(3)]
+    cases = [
+      (pks, data),
+      (pks[:1], [b""]),
+      (pks[:2], [data[0] + data[1][:16], data[1][:16]]),
+      (pks[:2], [data[0][:17], data[1]]),
+      ([pks[0], no_pk, pks[2]], data),
+    ]
+    encs = [s.ies_encrypt(eph, seed, r, d) for r, d in cases]
+    containers = ies_outputs(probe, s, encs)
+    for (recips, _), enc in zip(cases, containers, strict=True):
+      for i in range(len(recips) + 1):
+        s.ies_decrypt(False, i, keys[min(i, 2)], enc)
+      s.ies_decrypt(False, 0, keys[1], enc)
+      s.ies_decrypt(False, 0, s.decode("sk", bytes(32)), enc)
+      s.ies_decrypt(False, 0, keys[0], enc[:-1])
+      s.ies_decrypt(False, 0, keys[0], enc + b"\x00")
+      first = enc_blob(enc, 0)
+      one = enc[:80] + o.blob(first)
+      s.ies_decrypt(True, 0, keys[0], one)
+      s.ies_decrypt(True, 1, keys[0], one)
+    return (
+      "multi-recipient IES: three recipients, an empty plaintext, mixed and"
+      " misaligned lengths, an invalid recipient; decrypt at every index,"
+      " with another or an invalid key, a truncated or extended container,"
+      " and the single blob"
+    )
+
+  return scripted(
+    probe,
+    {
+      "aggregates": aggregates,
+      "secure": secure,
+      "shares": shares,
+      "recovery": recovery,
+      "ies": ies,
+    },
+  )
+
+
+def quirk22_rows(probe: o.Probe, decoded: list[Row]) -> list[Row]:
+  """Quirk 22 through BS11b's operations: an object whose bytes are
+  canonical only in the other scheme decodes invalid holding the default
+  element, which the ungated operations take as the infinity and the gated
+  ones refuse; legacy keys outside the subgroup or off the curve go through
+  them unchecked; and an IES plaintext of r, above r or zeros decodes as a
+  secret key with Core's outcome under each flag."""
+  warmed(probe, "quirk22")
+  msg = h("quirk22 msg")
+
+  def opposite(kind: str, scheme: str) -> bytes:
+    return next(
+      bytes.fromhex(str(r["in"]))
+      for r in decoded
+      if r["kind"] == kind
+      and r[f"eager_{scheme}"] == "I"
+      and any(bytes.fromhex(str(r["in"])))
+    )
+
+  def exotic(kind: str) -> list[bytes]:
+    return [
+      bytes.fromhex(str(r["in"]))
+      for r in decoded
+      if r["kind"] == kind
+      and str(r["class"]).startswith(("nonsub_", "off_"))
+      and str(r["eager_legacy"]).startswith("V")
+    ][:2]
+
+  def fallback(s: Steps) -> str:
+    scheme = "legacy" if s.script.legacy else "basic"
+    keys = [s.decode("sk", sk_of("q22", i)) for i in range(3)]
+    p = [s.pubkey(k) for k in keys]
+    x = [s.sign(k, msg) for k in keys]
+    q = s.decode("pk", opposite("pk", scheme))
+    t = s.decode("sig", opposite("sig", scheme))
+    for reg in (q, t):
+      s.unary(o.IS_VALID, "is_valid", reg)
+      s.unary(o.SER, "ser", reg)
+      s.unary(o.SER_HASH, "ser_hash", reg)
+    s.binary(o.EQ, "eq", s.agg("pk", [p[0], q, p[1]]), s.agg("pk", p[:2]))
+    s.binary(o.EQ, "eq", s.agg("sig", [x[0], t, x[1]]), s.agg("sig", x[:2]))
+    s.agg("pk", [p[0], q], pair=True)
+    s.agg("sig", [x[0], t], pair=True)
+    agg = s.agg_secure(x[:2], [p[0], q], msg)
+    s.verify_sec(agg, [p[0], q], msg)
+    s.agg_secure([x[0], t], p[:2], msg)
+    ids = [h("q22 id", i) for i in range(2)]
+    s.share("pk", [p[0], q], ids[0])
+    s.recover([x[0], t], ids)
+    s.dh(keys[0], q)
+    s.ies_encrypt(keys[0], h("q22 seed"), [p[1], q], [msg, msg])
+    return "an object canonical only in the other scheme through the wrapper operations"
+
+  def unchecked(s: Steps) -> str:
+    keys = [s.decode("sk", sk_of("q22 x", i)) for i in range(3)]
+    p = [s.pubkey(k) for k in keys]
+    x = [s.sign(k, msg) for k in keys]
+    q = [s.decode_as("pk", raw, True) for raw in exotic("pk")]
+    t = [s.decode_as("sig", raw, True) for raw in exotic("sig")]
+    ids = [h("q22 x id", i) for i in range(2)]
+    for e in q:
+      s.unary(o.IS_VALID, "is_valid", e)
+      s.share("pk", [e, p[0]], ids[0])
+      s.share("pk", [p[0], e], ids[1])
+      s.dh(keys[0], e)
+      s.agg_secure(x[:2], [p[0], e], msg)
+    for e in t:
+      s.recover([x[0], e], ids)
+      s.recover([e, x[1]], ids)
+      s.agg_secure([x[0], e], p[:2], msg)
+    return "legacy-decoded keys and signatures off the subgroup or the curve through shares, recovery, DH and AggregateSecure"
+
+  def secret(s: Steps) -> str:
+    keys = [s.decode("sk", sk_of("q22 sk", i)) for i in range(2)]
+    p = s.pubkey(keys[1])
+    plains = [be(R), be(R + 1), bytes(32), be(R - 1)]
+    encs = [s.ies_encrypt(keys[0], h("q22 sk seed"), [p], [d]) for d in plains]
+    containers = ies_outputs(probe, s, encs)
+    for d, enc in zip(plains, containers, strict=True):
+      s.ies_decrypt(False, 0, keys[1], enc)
+      for flag in (True, False):
+        s.decode_as("sk", d, flag)
+    return "IES plaintexts r, r + 1, zero and r - 1 decoded as a secret key under each flag"
+
+  return scripted(
+    probe, {"fallback": fallback, "unchecked": unchecked, "secret": secret}
+  )
+
+
 def decode_rows(probe: o.Probe) -> list[Row]:
   """bls_wrapper's eager inputs, decoded by the oracle eagerly and lazily."""
   # bls_wrapper's generator, loaded by path: it is also named gen. Its
@@ -956,6 +1305,8 @@ def main() -> int:
     "edge": lambda: {"rows": edge_rows(probe, decoded())},
     "relic": lambda: {"rows": relic_rows(probe)},
     "arith": lambda: {"rows": arith_rows(probe, decoded())},
+    "ops": lambda: {"rows": ops_rows(probe)},
+    "quirk22": lambda: {"rows": quirk22_rows(probe, decoded())},
   }
   unknown = set(args.only or ()) - builders.keys()
   if unknown:
