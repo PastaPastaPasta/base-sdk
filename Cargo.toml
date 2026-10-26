@@ -37,6 +37,7 @@ zeroize = { version = "1.9.0", default-features = false }
 [workspace.lints.clippy]
 expect_used = "deny"
 panic = "deny"
+same_name_method = "deny"
 todo = "deny"
 unimplemented = "deny"
 unreachable = "deny"
