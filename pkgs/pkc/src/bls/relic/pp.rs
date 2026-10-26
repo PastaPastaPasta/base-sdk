@@ -161,6 +161,9 @@ mod tests {
   use crate::bls::blst_ffi::miller_loop;
   use crate::bls::group::{G1Affine, G2Affine, Point, G1, G2};
 
+  use dash_dev::{arr_from_hex, Corpus};
+  use serde::Deserialize;
+
   fn g1_affine(v: u64) -> G1Affine {
     G1::generator().mul_scalar(&v.to_le_bytes(), 64).to_affine()
   }
@@ -253,5 +256,109 @@ mod tests {
       coord: Coord::Projc,
     };
     assert_eq!(map_sim(&[(pp, qq)]), map_sim(&[(p, q)]));
+  }
+
+  /// A point as the probe printed relic's coordinates.
+  #[derive(Deserialize)]
+  struct Coords<T> {
+    class: String,
+    projc: bool,
+    x: T,
+    y: T,
+    z: T,
+  }
+
+  /// One `pp_map_sim_oatep_k12` call: its pairs and relic's result, the
+  /// Miller value after `pp_exp_k12`.
+  #[derive(Deserialize)]
+  struct Vector {
+    g1: Vec<Coords<String>>,
+    g2: Vec<Coords<[String; 2]>>,
+    out: Vec<[String; 2]>,
+  }
+
+  fn fp(hex: &str) -> Fp {
+    Fp::from(&arr_from_hex::<48>(hex))
+  }
+
+  fn fp2(hex: &[String; 2]) -> Fp2 {
+    Fp2::new(fp(&hex[0]), fp(&hex[1]))
+  }
+
+  fn coord(projc: bool) -> Coord {
+    if projc {
+      Coord::Projc
+    } else {
+      Coord::Basic
+    }
+  }
+
+  /// Replays relic's pairings: the engine's Miller value, through blst's
+  /// final exponentiation, is relic's `pp_map_sim_oatep_k12` exactly, zero
+  /// included (P4, P5), on every class of point relic holds. The committed
+  /// corpus is a sample; `BLS_PAIRING_DIR` names a directory whose
+  /// `corpus/bls_pairing.json5` replaces it, for the probe's full runs.
+  #[test]
+  fn the_engine_reproduces_relics_pairings() {
+    let dir = std::env::var("BLS_PAIRING_DIR").unwrap_or_else(|_| env!("CARGO_MANIFEST_DIR").into());
+    let corpus = Corpus::open(&dir, "bls_pairing");
+    assert!(corpus.value::<bool>("twist_mtype"));
+    let mut classes = BTreeSet::<String>::new();
+    let (mut zeros, mut no_pair_left, mut most_pairs) = (0, 0, 0);
+    for v in corpus.vectors::<Vector>("pairs") {
+      most_pairs = most_pairs.max(v.g1.len());
+      let infinity_only = v
+        .g1
+        .iter()
+        .zip(&v.g2)
+        .all(|(p, q)| p.class == "infinity" || q.class == "infinity");
+      no_pair_left += usize::from(infinity_only);
+      let pairs: Vec<(Ep, Ep2)> = v
+        .g1
+        .iter()
+        .zip(&v.g2)
+        .map(|(p, q)| {
+          classes.insert(format!("g1 {}", p.class));
+          classes.insert(format!("g2 {}", q.class));
+          let p = Ep {
+            x: fp(&p.x),
+            y: fp(&p.y),
+            z: fp(&p.z),
+            coord: coord(p.projc),
+          };
+          let q = Ep2 {
+            x: fp2(&q.x),
+            y: fp2(&q.y),
+            z: fp2(&q.z),
+            coord: coord(q.projc),
+          };
+          (p, q)
+        })
+        .collect();
+      let mut want = Fp12::ZERO;
+      for (n, c) in v.out.iter().enumerate() {
+        want.set_coeff(n / 3, n % 3, fp2(c));
+      }
+      let f = map_sim(&pairs);
+      zeros += usize::from(f == Fp12::ZERO);
+      assert_eq!(f.final_exp(), want);
+    }
+    for class in [
+      "subgroup",
+      "torsion",
+      "offcurve",
+      "projective",
+      "projective_offcurve",
+      "edge",
+      "infinity",
+    ] {
+      assert!(classes.contains(&format!("g1 {class}")), "g1 {class}");
+      assert!(classes.contains(&format!("g2 {class}")), "g2 {class}");
+    }
+    assert!(classes.contains("g1 order3"));
+    assert!(classes.contains("g2 y0"));
+    assert!(zeros > 0, "no vector reaches a zero Miller value");
+    assert!(no_pair_left > 0, "no vector has an infinity side in every pair");
+    assert!(most_pairs > 1, "no vector has more than one pair");
   }
 }
