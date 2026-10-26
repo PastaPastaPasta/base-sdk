@@ -17,6 +17,7 @@ use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::Numeric;
 use dash_types::{enum_map, impl_num, impl_type, Checkable, CompactSize};
 
+use core::cmp::Ordering;
 use core::fmt;
 
 /// Maximum entries per purpose.
@@ -340,20 +341,24 @@ fn check_domain(name: &[u8]) -> Option<NIError> {
   None
 }
 
+/// Checks a service, in the group of `purpose` if there is one.
+fn check_service(svc: &ServiceV2, purpose: Option<NIPurpose>) -> Option<NIError> {
+  if let Some(error) = svc.check() {
+    return Some(NIError::BadAddr { error });
+  }
+  let is_https_port = purpose == Some(NIPurpose::PlatformHttps) && svc.port == PLATFORM_HTTPS_PORT;
+  if !svc.addr.is_i2p() && is_bad_port(svc.port) && !is_https_port {
+    return Some(NIError::BadPort { port: svc.port });
+  }
+  None
+}
+
 impl Checkable for NIEntry {
   type Error = NIError;
 
   fn check(&self) -> Option<Self::Error> {
     match self {
-      Self::Service(svc) => {
-        if let Some(error) = svc.check() {
-          return Some(NIError::BadAddr { error });
-        }
-        if !svc.addr.is_i2p() && is_bad_port(svc.port) {
-          return Some(NIError::BadPort { port: svc.port });
-        }
-        None
-      }
+      Self::Service(svc) => check_service(svc, None),
       Self::Domain { name, port } => {
         if *port == 0 || (is_bad_port(*port) && *port != PLATFORM_HTTPS_PORT) {
           return Some(NIError::BadPort { port: *port });
@@ -465,12 +470,11 @@ impl Checkable for NetInfoV2 {
     if self.entries.is_empty() {
       return Some(NIError::Malformed);
     }
-    // Duplicate purpose key detection.
-    for i in 0..self.entries.len() {
-      for j in (i + 1)..self.entries.len() {
-        if self.entries[i].0 == self.entries[j].0 {
-          return Some(NIError::Duplicate);
-        }
+    for pair in self.entries.windows(2) {
+      match pair[0].0.to_base().cmp(&pair[1].0.to_base()) {
+        Ordering::Less => {}
+        Ordering::Equal => return Some(NIError::Duplicate),
+        Ordering::Greater => return Some(NIError::Malformed),
       }
     }
     // addr:port duplicates across all entries
@@ -514,12 +518,12 @@ impl Checkable for NetInfoV2 {
         if matches!(entry, NIEntry::Domain { .. }) && *purpose != NIPurpose::PlatformHttps {
           return Some(NIError::BadType { entry_type: 0x02 });
         }
-        match entry.check() {
-          Some(NIError::BadPort {
-            port: PLATFORM_HTTPS_PORT,
-          }) if *purpose == NIPurpose::PlatformHttps => {}
-          Some(e) => return Some(e),
-          None => {}
+        let error = match entry {
+          NIEntry::Service(svc) => check_service(svc, Some(*purpose)),
+          _ => entry.check(),
+        };
+        if let Some(e) = error {
+          return Some(e);
         }
       }
     }
@@ -607,7 +611,7 @@ impl NITrait for NetInfoV2 {
 /// above `last`, and the errors of reading a byte.
 fn read_purpose(data: &mut &[u8], last: Option<NIPurpose>) -> Result<NIPurpose, DecodeError> {
   let value = u8::decode(data)?;
-  let is_after_last = |value: u8| last.is_none_or(|last| value > last.to_base());
+  let is_after_last = |candidate: u8| last.is_none_or(|last| candidate > last.to_base());
   let purpose = NIPurpose::from_base(value);
   if !matches!(purpose, NIPurpose::Unknown(_)) && is_after_last(value) {
     return Ok(purpose);
@@ -615,8 +619,8 @@ fn read_purpose(data: &mut &[u8], last: Option<NIPurpose>) -> Result<NIPurpose, 
   Err(DecodeError::InvalidValue {
     expected: NIPurpose::variants()
       .iter()
-      .map(|purpose| purpose.to_base())
-      .filter(|&value| is_after_last(value))
+      .map(NIPurpose::to_base)
+      .filter(|&candidate| is_after_last(candidate))
       .map(u64::from)
       .collect(),
     actual: u64::from(value),
@@ -949,6 +953,7 @@ mod tests {
   )]
   #[case::tor_port_valid(AddrV2::TorV3([1; 32]), 9998, None)]
   #[case::cjdns_valid(AddrV2::Cjdns(hex!("fc000000000000000000000000000001")), 9998, None)]
+  #[case::ipv4_port_443(AddrV2::Ipv4([1, 2, 3, 4]), 443, Some(NIError::BadPort { port: 443 }))]
   fn check_entry_service(#[case] addr: AddrV2, #[case] port: u16, #[case] expected: Option<NIError>) {
     let entry = NIEntry::Service(ServiceV2 { addr, port });
     assert_eq!(entry.check(), expected);
@@ -1123,6 +1128,20 @@ mod tests {
       (NIPurpose::CoreP2p, vec![svc(AddrV2::Ipv4([10, 0, 0, 2]), 9999)]),
     ],
     Some(NIError::Duplicate),
+  )]
+  #[case::ascending_purposes(
+    vec![
+      (NIPurpose::CoreP2p, vec![svc(AddrV2::Ipv4([1, 2, 3, 4]), 9999)]),
+      (NIPurpose::PlatformHttps, vec![dom(b"example.com", 443)]),
+    ],
+    None,
+  )]
+  #[case::descending_purposes(
+    vec![
+      (NIPurpose::PlatformHttps, vec![dom(b"example.com", 443)]),
+      (NIPurpose::CoreP2p, vec![svc(AddrV2::Ipv4([1, 2, 3, 4]), 9999)]),
+    ],
+    Some(NIError::Malformed),
   )]
   #[case::duplicate_addr_port_cross_group(
     vec![
