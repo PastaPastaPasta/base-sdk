@@ -65,6 +65,8 @@ pub struct ChainParams {
   pub pool_min_participants: i32,
   /// Maximum participants for a CoinJoin session.
   pub pool_max_participants: i32,
+  /// Address of the key that signs sporks.
+  pub spork_address: &'static str,
   /// Number of blocks in a credit-pool accounting period.
   pub credit_pool_period_blocks: i32,
   /// Hard-coded checkpoints for fast validation.

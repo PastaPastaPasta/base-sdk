@@ -110,6 +110,13 @@ pub static PARAMS: ChainParams = ChainParams {
     default_assume_valid: Hash256::from_bendian(hex!(
       "00000000000000119fe42827219e0686d3f7b494ae65f823194c740c5dbab492"
     )),
+    llmqs: &[
+      LlmqType::Llmq50_60,
+      LlmqType::Llmq60_75,
+      LlmqType::Llmq400_60,
+      LlmqType::Llmq400_85,
+      LlmqType::Llmq100_67,
+    ],
     llmq_type_chain_locks: LlmqType::Llmq400_60,
     llmq_type_dip0024_instant_send: LlmqType::Llmq60_75,
     llmq_type_platform: LlmqType::Llmq100_67,
@@ -149,6 +156,7 @@ pub static PARAMS: ChainParams = ChainParams {
   is_mockable_chain: false,
   pool_min_participants: 3,
   pool_max_participants: 20,
+  spork_address: "Xgtyuk76vhuFW2iT7UAiHgNdWXCf3J34wh",
   credit_pool_period_blocks: 576,
   checkpoints: &CHECKPOINTS,
   chain_tx_data: ChainTxData {

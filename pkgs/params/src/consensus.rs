@@ -6,7 +6,7 @@
 
 //! Consensus parameters of a network.
 
-use crate::{Bip9Deployments, LlmqType};
+use crate::{Bip9Deployments, LlmqParams, LlmqType};
 
 use bitcoin_units::BlockHeight;
 use dash_num::{Arith256, Hash256};
@@ -160,6 +160,8 @@ pub struct ConsensusParams {
   /// Block hash assumed valid for fast initial
   /// sync.
   pub default_assume_valid: Hash256,
+  /// LLMQ types the chain runs, in the reference implementation's order.
+  pub llmqs: &'static [LlmqType],
   /// LLMQ type used for ChainLocks.
   pub llmq_type_chain_locks: LlmqType,
   /// LLMQ type used for DIP0024 InstantSend.
@@ -191,5 +193,11 @@ impl ConsensusParams {
       BuriedDeployment::MnRr => self.mn_rr_height,
       BuriedDeployment::Withdrawals => self.withdrawals_height,
     }
+  }
+
+  /// Returns the parameters of an LLMQ type the chain runs, or `None` if the
+  /// chain does not run it.
+  pub fn llmq(&self, llmq_type: LlmqType) -> Option<LlmqParams> {
+    llmq_type.params().filter(|_| self.llmqs.contains(&llmq_type))
   }
 }

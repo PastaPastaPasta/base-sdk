@@ -98,6 +98,13 @@ pub static PARAMS: ChainParams = ChainParams {
     pow_dgw_height: BlockHeight::from_u32(34_140),
     minimum_chain_work: Arith256::ZERO,
     default_assume_valid: Hash256::ZERO,
+    llmqs: &[
+      LlmqType::LlmqTest,
+      LlmqType::LlmqTestInstantsend,
+      LlmqType::LlmqTestV17,
+      LlmqType::LlmqTestDip0024,
+      LlmqType::LlmqTestPlatform,
+    ],
     llmq_type_chain_locks: LlmqType::LlmqTest,
     llmq_type_dip0024_instant_send: LlmqType::LlmqTestDip0024,
     llmq_type_platform: LlmqType::LlmqTestPlatform,
@@ -121,7 +128,7 @@ pub static PARAMS: ChainParams = ChainParams {
   prune_after_height: 1000,
   assumed_blockchain_size_gb: 0,
   assumed_chain_state_size_gb: 0,
-  dns_seeds: &[],
+  dns_seeds: &["dummySeed.invalid."],
   addr_params: AddrParams {
     pubkey_addr: 140,                     // addresses start with 'y'
     script_addr: 19,                      // addresses start with '8' or '9'
@@ -137,6 +144,7 @@ pub static PARAMS: ChainParams = ChainParams {
   is_mockable_chain: true,
   pool_min_participants: 2,
   pool_max_participants: 20,
+  spork_address: "yj949n1UH6fDhw6HtVE5VMj2iSTaSWBMcW",
   credit_pool_period_blocks: 100,
   checkpoints: &CHECKPOINTS,
   chain_tx_data: ChainTxData {
