@@ -269,6 +269,11 @@ pub fn ies_key(sk: &BlsSkValue, pk: &BlsPkValue) -> Option<Zeroizing<[u8; 32]>> 
 /// even when infinite (a basic key equal to `r`). It does not depend on the
 /// flag. A subgroup key stays on blst, constant-time; an Exotic one runs the
 /// engine, which is variable-time, as relic is in Core.
+///
+/// `out` is a shared secret, held as Core holds it, in a public key: its
+/// `Debug` shows it, it is not wiped on drop and its comparison is not
+/// constant-time. Derive keys with [`ies_key`], which returns them in
+/// `Zeroizing`.
 pub fn dh_key_exchange(out: &mut BlsPkValue, sk: &BlsSkValue, pk: &BlsPkValue) -> bool {
   out.invalidate();
   if !sk.is_valid() || !pk.is_valid() {

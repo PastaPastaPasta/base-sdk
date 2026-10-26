@@ -1048,13 +1048,17 @@ def ops_rows(probe: o.Probe) -> list[Row]:
     no_sk, no_pk = s.decode("sk", bytes(32)), s.decode("pk", bytes(48))
     s.share("sk", [msk[0], no_sk], five)
     s.share("pk", [mpk[0], no_pk], five)
-    s.share("pk", [mpk[0], no_pk], five, recv=mpk[2])
+    kept = s.share("pk", [mpk[0], no_pk], five, recv=mpk[2])
+    s.binary(o.IMPL_EQ, "impl_eq", kept, mpk[2])
     s.share("pk", mpk, five, recv=mpk[2])
-    s.share("sk", [msk[0], no_sk], five, recv=msk[2])
+    kept = s.share("sk", [msk[0], no_sk], five, recv=msk[2])
+    s.agg_sk([kept])
+    s.agg_sk([kept, msk[0]])
     s.share("sk", msk, five, recv=msk[2])
     return (
       "SecretKeyShare and PublicKeyShare at ids 0, r, r + 5, 5, a random id"
-      " and its r-shift; one and no coefficients; an invalid one; INPLACE"
+      " and its r-shift; one and no coefficients; an invalid one; INPLACE,"
+      " a failure's kept element read back by IMPL_EQ and key sums"
     )
 
   def recovery(s: Steps) -> str:
@@ -1075,12 +1079,13 @@ def ops_rows(probe: o.Probe) -> list[Row]:
     s.recover(sigs_[:3], [ids[0], be(R), ids[2]])
     no_sig = s.decode("sig", bytes(96))
     s.recover([sigs_[0], no_sig, sigs_[2]], ids[:3])
-    s.recover([sigs_[0], no_sig, sigs_[2]], ids[:3], recv=sigs_[4])
+    kept = s.recover([sigs_[0], no_sig, sigs_[2]], ids[:3], recv=sigs_[4])
+    s.binary(o.IMPL_EQ, "impl_eq", kept, sigs_[4])
     s.recover(sigs_[:3], ids[:3], recv=sigs_[4])
     return (
       "Recover of full, other, short and long subsets, one share, none,"
       " unequal lists, ids equal mod r, zero and r ids, an invalid share,"
-      " INPLACE"
+      " INPLACE, a failure's kept element read back by IMPL_EQ"
     )
 
   def ies(s: Steps) -> str:

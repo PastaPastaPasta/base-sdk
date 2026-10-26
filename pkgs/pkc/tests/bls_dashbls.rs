@@ -5,15 +5,16 @@
 //
 
 //! The fixed vectors in dashbls' `test.cpp` (Dash Core v24.0.0-rc.3), replayed
-//! through the typed API. `corpus/bls_dashbls.json5` holds them verbatim and
-//! `corpus/PROVENANCE.md` says where from.
+//! through the typed API and, for aggregation and recovery, `bls::core`.
+//! `corpus/bls_dashbls.json5` holds them verbatim and `corpus/PROVENANCE.md`
+//! says where from.
 
 #![cfg(feature = "bls")]
 #![expect(clippy::unwrap_used, reason = "test code")]
 
 use bitcoin_hashes::sha256::Hash as Sha256;
 use dash_dev::{arr_from_hex, vec_from_hex, Corpus};
-use dash_pkc::bls::core::{BlsPkValue, BlsSigValue};
+use dash_pkc::bls::core::{aggregate_signatures_insecure, recover_signature, BlsPkValue, BlsSigValue};
 use dash_pkc::bls::{
   BlsPublicKey, BlsScChia, BlsScIetf, BlsSchemeKind, BlsSecretKey, BlsShareId, BlsSigShare, BlsSignature,
 };
@@ -116,6 +117,12 @@ fn chia_v1_basic() {
 
     let agg1 = Sig::aggregate(&[&sig1, &sig2]).unwrap();
     assert_eq!(agg1.to_bytes().to_lower_hex_string(), r.agg_sig1_sig2);
+    let value = |hex: &str| BlsSigValue::from_canonical(&arr_from_hex(hex), BlsSchemeKind::Basic).unwrap();
+    let core = aggregate_signatures_insecure(&[&value(&r.sig1), &value(&r.sig2)]);
+    assert_eq!(
+      core.to_bytes(BlsSchemeKind::Basic).to_lower_hex_string(),
+      r.agg_sig1_sig2
+    );
     agg1.verify_aggregates(&[&m1, &m2], &[&pk1, &pk2]).unwrap();
     assert!(sig1.verify_aggregates(&[&m1, &m2], &[&pk1, &pk2]).is_err());
     assert!(pk1.verify(&m1, &sig2).is_err());
@@ -194,6 +201,18 @@ fn legacy_threshold_gist() {
   let shares = legacy_shares(&rows, |r| &r.id_bytes);
   let recovered = BlsSignature::recover_shares(&shares.iter().collect::<Vec<_>>()).unwrap();
   assert_eq!(recovered.to_bytes().to_lower_hex_string(), m.threshold_sig);
+  // So does the wrapper's `Recover`, given the same id bytes.
+  let sigs: Vec<BlsSigValue> = rows
+    .iter()
+    .map(|r| BlsSigValue::from_canonical(&arr_from_hex(&r.sig), BlsSchemeKind::Legacy).unwrap())
+    .collect();
+  let ids: Vec<[u8; 32]> = rows.iter().map(|r| arr_from_hex(&r.id_bytes)).collect();
+  let mut core = BlsSigValue::invalid();
+  assert!(recover_signature(&mut core, &sigs.iter().collect::<Vec<_>>(), &ids));
+  assert_eq!(
+    core.to_bytes(BlsSchemeKind::Legacy).to_lower_hex_string(),
+    m.threshold_sig
+  );
   let pk = BlsPublicKey::<BlsScChia>::from_bytes(&arr_from_hex(&m.threshold_pk)).unwrap();
   pk.verify(&hash, &recovered).unwrap();
 
