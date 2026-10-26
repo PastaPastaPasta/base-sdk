@@ -409,12 +409,11 @@ pub trait NITrait: fmt::Display {
 pub struct NetInfoV2 {
   /// Format version.
   pub version: u8,
-  /// Purpose-grouped entries, one group per purpose in purpose order.
+  /// Purpose-grouped entries. Decoding reads only known purposes, in
+  /// ascending order.
   ///
-  /// A decoded value keeps the first group the payload gave for a purpose, as
-  /// Core's `std::map` does, so the groups, their order and the map framing
-  /// re-encode as Core's do. An entry Core marks invalid is
-  /// [`NIEntry::Invalid`]. A version Core does not know has no groups.
+  /// An entry Core marks invalid is [`NIEntry::Invalid`]. A version Core does
+  /// not know has no groups.
   pub entries: Vec<(NIPurpose, Vec<NIEntry>)>,
 }
 
@@ -430,19 +429,13 @@ impl BaseCodec for NetInfoV2 {
         entries: Vec::new(),
       });
     }
-    // Core reads a `std::map`: a repeated purpose is read and dropped, and the
-    // groups come out in purpose order. Each group takes 2 bytes or more.
+    // Each group takes 2 bytes or more.
     let purpose_count = CompactSize::decode_size(data)?.into_len(data.len() / MIN_GROUP_LEN)?;
-    let mut groups = BTreeMap::new();
+    let mut entries: Vec<(NIPurpose, Vec<NIEntry>)> = Vec::new();
     for _ in 0..purpose_count {
-      let purpose = u8::decode(data)?;
-      let group = Vec::<NIEntry>::decode(data)?;
-      groups.entry(purpose).or_insert(group);
+      let purpose = read_purpose(data, entries.last().map(|(last, _)| *last))?;
+      entries.push((purpose, Vec::<NIEntry>::decode(data)?));
     }
-    let entries = groups
-      .into_iter()
-      .map(|(purpose, group)| (NIPurpose::from_base(purpose), group))
-      .collect();
     Ok(Self { version, entries })
   }
 
@@ -604,6 +597,30 @@ impl NITrait for NetInfoV2 {
   fn stores_platform(&self) -> bool {
     true
   }
+}
+
+/// Reads a group purpose, which must be known and above `last`.
+///
+/// # Errors
+///
+/// Returns [`DecodeError::InvalidValue`] for an unknown purpose or one not
+/// above `last`, and the errors of reading a byte.
+fn read_purpose(data: &mut &[u8], last: Option<NIPurpose>) -> Result<NIPurpose, DecodeError> {
+  let value = u8::decode(data)?;
+  let is_after_last = |value: u8| last.is_none_or(|last| value > last.to_base());
+  let purpose = NIPurpose::from_base(value);
+  if !matches!(purpose, NIPurpose::Unknown(_)) && is_after_last(value) {
+    return Ok(purpose);
+  }
+  Err(DecodeError::InvalidValue {
+    expected: NIPurpose::variants()
+      .iter()
+      .map(|purpose| purpose.to_base())
+      .filter(|&value| is_after_last(value))
+      .map(u64::from)
+      .collect(),
+    actual: u64::from(value),
+  })
 }
 
 /// Returns `true` when two entries share the same address,
@@ -775,6 +792,7 @@ mod tests {
   use super::*;
   use crate::types::{AddrV1, AddrV2};
 
+  use dash_dev::vec_from_hex;
   use dash_types::codec::BaseCodec;
   use dash_types::Checkable;
   use hex_conservative::hex;
@@ -896,6 +914,19 @@ mod tests {
     let mut buf = Vec::new();
     decoded.encode(&mut buf);
     assert_eq!(buf, wire);
+  }
+
+  #[rstest]
+  #[case::repeated("010200000000", 0, vec![1, 2])]
+  #[case::descending("010201000000", 0, vec![2])]
+  #[case::after_last_purpose("010202000100", 1, vec![])]
+  #[case::unknown("01010300", 3, vec![0, 1, 2])]
+  fn decode_v2_purpose_refused(#[case] wire: &str, #[case] actual: u64, #[case] expected: Vec<u64>) {
+    let wire = vec_from_hex(wire);
+    assert_eq!(
+      NetInfoV2::decode(&mut wire.as_slice()),
+      Err(DecodeError::InvalidValue { expected, actual })
+    );
   }
 
   #[rstest]
