@@ -26,6 +26,8 @@ const DOMAIN_LABEL_MAX: usize = 63;
 const DOMAIN_MAX: usize = 253;
 /// Minimum FQDN length.
 const DOMAIN_MIN: usize = 3;
+/// Privileged port allowed for Platform HTTPS.
+const PLATFORM_HTTPS_PORT: u16 = 443;
 /// IPv6 prefix of an embedded TORv2 address.
 const TORV2_IN_IPV6: [u8; 6] = [0xfd, 0x87, 0xd8, 0x7e, 0xeb, 0x43];
 /// IPv6 prefix of an embedded internal address.
@@ -258,22 +260,26 @@ fn check_domain(name: &[u8]) -> Option<NIError> {
   None
 }
 
+/// Checks a service, in the group of `purpose` if there is one.
+fn check_service(svc: &ServiceV2, purpose: Option<NIPurpose>) -> Option<NIError> {
+  if let Some(error) = svc.check() {
+    return Some(NIError::BadAddr { error });
+  }
+  let is_https_port = purpose == Some(NIPurpose::PlatformHttps) && svc.port() == PLATFORM_HTTPS_PORT;
+  if !svc.addr().is_i2p() && is_bad_port(svc.port()) && !is_https_port {
+    return Some(NIError::BadPort { port: svc.port() });
+  }
+  None
+}
+
 impl Checkable for NIEntry {
   type Error = NIError;
 
   fn check(&self) -> Option<Self::Error> {
     match self {
-      Self::Service(svc) => {
-        if let Some(error) = svc.check() {
-          return Some(NIError::BadAddr { error });
-        }
-        if !svc.addr().is_i2p() && is_bad_port(svc.port()) {
-          return Some(NIError::BadPort { port: svc.port() });
-        }
-        None
-      }
+      Self::Service(svc) => check_service(svc, None),
       Self::Domain { name, port } => {
-        if *port == 0 || (is_bad_port(*port) && *port != 443) {
+        if *port == 0 || (is_bad_port(*port) && *port != PLATFORM_HTTPS_PORT) {
           return Some(NIError::BadPort { port: *port });
         }
         check_domain(name)
@@ -443,7 +449,11 @@ impl Checkable for NetInfoV2 {
         if matches!(entry, NIEntry::Domain { .. }) && *purpose != NIPurpose::PlatformHttps {
           return Some(NIError::BadType { entry_type: 0x02 });
         }
-        if let Some(e) = entry.check() {
+        let error = match entry {
+          NIEntry::Service(svc) => check_service(svc, Some(*purpose)),
+          _ => entry.check(),
+        };
+        if let Some(e) = error {
           return Some(e);
         }
       }
@@ -841,6 +851,7 @@ mod tests {
     Some(NIError::BadAddr { error: NetAddrError::BadPort { port: 0 } }),
   )]
   #[case::ipv4_port_privileged(AddrV2::Ipv4([1, 2, 3, 4]), 22, Some(NIError::BadPort { port: 22 }))]
+  #[case::ipv4_port_443(AddrV2::Ipv4([1, 2, 3, 4]), 443, Some(NIError::BadPort { port: 443 }))]
   #[case::ipv4_port_named_bad(AddrV2::Ipv4([1, 2, 3, 4]), 8333, Some(NIError::BadPort { port: 8333 }))]
   #[case::i2p_port_zero(AddrV2::I2p([1; 32]), 0, None)]
   #[case::i2p_port_nonzero(
@@ -1045,6 +1056,33 @@ mod tests {
     NIPurpose::CoreP2p,
     vec![svc(AddrV2::Ipv4([1, 2, 3, 4]), 0)],
     Some(NIError::BadAddr { error: NetAddrError::BadPort { port: 0 } }),
+  )]
+  #[case::service_https_port_443(NIPurpose::PlatformHttps, vec![svc(AddrV2::Ipv4([1, 2, 3, 4]), 443)], None)]
+  #[case::ipv6_https_port_443(
+    NIPurpose::PlatformHttps,
+    vec![svc(AddrV2::Ipv6(hex!("26064700470000000000000000001111")), 443)],
+    None,
+  )]
+  #[case::domain_https_port_443(NIPurpose::PlatformHttps, vec![dom(b"example.com", 443)], None)]
+  #[case::service_core_p2p_port_443(
+    NIPurpose::CoreP2p,
+    vec![svc(AddrV2::Ipv4([1, 2, 3, 4]), 443)],
+    Some(NIError::BadPort { port: 443 }),
+  )]
+  #[case::service_platform_p2p_port_443(
+    NIPurpose::PlatformP2p,
+    vec![svc(AddrV2::Ipv4([1, 2, 3, 4]), 443)],
+    Some(NIError::BadPort { port: 443 }),
+  )]
+  #[case::service_https_port_80(
+    NIPurpose::PlatformHttps,
+    vec![svc(AddrV2::Ipv4([1, 2, 3, 4]), 80)],
+    Some(NIError::BadPort { port: 80 }),
+  )]
+  #[case::i2p_https_port_443(
+    NIPurpose::PlatformHttps,
+    vec![svc(AddrV2::I2p([1; 32]), 443)],
+    Some(NIError::BadAddr { error: NetAddrError::BadPort { port: 443 } }),
   )]
   #[case::duplicate_addr_same_group(
     NIPurpose::CoreP2p,
