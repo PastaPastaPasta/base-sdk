@@ -98,6 +98,20 @@ pub(super) const EP2_FRB: [Fp2; 2] = [
   ),
 ];
 
+/// The twist's curve constant b' = 4(1 + u), `ctx->ep2_b`
+/// (`ep2_curve_get_b`), which the Miller loop's doubling reads.
+pub(super) const TWIST_B: Fp2 = {
+  let four = [
+    0xaa27_0000_000c_fff3,
+    0x53cc_0032_fc34_000a,
+    0x478f_e97a_6b0a_807f,
+    0xb1d3_7ebe_e6ba_24d7,
+    0x8ec9_733b_bf78_ab2f,
+    0x09d6_4551_3d83_de7e,
+  ];
+  fp2(four, four)
+};
+
 /// floor(p/2), big-endian, against which `ep_pck` and `ep2_pck` compare y
 /// (`relic_ep_pck.c:40-58`, `relic_ep2_pck.c:40-60`).
 const HALF_P: [u8; 48] = hex_conservative::hex!(
@@ -203,6 +217,7 @@ mod tests {
   fn one_and_b3_are_montgomery_constants() {
     assert_eq!(ONE, Fp::from_u64(1));
     assert_eq!(B3, Fp::from_u64(12));
+    assert_eq!(TWIST_B, Fp2::new(Fp::from_u64(4), Fp::from_u64(4)));
   }
 
   #[test]

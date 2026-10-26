@@ -7,7 +7,7 @@
 //! Bridging routines for unsafe blst FFI operations.
 
 use super::group::{G1Affine, G2Affine, Point, G1, G2};
-use super::scalar::{Fp, Fp2, Fr};
+use super::scalar::{Fp, Fp12, Fp2, Fr};
 
 use blst::*;
 use dash_types::type_cvrt;
@@ -70,6 +70,14 @@ pub(crate) fn pairing_product_is_one(pairs: &[(G1Affine, G2Affine)]) -> bool {
     blst_final_exp(&mut out, &acc);
     blst_fp12_is_one(&out)
   }
+}
+
+/// blst's Miller value for one pair, for comparing the relic engine's.
+#[cfg(test)]
+pub(crate) fn miller_loop(p: &G1Affine, q: &G2Affine) -> Fp12 {
+  let mut out = Fp12::ZERO;
+  unsafe { blst_miller_loop(&mut out.0, &q.0, &p.0) };
+  out
 }
 
 /// Hash a message to G2 under a ciphersuite tag, `G2Element::FromMessage`.
@@ -364,6 +372,51 @@ impl Sub for Fp2 {
     let mut out = blst_fp2::default();
     unsafe { blst_fp2_sub(&mut out, &self.0, &rhs.0) };
     Self(out)
+  }
+}
+
+#[cfg_attr(not(test), expect(dead_code, reason = "BS11a-4 4b routes the verifies through it"))]
+impl Fp12 {
+  /// One.
+  pub(crate) fn one() -> Self {
+    Self(unsafe { *blst_fp12_one() })
+  }
+
+  /// The square of this element.
+  pub(crate) fn square(&self) -> Self {
+    let mut out = Self::ZERO;
+    unsafe { blst_fp12_sqr(&mut out.0, &self.0) };
+    out
+  }
+
+  /// The conjugate over `Fp6`, `c0 - c1 w`: relic's `fp12_inv_cyc`, which
+  /// inverts only an element of the cyclotomic subgroup.
+  pub(crate) fn conjugate(mut self) -> Self {
+    unsafe { blst_fp12_conjugate(&mut self.0) };
+    self
+  }
+
+  /// The final exponentiation, `f^((p^12 - 1) / r)`, which relic's
+  /// `pp_exp_k12` equals (design Lemma E, with k = 1).
+  pub(crate) fn final_exp(&self) -> Self {
+    let mut out = Self::ZERO;
+    unsafe { blst_final_exp(&mut out.0, &self.0) };
+    out
+  }
+
+  /// Whether the element is one.
+  pub(crate) fn is_one(&self) -> bool {
+    unsafe { blst_fp12_is_one(&self.0) }
+  }
+}
+
+impl Mul for Fp12 {
+  type Output = Self;
+
+  fn mul(self, rhs: Self) -> Self::Output {
+    let mut out = Self::ZERO;
+    unsafe { blst_fp12_mul(&mut out.0, &self.0, &rhs.0) };
+    out
   }
 }
 

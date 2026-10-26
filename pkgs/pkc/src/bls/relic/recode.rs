@@ -35,7 +35,7 @@ const R_BITS: usize = 255;
 
 /// |x| for the BLS12-381 parameter x = -0xd201000000010000,
 /// `fp_prime_get_par`; `bn_rec_frb`'s digit base.
-const X_ABS: u64 = 0xd201_0000_0001_0000;
+pub(super) const X_ABS: u64 = 0xd201_0000_0001_0000;
 
 /// The G1 GLV basis `ctx->ep_v1` and `ctx->ep_v2` (`ep_curve_get_v1`/`v2`),
 /// as `ep_curve_set_endom` leaves them: entry 0 is the rounding constant,
@@ -69,7 +69,7 @@ impl Bn {
   };
 
   /// A non-negative value from little-endian limbs.
-  const fn pos(limbs: &[u64]) -> Self {
+  pub(super) const fn pos(limbs: &[u64]) -> Self {
     let mut mag = [0; LIMBS];
     let mut i = 0;
     while i < limbs.len() {

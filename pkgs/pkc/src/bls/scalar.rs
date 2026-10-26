@@ -9,7 +9,7 @@
 use super::curve_consts;
 use super::error::BlsError;
 
-use blst::{blst_fp, blst_fp2, blst_fr};
+use blst::{blst_fp, blst_fp12, blst_fp2, blst_fp6, blst_fr};
 use dash_types::type_cvrt;
 #[cfg(feature = "codec")]
 use dash_types::type_id::Unencodable;
@@ -352,6 +352,31 @@ type_cvrt!(From<Fp> for Fp2, |fp| Self::new(*fp, Fp::default()));
 type_cvrt!(From<Fp2> for blst_fp2, |fp2| fp2.0);
 
 type_cvrt!(From<blst_fp2> for Fp2, |raw| Self(*raw));
+
+/// An element of `Fp12 = Fp6[w]/(w^2 - v)` over
+/// `Fp6 = Fp2[v]/(v^3 - (1 + u))`, the tower blst and relic share: slot
+/// `[i][j]` is the `Fp2` coefficient of `w^i v^j`, as relic indexes its
+/// `fp12_t`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
+pub(crate) struct Fp12(pub(super) blst_fp12);
+
+impl Fp12 {
+  /// Zero, relic's `fp12_zero`.
+  pub(crate) const ZERO: Self = {
+    let fp2 = blst_fp2 {
+      fp: [blst_fp { l: [0; 6] }; 2],
+    };
+    Self(blst_fp12 {
+      fp6: [blst_fp6 { fp2: [fp2; 3] }; 2],
+    })
+  };
+
+  /// Writes `v` into slot `[i][j]`, as relic writes `l[i][j]`.
+  pub(crate) fn set_coeff(&mut self, i: usize, j: usize, v: Fp2) {
+    self.0.fp6[i].fp2[j] = v.0;
+  }
+}
 
 #[cfg(test)]
 #[expect(clippy::unwrap_used, reason = "test code")]
