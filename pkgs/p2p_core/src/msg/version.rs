@@ -73,10 +73,10 @@ impl BitOrAssign for ServiceFlags {
 
 /// The user agent exceeds the 256-byte limit.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, Unencodable)]
-#[error("user agent too long: {len} bytes, max {MAX_USER_AGENT}")]
+#[error("user agent too long: {size} bytes, max {MAX_USER_AGENT}")]
 pub struct UserAgentTooLong {
   /// Actual length in bytes.
-  pub len: usize,
+  pub size: usize,
 }
 
 /// CompactSize-prefixed user agent bytestring.
@@ -108,7 +108,7 @@ impl UserAgent {
   /// Returns `UserAgentTooLong` if `bytes` exceeds 256 bytes.
   pub fn new(bytes: Vec<u8>) -> Result<Self, UserAgentTooLong> {
     if bytes.len() > MAX_USER_AGENT {
-      return Err(UserAgentTooLong { len: bytes.len() });
+      return Err(UserAgentTooLong { size: bytes.len() });
     }
     Ok(Self(bytes))
   }
