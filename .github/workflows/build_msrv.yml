@@ -48,6 +48,10 @@ jobs:
       - name: Filter paths
         id: filter
         uses: dorny/paths-filter@v4
+        env:
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: fetch.recurseSubmodules
+          GIT_CONFIG_VALUE_0: "false"
         with:
           filters: .github/paths.yml
 
