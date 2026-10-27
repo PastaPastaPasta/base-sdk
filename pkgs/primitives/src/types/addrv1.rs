@@ -12,7 +12,8 @@ use crate::hash_impl;
 
 use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
-use dash_types::{impl_bytes, impl_type, type_cvrt, Checkable};
+use dash_types::{impl_bytes, impl_new, impl_type, type_cvrt, Checkable};
+use getset::CopyGetters;
 
 use core::fmt;
 use core::net::{Ipv4Addr, Ipv6Addr};
@@ -28,7 +29,7 @@ const IPV4_MAPPED_PREFIX: [u8; 12] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff];
   derive(::serde::Serialize, ::serde::Deserialize),
   serde(transparent)
 )]
-pub struct AddrV1(#[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::hex"))] pub [u8; 16]);
+pub struct AddrV1(#[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::hex"))] [u8; 16]);
 
 impl_bytes!(AddrV1, 16);
 
@@ -208,15 +209,19 @@ type_cvrt!(TryFrom<AddrV2> for AddrV1, NetAddrError, |addr| {
   }
 });
 
+impl_new! {
 /// Legacy network address (ADDRv1 format, 18 bytes).
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ServiceV1 {
   /// 16-byte address (IPv4-mapped IPv6 or native IPv6).
-  pub addr: AddrV1,
+  #[getset(get_copy = "pub")]
+  addr: AddrV1,
   /// Network port (big-endian on the wire).
-  pub port: u16,
+  #[getset(get_copy = "pub")]
+  port: u16,
+}
 }
 
 impl_type!(ServiceV1);
@@ -266,8 +271,8 @@ impl FromStr for ServiceV1 {
 
 type_cvrt!(TryFrom<ServiceV2> for ServiceV1, NetAddrError, |v2| {
   Ok(Self {
-    addr: AddrV1::try_from(&v2.addr)?,
-    port: v2.port,
+    addr: AddrV1::try_from(v2.addr())?,
+    port: v2.port(),
   })
 });
 
@@ -452,26 +457,20 @@ mod tests {
       port: 8333,
     };
     let v2 = ServiceV2::from(v1);
-    assert_eq!(v2.addr, AddrV2::Ipv4([1, 2, 3, 4]));
-    assert_eq!(v2.port, 8333);
+    assert_eq!(v2.addr(), &AddrV2::Ipv4([1, 2, 3, 4]));
+    assert_eq!(v2.port(), 8333);
   }
 
   #[rstest]
   fn service_try_from_v2() {
-    let v2 = ServiceV2 {
-      addr: AddrV2::Ipv4([1, 2, 3, 4]),
-      port: 8333,
-    };
+    let v2 = ServiceV2::new(AddrV2::Ipv4([1, 2, 3, 4]), 8333);
     let v1 = ServiceV1::try_from(v2).unwrap();
     assert_eq!(v1.to_string(), "1.2.3.4:8333");
   }
 
   #[rstest]
   fn service_try_from_v2_tor_fails() {
-    let v2 = ServiceV2 {
-      addr: AddrV2::TorV3([1; 32]),
-      port: 8333,
-    };
+    let v2 = ServiceV2::new(AddrV2::TorV3([1; 32]), 8333);
     let err = ServiceV1::try_from(v2).unwrap_err();
     assert_eq!(
       err,

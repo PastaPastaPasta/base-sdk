@@ -42,24 +42,18 @@ struct ScanResult {
 fn build_coinbase(script_sig: Vec<u8>, script_pubkey: Vec<u8>, amount_duffs: &str) -> Result<Transaction, String> {
   let sat: u64 = amount_duffs.parse().map_err(|e| format!("invalid amount: {e}"))?;
   let value = Amount::from_sat(sat).map_err(|e| format!("invalid amount: {e}"))?;
-  Ok(Transaction {
-    version: 1,
-    tx_type: TxType::Spend,
-    inputs: vec![TxIn {
-      prevout: OutPoint {
-        hash: TxHash::default(),
-        index: 0xFFFF_FFFF,
-      },
-      script_sig: ScriptSigBuf::from_bytes(script_sig),
-      sequence: 0xFFFF_FFFF,
-    }],
-    outputs: vec![TxOut {
-      value,
-      script_pubkey: ScriptPubKeyBuf::from_bytes(script_pubkey),
-    }],
-    lock_time: 0,
-    extra_payload: Vec::new(),
-  })
+  Ok(Transaction::new(
+    1,
+    TxType::Spend,
+    vec![TxIn::new(
+      OutPoint::new(TxHash::default(), 0xFFFF_FFFF),
+      ScriptSigBuf::from_bytes(script_sig),
+      0xFFFF_FFFF,
+    )],
+    vec![TxOut::new(value, ScriptPubKeyBuf::from_bytes(script_pubkey))],
+    0,
+    Vec::new(),
+  ))
 }
 
 /// Compute the merkle root from coinbase parameters.
@@ -74,7 +68,6 @@ pub fn merkle_root(script_sig_hex: &str, script_pubkey_hex: &str, amount_duffs: 
 
 /// Scan a batch of nonces for a valid proof-of-work hash.
 #[wasm_bindgen]
-#[expect(clippy::too_many_arguments, reason = "flat signature required by wasm_bindgen")]
 pub fn scanhash(
   version: i32,
   prev_hash_hex: &str,
@@ -93,14 +86,7 @@ pub fn scanhash(
   let coinbase = build_coinbase(sig_bytes, pk_bytes, amount_duffs)?;
   let merkle_root = MerkleRoot::from_lendian(*coinbase.hash().as_bytes());
 
-  let header = BlockHeader {
-    version,
-    prev_hash,
-    merkle_root,
-    time,
-    bits,
-    nonce: 0,
-  };
+  let header = BlockHeader::new(version, prev_hash, merkle_root, time, bits, nonce_start);
   let mut header_buf = encode_to_vec(&header);
 
   let decoded = CompactTarget::new(bits).expand();

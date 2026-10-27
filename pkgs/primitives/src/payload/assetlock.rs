@@ -13,24 +13,24 @@ use crate::transaction::TxOut;
 use dash_script::Recipient;
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::Checkable;
+use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
+codec_payload! {
 /// AssetLock: L1-to-Platform (type 8).
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct AssetLock {
   /// Payload version.
-  pub version: u8,
+  #[getset(get_copy = "pub")]
+  version: u8,
   /// Platform credit allocations.
-  pub credit_outputs: Vec<TxOut>,
+  #[getset(get = "pub")]
+  credit_outputs: Vec<TxOut>,
 }
-
-codec_payload!(AssetLock {
-  version,
-  credit_outputs
-});
+}
 
 /// Asset lock validation failure.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, thiserror::Error, Unencodable)]
@@ -64,7 +64,7 @@ impl Checkable for AssetLock {
     let max_money = bitcoin_units::Amount::MAX_MONEY.to_sat();
     let mut total: u64 = 0;
     for (i, out) in self.credit_outputs.iter().enumerate() {
-      let sat = out.value.to_sat();
+      let sat = out.value().to_sat();
       if sat == 0 || sat > max_money {
         return Some(AssetLockInvalid::CreditOutOfRange { index: i });
       }
@@ -73,7 +73,7 @@ impl Checkable for AssetLock {
         return Some(AssetLockInvalid::CreditOutOfRange { index: i });
       }
       if !matches!(
-        Recipient::from_script(out.script_pubkey.as_bytes()),
+        Recipient::from_script(out.script_pubkey().as_bytes()),
         Some(Recipient::PubKeyHash(_))
       ) {
         return Some(AssetLockInvalid::CreditNotP2pkh { index: i });

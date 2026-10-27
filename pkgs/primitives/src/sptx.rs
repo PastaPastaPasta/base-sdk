@@ -17,7 +17,8 @@ use crate::types::{NIError, NIPurpose, NITrait, NetInfoV2};
 
 use dash_num::make_hash;
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{enum_map, impl_num, Checkable};
+use dash_types::{enum_map, impl_new, impl_num, Checkable};
+use getset::{CopyGetters, Getters};
 
 /// Maximum operator reward in basis points.
 pub(crate) const MAX_OPERATOR_REWARD: u16 = 10_000;
@@ -187,14 +188,18 @@ pub enum SpecialPayload {
   },
 }
 
+impl_new! {
 /// Error decoding a special payload.
-#[derive(Clone, Debug, Eq, PartialEq, Hash, thiserror::Error, Unencodable)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, PartialEq, Hash, thiserror::Error, Unencodable)]
 #[error("{tx_type} payload: {message}")]
 pub struct PayloadError {
   /// Which transaction type was being decoded.
-  pub tx_type: TxType,
+  #[getset(get_copy = "pub")]
+  tx_type: TxType,
   /// Human-readable description.
-  pub message: String,
+  #[getset(get = "pub")]
+  message: String,
+}
 }
 
 /// Structural check failure for a special payload.

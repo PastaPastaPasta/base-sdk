@@ -15,7 +15,8 @@ use bitcoin_units::Amount;
 use dash_num::Hash256;
 use dash_types::codec::BaseCodec;
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{enum_map, impl_num, Checkable, Hashable, Numeric};
+use dash_types::{enum_map, impl_new, impl_num, Checkable, Hashable, Numeric};
+use getset::{CopyGetters, Getters};
 use hex_conservative::DisplayHex;
 
 /// Maximum allowed name length for governance proposals.
@@ -42,6 +43,7 @@ impl_num!(GovObjectType, i32);
 
 hash_impl!(GovObjectType);
 
+impl_new! {
 /// A governance proposal payload (type 1 JSON).
 ///
 /// ```json
@@ -55,24 +57,32 @@ hash_impl!(GovObjectType);
 ///   "end_epoch": 1703000000
 /// }
 /// ```
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, Unencodable)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct Proposal {
   /// Short name (max 40 chars, lowercase alphanum + `-_`).
-  pub name: String,
+  #[getset(get = "pub")]
+  name: String,
   /// Proposal URL.
-  pub url: String,
+  #[getset(get = "pub")]
+  url: String,
   /// Dash address receiving payment.
-  pub payment_address: String,
+  #[getset(get = "pub")]
+  payment_address: String,
   /// Payment amount.
   #[cfg_attr(feature = "serde", serde(with = "crate::serialize::amount"))]
-  pub payment_amount: Amount,
+  #[getset(get_copy = "pub")]
+  payment_amount: Amount,
   /// Unix timestamp when payments begin.
-  pub start_epoch: i64,
+  #[getset(get_copy = "pub")]
+  start_epoch: i64,
   /// Unix timestamp when payments end.
-  pub end_epoch: i64,
+  #[getset(get_copy = "pub")]
+  end_epoch: i64,
+}
 }
 
+impl_new! {
 /// A superblock trigger payload (type 2 JSON).
 ///
 /// ```json
@@ -84,18 +94,23 @@ pub struct Proposal {
 ///   "proposal_hashes": "hash1|hash2"
 /// }
 /// ```
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, Unencodable)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Trigger {
   /// Block height at which payments occur.
-  pub event_block_height: i32,
+  #[getset(get_copy = "pub")]
+  event_block_height: i32,
   /// Pipe-delimited payment addresses.
-  pub payment_addresses: String,
+  #[getset(get = "pub")]
+  payment_addresses: String,
   /// Pipe-delimited payment amounts.
-  pub payment_amounts: String,
+  #[getset(get = "pub")]
+  payment_amounts: String,
   /// Pipe-delimited proposal hashes.
-  pub proposal_hashes: String,
+  #[getset(get = "pub")]
+  proposal_hashes: String,
+}
 }
 
 /// Decoded governance object data payload.
@@ -110,6 +125,7 @@ pub enum GovData {
   Unknown(Vec<u8>),
 }
 
+codec_base! {
 /// A governance object as serialized on the wire.
 ///
 /// ```text
@@ -118,40 +134,38 @@ pub enum GovData {
 /// || type(i32) || masternode_outpoint(36)
 /// || sig(CompactSize + bytes)
 /// ```
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct GovObject {
   /// Parent object hash (zero for root).
-  pub hash_parent: TxHash,
+  #[getset(get_copy = "pub")]
+  hash_parent: TxHash,
   /// Object revision.
-  pub revision: i32,
+  #[getset(get_copy = "pub")]
+  revision: i32,
   /// Creation timestamp.
-  pub time: i64,
+  #[getset(get_copy = "pub")]
+  time: i64,
   /// Collateral transaction hash.
-  pub collateral_hash: TxHash,
+  #[getset(get_copy = "pub")]
+  collateral_hash: TxHash,
   /// Raw data bytes (JSON when decoded as string).
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::hex"))]
-  pub data: Vec<u8>,
+  #[getset(get = "pub")]
+  data: Vec<u8>,
   /// Object type code.
-  pub object_type: GovObjectType,
+  #[getset(get_copy = "pub")]
+  object_type: GovObjectType,
   /// Signing masternode outpoint.
-  pub masternode_outpoint: OutPoint,
+  #[getset(get_copy = "pub")]
+  masternode_outpoint: OutPoint,
   /// BLS or ECDSA signature.
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::hex"))]
-  pub sig: Vec<u8>,
+  #[getset(get = "pub")]
+  sig: Vec<u8>,
 }
-
-codec_base!(GovObject {
-  hash_parent,
-  revision,
-  time,
-  collateral_hash,
-  data,
-  object_type,
-  masternode_outpoint,
-  sig,
-});
+}
 
 impl Hashable for GovObject {
   type Hash = Hash256;
@@ -171,8 +185,8 @@ impl Hashable for GovObject {
     // data hex is serialized as a string (CompactSize + bytes)
     data_hex.encode(&mut buf);
     // outpoint + dummy padding for legacy hash compat
-    self.masternode_outpoint.hash.encode(&mut buf);
-    self.masternode_outpoint.index.encode(&mut buf);
+    self.masternode_outpoint.txid().encode(&mut buf);
+    self.masternode_outpoint.index().encode(&mut buf);
     0u8.encode(&mut buf);
     0xFFFF_FFFFu32.encode(&mut buf);
     self.sig.encode(&mut buf);

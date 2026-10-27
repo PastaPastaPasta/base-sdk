@@ -147,15 +147,15 @@ fn addr_v1_wire_vector() {
 
   assert_eq!(decoded.addrs[0].time, 0x4966bc61);
   assert_eq!(decoded.addrs[0].services, ServiceFlags(0));
-  assert_eq!(decoded.addrs[0].addr.port, 0);
+  assert_eq!(decoded.addrs[0].addr.port(), 0);
 
   assert_eq!(decoded.addrs[1].time, 0x83766279);
   assert_eq!(decoded.addrs[1].services, ServiceFlags(1));
-  assert_eq!(decoded.addrs[1].addr.port, 241);
+  assert_eq!(decoded.addrs[1].addr.port(), 241);
 
   assert_eq!(decoded.addrs[2].time, 0xffffffff);
   assert_eq!(decoded.addrs[2].services, ServiceFlags(1024));
-  assert_eq!(decoded.addrs[2].addr.port, 0xf1f2);
+  assert_eq!(decoded.addrs[2].addr.port(), 0xf1f2);
 
   assert_eq!(encode_to_vec(&decoded), bytes);
 }

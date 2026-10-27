@@ -12,33 +12,33 @@ use crate::sptx::QuorumHash;
 use dash_pkc::bls::BlsSigBytes;
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::Checkable;
+use getset::CopyGetters;
 
 use core::fmt;
 
 /// Number of version bits available for signalling.
 pub const VERSIONBITS_NUM_BITS: u8 = 29;
 
+codec_payload! {
 /// MnHardFork -- hard-fork signal (type 7).
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct MnHardFork {
   /// Payload version.
-  pub version: u8,
+  #[getset(get_copy = "pub")]
+  version: u8,
   /// Feature bit being activated.
-  pub version_bit: u8,
+  #[getset(get_copy = "pub")]
+  version_bit: u8,
   /// Quorum hash.
-  pub quorum_hash: QuorumHash,
+  #[getset(get_copy = "pub")]
+  quorum_hash: QuorumHash,
   /// Quorum BLS signature.
-  pub sig: BlsSigBytes,
+  #[getset(get_copy = "pub")]
+  sig: BlsSigBytes,
 }
-
-codec_payload!(MnHardFork {
-  version,
-  version_bit,
-  quorum_hash,
-  sig,
-});
+}
 
 /// MNHF signal validation failure.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, thiserror::Error, Unencodable)]

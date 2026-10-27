@@ -37,6 +37,7 @@ cfg_if::cfg_if! {
     mod sig_pop;
     mod sig_threshold;
     #[expect(unsafe_code, reason = "blst C FFI")]
+    #[expect(clippy::same_name_method, reason = "trait impl delegates to method")]
     pub(crate) mod blst_ffi;
     pub(crate) mod chia_h2c;
     pub(crate) mod group;

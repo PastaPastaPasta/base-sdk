@@ -13,33 +13,43 @@ use bitcoin_units::BlockHeight;
 use dash_pkc::bls::BlsSigBytes;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{Checkable, CompactSize, Numeric};
+use dash_types::{impl_new, Checkable, CompactSize, Numeric};
+use getset::CopyGetters;
 
 use core::fmt;
 
+impl_new! {
 /// CoinbaseCommitment -- coinbase commitment payload.
 ///
 /// - v1: base fields (version, height, merkle_root_mn_list)
 /// - v2: adds merkle_root_quorums
 /// - v3: adds ChainLock proof and credit pool balance
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct CoinbaseCommitment {
   /// Payload version (1, 2, or 3).
-  pub version: u16,
+  #[getset(get_copy = "pub")]
+  version: u16,
   /// Block height.
-  pub height: BlockHeight,
+  #[getset(get_copy = "pub")]
+  height: BlockHeight,
   /// Merkle root of the masternode list.
-  pub merkle_root_mn_list: MerkleRoot,
+  #[getset(get_copy = "pub")]
+  merkle_root_mn_list: MerkleRoot,
   /// Merkle root of quorum commitments (v2+).
-  pub merkle_root_quorums: Option<MerkleRoot>,
+  #[getset(get_copy = "pub")]
+  merkle_root_quorums: Option<MerkleRoot>,
   /// Best ChainLock height difference (v3+, CompactSize).
-  pub best_cl_height_diff: Option<u64>,
+  #[getset(get_copy = "pub")]
+  best_cl_height_diff: Option<u64>,
   /// Best ChainLock BLS signature (v3+).
-  pub best_cl_signature: Option<BlsSigBytes>,
+  #[getset(get_copy = "pub")]
+  best_cl_signature: Option<BlsSigBytes>,
   /// Credit pool balance in duffs (v3+).
-  pub credit_pool_balance: Option<i64>,
+  #[getset(get_copy = "pub")]
+  credit_pool_balance: Option<i64>,
+}
 }
 
 impl_payload!(CoinbaseCommitment);

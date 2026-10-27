@@ -437,7 +437,6 @@ pub fn run(
   )
 }
 
-#[expect(clippy::too_many_arguments, reason = "one-shot CLI verification driver")]
 fn verify_chunks(
   app: &Application,
   pool: &rayon::ThreadPool,

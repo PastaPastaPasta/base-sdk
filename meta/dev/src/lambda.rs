@@ -93,13 +93,13 @@ where
 {
   assert_txid(raw, label);
   let tx = decode_tx(raw);
-  let decoded = T::decode(&mut &tx.extra_payload[..]).unwrap_or_else(|e| panic!("{label}: payload: {e}"));
+  let decoded = T::decode(&mut &tx.extra_payload()[..]).unwrap_or_else(|e| panic!("{label}: payload: {e}"));
   if let Some(e) = decoded.check() {
     panic!("{label}: payload check: {e}");
   }
   assert_eq!(decoded, *details, "{label}");
   let mut buf = Vec::new();
   decoded.encode(&mut buf);
-  assert_eq!(buf, tx.extra_payload, "{label}: payload encode");
+  assert_eq!(&buf, tx.extra_payload(), "{label}: payload encode");
   assert_eq!(encode_to_vec(&tx), raw, "{label}: tx encode");
 }

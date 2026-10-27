@@ -20,6 +20,7 @@ use dash_pow::X11;
 use dash_types::codec::{self, BaseCodec};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{ArrayBuf, Checkable, Hashable, Numeric};
+use getset::{CopyGetters, Getters, Setters};
 
 use core::fmt;
 
@@ -43,33 +44,32 @@ make_hash! {
 
 hash_impl!(MerkleRoot);
 
+codec_base! {
 /// A block header.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, Copy, CopyGetters, Debug, Default, Eq, Hash, PartialEq, Setters, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct BlockHeader {
   /// Block version.
-  pub version: i32,
+  #[getset(get_copy = "pub")]
+  version: i32,
   /// Hash of the previous block header.
-  pub prev_hash: BlockHash,
+  #[getset(get_copy = "pub")]
+  prev_hash: BlockHash,
   /// Merkle root of the transaction tree.
-  pub merkle_root: MerkleRoot,
+  #[getset(get_copy = "pub", set = "pub")]
+  merkle_root: MerkleRoot,
   /// Block timestamp (unix epoch seconds).
-  pub time: u32,
+  #[getset(get_copy = "pub", set = "pub")]
+  time: u32,
   /// Compact difficulty target.
-  pub bits: u32,
+  #[getset(get_copy = "pub")]
+  bits: u32,
   /// Nonce used for proof-of-work.
-  pub nonce: u32,
+  #[getset(get_copy = "pub", set = "pub")]
+  nonce: u32,
 }
-
-codec_base!(BlockHeader {
-  version,
-  prev_hash,
-  merkle_root,
-  time,
-  bits,
-  nonce,
-});
+}
 
 impl Hashable for BlockHeader {
   type Hash = BlockHash;
@@ -121,17 +121,19 @@ pub enum BlockInvalid {
   Transaction { index: usize, error: TxInvalid },
 }
 
+codec_type! {
 /// A Dash block: header followed by a vector of transactions.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct Block {
   /// Block header (80 bytes).
-  pub header: BlockHeader,
+  #[getset(get_copy = "pub")]
+  header: BlockHeader,
   /// Transactions in the block.
-  pub transactions: Vec<Transaction>,
+  #[getset(get = "pub")]
+  transactions: Vec<Transaction>,
 }
-
-codec_type!(Block { header, transactions });
+}
 
 impl Checkable for Block {
   type Error = BlockInvalid;
@@ -174,11 +176,11 @@ impl Checkable for Block {
     let max_sigops = MAX_DIP0001_BLOCK_SIZE / 50;
     let mut total_sigops: usize = 0;
     for tx in &self.transactions {
-      for input in &tx.inputs {
-        total_sigops += dash_script::legacy_sigop_count(input.script_sig.as_bytes());
+      for input in tx.inputs() {
+        total_sigops += dash_script::legacy_sigop_count(input.script_sig().as_bytes());
       }
-      for output in &tx.outputs {
-        total_sigops += dash_script::legacy_sigop_count(output.script_pubkey.as_bytes());
+      for output in tx.outputs() {
+        total_sigops += dash_script::legacy_sigop_count(output.script_pubkey().as_bytes());
       }
     }
     if total_sigops > max_sigops {
@@ -243,24 +245,21 @@ impl fmt::Display for Block {
 
 impl From<&GenesisParams> for Block {
   fn from(params: &GenesisParams) -> Self {
-    let coinbase = Transaction {
-      version: 1,
-      tx_type: TxType::Spend,
-      inputs: vec![TxIn {
-        prevout: OutPoint {
-          hash: TxHash::default(),
-          index: 0xFFFF_FFFF,
-        },
-        script_sig: ScriptSigBuf::from_bytes(params.script_sig.to_vec()),
-        sequence: 0xFFFF_FFFF,
-      }],
-      outputs: vec![TxOut {
-        value: params.reward,
-        script_pubkey: ScriptPubKeyBuf::from_bytes(params.script_pubkey.to_vec()),
-      }],
-      lock_time: 0,
-      extra_payload: Vec::new(),
-    };
+    let coinbase = Transaction::new(
+      1,
+      TxType::Spend,
+      vec![TxIn::new(
+        OutPoint::new(TxHash::default(), 0xFFFF_FFFF),
+        ScriptSigBuf::from_bytes(params.script_sig.to_vec()),
+        0xFFFF_FFFF,
+      )],
+      vec![TxOut::new(
+        params.reward,
+        ScriptPubKeyBuf::from_bytes(params.script_pubkey.to_vec()),
+      )],
+      0,
+      Vec::new(),
+    );
 
     let mut block = Block {
       header: BlockHeader {
@@ -319,27 +318,26 @@ mod tests {
 
   impl TxShape {
     fn build(&self) -> Transaction {
-      let inputs = self.inputs.iter().enumerate().map(|(i, &seed)| TxIn {
-        prevout: OutPoint {
-          hash: TxHash::from_lendian([seed; 32]),
-          index: if seed == 0 { u32::MAX } else { 0 },
-        },
-        script_sig: ScriptSigBuf::from_bytes(vec![0; if i == 0 { 2 } else { 0 }]),
-        sequence: u32::MAX,
+      let inputs = self.inputs.iter().enumerate().map(|(i, &seed)| {
+        TxIn::new(
+          OutPoint::new(TxHash::from_lendian([seed; 32]), if seed == 0 { u32::MAX } else { 0 }),
+          ScriptSigBuf::from_bytes(vec![0; if i == 0 { 2 } else { 0 }]),
+          u32::MAX,
+        )
       });
       let mut script = vec![Opcode::CheckSig.to_base(); self.sigops];
       script.resize(self.sigops + self.pad, 0);
-      Transaction {
-        version: 3,
-        tx_type: TxType::Spend,
-        inputs: inputs.collect(),
-        outputs: vec![TxOut {
-          value: Amount::from_sat(1).unwrap(),
-          script_pubkey: ScriptPubKeyBuf::from_bytes(script),
-        }],
-        lock_time: self.lock_time,
-        extra_payload: vec![],
-      }
+      Transaction::new(
+        3,
+        TxType::Spend,
+        inputs.collect(),
+        vec![TxOut::new(
+          Amount::from_sat(1).unwrap(),
+          ScriptPubKeyBuf::from_bytes(script),
+        )],
+        self.lock_time,
+        vec![],
+      )
     }
   }
 

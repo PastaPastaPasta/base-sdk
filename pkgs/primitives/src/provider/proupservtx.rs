@@ -21,6 +21,7 @@ use bitcoin_primitives::script::ScriptPubKeyBuf;
 use dash_pkc::bls::{BlsError, BlsPkBytes, BlsSigBytes, BLS_SIG_LEN};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::{type_id::TypeId, Checkable, Numeric, Signable};
+use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
@@ -29,32 +30,42 @@ use core::fmt;
 /// - v1: LegacyBLS (no mn_type field)
 /// - v2: BasicBLS (adds mn_type)
 /// - v3: ExtAddr (extended network info)
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ProUpServTx {
   /// Payload version.
-  pub version: ProTxVersion,
+  #[getset(get_copy = "pub")]
+  version: ProTxVersion,
   /// v2+ only; defaults to Regular for v1.
-  pub mn_type: MnType,
+  #[getset(get_copy = "pub")]
+  mn_type: MnType,
   /// ProTx hash identifying the masternode.
-  pub pro_tx_hash: TxHash,
+  #[getset(get_copy = "pub")]
+  pro_tx_hash: TxHash,
   /// Legacy ServiceV1 or extended NetInfo.
-  pub net_info: NetInfo,
+  #[getset(get = "pub")]
+  net_info: NetInfo,
   /// Operator payout script.
-  pub script_operator_payout: ScriptPubKeyBuf,
+  #[getset(get = "pub")]
+  script_operator_payout: ScriptPubKeyBuf,
   /// Hash of all inputs.
-  pub inputs_hash: InputsHash,
+  #[getset(get_copy = "pub")]
+  inputs_hash: InputsHash,
   /// Platform node id (Evo only).
-  pub platform_node_id: Option<PlatformNodeId>,
+  #[getset(get_copy = "pub")]
+  platform_node_id: Option<PlatformNodeId>,
   /// Platform P2P port (Evo + version < 3 only).
   #[cfg_attr(feature = "serde", serde(rename = "platformP2PPort"))]
-  pub platform_p2p_port: Option<u16>,
+  #[getset(get_copy = "pub")]
+  platform_p2p_port: Option<u16>,
   /// Platform HTTP port (Evo + version < 3 only).
   #[cfg_attr(feature = "serde", serde(rename = "platformHTTPPort"))]
-  pub platform_http_port: Option<u16>,
+  #[getset(get_copy = "pub")]
+  platform_http_port: Option<u16>,
   /// Operator BLS signature.
-  pub sig: OperatorSig,
+  #[getset(get_copy = "pub")]
+  sig: OperatorSig,
 }
 
 impl_payload!(ProUpServTx);
@@ -73,7 +84,7 @@ impl BaseCodec for ProUpServTx {
     let net_info = if version >= ProTxVersion::ExtAddr {
       NetInfo::Extended(NetInfoV2::decode(data)?)
     } else {
-      NetInfo::Legacy(NetInfoV1(ServiceV1::decode(data)?))
+      NetInfo::Legacy(NetInfoV1::new(ServiceV1::decode(data)?))
     };
     let script_operator_payout = ScriptPubKeyBuf::decode(data)?;
     let inputs_hash = InputsHash::decode(data)?;
@@ -204,6 +215,35 @@ impl Checkable for ProUpServTx {
 }
 
 hash_impl!(ProUpServTx);
+
+impl ProUpServTx {
+  /// Constructs an unsigned payload. The signature is set through
+  /// [`Signable::set_signature`].
+  pub fn new(
+    version: ProTxVersion,
+    mn_type: MnType,
+    pro_tx_hash: TxHash,
+    net_info: NetInfo,
+    script_operator_payout: ScriptPubKeyBuf,
+    inputs_hash: InputsHash,
+    platform_node_id: Option<PlatformNodeId>,
+    platform_p2p_port: Option<u16>,
+    platform_http_port: Option<u16>,
+  ) -> Self {
+    Self {
+      version,
+      mn_type,
+      pro_tx_hash,
+      net_info,
+      script_operator_payout,
+      inputs_hash,
+      platform_node_id,
+      platform_p2p_port,
+      platform_http_port,
+      sig: OperatorSig::default(),
+    }
+  }
+}
 
 impl fmt::Display for ProUpServTx {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

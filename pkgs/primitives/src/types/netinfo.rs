@@ -13,8 +13,8 @@ use crate::prelude::*;
 
 use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::Numeric;
-use dash_types::{enum_map, impl_num, impl_type, Checkable, CompactSize, MAX_SER_SIZE};
+use dash_types::{enum_map, impl_new, impl_num, impl_type, Checkable, CompactSize, Numeric, MAX_SER_SIZE};
+use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
@@ -221,8 +221,8 @@ impl Checkable for NIEntry {
         if let Some(error) = svc.check() {
           return Some(NIError::BadAddr { error });
         }
-        if !svc.addr.is_i2p() && is_bad_port(svc.port) {
-          return Some(NIError::BadPort { port: svc.port });
+        if !svc.addr().is_i2p() && is_bad_port(svc.port()) {
+          return Some(NIError::BadPort { port: svc.port() });
         }
         None
       }
@@ -268,18 +268,23 @@ pub trait NITrait: fmt::Display {
   fn stores_platform(&self) -> bool;
 }
 
+impl_new! {
 /// Extended network info for v3+ ProRegTx / ProUpServTx.
 ///
 /// Contains a versioned list of purpose-grouped network entries (core P2P,
 /// platform P2P, platform HTTPS).
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct NetInfoV2 {
   /// Format version.
-  pub version: u8,
+  #[getset(get_copy = "pub")]
+  version: u8,
   /// Purpose-grouped entries.
-  pub entries: Vec<(NIPurpose, Vec<NIEntry>)>,
+  #[cfg_attr(feature = "serde", serde(rename = "entries"))]
+  #[getset(get = "pub")]
+  groups: Vec<(NIPurpose, Vec<NIEntry>)>,
+}
 }
 
 impl_type!(NetInfoV2);
@@ -288,7 +293,7 @@ impl BaseCodec for NetInfoV2 {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let version = u8::decode(data)?;
     let purpose_count = CompactSize::decode_len(data, MAX_SER_SIZE)?;
-    let mut entries = Vec::with_capacity(purpose_count);
+    let mut groups = Vec::with_capacity(purpose_count);
     for _ in 0..purpose_count {
       let purpose = NIPurpose::from_base(u8::decode(data)?);
       let entry_count = CompactSize::decode_len(data, MAX_SER_SIZE)?;
@@ -296,15 +301,15 @@ impl BaseCodec for NetInfoV2 {
       for _ in 0..entry_count {
         group.push(NIEntry::decode(data)?);
       }
-      entries.push((purpose, group));
+      groups.push((purpose, group));
     }
-    Ok(Self { version, entries })
+    Ok(Self { version, groups })
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
     self.version.encode(buf);
-    CompactSize::from(self.entries.len()).encode(buf);
-    for (purpose, group) in &self.entries {
+    CompactSize::from(self.groups.len()).encode(buf);
+    for (purpose, group) in &self.groups {
       purpose.to_base().encode(buf);
       CompactSize::from(group.len()).encode(buf);
       for entry in group {
@@ -321,19 +326,19 @@ impl Checkable for NetInfoV2 {
     if self.version == 0 || self.version > Self::CURRENT_VERSION {
       return Some(NIError::Malformed);
     }
-    if self.entries.is_empty() {
+    if self.groups.is_empty() {
       return Some(NIError::Malformed);
     }
     // Duplicate purpose key detection.
-    for i in 0..self.entries.len() {
-      for j in (i + 1)..self.entries.len() {
-        if self.entries[i].0 == self.entries[j].0 {
+    for i in 0..self.groups.len() {
+      for j in (i + 1)..self.groups.len() {
+        if self.groups[i].0 == self.groups[j].0 {
           return Some(NIError::Duplicate);
         }
       }
     }
     // addr:port duplicates across all entries
-    let all: Vec<&NIEntry> = self.entries.iter().flat_map(|(_, g)| g.iter()).collect();
+    let all: Vec<&NIEntry> = self.groups.iter().flat_map(|(_, g)| g.iter()).collect();
     for i in 0..all.len() {
       for j in (i + 1)..all.len() {
         if all[i] == all[j] {
@@ -341,7 +346,7 @@ impl Checkable for NetInfoV2 {
         }
       }
     }
-    for (purpose, group) in &self.entries {
+    for (purpose, group) in &self.groups {
       if matches!(purpose, NIPurpose::Unknown(_)) {
         return Some(NIError::Malformed);
       }
@@ -364,9 +369,9 @@ impl Checkable for NetInfoV2 {
       }
       for entry in group {
         if let NIEntry::Service(svc) = entry {
-          if matches!(svc.addr, AddrV2::Unknown { .. }) {
+          if matches!(svc.addr(), AddrV2::Unknown { .. }) {
             return Some(NIError::BadType {
-              entry_type: svc.addr.network().to_base(),
+              entry_type: svc.addr().network().to_base(),
             });
           }
         }
@@ -391,11 +396,11 @@ impl NetInfoV2 {
 
 impl fmt::Display for NetInfoV2 {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    if self.entries.is_empty() {
+    if self.groups.is_empty() {
       return f.write_str("NetInfoV2()");
     }
     f.write_str("NetInfoV2(")?;
-    for (i, (purpose, group)) in self.entries.iter().enumerate() {
+    for (i, (purpose, group)) in self.groups.iter().enumerate() {
       if i > 0 {
         f.write_str(", ")?;
       }
@@ -415,7 +420,7 @@ impl fmt::Display for NetInfoV2 {
 impl NITrait for NetInfoV2 {
   fn entries(&self, purpose: Option<NIPurpose>) -> impl Iterator<Item = NIEntry> + '_ {
     self
-      .entries
+      .groups
       .iter()
       .filter(move |(pp, _)| purpose.is_none() || purpose == Some(*pp))
       .flat_map(|(_, group)| group.iter().cloned())
@@ -423,7 +428,7 @@ impl NITrait for NetInfoV2 {
 
   fn primary(&self) -> Option<ServiceV2> {
     self
-      .entries
+      .groups
       .iter()
       .find(|(p, e)| *p == NIPurpose::CoreP2p && !e.is_empty())
       .and_then(|(_, entries)| {
@@ -435,11 +440,11 @@ impl NITrait for NetInfoV2 {
   }
 
   fn is_empty(&self) -> bool {
-    self.entries.iter().all(|(_, group)| group.is_empty())
+    self.groups.iter().all(|(_, group)| group.is_empty())
   }
 
   fn has_entries(&self, purpose: NIPurpose) -> bool {
-    self.entries.iter().any(|(p, e)| *p == purpose && !e.is_empty())
+    self.groups.iter().any(|(p, e)| *p == purpose && !e.is_empty())
   }
 
   fn stores_platform(&self) -> bool {
@@ -451,7 +456,7 @@ impl NITrait for NetInfoV2 {
 /// ignoring port.
 fn same_addr(a: &NIEntry, b: &NIEntry) -> bool {
   match (a, b) {
-    (NIEntry::Service(sa), NIEntry::Service(sb)) => sa.addr == sb.addr,
+    (NIEntry::Service(sa), NIEntry::Service(sb)) => sa.addr() == sb.addr(),
     (NIEntry::Domain { name: na, .. }, NIEntry::Domain { name: nb, .. }) => na == nb,
     _ => false,
   }
@@ -461,7 +466,7 @@ fn same_addr(a: &NIEntry, b: &NIEntry) -> bool {
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
-pub struct NetInfoV1(pub ServiceV1);
+pub struct NetInfoV1(ServiceV1);
 
 impl_type!(NetInfoV1);
 
@@ -488,9 +493,21 @@ impl Checkable for NetInfoV1 {
 
 hash_impl!(NetInfoV1);
 
+impl NetInfoV1 {
+  /// Wraps a legacy service.
+  pub fn new(service: ServiceV1) -> Self {
+    Self(service)
+  }
+
+  /// Legacy service address.
+  pub fn service(&self) -> &ServiceV1 {
+    &self.0
+  }
+}
+
 impl fmt::Display for NetInfoV1 {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    if self.0.addr.is_null() && self.0.port == 0 {
+    if self.0.addr().is_null() && self.0.port() == 0 {
       return f.write_str("NetInfoV1()");
     }
     write!(f, "NetInfoV1({})", self.0)
@@ -518,7 +535,7 @@ impl NITrait for NetInfoV1 {
   }
 
   fn is_empty(&self) -> bool {
-    self.0.addr.is_null() && self.0.port == 0
+    self.0.addr().is_null() && self.0.port() == 0
   }
 
   fn has_entries(&self, purpose: NIPurpose) -> bool {
@@ -619,7 +636,7 @@ mod tests {
       "01020304", // addr 1.2.3.4
       "270f",     // port=9999
     )),
-    NIEntry::Service(ServiceV2 { addr: AddrV2::Ipv4([1, 2, 3, 4]), port: 9999 }),
+    NIEntry::Service(ServiceV2::new(AddrV2::Ipv4([1, 2, 3, 4]), 9999)),
   )]
   #[case::ipv6(
     &hex!(concat!(
@@ -629,7 +646,7 @@ mod tests {
       "00000000000000000000000000000001", // addr ::1
       "270f",                             // port=9999
     )),
-    NIEntry::Service(ServiceV2 { addr: AddrV2::Ipv6([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]), port: 9999 }),
+    NIEntry::Service(ServiceV2::new(AddrV2::Ipv6([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]), 9999)),
   )]
   #[case::domain(
     &hex!(concat!(
@@ -667,12 +684,9 @@ mod tests {
     )),
     NetInfoV2 {
       version: 1,
-      entries: vec![(
+      groups: vec![(
         NIPurpose::CoreP2p,
-        vec![NIEntry::Service(ServiceV2 {
-          addr: AddrV2::Ipv4([1, 2, 3, 4]),
-          port: 9999,
-        })],
+        vec![NIEntry::Service(ServiceV2::new(AddrV2::Ipv4([1, 2, 3, 4]), 9999))],
       )],
     },
   )]
@@ -693,13 +707,10 @@ mod tests {
     )),
     NetInfoV2 {
       version: 1,
-      entries: vec![
+      groups: vec![
         (
           NIPurpose::CoreP2p,
-          vec![NIEntry::Service(ServiceV2 {
-            addr: AddrV2::Ipv4([192, 168, 0, 1]),
-            port: 9102,
-          })],
+          vec![NIEntry::Service(ServiceV2::new(AddrV2::Ipv4([192, 168, 0, 1]), 9102))],
         ),
         (
           NIPurpose::PlatformHttps,
@@ -739,7 +750,7 @@ mod tests {
   #[case::tor_port_valid(AddrV2::TorV3([1; 32]), 9998, None)]
   #[case::cjdns_valid(AddrV2::Cjdns(hex!("fc000000000000000000000000000001")), 9998, None)]
   fn check_entry_service(#[case] addr: AddrV2, #[case] port: u16, #[case] expected: Option<NIError>) {
-    let entry = NIEntry::Service(ServiceV2 { addr, port });
+    let entry = NIEntry::Service(ServiceV2::new(addr, port));
     assert_eq!(entry.check(), expected);
   }
 
@@ -834,12 +845,12 @@ mod tests {
   #[case::ipv6_valid("[2001::1]", 9999, None)]
   fn check_v1(#[case] addr_str: &str, #[case] port: u16, #[case] expected: Option<NIError>) {
     let addr: AddrV1 = addr_str.parse().unwrap();
-    let v1 = NetInfoV1(ServiceV1 { addr, port });
+    let v1 = NetInfoV1(ServiceV1::new(addr, port));
     assert_eq!(v1.check(), expected);
   }
 
   fn svc(addr: AddrV2, port: u16) -> NIEntry {
-    NIEntry::Service(ServiceV2 { addr, port })
+    NIEntry::Service(ServiceV2::new(addr, port))
   }
 
   fn dom(name: &[u8], port: u16) -> NIEntry {
@@ -852,7 +863,7 @@ mod tests {
   fn valid_v2() -> NetInfoV2 {
     NetInfoV2 {
       version: 1,
-      entries: vec![(NIPurpose::CoreP2p, vec![svc(AddrV2::Ipv4([1, 2, 3, 4]), 9999)])],
+      groups: vec![(NIPurpose::CoreP2p, vec![svc(AddrV2::Ipv4([1, 2, 3, 4]), 9999)])],
     }
   }
 
@@ -900,7 +911,7 @@ mod tests {
   fn check_v2_group(#[case] purpose: NIPurpose, #[case] group: Vec<NIEntry>, #[case] expected: Option<NIError>) {
     let v2 = NetInfoV2 {
       version: 1,
-      entries: vec![(purpose, group)],
+      groups: vec![(purpose, group)],
     };
     assert_eq!(v2.check(), expected);
   }
@@ -922,7 +933,10 @@ mod tests {
     Some(NIError::Duplicate),
   )]
   fn check_v2_structure(#[case] entries: Vec<(NIPurpose, Vec<NIEntry>)>, #[case] expected: Option<NIError>) {
-    let v2 = NetInfoV2 { version: 1, entries };
+    let v2 = NetInfoV2 {
+      version: 1,
+      groups: entries,
+    };
     assert_eq!(v2.check(), expected);
   }
 
@@ -930,7 +944,7 @@ mod tests {
   fn check_v2_too_many_entries() {
     let v2 = NetInfoV2 {
       version: 1,
-      entries: vec![(
+      groups: vec![(
         NIPurpose::CoreP2p,
         (0..MAX_ENTRIES + 1)
           .map(|i| svc(AddrV2::Ipv4([10, 0, 0, i as u8 + 1]), 9999))
@@ -961,15 +975,15 @@ mod tests {
   fn trait_v2_primary() {
     let v2 = valid_v2();
     let primary = v2.primary().unwrap();
-    assert_eq!(primary.addr, AddrV2::Ipv4([1, 2, 3, 4]));
-    assert_eq!(primary.port, 9999);
+    assert_eq!(primary.addr(), &AddrV2::Ipv4([1, 2, 3, 4]));
+    assert_eq!(primary.port(), 9999);
   }
 
   #[rstest]
   fn trait_v2_empty() {
     let empty = NetInfoV2 {
       version: 1,
-      entries: vec![],
+      groups: vec![],
     };
     assert!(empty.is_empty());
     assert!(!empty.has_entries(NIPurpose::CoreP2p));
@@ -981,10 +995,7 @@ mod tests {
 
   #[rstest]
   fn trait_v1_entries() {
-    let v1 = NetInfoV1(ServiceV1 {
-      addr: "1.2.3.4".parse().unwrap(),
-      port: 9999,
-    });
+    let v1 = NetInfoV1(ServiceV1::new("1.2.3.4".parse().unwrap(), 9999));
     assert!(!v1.is_empty());
     assert!(v1.has_entries(NIPurpose::CoreP2p));
     assert!(!v1.has_entries(NIPurpose::PlatformP2p));
@@ -998,10 +1009,7 @@ mod tests {
 
   #[rstest]
   fn trait_v1_empty() {
-    let empty = NetInfoV1(ServiceV1 {
-      addr: AddrV1::default(),
-      port: 0,
-    });
+    let empty = NetInfoV1(ServiceV1::new(AddrV1::default(), 0));
     assert!(empty.is_empty());
     assert!(!empty.has_entries(NIPurpose::CoreP2p));
     assert!(empty.primary().is_none());
@@ -1011,10 +1019,7 @@ mod tests {
 
   #[rstest]
   fn trait_dispatch_legacy() {
-    let v1 = NetInfo::Legacy(NetInfoV1(ServiceV1 {
-      addr: "1.2.3.4".parse().unwrap(),
-      port: 9999,
-    }));
+    let v1 = NetInfo::Legacy(NetInfoV1(ServiceV1::new("1.2.3.4".parse().unwrap(), 9999)));
     assert!(!v1.is_empty());
     assert!(v1.has_entries(NIPurpose::CoreP2p));
     assert!(!v1.stores_platform());
