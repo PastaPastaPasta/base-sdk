@@ -241,7 +241,7 @@ impl From<&GenesisParams> for Block {
       tx_type: TxType::Spend,
       inputs: vec![TxIn {
         prevout: OutPoint {
-          hash: TxHash::default(),
+          txid: TxHash::default(),
           index: 0xFFFF_FFFF,
         },
         script_sig: ScriptSigBuf::from_bytes(params.script_sig.to_vec()),
@@ -314,7 +314,7 @@ mod tests {
     fn build(&self) -> Transaction {
       let inputs = self.inputs.iter().enumerate().map(|(i, &seed)| TxIn {
         prevout: OutPoint {
-          hash: TxHash::from_lendian([seed; 32]),
+          txid: TxHash::from_lendian([seed; 32]),
           index: if seed == 0 { u32::MAX } else { 0 },
         },
         script_sig: ScriptSigBuf::from_bytes(vec![0; if i == 0 { 2 } else { 0 }]),

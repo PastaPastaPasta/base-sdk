@@ -42,7 +42,8 @@ codec_type! {
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct OutPoint {
   /// Transaction hash of the referenced output.
-  pub hash: TxHash,
+  #[cfg_attr(feature = "serde", serde(rename = "hash"))]
+  pub txid: TxHash,
   /// Index of the referenced output within the transaction.
   pub index: u32,
 }
@@ -51,13 +52,13 @@ pub struct OutPoint {
 impl OutPoint {
   /// Returns `true` for the null outpoint (all-zero hash, index `u32::MAX`).
   pub fn is_null(&self) -> bool {
-    self.hash.is_null() && self.index == u32::MAX
+    self.txid.is_null() && self.index == u32::MAX
   }
 }
 
 impl fmt::Display for OutPoint {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "{}:{}", self.hash, self.index)
+    write!(f, "{}:{}", self.txid, self.index)
   }
 }
 
@@ -421,7 +422,7 @@ pub(crate) mod tests {
     fn build(&self) -> Transaction {
       let inputs = self.inputs.iter().enumerate().map(|(i, &seed)| TxIn {
         prevout: OutPoint {
-          hash: TxHash::from_lendian([seed; 32]),
+          txid: TxHash::from_lendian([seed; 32]),
           index: if seed == 0 { u32::MAX } else { 0 },
         },
         script_sig: ScriptSigBuf::from_bytes(vec![0; if i == 0 { self.script_sig } else { 0 }]),

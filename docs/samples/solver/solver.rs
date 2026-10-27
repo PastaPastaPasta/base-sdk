@@ -47,7 +47,7 @@ fn build_coinbase(script_sig: Vec<u8>, script_pubkey: Vec<u8>, amount_duffs: &st
     tx_type: TxType::Spend,
     inputs: vec![TxIn {
       prevout: OutPoint {
-        hash: TxHash::default(),
+        txid: TxHash::default(),
         index: 0xFFFF_FFFF,
       },
       script_sig: ScriptSigBuf::from_bytes(script_sig),
