@@ -8,13 +8,6 @@
 
 use wide::{u32x4, u32x8};
 
-/// Rotate a `u32` word left by `shift` bits.
-#[expect(dead_code, reason = "used by cubehash consts IV generation")]
-#[inline]
-pub(crate) const fn rotl_u32(word: u32, shift: u32) -> u32 {
-  word.rotate_left(shift)
-}
-
 /// Rotate each lane of a `u32x4` value left by `shift` bits.
 #[inline]
 pub(crate) fn rotl_u32x4(words: u32x4, shift: u32) -> u32x4 {

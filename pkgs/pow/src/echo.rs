@@ -12,8 +12,8 @@
 use crate::aes::{block_from_words, round, round_nk, words_from_block, Block};
 use crate::consts::echo::BLOCK;
 use crate::util::buffer::{Buffer, Compress};
-use crate::util::impl_digest;
-use crate::util::memops::{digest_from_u32_le, load_u32_le};
+use crate::util::memops::{digest_from_u32_le, load_u32s_le};
+use crate::util::{const_array, impl_digest};
 
 use digest::{FixedOutput, Output, Update};
 use wide::{i8x16, u32x4};
@@ -24,8 +24,8 @@ type Counter = u128;
 type ChainingValue = [AesState; 8];
 type BlockWords = [u32; 32];
 
-/// Grid permutation used by the row-shift step.
-static BIG_SHIFT_ROWS: [usize; 16] = [0, 5, 10, 15, 4, 9, 14, 3, 8, 13, 2, 7, 12, 1, 6, 11];
+/// Grid permutation of the row-shift step, AES ShiftRows applied to cells.
+static BIG_SHIFT_ROWS: [usize; 16] = const_array!(0; 16; |i| 5 * i % 16);
 
 /// Lays four words out as one grid cell.
 #[cfg_attr(not(debug_assertions), inline(always))]
@@ -143,7 +143,7 @@ fn compress_words(chaining_value: &mut ChainingValue, block: &BlockWords, counte
 /// Runs the compression function on one 1024-bit block.
 #[cfg_attr(not(debug_assertions), inline(always))]
 fn compress_block(chaining_value: &mut ChainingValue, block: &[u8; BLOCK], counter: Counter) {
-  let words = core::array::from_fn(|word| load_u32_le(block, word));
+  let words = load_u32s_le(block);
   compress_words(chaining_value, &words, counter);
 }
 

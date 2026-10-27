@@ -12,7 +12,7 @@
 use crate::consts::blake::{BLOCK, CB, IV, SIGMA};
 use crate::util::buffer::{Buffer, Compress};
 use crate::util::impl_digest;
-use crate::util::memops::load_u64_le;
+use crate::util::memops::load_u64s_be;
 
 use digest::{FixedOutput, Output, Update};
 
@@ -72,13 +72,6 @@ fn advance_counter(t0: &mut u64, t1: &mut u64) {
   }
 }
 
-/// Loads one block as sixteen message words in the byte order used by the
-/// compression function.
-#[inline]
-fn load_message(block: &[u8]) -> [u64; 16] {
-  core::array::from_fn(|i| load_u64_le(block, i).swap_bytes())
-}
-
 /// Chaining value and the 128-bit count of bits compressed so far.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct Core {
@@ -91,7 +84,7 @@ impl Compress<BLOCK> for Core {
   #[cfg_attr(not(debug_assertions), inline(always))]
   fn compress(&mut self, block: &[u8; BLOCK]) {
     advance_counter(&mut self.t0, &mut self.t1);
-    compress(&mut self.h, &load_message(block), self.t0, self.t1);
+    compress(&mut self.h, &load_u64s_be(block), self.t0, self.t1);
   }
 }
 
@@ -142,14 +135,14 @@ impl FixedOutput for Blake512 {
       block[111] |= 0x01;
       block[112..120].copy_from_slice(&th.to_be_bytes());
       block[120..].copy_from_slice(&tl.to_be_bytes());
-      compress(h, &load_message(block), t0, t1);
+      compress(h, &load_u64s_be(block), t0, t1);
     } else {
-      compress(h, &load_message(block), t0, t1);
+      compress(h, &load_u64s_be(block), t0, t1);
       let mut last = [0u8; BLOCK];
       last[111] = 0x01;
       last[112..120].copy_from_slice(&th.to_be_bytes());
       last[120..].copy_from_slice(&tl.to_be_bytes());
-      compress(h, &load_message(&last), 0, 0);
+      compress(h, &load_u64s_be(&last), 0, 0);
     }
 
     for (bytes, word) in out.chunks_exact_mut(8).zip(h) {
