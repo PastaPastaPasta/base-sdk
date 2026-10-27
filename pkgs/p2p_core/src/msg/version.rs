@@ -81,7 +81,7 @@ pub struct UserAgentTooLong {
 
 /// CompactSize-prefixed user agent bytestring.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
-#[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(::serde::Serialize))]
 pub struct UserAgent(#[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::utf8_lossy"))] Vec<u8>);
 
 impl_p2p!(UserAgent);
@@ -148,6 +148,14 @@ impl TryFrom<Vec<u8>> for UserAgent {
 
   fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
     Self::new(bytes)
+  }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> ::serde::Deserialize<'de> for UserAgent {
+  fn deserialize<D: ::serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+    let bytes = dash_types::serialize::utf8_lossy::deserialize(deserializer)?;
+    Self::new(bytes).map_err(::serde::de::Error::custom)
   }
 }
 
@@ -221,7 +229,7 @@ codec_p2p!(Version {
 mod tests {
   use super::*;
 
-  use dash_dev::{assert_json_rt, assert_serde_rt, check_wire, Corpus};
+  use dash_dev::{assert_json_rt, assert_serde_rt, check_wire, json_rejects, to_json, Corpus};
   use rstest::rstest;
 
   #[rstest]
@@ -231,6 +239,12 @@ mod tests {
   #[case::max(alloc::vec![0x80; MAX_USER_AGENT])]
   fn user_agent_json_round_trips(#[case] bytes: Vec<u8>) {
     assert_json_rt(&UserAgent(bytes));
+  }
+
+  #[rstest]
+  fn user_agent_json_rejects_oversize() {
+    let json = to_json(&UserAgent(alloc::vec![b'a'; MAX_USER_AGENT + 1]));
+    assert!(json_rejects::<UserAgent>(&json));
   }
 
   #[rstest]
