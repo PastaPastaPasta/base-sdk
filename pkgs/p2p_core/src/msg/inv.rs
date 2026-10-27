@@ -125,13 +125,14 @@ pub struct Inventory {
   #[cfg_attr(feature = "serde", serde(rename = "type"))]
   pub inv_type: InvType,
   /// Object hash.
-  pub hash: Hash256,
+  #[cfg_attr(feature = "serde", serde(rename = "hash"))]
+  pub inv_hash: Hash256,
 }
 }
 
 impl fmt::Display for Inventory {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "{}:{}", self.inv_type, self.hash)
+    write!(f, "{}:{}", self.inv_type, self.inv_hash)
   }
 }
 

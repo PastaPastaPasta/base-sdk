@@ -27,7 +27,8 @@ pub struct DeletedQuorum {
   /// LLMQ type.
   pub llmq_type: LlmqType,
   /// Quorum hash.
-  pub hash: BlockHash,
+  #[cfg_attr(feature = "serde", serde(rename = "hash"))]
+  pub quorum_hash: BlockHash,
 }
 }
 

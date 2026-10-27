@@ -15,14 +15,15 @@ use dash_types::type_id::TypeId;
 codec_p2p! {
 /// Requests governance objects and votes from a peer.
 ///
-/// When `hash` is zero, the peer responds with all governance
+/// When `object_hash` is zero, the peer responds with all governance
 /// objects. When non-zero, it responds with votes for that
 /// specific object.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct GovSync {
   /// Object hash (zero for full sync).
-  pub hash: Hash256,
+  #[cfg_attr(feature = "serde", serde(rename = "hash"))]
+  pub object_hash: Hash256,
   /// Serialised bloom filter (empty for no filtering).
   pub bloom_filter: Vec<u8>,
 }
