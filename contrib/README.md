@@ -33,6 +33,8 @@ source .venv/bin/activate
 packages need to be additionally sourced.
 
 * [cargo-deny](https://github.com/EmbarkStudios/cargo-deny)
+* [cargo-hack](https://github.com/taiki-e/cargo-hack)
+* [cargo-mutants](https://mutants.rs)
 * [cargo-nextest](https://github.com/nextest-rs/nextest)
 * [CodeQL 2.27 or higher](https://github.com/github/codeql-cli-binaries/releases)
 * [Git](https://git-scm.com/install/)
@@ -49,7 +51,7 @@ packages need to be additionally sourced.
 > ([source](https://docs.brew.sh/FAQ#what-does-keg-only-mean)).
 
 ```bash
-brew install cargo-deny cargo-nextest codeql git just just-lsp node@24
+brew install cargo-deny cargo-hack cargo-mutants cargo-nextest codeql git just just-lsp node@24
 ```
 
 ### Linux/WSL
@@ -60,10 +62,11 @@ you may need to update your shell to add your installation path to `PATH` so tha
 lint script.
 
 Neither CodeQL nor taplo are available in official Debian or Fedora repositories and must be sourced per vendor
-guidance. `cargo-nextest` and `just-lsp` are likewise best installed as Rust binary crates.
+guidance. `cargo-hack`, `cargo-mutants`, `cargo-nextest` and `just-lsp` are likewise best installed as Rust binary
+crates.
 
 ```bash
-cargo install --locked cargo-nextest just-lsp
+cargo install --locked cargo-hack cargo-mutants cargo-nextest just-lsp
 ```
 
 #### Installing `taplo`
@@ -95,6 +98,33 @@ cargo install --locked cargo-deny
 
 ```bash
 sudo dnf install -y cargo-deny git just nodejs24
+```
+
+## Bazel
+
+> [!NOTE]
+> Bazel isn't installed directly. Instead, [Bazelisk](https://github.com/bazelbuild/bazelisk) is installed as `bazel`,
+> which uses the version pinned by [`.bazelversion`](../.bazelversion). It is accompanied by
+> [buildifier](https://github.com/bazelbuild/buildtools), used to lint Starlark (the DSL used by Bazel) files.
+
+<!-- pyml disable-next-line no-duplicate-heading -->
+### macOS (with [Homebrew](https://brew.sh/))
+
+> [!WARNING]
+> `bazelisk` conflicts with the `bazel` formula. If the latter has been installed, it must be uninstalled first.
+
+```bash
+brew install bazelisk buildifier
+```
+
+<!-- pyml disable-next-line no-duplicate-heading -->
+### Linux/WSL
+
+Neither Bazelisk nor buildifier are available in official Debian or Fedora repositories. Both are published to the npm
+registry and can be installed with the `npm` CLI tool (a part of Node.js, an existing dependency).
+
+```bash
+npm install -g @bazel/bazelisk @bazel/buildifier
 ```
 
 <!-- [end:setup] -->

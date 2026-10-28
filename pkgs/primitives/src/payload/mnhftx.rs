@@ -8,8 +8,8 @@
 
 use super::bls;
 use super::sighash::{request_id, tx_bytes_unsigned};
-use super::QuorumHash;
 use crate::prelude::*;
+use crate::sptx::QuorumHash;
 use crate::{hash_impl, Transaction};
 
 use dash_num::Hash256;
@@ -63,21 +63,14 @@ impl BaseCodec for MnHardFork {
 }
 
 /// MNHF signal validation failure.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Unencodable)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, thiserror::Error, Unencodable)]
 pub enum MnHardForkInvalid {
   /// `bad-mnhf-version`
+  #[error("bad-mnhf-version: {version}")]
   BadVersion { version: u8 },
   /// `bad-mnhf-nbit-out-of-bounds`
+  #[error("bad-mnhf-nbit-out-of-bounds: {bit}")]
   VersionBitOutOfBounds { bit: u8 },
-}
-
-impl core::fmt::Display for MnHardForkInvalid {
-  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-    match self {
-      Self::BadVersion { version } => write!(f, "bad-mnhf-version: {version}"),
-      Self::VersionBitOutOfBounds { bit } => write!(f, "bad-mnhf-nbit-out-of-bounds: {bit}"),
-    }
-  }
 }
 
 impl Checkable for MnHardFork {

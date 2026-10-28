@@ -9,6 +9,9 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[lib]
+bench = false
+
 [features]
 default = []
 std = [
@@ -18,16 +21,17 @@ std = [
   "dash-types/std",
 ]
 full = ["std", "serde"]
+portable = ["dash-pkc/portable"]
 serde = ["dep:serde", "dash-pkc/serde", "dash-types/serde"]
 
 [dependencies]
 base58ck = { workspace = true, features = ["alloc"] }
 bitcoin-consensus-encoding = { workspace = true, features = ["alloc"] }
-dash-num = { version = "0.1.0-beta", path = "../num", default-features = false }
-dash-pkc = { version = "0.1.0-beta", path = "../pkc", default-features = false, features = [
+dash-num = { version = "0.2.0-beta", path = "../num", default-features = false }
+dash-pkc = { version = "0.2.0-beta", path = "../pkc", default-features = false, features = [
   "codec",
 ] }
-dash-types = { version = "0.1.0-beta", path = "../types", default-features = false, features = [
+dash-types = { version = "0.2.0-beta", path = "../types", default-features = false, features = [
   "bitcoin-primitives",
   "codec",
 ] }

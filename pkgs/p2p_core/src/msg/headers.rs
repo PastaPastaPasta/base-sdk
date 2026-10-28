@@ -25,7 +25,7 @@ const MIN_HEADERS_ENTRY: usize = 81;
 ///
 /// The count then bounds the allocation by the payload, not by the peer.
 pub(crate) fn read_entry_count(data: &mut &[u8], min_entry: usize) -> Result<usize, DecodeError> {
-  CompactSize::decode_size(data)?.into_len(data.len() / min_entry)
+  CompactSize::decode(data)?.into_len(data.len() / min_entry)
 }
 
 /// Requests block headers starting from a locator.
@@ -119,7 +119,7 @@ impl Headers {
         bits: u32::decode(data)?,
         nonce: u32::decode(data)?,
       });
-      CompactSize::decode_size(data)?;
+      CompactSize::decode(data)?;
     }
     Ok(Self { headers })
   }

@@ -505,7 +505,7 @@ class TestPreprocess:
 
   def test_a_literal_fence_shows_the_directive_it_holds(self) -> None:
     held = [
-      "<!-- [include:maint/unconv.toml] -->",
+      "<!-- [include:maint/commit.toml] -->",
       "<!-- [inclde:README.md] -->",
       "<!-- [start:omit] -->",
       "<!-- [end:omit] -->",
@@ -527,11 +527,11 @@ class TestPreprocess:
 
   def test_include_nests(self) -> None:
     with self._scratch(
-      outer='```toml\n<!-- [include:maint/unconv.toml] -->\n```\n',
+      outer='```toml\n<!-- [include:maint/commit.toml] -->\n```\n',
     ) as home:
       out = self._render(f'<!-- [include:{home}/outer.md] -->\n')
     assert "[include:" not in out
-    assert "global" in out
+    assert "namespace" in out
 
   def test_include_refuses_a_cycle(self) -> None:
     import pytest
@@ -639,7 +639,7 @@ class TestPreprocess:
       ('[a](../README.md "root")',
        (f'href="{blob}/README.md"', 'title="root"')),
       ("[a](<../README.md>)", (f'href="{blob}/README.md"',)),
-      ("[a](../maint/unconv.toml)", (f'href="{blob}/maint/unconv.toml"',)),
+      ("[a](../maint/commit.toml)", (f'href="{blob}/maint/commit.toml"',)),
     )
     for source, expected in cases:
       with self._scratch(page=f"{source}\n") as home:
@@ -697,10 +697,10 @@ class TestPreprocess:
 
   def test_include_survives_a_fenced_info_string(self) -> None:
     out = self._render(
-      '```text\n```markdown\n<!-- [include:maint/unconv.toml] -->\n```\n'
+      '```text\n```markdown\n<!-- [include:maint/commit.toml] -->\n```\n'
     )
-    assert "[include:maint/unconv.toml]" in out
-    assert "[global]" not in out
+    assert "[include:maint/commit.toml]" in out
+    assert "[default]" not in out
 
   def test_alert_survives_a_fenced_info_string(self) -> None:
     out = self._render("```\n```text\n> [!NOTE]\n> Shown.\n```\n")

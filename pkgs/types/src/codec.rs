@@ -7,19 +7,19 @@
 //! Codec traits and helpers.
 
 use crate::prelude::*;
-use crate::type_id::TypeId;
+use crate::type_id::{TypeId, Unencodable};
 use crate::{CompactSize, Hashable};
 
 use core::convert::Infallible;
-use core::fmt;
 
 /// Maximum bytes to pre-allocate per batch when deserializing vectors.
 const MAX_VECTOR_ALLOCATE: usize = 5_000_000;
 
 /// An error encountered during consensus decoding.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, thiserror::Error)]
 pub enum DecodeError<E = Infallible> {
   /// A decoded field has an invalid byte length.
+  #[error("invalid length: expected one of {expected:?}, got {actual}")]
   BadLen {
     /// Acceptable lengths.
     expected: Vec<usize>,
@@ -27,8 +27,10 @@ pub enum DecodeError<E = Infallible> {
     actual: usize,
   },
   /// Decode validation error.
-  DecError(E),
+  #[error("decode validation: {0}")]
+  DecError(#[source] E),
   /// CompactSize value exceeds the allowed limit.
+  #[error("compact size value {value} exceeds limit {limit}")]
   CompactSizeExceedsLimit {
     /// The configured limit.
     limit: usize,
@@ -36,6 +38,7 @@ pub enum DecodeError<E = Infallible> {
     value: u64,
   },
   /// Not enough bytes remaining in the cursor.
+  #[error("unexpected eof: needed {needed} bytes, {remaining} remaining")]
   Eof {
     /// Bytes needed for the read.
     needed: usize,
@@ -43,8 +46,10 @@ pub enum DecodeError<E = Infallible> {
     remaining: usize,
   },
   /// Decoded bytes are not valid UTF-8.
+  #[error("invalid utf-8 in string")]
   InvalidUtf8,
   /// A decoded value does not match any expected value.
+  #[error("invalid value: expected one of {expected:?}, got {actual}")]
   InvalidValue {
     /// Acceptable values.
     expected: Vec<u64>,
@@ -52,22 +57,26 @@ pub enum DecodeError<E = Infallible> {
     actual: u64,
   },
   /// BLS bytes canonical in neither scheme, Core's "malleable BLS object".
+  #[error("malleable BLS object")]
   MalleableBls,
   /// A boolean byte other than 0 or 1, which Dash Core reads as `true`.
   ///
   /// A strict read refuses it where Core reads it, as 1, and acts on the
   /// message, so a caller that follows Core does not penalise or drop the
   /// peer for it.
+  #[error("non-canonical bool: got {value}")]
   NonCanonicalBool {
     /// The byte read.
     value: u8,
   },
   /// CompactSize encoding is not minimal.
+  #[error("non-minimal compact size encoding for value {value}")]
   NonMinimalCompactSize {
     /// The decoded value that was not minimally encoded.
     value: u64,
   },
   /// Unconsumed bytes remain after decoding.
+  #[error("{remaining} trailing bytes after decode")]
   TrailingBytes {
     /// Number of bytes left over.
     remaining: usize,
@@ -88,45 +97,6 @@ impl DecodeError {
       Self::NonCanonicalBool { value } => DecodeError::NonCanonicalBool { value },
       Self::NonMinimalCompactSize { value } => DecodeError::NonMinimalCompactSize { value },
       Self::TrailingBytes { remaining } => DecodeError::TrailingBytes { remaining },
-    }
-  }
-}
-
-impl<E: fmt::Display> fmt::Display for DecodeError<E> {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      Self::BadLen { expected, actual } => {
-        write!(f, "invalid length: expected one of {expected:?}, got {actual}")
-      }
-      Self::DecError(e) => write!(f, "decode validation: {e}"),
-      Self::CompactSizeExceedsLimit { limit, value } => {
-        write!(f, "compact size value {value} exceeds limit {limit}",)
-      }
-      Self::Eof { needed, remaining } => {
-        write!(f, "unexpected eof: needed {needed} bytes, {remaining} remaining",)
-      }
-      Self::InvalidUtf8 => write!(f, "invalid utf-8 in string"),
-      Self::InvalidValue { expected, actual } => {
-        write!(f, "invalid value: expected one of {expected:?}, got {actual}")
-      }
-      Self::MalleableBls => write!(f, "malleable BLS object"),
-      Self::NonCanonicalBool { value } => write!(f, "non-canonical bool: got {value}"),
-      Self::NonMinimalCompactSize { value } => {
-        write!(f, "non-minimal compact size encoding for value {value}",)
-      }
-      Self::TrailingBytes { remaining } => {
-        write!(f, "{remaining} trailing bytes after decode")
-      }
-    }
-  }
-}
-
-#[cfg(feature = "std")]
-impl<E: std::error::Error + 'static> std::error::Error for DecodeError<E> {
-  fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-    match self {
-      Self::DecError(e) => Some(e),
-      _ => None,
     }
   }
 }
@@ -173,6 +143,34 @@ pub fn read_bytes<'a>(data: &mut &'a [u8], n: usize) -> Result<&'a [u8], DecodeE
   Ok(head)
 }
 
+/// Reads a CompactSize-prefixed vector of at most `limit` elements. The count
+/// is checked before any element is decoded or allocated.
+///
+/// # Errors
+///
+/// Returns the errors of [`CompactSize::decode_len`] and `T::decode`.
+pub fn decode_vec<T: BaseCodec>(data: &mut &[u8], limit: usize) -> Result<Vec<T>, DecodeError> {
+  let count = CompactSize::decode_len(data, limit)?;
+  decode_elements(data, count)
+}
+
+/// Decodes `count` elements, reserving in batches so that the reservation
+/// stays within one batch of the elements decoded.
+fn decode_elements<T: BaseCodec>(data: &mut &[u8], count: usize) -> Result<Vec<T>, DecodeError> {
+  let batch = MAX_VECTOR_ALLOCATE / core::mem::size_of::<T>().max(1);
+  let mut items = Vec::new();
+  let mut allocated = 0usize;
+  for _ in 0..count {
+    if items.len() == allocated {
+      // `reserve` may grow the capacity past the batch.
+      allocated = count.min(allocated + batch);
+      items.reserve_exact(allocated - items.len());
+    }
+    items.push(T::decode(data)?);
+  }
+  Ok(items)
+}
+
 /// Append-only byte buffer used by [`BaseCodec::encode`].
 pub trait EncodeBuf {
   /// Appends a single byte.
@@ -190,6 +188,27 @@ impl EncodeBuf for Vec<u8> {
   fn extend_from_slice(&mut self, data: &[u8]) {
     self.extend_from_slice(data);
   }
+}
+
+/// An encode target that counts the bytes written instead of storing them.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Unencodable)]
+struct ByteCount(usize);
+
+impl EncodeBuf for ByteCount {
+  fn push(&mut self, _byte: u8) {
+    self.0 += 1;
+  }
+
+  fn extend_from_slice(&mut self, data: &[u8]) {
+    self.0 += data.len();
+  }
+}
+
+/// Returns the size of the wire encoding of `value`.
+pub fn encoded_size<E>(value: &impl BaseCodec<E>) -> usize {
+  let mut size = ByteCount::default();
+  value.encode(&mut size);
+  size.0
 }
 
 /// The widest wire image a type's buffering decoder will accept.
@@ -291,6 +310,18 @@ impl BaseCodec for i64 {
   }
 }
 
+/// A non-zero byte other than `1` re-encodes as `1`, so such input does not
+/// round-trip.
+impl BaseCodec for bool {
+  fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
+    Ok(take::<1>(data)?[0] != 0)
+  }
+
+  fn encode(&self, buf: &mut impl EncodeBuf) {
+    buf.push(u8::from(*self));
+  }
+}
+
 impl<const N: usize> BaseCodec for [u8; N] {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     take::<N>(data)
@@ -303,19 +334,7 @@ impl<const N: usize> BaseCodec for [u8; N] {
 
 impl<T: BaseCodec> BaseCodec for Vec<T> {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let count = CompactSize::decode_size(data)?.into_len(data.len())?;
-    let batch = MAX_VECTOR_ALLOCATE / core::mem::size_of::<T>().max(1);
-    let mut items = Vec::new();
-    let mut allocated = 0usize;
-    for _ in 0..count {
-      if items.len() == allocated {
-        // Core's `reserve(allocated)`: exactly one batch beyond the items read.
-        allocated = count.min(allocated + batch);
-        items.reserve_exact(allocated - items.len());
-      }
-      items.push(T::decode(data)?);
-    }
-    Ok(items)
+    decode_vec(data, crate::MAX_SER_SIZE)
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
@@ -384,22 +403,15 @@ impl<T: Codec> __CodecMarker for T {}
 
 #[cfg(test)]
 mod tests {
-  use super::DecodeError;
+  use super::{decode_vec, encoded_size, BaseCodec, DecodeError};
   use crate::prelude::*;
   use crate::{VecDecoder, VecEncoder};
 
   use rstest::*;
 
-  use core::fmt;
-
-  #[derive(Clone, Debug, Eq, PartialEq)]
+  #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
+  #[error("sample text")]
   struct SampleError;
-
-  impl fmt::Display for SampleError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-      write!(f, "sample text")
-    }
-  }
 
   #[rstest]
   fn dec_error_displays_the_inner_error() {
@@ -430,6 +442,61 @@ mod tests {
     let lifted: DecodeError<SampleError> = err.lift();
     assert_eq!(lifted.to_string(), before);
     assert!(!matches!(lifted, DecodeError::DecError(_)));
+  }
+
+  #[rstest]
+  #[case::zero(0x00, false)]
+  #[case::one(0x01, true)]
+  #[case::two(0x02, true)]
+  #[case::high(0x80, true)]
+  #[case::max(0xFF, true)]
+  fn bool_decodes_any_non_zero_byte_as_true(#[case] byte: u8, #[case] value: bool) {
+    let mut cursor: &[u8] = &[byte];
+    assert_eq!(bool::decode(&mut cursor), Ok(value));
+    assert!(cursor.is_empty());
+  }
+
+  #[rstest]
+  #[case::false_(false, 0x00)]
+  #[case::true_(true, 0x01)]
+  fn bool_encodes_as_zero_or_one(#[case] value: bool, #[case] byte: u8) {
+    let mut buf = Vec::new();
+    value.encode(&mut buf);
+    assert_eq!(buf, [byte]);
+  }
+
+  #[rstest]
+  fn bool_rejects_empty_input() {
+    assert!(matches!(bool::decode(&mut &[][..]), Err(DecodeError::Eof { .. })));
+  }
+
+  #[rstest]
+  #[case::empty(&[0x00], Ok(vec![]))]
+  #[case::below(&[0x01, 0x0A, 0x00], Ok(vec![10]))]
+  #[case::at_limit(&[0x02, 0x0A, 0x00, 0x0B, 0x00], Ok(vec![10, 11]))]
+  #[case::past_limit(&[0x03, 0x0A, 0x00], Err(DecodeError::CompactSizeExceedsLimit { limit: 2, value: 3 }))]
+  #[case::short_element(&[0x02, 0x0A, 0x00, 0x0B], Err(DecodeError::Eof { needed: 2, remaining: 1 }))]
+  fn decode_vec_bounds_the_count(#[case] wire: &[u8], #[case] expected: Result<Vec<u16>, DecodeError>) {
+    assert_eq!(decode_vec::<u16>(&mut &*wire, 2), expected);
+  }
+
+  #[rstest]
+  fn decode_vec_stops_after_the_value() {
+    let mut cursor: &[u8] = &[0x01, 0xAA, 0xFF];
+    assert_eq!(decode_vec::<u8>(&mut cursor, 1), Ok(vec![0xAA]));
+    assert_eq!(cursor, [0xFF]);
+  }
+
+  #[rstest]
+  #[case::empty(0, 1)]
+  #[case::one_byte_count(252, 253)]
+  #[case::three_byte_count(253, 256)]
+  fn encoded_size_counts_the_wire_encoding(#[case] len: usize, #[case] size: usize) {
+    let value = vec![0u8; len];
+    let mut buf = Vec::new();
+    value.encode(&mut buf);
+    assert_eq!(buf.len(), size);
+    assert_eq!(encoded_size(&value), size);
   }
 
   /// A length prefix above `MAX_SIZE` fails even with enough bytes left,

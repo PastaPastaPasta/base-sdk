@@ -112,10 +112,6 @@ fn typed_sk<S: BlsScheme>(hex: &str) -> BlsSecretKey<S> {
   BlsSecretKey::from_bytes(&arr_from_hex(hex)).unwrap_or_else(|e| panic!("sk {hex}: {e:?}"))
 }
 
-fn msg<S: BlsScheme>(h: &[u8; 32]) -> &S::Msg {
-  S::msg_ref(h)
-}
-
 /// Asserts `core`'s verdict and, where the operands decode, the pooled one.
 fn assert_verdict(label: &str, core: BlsVerdict, pooled: Option<bool>, ok: bool) {
   assert_eq!(core, BlsVerdict::from(ok), "{label}: bls::core");
@@ -138,7 +134,7 @@ fn assert_hash_to_g2<S: BlsScheme>(kind: BlsSchemeKind) {
   one[31] = 1;
   let sk = BlsSecretKey::<S>::from_bytes(&one).unwrap_or_else(|e| panic!("sk 1: {e:?}"));
   for row in corpus("hash_to_g2").vectors::<HashRow>(scheme_name(kind)) {
-    let sig = sk.sign(msg::<S>(&hash(&row.msg)));
+    let sig = sk.sign_digest(&hash(&row.msg));
     assert_eq!(sig.to_bytes().to_lower_hex_string(), row.point, "hash of {}", row.msg);
   }
 }
@@ -177,7 +173,7 @@ fn assert_sign<S: BlsScheme>(kind: BlsSchemeKind) {
     );
   }
   for row in c.vectors::<SignRow>("sign") {
-    let sig = typed_sk::<S>(&keys[row.key].sk).sign(msg::<S>(&hash(&row.msg)));
+    let sig = typed_sk::<S>(&keys[row.key].sk).sign_digest(&hash(&row.msg));
     assert_eq!(
       sig.to_bytes().to_lower_hex_string(),
       row.sig,
@@ -191,7 +187,7 @@ fn assert_sign<S: BlsScheme>(kind: BlsSchemeKind) {
     let core = verify_insecure(&sig_value(&row.sig, kind), &pk_value(&row.pk, kind), &h, kind);
     let pooled = typed_pk::<S>(&row.pk)
       .zip(typed_sig::<S>(&row.sig))
-      .map(|(pk, sig)| pk.verify(msg::<S>(&h), &sig).is_ok());
+      .map(|(pk, sig)| pk.verify_digest(&h, &sig).is_ok());
     assert_verdict(&row.note, core, pooled, row.ok);
   }
 }
@@ -319,7 +315,7 @@ fn assert_aggregate<S: BlsScheme>(kind: BlsSchemeKind) {
     let agg = BlsPublicKey::aggregate(&refs).unwrap_or_else(|e| panic!("{e:?}"));
     let agg = pk_value(&agg.to_bytes().to_lower_hex_string(), kind);
     let core = verify_insecure(&sig_value(&row.sig, kind), &agg, &h, kind);
-    let pooled = typed_sig::<S>(&row.sig).map(|sig| sig.fast_verify_aggregates(msg::<S>(&h), &refs).is_ok());
+    let pooled = typed_sig::<S>(&row.sig).map(|sig| sig.fast_verify_aggregates_digest(&h, &refs).is_ok());
     assert_verdict(&format!("{} keys, {}", row.pks.len(), row.note), core, pooled, row.ok);
   }
   for row in c.vectors::<DistinctRow>("distinct") {
@@ -333,9 +329,11 @@ fn assert_aggregate<S: BlsScheme>(kind: BlsSchemeKind) {
       kind,
     );
     let pks = typed_pks::<S>(&row.pks);
-    let msgs: Vec<&S::Msg> = hs.iter().map(msg::<S>).collect();
-    let pooled =
-      typed_sig::<S>(&row.sig).map(|sig| sig.verify_aggregates(&msgs, &pks.iter().collect::<Vec<_>>()).is_ok());
+    let pooled = typed_sig::<S>(&row.sig).map(|sig| {
+      sig
+        .verify_aggregates_digests(&hs, &pks.iter().collect::<Vec<_>>())
+        .is_ok()
+    });
     // The typed legacy verify accepts a repeated message, which Core's legacy
     // scheme does too; the typed basic verify refuses it, as Core does.
     assert_verdict(&label, core, pooled, row.ok);
@@ -380,7 +378,7 @@ fn assert_secure<S: BlsScheme>(kind: BlsSchemeKind) {
     let pks = typed_pks::<S>(&row.pks);
     let pooled = typed_sig::<S>(&row.sig).map(|sig| {
       sig
-        .secure_verify_aggregates(msg::<S>(&h), &pks.iter().collect::<Vec<_>>())
+        .secure_verify_aggregates_digest(&h, &pks.iter().collect::<Vec<_>>())
         .is_ok()
     });
     assert_verdict(&row.note, core, pooled, row.ok);
@@ -419,10 +417,7 @@ fn assert_threshold<S: BlsScheme>(kind: BlsSchemeKind) {
       assert_eq!(&sk.public_key(), pk, "{label}: master public key");
     }
     let h = hash(&case.msg);
-    assert_eq!(
-      msk[0].sign(msg::<S>(&h)).to_bytes().to_lower_hex_string(),
-      case.master_sig
-    );
+    assert_eq!(msk[0].sign_digest(&h).to_bytes().to_lower_hex_string(), case.master_sig);
     let msk_refs: Vec<&BlsSecretKey<S>> = msk.iter().collect();
     let mpk_refs: Vec<&BlsPublicKey<S>> = mpk.iter().collect();
     let (msk_values, mpk_values) = (read_all(&case.msk, kind, sk_value), read_all(&case.mpk, kind, pk_value));
@@ -457,7 +452,7 @@ fn assert_threshold<S: BlsScheme>(kind: BlsSchemeKind) {
       assert_eq!(sk, case.sk_shares[i], "{label}: secret key share {i}");
       assert_eq!(pk, case.pk_shares[i], "{label}: public key share {i}");
       if let Some(share) = &sk {
-        let sig = typed_sk::<S>(share).sign(msg::<S>(&h)).to_bytes().to_lower_hex_string();
+        let sig = typed_sk::<S>(share).sign_digest(&h).to_bytes().to_lower_hex_string();
         assert_eq!(Some(sig), case.sig_shares[i], "{label}: signature share {i}");
       }
     }
@@ -555,8 +550,8 @@ fn assert_ies<S: BlsScheme>(kind: BlsSchemeKind) {
       continue;
     };
     assert_eq!(row.decrypt.len(), row.plaintexts.len() + 2, "{}", row.note);
-    let multi: BlsIesMulti<S> = decode_bytes::<BlsIesMultiBytes<S>>(out)
-      .try_into()
+    let multi: BlsIesMulti<S> = decode_bytes::<BlsIesMultiBytes>(out)
+      .to::<S>()
       .unwrap_or_else(|e| panic!("{}: {e:?}", row.note));
     assert_eq!(
       multi.ephemeral_pk(),
@@ -586,8 +581,8 @@ fn assert_ies<S: BlsScheme>(kind: BlsSchemeKind) {
     }
   }
   for row in c.vectors::<BlobRow>("blob") {
-    let blob: BlsIesBlob<S> = decode_bytes::<BlsIesBlobBytes<S>>(&row.blob)
-      .try_into()
+    let blob: BlsIesBlob<S> = decode_bytes::<BlsIesBlobBytes>(&row.blob)
+      .to::<S>()
       .unwrap_or_else(|e| panic!("blob: {e:?}"));
     let got = typed_sk::<S>(&row.sk)
       .ies_decrypt(&blob, row.idx)
@@ -1382,8 +1377,8 @@ fn assert_dkg() {
     let mut vvecs = BTreeMap::new();
     for c in &q.contributions {
       check_signed(&c.signed, "contribution");
-      let multi: BlsIesMulti<S> = decode_bytes::<BlsIesMultiBytes<S>>(&c.ies)
-        .try_into()
+      let multi: BlsIesMulti<S> = decode_bytes::<BlsIesMultiBytes>(&c.ies)
+        .to::<S>()
         .unwrap_or_else(|e| panic!("{e:?}"));
       let vvec = typed_pks::<S>(&c.vvec);
       for (j, share) in c.shares.iter().enumerate() {

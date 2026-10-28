@@ -103,7 +103,7 @@ impl_p2p!(PrefilledTx);
 impl BaseCodec for PrefilledTx {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     // Within u16 once `into_len` bounds it by MAX_BLOCK_TXS.
-    let index = CompactSize::decode_size(data)?.into_len(MAX_BLOCK_TXS)? as u16;
+    let index = CompactSize::decode(data)?.into_len(MAX_BLOCK_TXS)? as u16;
     Ok(Self {
       index,
       tx: Transaction::decode(data)?,
@@ -221,11 +221,11 @@ impl BaseCodec for GetBlockTxn {
   /// past 65,535 fails.
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let block_hash = BlockHash::decode(data)?;
-    let count = CompactSize::decode_size(data)?.into_len(data.len())?;
+    let count = CompactSize::decode(data)?.into_len(data.len())?;
     let mut indexes: Vec<u16> = Vec::with_capacity(count);
     let mut shift: u64 = 0;
     for _ in 0..count {
-      let diff = u64::from(CompactSize::decode_size(data)?);
+      let diff = u64::from(CompactSize::decode(data)?);
       // Core's "differential value overflow": a wrapped sum, the u64
       // sentinel or the element type's range.
       let Some(index) = shift.checked_add(diff).and_then(|s| u16::try_from(s).ok()) else {

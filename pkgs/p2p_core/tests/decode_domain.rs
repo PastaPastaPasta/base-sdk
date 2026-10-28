@@ -16,7 +16,6 @@ use dash_p2p_core::{
 };
 use dash_pkc::bls::BlsCtx;
 use dash_types::codec::{BaseCodec, DecodeError};
-use dash_types::CoreBool;
 use rstest::rstest;
 
 #[derive(::serde::Deserialize)]
@@ -130,12 +129,12 @@ fn version_reads_optional_fields_as_core() {
           panic!("{}: not a version", v.name);
         };
         if core == "disconnect: inbound masternode" {
-          assert_eq!(version.mn_connection.map(|b| b.get()), Some(true), "{}", v.name);
+          assert_eq!(version.mn_connection, Some(true), "{}", v.name);
         }
         if let Some(expected) = v.groups {
           assert_eq!(groups(&version), expected, "{}", v.name);
           // Core's defaults for absent fields: no subver, height -1, relay.
-          let relay = version.relay.is_none_or(|r| r.get());
+          let relay = version.relay.unwrap_or(true);
           assert_eq!(Some(relay), v.relaytxes, "{}", v.name);
           let subver = version.user_agent.as_ref().and_then(|u| u.as_str()).unwrap_or_default();
           assert_eq!(Some(subver), v.subver.as_deref(), "{}", v.name);
@@ -212,7 +211,7 @@ fn control_messages_read_a_core_bool() {
       );
       continue;
     }
-    let flag = CoreBool(raw[0] != 0);
+    let flag = raw[0] != 0;
     let expected = match v.command.as_str() {
       "senddsq" => P2pMsg::SendDsq(SendDsq { send_dsq: flag }),
       _ => P2pMsg::QSendRecSigs(QSendRecSigs { send_rec_sigs: flag }),

@@ -21,7 +21,7 @@ pub(crate) const AES_KEY_LEN: usize = 32;
 /// Encrypts under unpadded AES-256-CBC, or `None` when the input is not a
 /// whole number of blocks.
 pub(crate) fn encrypt(key: &[u8; AES_KEY_LEN], iv: &[u8; AES_BLOCK_LEN], plaintext: &[u8]) -> Option<Vec<u8>> {
-  if plaintext.len() % AES_BLOCK_LEN != 0 {
+  if !plaintext.len().is_multiple_of(AES_BLOCK_LEN) {
     return None;
   }
 
@@ -49,7 +49,7 @@ pub(crate) fn decrypt(
   iv: &[u8; AES_BLOCK_LEN],
   ciphertext: &[u8],
 ) -> Option<Zeroizing<Vec<u8>>> {
-  if ciphertext.len() % AES_BLOCK_LEN != 0 {
+  if !ciphertext.len().is_multiple_of(AES_BLOCK_LEN) {
     return None;
   }
 

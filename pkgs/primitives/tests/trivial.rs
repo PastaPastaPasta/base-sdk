@@ -19,10 +19,10 @@ const DECODE_FAILURE: &[&str] = &["gettxpayload-fail", "bad-protx-payload"];
 /// The version of a provider payload Core decoded past its version.
 fn known_protx_version(payload: &SpecialPayload) -> Option<u16> {
   match payload {
-    SpecialPayload::ProviderRegister(p) => Some(p.version),
-    SpecialPayload::ProviderUpdateService(p) => Some(p.version),
-    SpecialPayload::ProviderUpdateRegistrar(p) => Some(p.version),
-    SpecialPayload::ProviderUpdateRevoke(p) => Some(p.version),
+    SpecialPayload::ProviderRegister(p) => Some(p.version.to_base()),
+    SpecialPayload::ProviderUpdateService(p) => Some(p.version.to_base()),
+    SpecialPayload::ProviderUpdateRegistrar(p) => Some(p.version.to_base()),
+    SpecialPayload::ProviderUpdateRevoke(p) => Some(p.version.to_base()),
     _ => None,
   }
 }

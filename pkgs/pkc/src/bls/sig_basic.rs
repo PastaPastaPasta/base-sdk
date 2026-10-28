@@ -28,12 +28,12 @@ use core::hash::{Hash, Hasher};
 /// A BLS signature (96-byte compressed G2 point)
 #[cfg_attr(feature = "codec", derive(TypeId))]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(into = "BlsSigBytes<S>", try_from = "BlsSigBytes<S>"))]
+#[cfg_attr(feature = "serde", serde(into = "BlsSigBytes", try_from = "BlsSigBytes"))]
 #[cfg_attr(feature = "serde", serde(bound(serialize = "", deserialize = "")))]
 pub struct BlsSignature<S: BlsScheme>(pub(crate) S::InnerSig);
 
 #[cfg(feature = "codec")]
-dlgt_codec!(for[S: BlsScheme] BlsSignature<S> => BlsSigBytes<S>, Hash256, BlsError, BLS_SIG_LEN);
+dlgt_codec!(for[S: BlsScheme] BlsSignature<S> => BlsSigBytes, Hash256, BlsError, BLS_SIG_LEN);
 
 impl<S: BlsScheme> BlsSignature<S> {
   /// Deserialize from 96 bytes.
@@ -101,13 +101,32 @@ impl<S: BlsScheme> Hash for BlsSignature<S> {
   }
 }
 
-type_cvrt!(for[S: BlsScheme] From<BlsSignature<S>> for BlsSigBytes<S>, |sig| {
+type_cvrt!(for[S: BlsScheme] From<BlsSignature<S>> for BlsSigBytes, |sig| {
   Self::from_bytes(sig.to_bytes())
 });
 
-type_cvrt!(for[S: BlsScheme] TryFrom<BlsSigBytes<S>> for BlsSignature<S>, BlsError, |bytes| {
+type_cvrt!(for[S: BlsScheme] TryFrom<BlsSigBytes> for BlsSignature<S>, BlsError, |bytes| {
   Self::from_bytes(bytes.as_bytes())
 });
+
+impl BlsSigBytes {
+  /// Validates the bytes as a signature under scheme `S`.
+  ///
+  /// # Errors
+  ///
+  /// Returns `InvalidSignature` when the bytes are not a valid point under `S`.
+  pub fn to<S: BlsScheme>(&self) -> Result<BlsSignature<S>, BlsError> {
+    BlsSignature::try_from(self)
+  }
+
+  /// Whether `S` decodes the bytes to a signature that re-encodes to them.
+  ///
+  /// Null bytes pass, so pair with [`is_null`](Self::is_null) to require a
+  /// signature.
+  pub fn is_canonical<S: BlsScheme>(&self) -> bool {
+    self.is_null() || self.to::<S>().is_ok_and(|sig| sig.to_bytes() == *self.as_bytes())
+  }
+}
 
 type_cvrt!(for[S: BlsScheme] TryFrom<BlsSignature<S>> for G2, BlsError, |sig| {
   S::sig_to_g2(&sig.0)
@@ -131,7 +150,7 @@ mod tests {
   use crate::prelude::*;
 
   use cfg_if::cfg_if;
-  use dash_dev::{arr_from_hex, Corpus};
+  use dash_dev::{arr_from_hex, vec_from_hex, Corpus};
   use hex_conservative::DisplayHex;
   use rstest::rstest;
   use serde::Deserialize;
@@ -146,13 +165,13 @@ mod tests {
   fn assert_sign_verify<S: BlsScheme>() {
     let sk = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap();
     let pk = sk.public_key();
-    let sig = sk.sign(S::msg_ref(&MSG_DEADBEEF));
+    let sig = sk.sign_digest(&MSG_DEADBEEF);
 
-    assert!(pk.verify(S::msg_ref(&MSG_DEADBEEF), &sig).is_ok());
-    assert!(pk.verify(S::msg_ref(&MSG_8BADFOOD), &sig).is_err());
+    assert!(pk.verify_digest(&MSG_DEADBEEF, &sig).is_ok());
+    assert!(pk.verify_digest(&MSG_8BADFOOD, &sig).is_err());
 
     let other_pk = BlsSecretKey::<S>::from_ikm(&RSEED[1]).unwrap().public_key();
-    assert!(other_pk.verify(S::msg_ref(&MSG_DEADBEEF), &sig).is_err());
+    assert!(other_pk.verify_digest(&MSG_DEADBEEF, &sig).is_err());
   }
 
   #[rstest]
@@ -198,8 +217,8 @@ mod tests {
   /// yields the same signature every time.
   fn assert_sign_is_deterministic<S: BlsScheme>() {
     let sk = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap();
-    let msg = S::msg_ref(&MSG_DEADBEEF);
-    assert_eq!(sk.sign(msg), sk.sign(msg));
+    let msg = &MSG_DEADBEEF;
+    assert_eq!(sk.sign_digest(msg), sk.sign_digest(msg));
   }
 
   #[rstest]
@@ -209,9 +228,31 @@ mod tests {
     assertion();
   }
 
+  fn assert_sig_bytes_canonical<S: BlsScheme>() {
+    let sk = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap();
+    let clean = sk.sign_digest(&MSG_DEADBEEF).to_bytes();
+    assert!(BlsSigBytes::from_bytes(clean).is_canonical::<S>());
+    assert!(BlsSigBytes::from_bytes([0u8; 96]).is_canonical::<S>());
+
+    let mut infinity = [0u8; 96];
+    infinity[0] = 0xc0;
+    assert!(!BlsSigBytes::from_bytes(infinity).is_canonical::<S>());
+
+    let mut out_of_range = clean;
+    out_of_range[48] |= 0xe0;
+    assert!(!BlsSigBytes::from_bytes(out_of_range).is_canonical::<S>());
+  }
+
+  #[rstest]
+  #[case::chia(assert_sig_bytes_canonical::<BlsScChia>)]
+  #[case::ietf(assert_sig_bytes_canonical::<BlsScIetf>)]
+  fn sig_bytes_canonical_signatures_and_null(#[case] assertion: fn()) {
+    assertion();
+  }
+
   fn assert_sig_roundtrip<S: BlsScheme>() {
     let sk = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap();
-    let bytes = sk.sign(S::msg_ref(&MSG_DEADBEEF)).to_bytes();
+    let bytes = sk.sign_digest(&MSG_DEADBEEF).to_bytes();
     assert_eq!(BlsSignature::<S>::from_bytes(&bytes).unwrap().to_bytes(), bytes);
   }
 
@@ -232,7 +273,7 @@ mod tests {
     for i in 0..64 {
       let sk = BlsSecretKey::<S>::from_ikm(&test_ikm(i)).unwrap();
       let pk = sk.public_key();
-      let sig = sk.sign(S::msg_ref(&test_msg(i)));
+      let sig = sk.sign_digest(&test_msg(i));
 
       let pk_bytes = pk.to_bytes();
       let sig_bytes = sig.to_bytes();
@@ -284,7 +325,7 @@ mod tests {
   fn chia_rejects_stray_signature_bits(#[case] index: usize, #[case] mask: u8) {
     let clean = BlsSecretKey::<BlsScChia>::from_ikm(&RSEED[0])
       .unwrap()
-      .sign(&MSG_DEADBEEF)
+      .sign_digest(&MSG_DEADBEEF)
       .to_bytes();
 
     let mut mutated = clean;
@@ -355,7 +396,7 @@ mod tests {
 
     for v in &vecs {
       let sk = BlsSecretKey::<S>::from_bytes(&arr_from_hex(&v.sk)).unwrap();
-      let sig = sk.sign(S::msg_ref(&arr_from_hex(&v.msg)));
+      let sig = sk.sign_digest(&arr_from_hex(&v.msg));
       assert_eq!(sig.to_bytes().to_lower_hex_string(), v.sig);
     }
   }
@@ -367,19 +408,53 @@ mod tests {
     assertion(scheme);
   }
 
+  fn assert_message_signing_matches_vectors<S: BlsScheme>(scheme: &str) {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "bls_sign").scope(scheme);
+    let vecs: Vec<SignVec> = corpus.vectors("sign_message");
+    assert!(!vecs.is_empty(), "corpus section is empty");
+
+    for v in &vecs {
+      let sk = BlsSecretKey::<S>::from_bytes(&arr_from_hex(&v.sk)).unwrap();
+      let msg = vec_from_hex(&v.msg);
+      let sig = sk.sign_message(&msg);
+      assert_eq!(sig.to_bytes().to_lower_hex_string(), v.sig);
+      assert!(sk.public_key().verify_message(&msg, &sig).is_ok());
+    }
+  }
+
+  #[rstest]
+  #[case::chia(assert_message_signing_matches_vectors::<BlsScChia>, "chia")]
+  #[case::ietf(assert_message_signing_matches_vectors::<BlsScIetf>, "ietf")]
+  fn message_signing_matches_vectors(#[case] assertion: fn(&str), #[case] scheme: &str) {
+    assertion(scheme);
+  }
+
+  /// An IETF digest is an ordinary message, so both paths sign it alike.
+  #[rstest]
+  fn ietf_digest_signs_as_message() {
+    let sk = BlsSecretKey::<BlsScIetf>::from_ikm(&RSEED[1]).unwrap();
+    let sig = sk.sign_digest(&MSG_DEADBEEF);
+    assert_eq!(sk.sign_message(&MSG_DEADBEEF), sig);
+    assert!(sk.public_key().verify_message(&MSG_DEADBEEF, &sig).is_ok());
+    assert!(sk.public_key().verify_message(&MSG_8BADFOOD, &sig).is_err());
+  }
+
   /// One secret scalar over one message yields two different signatures, so a
   /// scheme mix-up cannot go unnoticed.
   #[rstest]
   fn signatures_differ_across_schemes() {
     let chia = BlsSecretKey::<BlsScChia>::from_ikm(&RSEED[0]).unwrap();
     let ietf = BlsSecretKey::<BlsScIetf>::from_bytes(&chia.to_bytes()).unwrap();
-    assert_ne!(chia.sign(&MSG_DEADBEEF).to_bytes(), ietf.sign(&MSG_DEADBEEF).to_bytes());
+    assert_ne!(
+      chia.sign_digest(&MSG_DEADBEEF).to_bytes(),
+      ietf.sign_digest(&MSG_DEADBEEF).to_bytes()
+    );
   }
 
   /// Conversion re-encodes one point, so a round trip returns the original.
   fn assert_sig_scheme_conversion_round_trips<S: BlsScheme, T: BlsScheme>() {
     let sk = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap();
-    let sig = sk.sign(S::msg_ref(&MSG_DEADBEEF));
+    let sig = sk.sign_digest(&MSG_DEADBEEF);
     let there = sig.to_scheme::<T>().unwrap();
 
     assert_eq!(there.to_scheme::<S>().unwrap().to_bytes(), sig.to_bytes());
@@ -400,11 +475,11 @@ mod tests {
   #[rstest]
   fn sig_scheme_conversion_does_not_move_the_augmentation() {
     let sk = BlsSecretKey::<BlsScChia>::from_ikm(&RSEED[0]).unwrap();
-    let sig = sk.sign(&MSG_DEADBEEF);
+    let sig = sk.sign_digest(&MSG_DEADBEEF);
 
     let converted = sig.to_scheme::<BlsScIetf>().unwrap();
     let pk_ietf = sk.public_key().to_scheme::<BlsScIetf>().unwrap();
-    assert!(pk_ietf.verify(&MSG_DEADBEEF, &converted).is_err());
+    assert!(pk_ietf.verify_digest(&MSG_DEADBEEF, &converted).is_err());
   }
 
   /// A signature Chia admits and IETF does not must not become an IETF one by
@@ -426,23 +501,43 @@ mod tests {
       #[rstest]
       fn serde_roundtrip() {
         let chia = BlsSecretKey::<BlsScChia>::from_ikm(&RSEED[0]).unwrap();
-        assert_json_rt(&chia.sign(&MSG_DEADBEEF));
+        assert_json_rt(&chia.sign_digest(&MSG_DEADBEEF));
         let ietf = BlsSecretKey::<BlsScIetf>::from_ikm(&RSEED[0]).unwrap();
-        assert_json_rt(&ietf.sign(&MSG_DEADBEEF));
+        assert_json_rt(&ietf.sign_digest(&MSG_DEADBEEF));
       }
 
       #[rstest]
       fn serde_emits_hex_string() {
         let chia = BlsSecretKey::<BlsScChia>::from_ikm(&RSEED[0])
           .unwrap()
-          .sign(&MSG_DEADBEEF);
+          .sign_digest(&MSG_DEADBEEF);
         let ietf = BlsSecretKey::<BlsScIetf>::from_ikm(&RSEED[0])
           .unwrap()
-          .sign(&MSG_DEADBEEF);
+          .sign_digest(&MSG_DEADBEEF);
 
         assert_eq!(to_json(&chia), format!("\"{}\"", chia.to_bytes().to_lower_hex_string()));
         assert_eq!(to_json(&ietf), format!("\"{}\"", ietf.to_bytes().to_lower_hex_string()));
       }
     }
+  }
+
+  fn assert_to_matches_from_bytes<S: BlsScheme>() {
+    let valid = BlsSecretKey::<S>::from_ikm(&RSEED[0])
+      .unwrap()
+      .sign_digest(&MSG_DEADBEEF)
+      .to_bytes();
+    for encoded in [valid, G2_OFF_SUBGROUP_CHIA, G2_OFF_SUBGROUP_IETF, [0; 96]] {
+      assert_eq!(
+        BlsSigBytes::from_bytes(encoded).to::<S>(),
+        BlsSignature::<S>::from_bytes(&encoded)
+      );
+    }
+  }
+
+  #[rstest]
+  #[case::chia(assert_to_matches_from_bytes::<BlsScChia>)]
+  #[case::ietf(assert_to_matches_from_bytes::<BlsScIetf>)]
+  fn to_admits_what_from_bytes_admits(#[case] assertion: fn()) {
+    assertion();
   }
 }

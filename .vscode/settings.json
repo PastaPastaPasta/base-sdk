@@ -40,6 +40,7 @@
     "**/Cargo.lock": true,
     "**/target": true,
   },
+  "rust-analyzer.cargo.extraArgs": ["--locked"],
   "rust-analyzer.cargo.features": "all",
   "rust-analyzer.check.command": "clippy",
   "rust-analyzer.checkOnSave": true,

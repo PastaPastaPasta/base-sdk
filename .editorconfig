@@ -11,8 +11,14 @@ trim_trailing_whitespace = true
 [*.Dockerfile]
 indent_size = 4
 
+[*.bat]
+end_of_line = crlf
+
 [*.md]
 trim_trailing_whitespace = false
 
-[Justfile]
+[{Justfile,*.just}]
+indent_size = 4
+
+[{*.bzl,BUILD.bazel,MODULE.bazel}]
 indent_size = 4

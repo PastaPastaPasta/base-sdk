@@ -33,7 +33,7 @@ File fileOf(Locatable n) { result = n.getLocation().getFile() }
 /** Materialises the repo-root-relative path for source files. */
 pragma[nomagic]
 predicate fileRelPath(File f, string relPath) {
-  relPath = f.getAbsolutePath().regexpCapture(".*/(pkgs/.*)", 1)
+  relPath = f.getAbsolutePath().regexpCapture(".*/((?:meta|pkgs)/.*)", 1)
 }
 
 /** Holds if `f` belongs to a crate in this workspace. */

@@ -347,7 +347,7 @@ mod tests {
 
   pub(super) fn values<S: BlsScheme>(seed: u8, msg: &[u8; 32], kind: BlsSchemeKind) -> (BlsSigValue, BlsPkValue) {
     let sk = BlsSecretKey::<S>::from_ikm(&[seed; 32]).unwrap();
-    let sig = sk.sign(S::msg_ref(msg)).to_bytes();
+    let sig = sk.sign_digest(msg).to_bytes();
     let pk = sk.public_key().to_bytes();
     (
       BlsValue::from_canonical(&sig, kind).unwrap(),

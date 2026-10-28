@@ -22,9 +22,7 @@ use dash_pkc::bls::{
   BlsSchemeSource, BlsSigBytes, BlsSigId, BlsSignature,
 };
 use dash_pkc::ecdsa::{EcdsaPkBytes, EcdsaPublicKey, EcdsaRecSigBytes, EcdsaRecSignature};
-use dash_primitives::{
-  llmq_sign_hash, CompactSig, LlmqType, PayloadDecode, ProTxInvalid, QuorumHash, SpecialPayload, Transaction,
-};
+use dash_primitives::{llmq_sign_hash, CompactSig, LlmqType, PayloadDecode, QuorumHash, SpecialPayload, Transaction};
 use dash_script::AddrParams;
 use dash_types::codec::BaseCodec;
 use dash_types::{Hashable, Numeric};
@@ -77,7 +75,7 @@ fn bls_verifies(scheme: BlsSchemeKind, pk: &BlsEagerPk, sig: &BlsEagerSig, hash:
     BlsSchemeKind::Legacy => {
       let pk = BlsPublicKey::<BlsScChia>::try_from(BlsPkBytes::from(pk));
       let sig = BlsSignature::<BlsScChia>::try_from(BlsSigBytes::from(sig));
-      matches!((pk, sig), (Ok(pk), Ok(sig)) if pk.verify(&msg, &sig).is_ok())
+      matches!((pk, sig), (Ok(pk), Ok(sig)) if pk.verify_digest(&msg, &sig).is_ok())
     }
     BlsSchemeKind::Basic => {
       let pk = BlsPublicKey::<BlsScIetf>::try_from(BlsPkBytes::from(pk));
@@ -102,10 +100,15 @@ fn bls_pk(hex: &str, scheme: BlsSchemeKind) -> BlsEagerPk {
 
 /// The key id of the key `CPubKey::RecoverCompact` recovers from `sig`.
 fn recovered_key_id(sig: &[u8], hash: &Hash256) -> Option<String> {
-  let sig = EcdsaRecSigBytes::from_raw(sig.try_into().ok()?)?;
+  let sig = EcdsaRecSigBytes::from_bytes(sig.try_into().ok()?)?;
   let sig = EcdsaRecSignature::try_from(sig).ok()?;
   let pk = EcdsaPublicKey::recover(&hash.to_lendian(), &sig).ok()?;
   Some(EcdsaPkBytes::from(pk).hash().as_bytes().to_lower_hex_string())
+}
+
+/// A provider signature's bytes, empty when unsigned.
+fn ecdsa(sig: Option<&[u8; 65]>) -> &[u8] {
+  sig.map_or(&[], |sig| &sig[..])
 }
 
 fn compact(sig: &CompactSig) -> &[u8] {
@@ -157,27 +160,30 @@ fn check_signed(txid: &str, entry: &Value) -> (u16, u16) {
         .iter()
         .map(|s| s.key_id_owner.as_bytes().to_lower_hex_string())
         .collect();
-      let hash = hash(&p.shared_consent_bytes(&tx).unwrap());
+      let hash = hash(&p.shared_consent_bytes(&tx));
       (
-        p.version,
+        p.version.to_base(),
         owners_signed(&owners, p.join_sigs.iter().map(compact), &hash),
       )
     }
     SpecialPayload::ProviderRegister(p) => {
-      let hash = hash(&p.sign_message_bytes(addr).unwrap());
-      (p.version, owners_signed(&key_ids, [&p.vch_sig[..]], &hash))
+      let hash = hash(&p.sign_message_bytes(addr));
+      (
+        p.version.to_base(),
+        owners_signed(&key_ids, [ecdsa(p.vch_sig.as_bytes())], &hash),
+      )
     }
     SpecialPayload::ProviderUpdateService(p) => (
-      p.version,
-      bls_verifies_any(&operator(), &p.sig, &hash(&p.sig_hash_bytes().unwrap())),
+      p.version.to_base(),
+      bls_verifies_any(&operator(), &p.sig, &hash(&p.sig_hash_bytes())),
     ),
     SpecialPayload::ProviderUpdateRegistrar(p) => (
-      p.version,
-      owners_signed(&key_ids, [&p.vch_sig[..]], &hash(&p.sig_hash_bytes().unwrap())),
+      p.version.to_base(),
+      owners_signed(&key_ids, [ecdsa(p.vch_sig.as_bytes())], &hash(&p.sig_hash_bytes())),
     ),
     SpecialPayload::ProviderUpdateRevoke(p) => (
-      p.version,
-      bls_verifies_any(&operator(), &p.sig, &hash(&p.sig_hash_bytes().unwrap())),
+      p.version.to_base(),
+      bls_verifies_any(&operator(), &p.sig, &hash(&p.sig_hash_bytes())),
     ),
     SpecialPayload::QuorumCommitment(p) => {
       // The key enters the hash under the flag the signature verifies under.
@@ -236,47 +242,6 @@ fn core_signatures_verify_over_sighash() {
   let commitments = (1..=4).map(|v| (6, v));
   let others = [(7, 1), (9, 1), (9, 2), (10, 1), (11, 1), (12, 1)];
   assert_eq!(shapes, protx.chain(commitments).chain(others).collect());
-}
-
-/// The provider payloads' sign hashes refuse unsupported versions.
-#[test]
-fn provider_sighash_refuses_unsupported_versions() {
-  let mut checked = BTreeSet::new();
-  for entry in corpus("sighash").as_object().unwrap().values() {
-    let tx = decode_tx(entry["raw"].as_str().unwrap());
-    let PayloadDecode { payload, .. } = tx.decode_payload().unwrap().unwrap();
-    for version in [0, 4, u16::MAX] {
-      let refused = ProTxInvalid::BadVersion { version };
-      let tx_type = match payload.clone() {
-        SpecialPayload::ProviderRegister(mut p) => {
-          p.version = version;
-          assert_eq!(p.sig_hash_bytes().unwrap_err(), refused);
-          assert_eq!(p.sign_string(&REGTEST).unwrap_err(), refused);
-          assert_eq!(p.sign_message_bytes(&REGTEST).unwrap_err(), refused);
-          assert_eq!(p.shared_consent_bytes(&tx).unwrap_err(), refused);
-          1
-        }
-        SpecialPayload::ProviderUpdateService(mut p) => {
-          p.version = version;
-          assert_eq!(p.sig_hash_bytes().unwrap_err(), refused);
-          2
-        }
-        SpecialPayload::ProviderUpdateRegistrar(mut p) => {
-          p.version = version;
-          assert_eq!(p.sig_hash_bytes().unwrap_err(), refused);
-          3
-        }
-        SpecialPayload::ProviderUpdateRevoke(mut p) => {
-          p.version = version;
-          assert_eq!(p.sig_hash_bytes().unwrap_err(), refused);
-          4
-        }
-        _ => continue,
-      };
-      checked.insert(tx_type);
-    }
-  }
-  assert_eq!(checked, (1..=4).collect());
 }
 
 /// Asset unlocks: the txid is Core's, and the instance hash is the one Core

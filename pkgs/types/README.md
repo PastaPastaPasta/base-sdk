@@ -19,7 +19,7 @@ for the Base SDK's higher level types, including
 To import `dash-types` to your project, add the following to the `[dependencies]` section in `Cargo.toml`
 
 ```toml
-dash-types = "0.1.0-beta"
+dash-types = "0.2.0-beta"
 ```
 
 To use an unpublished revision of this crate, identify the commit hash to pin against and use the following replacing
@@ -42,9 +42,9 @@ This crate is `#![no_std]` + `alloc` by default.
 | Feature | Default | Description |
 | ------- | ------- | ----------- |
 | `bitcoin-primitives` | | Enables [adapters](https://github.com/dashpay/base-sdk/blob/develop/pkgs/types/src/adapters.rs) for types defined in [`bitcoin-primitives`](https://docs.rs/bitcoin-primitives). _Implies `codec`._ |
-| `codec` | :white_check_mark: | Enables support for encoding and decoding types using [`bitcoin-consensus-encoding`](https://docs.rs/bitcoin-consensus-encoding) |
+| `codec` | ✅ | Enables support for encoding and decoding types using [`bitcoin-consensus-encoding`](https://docs.rs/bitcoin-consensus-encoding) |
 | `full` | | Enables all features and `std` support. |
-| `serde` | | Enables support for encoding and decoding `codec`-backed types using [`serde`](https://github.com/serde-rs/serde). _Implies `codec`._ |
+| `serde` | | Enables support for encoding and decoding types using [`serde`](https://github.com/serde-rs/serde). |
 
 ## Documentation
 

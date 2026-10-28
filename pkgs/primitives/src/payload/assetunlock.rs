@@ -6,9 +6,10 @@
 
 //! AssetUnlock (type 9): Platform to L1.
 
+use super::bls;
 use super::sighash::{request_id, tx_bytes_unsigned};
-use super::{bls, QuorumHash};
 use crate::prelude::*;
+use crate::sptx::QuorumHash;
 use crate::{hash_impl, Transaction};
 
 use dash_num::Hash256;
@@ -72,21 +73,14 @@ impl BaseCodec for AssetUnlock {
 }
 
 /// Asset unlock validation failure.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Unencodable)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, thiserror::Error, Unencodable)]
 pub enum AssetUnlockInvalid {
   /// `bad-assetunlocktx-version`
+  #[error("bad-assetunlocktx-version: {version}")]
   BadVersion { version: u8 },
   /// `bad-txns-assetunlock-fee-outofrange`
+  #[error("bad-txns-assetunlock-fee-outofrange: {fee}")]
   FeeOutOfRange { fee: u32 },
-}
-
-impl core::fmt::Display for AssetUnlockInvalid {
-  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-    match self {
-      Self::BadVersion { version } => write!(f, "bad-assetunlocktx-version: {version}"),
-      Self::FeeOutOfRange { fee } => write!(f, "bad-txns-assetunlock-fee-outofrange: {fee}"),
-    }
-  }
 }
 
 impl Checkable for AssetUnlock {

@@ -17,7 +17,7 @@ use dash_types::codec::{read_bytes, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::{CompactSize, Numeric};
 
 /// Core's `MAX_PROTOCOL_MESSAGE_LENGTH`, the V1 payload limit.
-pub(crate) const MAX_P2P_PAYLOAD_SIZE: usize = limits::MAX_PROTOCOL_MESSAGE_LENGTH;
+pub const MAX_P2P_PAYLOAD_SIZE: usize = limits::MAX_PROTOCOL_MESSAGE_LENGTH;
 
 /// Core's V2 `MAX_CONTENTS_LEN`: the long-form type and a V1-sized payload.
 ///
@@ -82,7 +82,7 @@ pub(crate) use codec_p2p;
 /// Reads Core's `LIMITED_VECTOR(v, limit)` of bytes: a size above `limit`
 /// fails before any byte is read.
 pub(crate) fn read_limited_byte_vec(data: &mut &[u8], limit: usize) -> Result<Vec<u8>, DecodeError> {
-  let len = CompactSize::decode_size(data)?.into_len(limit)?;
+  let len = CompactSize::decode(data)?.into_len(limit)?;
   Ok(read_bytes(data, len)?.to_vec())
 }
 
@@ -95,7 +95,7 @@ pub(crate) fn read_limited_byte_vec(data: &mut &[u8], limit: usize) -> Result<Ve
 /// first; a smaller count the entries cannot fill fails where they run out,
 /// as in Core.
 pub(crate) fn read_count_at_most(data: &mut &[u8], command: &'static str, max: usize) -> Result<usize, P2pDecodeError> {
-  let count = CompactSize::decode_size(data)?;
+  let count = CompactSize::decode(data)?;
   if count.to_base() > max as u64 {
     return Err(P2pDecodeError::TooManyEntries {
       command,

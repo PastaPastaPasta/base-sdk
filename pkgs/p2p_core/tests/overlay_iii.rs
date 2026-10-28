@@ -20,7 +20,7 @@ use dash_params::{ChainParamsBuilder, NetworkKind, Release};
 use dash_pkc::bls::BlsCtx;
 use dash_primitives::GovVote;
 use dash_types::codec::BaseCodec;
-use dash_types::{CoreBool, Hashable, Numeric};
+use dash_types::{Hashable, Numeric};
 use rstest::rstest;
 
 fn decode_at(cmd: &'static str, payload: &[u8], version: i32) -> Result<(P2pMsg, usize), P2pDecodeError> {
@@ -167,7 +167,7 @@ fn dsq_hashes_its_ready_flag_as_core_writes_it() {
   let P2pMsg::Dsq(q) = decode("dsq", &dsq(2)).unwrap() else {
     panic!("dsq")
   };
-  assert_eq!(q.ready, CoreBool(true));
+  assert!(q.ready);
   // Core writes any non-zero byte back as 0x01 and hashes that.
   assert_eq!(encode(&P2pMsg::Dsq(q.clone())), canonical);
   assert_eq!(q.hash(), dsha256(&canonical));

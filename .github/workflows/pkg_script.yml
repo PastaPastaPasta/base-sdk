@@ -4,14 +4,14 @@ on:
   workflow_dispatch:
   push:
     paths: &paths
-      - pkgs/script/**
-      - pkgs/types/**
+      - .cargo/nextest.toml
+      - .github/workflows/build_msrv.yml
+      - .github/workflows/pkg_script.yml
       - Cargo.lock
       - Cargo.toml
-      - .github/workflows/pkg_script.yml
-      - .github/workflows/build_stable.yml
-      - .github/workflows/build_nightly.yml
       - contrib/nix/**
+      - pkgs/script/**
+      - pkgs/types/**
       - pyproject.toml
       - rust-toolchain.toml
       - uv.lock
@@ -23,14 +23,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  stable:
-    uses: ./.github/workflows/build_stable.yml
-    with:
-      package: dash-script
-      package_dir: script
-
-  nightly:
-    uses: ./.github/workflows/build_nightly.yml
+  msrv:
+    uses: ./.github/workflows/build_msrv.yml
     with:
       package: dash-script
       package_dir: script

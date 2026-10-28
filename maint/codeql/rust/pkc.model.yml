@@ -12,9 +12,12 @@ extensions:
       - ["Bls", "Signature", "aggregate"]                 # Add
       - ["Bls", "Signature", "secure_aggregate"]          # Add w/ binding against rogue keys
       - ["Bls", "Signature", "sub_insecure"]              # Subtract
-      - ["Bls", "Signature", "verify_aggregates"]         # Verify multi-message, multiple signers
-      - ["Bls", "Signature", "fast_verify_aggregates"]    # Verify single-message, multiple signers
-      - ["Bls", "Signature", "secure_verify_aggregates"]  # Verify w/ binding against rogue keys
+      - ["Bls", "Signature", "verify_aggregates_digests"]         # Verify multi-message, multiple signers
+      - ["Bls", "Signature", "verify_aggregates_messages"]        # Verify multi-message, multiple signers
+      - ["Bls", "Signature", "fast_verify_aggregates_digest"]     # Verify single-message, multiple signers
+      - ["Bls", "Signature", "fast_verify_aggregates_message"]    # Verify single-message, multiple signers
+      - ["Bls", "Signature", "secure_verify_aggregates_digest"]   # Verify w/ binding against rogue keys
+      - ["Bls", "Signature", "secure_verify_aggregates_message"]  # Verify w/ binding against rogue keys
       # Integrated Encryption Scheme
       - ["Bls", "SecretKey", "dh_exchange"]               # Derive shared secret
       - ["Bls", "SecretKey", "ies_decrypt"]               # Decrypt blob
@@ -66,7 +69,14 @@ extensions:
       pack: base-sdk/codeql-rust
       extensible: armLacks
     data:
+      # ECDSA
+      # Signing
+      - ["Ecdsa", "SecretKey", "sign_message"]            # Signs a 32-byte hashed message only
+      - ["Ecdsa", "PublicKey", "verify_message"]          # Verifies a 32-byte hashed message only
       # Ed25519
+      # Signing
+      - ["Eddsa", "SecretKey", "sign_digest"]             # Hashes the message itself, see RFC 8032
+      - ["Eddsa", "PublicKey", "verify_digest"]           # Hashes the message itself, see RFC 8032
       # Tweaking
       - ["Eddsa", "SecretKey", "add_tweak"]               # Curve properties prevent this, see SLIP-0010
       - ["Eddsa", "SecretKey", "mul_tweak"]               # Curve properties prevent this, see SLIP-0010

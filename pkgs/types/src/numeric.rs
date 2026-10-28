@@ -119,21 +119,29 @@ numeric_prim! {
   i128, 16; u128, 16;
 }
 
-/// Generates `BaseCodec` + `Encode` + `Decode` + serde for a type
-/// that already implements [`Numeric`] over `$uint`.
-#[cfg(feature = "codec")]
+/// Generates `BaseCodec`, `Encode` and `Decode` with `codec`, and serde with
+/// `serde`, for a type that already implements [`Numeric`] over `$uint`.
 #[macro_export]
 macro_rules! impl_num {
-  ($name:tt, i8)  => { $crate::impl_num!(@codec $name, i8, 1); };
-  ($name:tt, u8)  => { $crate::impl_num!(@codec $name, u8, 1); };
-  ($name:tt, i16) => { $crate::impl_num!(@codec $name, i16, 2); };
-  ($name:tt, u16) => { $crate::impl_num!(@codec $name, u16, 2); };
-  ($name:tt, i32) => { $crate::impl_num!(@codec $name, i32, 4); };
-  ($name:tt, u32) => { $crate::impl_num!(@codec $name, u32, 4); };
-  ($name:tt, i64) => { $crate::impl_num!(@codec $name, i64, 8); };
-  ($name:tt, u64) => { $crate::impl_num!(@codec $name, u64, 8); };
-  ($name:tt, i128) => { $crate::impl_num!(@codec $name, i128, 16); };
-  ($name:tt, u128) => { $crate::impl_num!(@codec $name, u128, 16); };
+  ($name:tt, i8)  => { $crate::impl_num!(@both $name, i8, 1); };
+  ($name:tt, u8)  => { $crate::impl_num!(@both $name, u8, 1); };
+  ($name:tt, i16) => { $crate::impl_num!(@both $name, i16, 2); };
+  ($name:tt, u16) => { $crate::impl_num!(@both $name, u16, 2); };
+  ($name:tt, i32) => { $crate::impl_num!(@both $name, i32, 4); };
+  ($name:tt, u32) => { $crate::impl_num!(@both $name, u32, 4); };
+  ($name:tt, i64) => { $crate::impl_num!(@both $name, i64, 8); };
+  ($name:tt, u64) => { $crate::impl_num!(@both $name, u64, 8); };
+  ($name:tt, i128) => { $crate::impl_num!(@both $name, i128, 16); };
+  ($name:tt, u128) => { $crate::impl_num!(@both $name, u128, 16); };
+  (@both $name:ty, $uint:ty, $n:literal) => {
+    $crate::cfg_codec! {
+      $crate::impl_num!(@codec $name, $uint, $n);
+    }
+
+    $crate::cfg_serde! {
+      $crate::impl_num!(@serde $name, $uint);
+    }
+  };
   (@codec $name:ty, $uint:ty, $n:literal) => {
     impl $crate::codec::BaseCodec for $name {
       fn decode(
@@ -155,26 +163,25 @@ macro_rules! impl_num {
     }
 
     $crate::impl_type!($name);
-
-    $crate::cfg_serde! {
-      impl $crate::__private::serde::Serialize for $name {
-        fn serialize<S: $crate::__private::serde::Serializer>(
-          &self, serializer: S,
-        ) -> Result<S::Ok, S::Error> {
-          $crate::__private::serde::Serialize::serialize(
-            &<Self as $crate::Numeric>::to_base(self),
-            serializer,
-          )
-        }
+  };
+  (@serde $name:ty, $uint:ty) => {
+    impl $crate::__private::serde::Serialize for $name {
+      fn serialize<S: $crate::__private::serde::Serializer>(
+        &self, serializer: S,
+      ) -> Result<S::Ok, S::Error> {
+        $crate::__private::serde::Serialize::serialize(
+          &<Self as $crate::Numeric>::to_base(self),
+          serializer,
+        )
       }
+    }
 
-      impl<'de> $crate::__private::serde::Deserialize<'de> for $name {
-        fn deserialize<D: $crate::__private::serde::Deserializer<'de>>(
-          deserializer: D,
-        ) -> Result<Self, D::Error> {
-          <$uint as $crate::__private::serde::Deserialize>::deserialize(deserializer)
-            .map(<Self as $crate::Numeric>::from_base)
-        }
+    impl<'de> $crate::__private::serde::Deserialize<'de> for $name {
+      fn deserialize<D: $crate::__private::serde::Deserializer<'de>>(
+        deserializer: D,
+      ) -> Result<Self, D::Error> {
+        <$uint as $crate::__private::serde::Deserialize>::deserialize(deserializer)
+          .map(<Self as $crate::Numeric>::from_base)
       }
     }
   };
@@ -199,12 +206,12 @@ macro_rules! make_num {
         $crate::make_num!(
           @struct $attrs #[derive($crate::type_id::TypeId)] $name, $uint
         );
-
-        $crate::impl_num!($name, $uint);
       } else {
         $crate::make_num!(@struct $attrs $name, $uint);
       }
     }
+
+    $crate::impl_num!($name, $uint);
   };
   (
     $(#[$attr:meta])*

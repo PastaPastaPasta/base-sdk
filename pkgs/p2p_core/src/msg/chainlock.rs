@@ -9,7 +9,7 @@
 use crate::codec::codec_p2p;
 use crate::prelude::*;
 
-use dash_pkc::bls::{BlsScIetf, BlsSigBytes};
+use dash_pkc::bls::BlsSigBytes;
 use dash_primitives::{BlockHash, OutPoint, TxHash};
 use dash_types::type_id::TypeId;
 
@@ -31,7 +31,7 @@ pub struct ClSig {
   pub block_hash: BlockHash,
   /// Recovered threshold signature of the signing quorum, as read. Its
   /// scheme comes from the context, not the type's tag.
-  pub sig: BlsSigBytes<BlsScIetf>,
+  pub sig: BlsSigBytes,
 }
 
 codec_p2p!(ClSig {
@@ -63,7 +63,7 @@ pub struct IsdLock {
   /// Hash of the block that starts the signing quorum's cycle.
   pub cycle_hash: BlockHash,
   /// Recovered threshold signature of the signing quorum.
-  pub sig: BlsSigBytes<BlsScIetf>,
+  pub sig: BlsSigBytes,
 }
 
 codec_p2p!(IsdLock {

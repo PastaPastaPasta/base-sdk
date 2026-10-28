@@ -32,20 +32,22 @@ pub mod serialize;
 pub use hex::ParseHexError;
 pub use macros::qtypestr;
 pub use numeric::Numeric;
-pub use traits::{Checkable, Hashable};
+pub use traits::{Checkable, Hashable, Signable};
 
 cfg_if::cfg_if! {
   if #[cfg(feature = "codec")] {
     #[allow(unused_macros, reason = "used by feature-gated submodules")]
     mod adapters;
     mod compact;
-    mod core_bool;
+    mod sealed {
+      /// Sealing marker for traits only this crate implements.
+      pub trait Sealed {}
+    }
 
     pub mod codec;
     pub mod type_id;
 
-    pub use compact::CompactSize;
-    pub use core_bool::CoreBool;
+    pub use compact::{CompactSize, CompactUint};
     pub use entity::{VecDecoder, VecEncoder, MAX_SER_SIZE};
     pub use secret::{ArrDecoder, ArrEncoder, ArrayBuf, MAX_ARR_SIZE};
   }

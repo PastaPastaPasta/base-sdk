@@ -1,6 +1,6 @@
 [package]
 name = "dash-num"
-version = "0.1.0-beta"
+version = "0.2.0-beta"
 description = "Wide-integer blob and arithmetic types for the Dash Base SDK"
 keywords = ["base-sdk", "dash", "dashcore", "dashpay"]
 categories = [
@@ -22,6 +22,9 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[lib]
+bench = false
+
 [features]
 default = ["codec"]
 std = [
@@ -41,7 +44,6 @@ full = [
   "std",
 ]
 serde = [
-  "codec",
   "dash-types/serde",
   "dep:serde",
 ]
@@ -50,7 +52,7 @@ serde = [
 ambassador = { workspace = true }
 bitcoin-consensus-encoding = { workspace = true, optional = true }
 bitcoin-internals = { workspace = true }
-dash-types = { version = "0.1.0-beta", path = "../types", default-features = false }
+dash-types = { version = "0.2.0-beta", path = "../types", default-features = false }
 delegate = { workspace = true }
 hex-conservative = { workspace = true }
 serde = { workspace = true, features = [
@@ -59,7 +61,7 @@ serde = { workspace = true, features = [
 ], optional = true }
 
 [dev-dependencies]
-dash-dev = { path = "../dev", features = ["full"] }
+dash-dev = { path = "../../meta/dev", features = ["full"] }
 divan = { workspace = true }
 rstest = { workspace = true }
 serde = { workspace = true, features = ["derive", "std"] }

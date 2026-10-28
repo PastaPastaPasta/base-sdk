@@ -1,0 +1,2 @@
+# Bazelisk runs `bazel/bazel` in place of the Bazel release it fetched.
+BAZELISK_WRAPPER_DIRECTORY=bazel

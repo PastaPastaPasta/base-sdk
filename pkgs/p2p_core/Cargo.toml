@@ -9,6 +9,9 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[lib]
+bench = false
+
 [features]
 default = []
 std = [
@@ -26,32 +29,40 @@ serde = [
   "dash-types/serde",
 ]
 full = ["std", "serde"]
+portable = [
+  "dash-params/portable",
+  "dash-pkc/portable",
+  "dash-primitives/portable",
+  "dash-script/portable",
+]
 
 [dependencies]
 bitcoin-consensus-encoding = { workspace = true, features = ["alloc"] }
 bitcoin_hashes = { workspace = true, features = ["alloc"] }
 cfg-if = "1"
-dash-num = { version = "0.1.0-beta", path = "../num", features = ["codec"] }
-dash-pkc = { version = "0.1.0-beta", path = "../pkc", features = [
+dash-num = { version = "0.2.0-beta", path = "../num", features = ["codec"] }
+dash-pkc = { version = "0.2.0-beta", path = "../pkc", features = [
   "bls",
   "codec",
 ] }
 dash-script = { version = "0.0.0", path = "../script" }
 dash-params = { version = "0.0.0", path = "../params" }
 dash-primitives = { version = "0.0.0", path = "../primitives" }
-dash-types = { version = "0.1.0-beta", path = "../types", default-features = false, features = [
+dash-types = { version = "0.2.0-beta", path = "../types", default-features = false, features = [
   "codec",
 ] }
 serde = { workspace = true, features = [
   "alloc",
   "derive",
 ], optional = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
-dash-dev = { version = "0.0.0", path = "../dev", features = ["full"] }
+dash-dev = { version = "0.0.0", path = "../../meta/dev", features = ["full"] }
 divan = { workspace = true }
 hex-conservative = { workspace = true, features = ["std"] }
 rstest = { workspace = true }
+serde = { workspace = true, features = ["derive", "std"] }
 
 [[bench]]
 name = "p2p_core"
@@ -61,3 +72,6 @@ required-features = ["serde"]
 
 [lints]
 workspace = true
+
+[package.metadata.docs.rs]
+features = ["portable"]

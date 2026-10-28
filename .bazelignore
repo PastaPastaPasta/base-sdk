@@ -1,0 +1,5 @@
+.cache
+.venv
+docs/.site
+public
+target

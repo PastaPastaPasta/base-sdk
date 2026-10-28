@@ -73,7 +73,7 @@ pub struct EcdsaPkBytes {
 #[cfg(feature = "codec")]
 impl BaseCodec for EcdsaPkBytes {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let n = CompactSize::decode(data)?.into_len(ECDSA_PK_LEN + 1)?;
+    let n = CompactSize::decode_len(data, ECDSA_PK_LEN + 1)?;
     let raw = read_bytes(data, n)?;
     let prefix = raw
       .first()
@@ -88,7 +88,7 @@ impl BaseCodec for EcdsaPkBytes {
         actual: n,
       });
     }
-    Ok(Self::from_raw(prefix, raw))
+    Ok(Self::new(prefix, raw))
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
@@ -111,8 +111,8 @@ impl Hashable for EcdsaPkBytes {
 
 impl EcdsaPkBytes {
   /// Copies `prefix.size()` bytes without validating the coordinates.
-  pub(super) fn from_raw(prefix: Sec1Byte, bytes: &[u8]) -> Self {
-    debug_assert_eq!(bytes.len(), prefix.size(), "from_raw: length disagrees with prefix");
+  pub(super) fn new(prefix: Sec1Byte, bytes: &[u8]) -> Self {
+    debug_assert_eq!(bytes.len(), prefix.size(), "new: length disagrees with prefix");
     let mut buf = [0xFFu8; ECDSA_PK_LEN + 1];
     let len = bytes.len().min(prefix.size());
     buf[..len].copy_from_slice(&bytes[..len]);
@@ -135,7 +135,7 @@ impl EcdsaPkBytes {
     if bytes.len() != prefix.size() {
       return None;
     }
-    Some(Self::from_raw(prefix, bytes))
+    Some(Self::new(prefix, bytes))
   }
 
   /// Copies out the raw SEC1 bytes.

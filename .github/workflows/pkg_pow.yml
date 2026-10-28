@@ -4,14 +4,21 @@ on:
   workflow_dispatch:
   push:
     paths: &paths
-      - pkgs/pow/**
-      - pkgs/num/**
+      - .cargo/config.toml
+      - .cargo/nextest.toml
+      - .github/workflows/build_msrv.yml
+      - .github/workflows/pkg_pow.yml
+      - .gitmodules
       - Cargo.lock
       - Cargo.toml
-      - .github/workflows/pkg_pow.yml
-      - .github/workflows/build_stable.yml
-      - .github/workflows/build_nightly.yml
       - contrib/nix/**
+      - fuzz/Cargo.lock
+      - fuzz/Cargo.toml
+      - fuzz/mod.just
+      - fuzz/pow/**
+      - Justfile
+      - pkgs/num/**
+      - pkgs/pow/**
       - pyproject.toml
       - rust-toolchain.toml
       - uv.lock
@@ -23,16 +30,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  stable:
-    uses: ./.github/workflows/build_stable.yml
+  msrv:
+    uses: ./.github/workflows/build_msrv.yml
     with:
       package: dash-pow
       package_dir: pow
-      features: std
-
-  nightly:
-    uses: ./.github/workflows/build_nightly.yml
-    with:
-      package: dash-pow
-      package_dir: pow
+      fuzz_package_dir: pow
     secrets: inherit

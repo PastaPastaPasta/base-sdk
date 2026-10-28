@@ -8,8 +8,8 @@
 //! special transactions.
 
 use crate::block::MAX_LEGACY_BLOCK_SIZE;
-use crate::payload::{PayloadDecode, PayloadError, PayloadInvalid, SpecialPayload, TxType};
 use crate::prelude::*;
+use crate::sptx::{PayloadDecode, PayloadError, PayloadInvalid, SpecialPayload, TxType};
 use crate::{codec_type, hash_impl};
 
 use bitcoin_hashes::sha256d;
@@ -144,68 +144,47 @@ pub(crate) fn money_range(value: i64) -> bool {
 }
 
 /// Transaction validation failure.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Unencodable)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, thiserror::Error, Unencodable)]
 pub enum TxInvalid {
   /// `bad-txns-vin-empty`
+  #[error("bad-txns-vin-empty")]
   EmptyInputs,
   /// `bad-txns-vout-empty`
+  #[error("bad-txns-vout-empty")]
   EmptyOutputs,
   /// `bad-txns-oversize`
+  #[error("bad-txns-oversize: {size} bytes")]
   Oversize { size: usize },
   /// `bad-txns-payload-oversize`
+  #[error("bad-txns-payload-oversize: {size} bytes")]
   PayloadOversize { size: usize },
   /// `bad-txns-vout-negative`
+  #[error("bad-txns-vout-negative: output {index} value {value}")]
   OutputNegative { index: usize, value: i64 },
   /// `bad-txns-vout-toolarge`
+  #[error("bad-txns-vout-toolarge: output {index} value {value}")]
   OutputTooLarge { index: usize, value: i64 },
   /// `bad-txns-txouttotal-toolarge`
+  #[error("bad-txns-txouttotal-toolarge: {total}")]
   OutputTotalTooLarge { total: i64 },
   /// `bad-txns-inputs-duplicate`
+  #[error("bad-txns-inputs-duplicate: {outpoint}")]
   DuplicateInputs { outpoint: OutPoint },
   /// `bad-cb-length`
+  #[error("bad-cb-length: {len}")]
   BadCoinbaseScriptLength { len: usize },
   /// `bad-txns-prevout-null`
+  #[error("bad-txns-prevout-null: input {index}")]
   NullPrevout { index: usize },
   /// `bad-txns-payload-not-allowed`
+  #[error("bad-txns-payload-not-allowed")]
   PayloadNotAllowed,
   /// `bad-txns-payload-decode`
+  #[error("bad-txns-payload-decode: {0}")]
   PayloadDecode(PayloadError),
   /// `bad-txns-payload-check`
+  #[error("bad-txns-payload-check: {0}")]
   PayloadCheck(PayloadInvalid),
-}
-
-impl fmt::Display for TxInvalid {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      Self::EmptyInputs => write!(f, "bad-txns-vin-empty"),
-      Self::EmptyOutputs => write!(f, "bad-txns-vout-empty"),
-      Self::Oversize { size } => write!(f, "bad-txns-oversize: {size} bytes"),
-      Self::PayloadOversize { size } => write!(f, "bad-txns-payload-oversize: {size} bytes"),
-      Self::OutputNegative { index, value } => write!(f, "bad-txns-vout-negative: output {index} value {value}"),
-      Self::OutputTooLarge { index, value } => write!(f, "bad-txns-vout-toolarge: output {index} value {value}"),
-      Self::OutputTotalTooLarge { total } => write!(f, "bad-txns-txouttotal-toolarge: {total}"),
-      Self::DuplicateInputs { outpoint } => write!(f, "bad-txns-inputs-duplicate: {outpoint}"),
-      Self::BadCoinbaseScriptLength { len } => write!(f, "bad-cb-length: {len}"),
-      Self::NullPrevout { index } => write!(f, "bad-txns-prevout-null: input {index}"),
-      Self::PayloadNotAllowed => write!(f, "bad-txns-payload-not-allowed"),
-      Self::PayloadDecode(e) => write!(f, "bad-txns-payload-decode: {e}"),
-      Self::PayloadCheck(e) => write!(f, "bad-txns-payload-check: {e}"),
-    }
-  }
-}
-
-/// An encode target that counts the bytes written instead of storing them.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Unencodable)]
-struct ByteCount(usize);
-
-impl EncodeBuf for ByteCount {
-  fn push(&mut self, _byte: u8) {
-    self.0 += 1;
-  }
-
-  fn extend_from_slice(&mut self, data: &[u8]) {
-    self.0 += data.len();
-  }
 }
 
 /// A Dash transaction.
@@ -249,7 +228,7 @@ impl BaseCodec for Transaction {
       outputs: Vec::decode(data)?,
       lock_time: u32::decode(data)?,
       extra_payload: if version >= 3 && tx_type != TxType::Spend {
-        let len = CompactSize::decode_size(data)?.into_len(data.len())?;
+        let len = CompactSize::decode_len(data, dash_types::MAX_SER_SIZE)?;
         codec::read_bytes(data, len)?.to_vec()
       } else {
         Vec::new()
@@ -285,10 +264,9 @@ impl Checkable for Transaction {
       return Some(TxInvalid::EmptyOutputs);
     }
 
-    let mut size = ByteCount::default();
-    self.encode(&mut size);
-    if size.0 > MAX_LEGACY_BLOCK_SIZE {
-      return Some(TxInvalid::Oversize { size: size.0 });
+    let size = codec::encoded_size(self);
+    if size > MAX_LEGACY_BLOCK_SIZE {
+      return Some(TxInvalid::Oversize { size });
     }
 
     if !self.has_extra_payload() && !self.extra_payload.is_empty() {
@@ -449,9 +427,9 @@ impl Transaction {
     }))
   }
 
-  /// Returns `true` when the first input spends the null outpoint.
+  /// Returns `true` when the only input spends the null outpoint.
   pub(crate) fn is_coinbase(&self) -> bool {
-    !self.inputs.is_empty() && self.inputs[0].prevout.is_null()
+    self.inputs.len() == 1 && self.inputs[0].prevout.is_null()
   }
 }
 
@@ -470,11 +448,12 @@ impl fmt::Display for Transaction {
 
 #[cfg(all(test, feature = "serde"))]
 #[expect(clippy::panic, clippy::unwrap_used, reason = "test code")]
-mod tests {
+pub(crate) mod tests {
   use super::*;
 
   use dash_dev::{assert_serde_rt, check_tx, vec_from_hex, Corpus};
   use rstest::rstest;
+  use serde::Deserialize;
 
   #[derive(::serde::Deserialize)]
   struct ValueVector {
@@ -639,5 +618,64 @@ mod tests {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), section);
     let items = corpus.entries::<Transaction>(section, check_tx);
     assert_serde_rt(section, &items);
+  }
+
+  #[derive(Deserialize)]
+  struct CheckVector {
+    #[serde(rename = "type")]
+    tx_type: u16,
+    inputs: Vec<u8>,
+    script_sig: usize,
+    values: Vec<u64>,
+    pad: usize,
+    payload: usize,
+    size: usize,
+    reason: String,
+  }
+
+  impl CheckVector {
+    fn build(&self) -> Transaction {
+      let inputs = self.inputs.iter().enumerate().map(|(i, &seed)| TxIn {
+        prevout: OutPoint {
+          hash: TxHash::from_lendian([seed; 32]),
+          index: if seed == 0 { u32::MAX } else { 0 },
+        },
+        script_sig: ScriptSigBuf::from_bytes(vec![0; if i == 0 { self.script_sig } else { 0 }]),
+        sequence: u32::MAX,
+      });
+      let outputs = self.values.iter().enumerate().map(|(i, &value)| TxOut {
+        value: i64::try_from(value).unwrap(),
+        script_pubkey: ScriptPubKeyBuf::from_bytes(vec![0; if i == 0 { self.pad } else { 0 }]),
+      });
+      Transaction {
+        version: 3,
+        tx_type: TxType::from_base(self.tx_type),
+        inputs: inputs.collect(),
+        outputs: outputs.collect(),
+        lock_time: 0,
+        extra_payload: vec![0; self.payload],
+      }
+    }
+  }
+
+  /// Payload checks run after every check the vectors cover, so payload
+  /// errors count as a pass.
+  pub(crate) fn reason(result: Option<TxInvalid>) -> String {
+    match result {
+      None | Some(TxInvalid::PayloadDecode(_) | TxInvalid::PayloadCheck(_)) => String::new(),
+      Some(error) => error.to_string().split(':').next().unwrap_or_default().into(),
+    }
+  }
+
+  #[rstest]
+  fn check_matches_vectors() {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "tx_check");
+    for (i, v) in corpus.vectors::<CheckVector>("check").into_iter().enumerate() {
+      let tx = v.build();
+      let mut buf = Vec::new();
+      tx.encode(&mut buf);
+      assert_eq!(buf.len(), v.size, "vector {i}");
+      assert_eq!(reason(tx.check()), v.reason, "vector {i}");
+    }
   }
 }

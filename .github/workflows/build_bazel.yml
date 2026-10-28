@@ -1,0 +1,55 @@
+name: Build with Bazel
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  bazel:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
+          - macos-latest
+          - macos-15-intel
+          - windows-latest
+
+    name: ${{ matrix.os }} (bazel)
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
+      # Windows images ship Bazel beside Bazelisk, and either may come first.
+      - name: Uninstall Bazel
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (choco list bazel --exact --limit-output) {
+            choco uninstall bazel --yes --no-progress
+          }
+
+      - name: Build every target
+        run: just zbuild
+
+      - name: Check the output root
+        shell: bash
+        run: test -d .cache/bazel/install

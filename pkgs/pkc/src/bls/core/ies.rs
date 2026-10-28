@@ -173,7 +173,7 @@ fn decode_ephemeral(data: &mut &[u8], flag: BlsSchemeKind) -> Result<BlsPkValue,
 
 #[cfg(feature = "codec")]
 fn decode_bytes(data: &mut &[u8]) -> Result<Vec<u8>, DecodeError> {
-  let len = CompactSize::decode_size(data)?.into_len(data.len())?;
+  let len = CompactSize::decode(data)?.into_len(data.len())?;
   Ok(read_bytes(data, len)?.to_vec())
 }
 
@@ -206,7 +206,7 @@ impl BlsIesMultiBlobs {
   pub fn decode(data: &mut &[u8], flag: BlsSchemeKind) -> Result<Self, DecodeError> {
     let ephemeral = decode_ephemeral(data, flag)?;
     let iv_seed = take::<IV_SEED_LEN>(data)?;
-    let count = CompactSize::decode_size(data)?.into_len(data.len())?;
+    let count = CompactSize::decode(data)?.into_len(data.len())?;
     let mut blobs = Vec::new();
     for _ in 0..count {
       blobs.push(decode_bytes(data)?);

@@ -6,15 +6,17 @@
 
 //! SHAvite-3-512 hash function.
 
-#[doc(hidden)]
-pub mod consts;
-#[doc(hidden)]
-pub mod scalar;
-#[cfg(feature = "simd")]
-#[doc(hidden)]
-pub mod simd;
+mod common;
 
-#[cfg(not(feature = "simd"))]
-pub use scalar::hash512;
-#[cfg(feature = "simd")]
-pub use simd::hash512;
+use crate::aes::{hardware_aes, software_aes};
+
+software_aes! {
+  mod aes_words;
+  use self::aes_words as backend;
+}
+hardware_aes! {
+  mod aes_lanes;
+  use self::aes_lanes as backend;
+}
+
+pub use self::common::Shavite512;

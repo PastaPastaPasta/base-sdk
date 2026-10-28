@@ -62,7 +62,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Typed CoinJoin messages: `dsa` (`DsAccept`, its flags read from `ProtocolVersion::COINJOIN_REBALANCE`, written for the
   connection's negotiated version by `DsAccept::for_version`), `dsi` (`DsEntry`, the collateral between its lists),
   `dsf` (`DsFinalTx`), `dss` (`DsSignedInputs`), `dsc` (`DsComplete`), `dssu` (`DsStatusUpdate`), `dstx` (`DsTx`) and
-  `dsq` (`DsQueue`). `DsQueue`'s `ready` is a `CoreBool`, so its hash (`GetHash`) and `DsQueue::signature_hash` are of
+  `dsq` (`DsQueue`). `DsQueue`'s `ready` is a `bool` read as Core reads it, so its hash (`GetHash`) and `DsQueue::signature_hash` are of
   the queue as Core writes it back; `DsTx::signature_hash` signs the time and not the signature. `max_pool_entries` is
   Core's pool bound: `DsEntry::fits_pool` on a read `dsi`, and `DsSignedInputs::check_payload` on a `dss` count before
   the read (`TooManyEntries`, Core's `ERR_MAXIMUM`).

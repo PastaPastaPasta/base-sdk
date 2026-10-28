@@ -53,5 +53,5 @@ pub fn alice_rec_sig() -> EcdsaRecSignature {
 
 #[fixture]
 pub fn alice_sig() -> EcdsaSignature {
-  alice_sk().sign(&MSG)
+  alice_sk().sign_digest(&MSG)
 }

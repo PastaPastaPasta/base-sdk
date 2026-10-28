@@ -40,11 +40,19 @@ impl<S: BlsScheme> BlsSkShare<S> {
     &self.id
   }
 
-  /// Sign a message of the scheme's message type, producing a signature share.
-  pub fn sign(&self, msg: &S::Msg) -> BlsSigShare<S> {
+  /// Sign a 32-byte hashed message, yielding a signature share.
+  pub fn sign_digest(&self, digest: &[u8; 32]) -> BlsSigShare<S> {
     BlsSigShare {
       id: self.id,
-      sig: self.sk.sign(msg),
+      sig: self.sk.sign_digest(digest),
+    }
+  }
+
+  /// Sign an arbitrary-length message, yielding a signature share.
+  pub fn sign_message(&self, msg: &[u8]) -> BlsSigShare<S> {
+    BlsSigShare {
+      id: self.id,
+      sig: self.sk.sign_message(msg),
     }
   }
 
@@ -485,9 +493,9 @@ mod tests {
     let sk0 = BlsSecretKey::<S>::from_bytes(&a.to_bendian()).unwrap();
     let sk1 = BlsSecretKey::<S>::from_bytes(&b.to_bendian()).unwrap();
 
-    let msg = S::msg_ref(&MSG_DEADBEEF);
-    let share0 = BlsSigShare::new(id0, sk0.sign(msg));
-    let share1 = BlsSigShare::new(id1, sk1.sign(msg));
+    let msg = &MSG_DEADBEEF;
+    let share0 = BlsSigShare::new(id0, sk0.sign_digest(msg));
+    let share1 = BlsSigShare::new(id1, sk1.sign_digest(msg));
 
     assert_ne!(share0.signature().to_bytes(), share1.signature().to_bytes());
     assert!(matches!(
@@ -691,10 +699,10 @@ mod tests {
       let sk_share = BlsSecretKey::<S>::from_bytes(&arr_from_hex(c["sk_share"].as_str().unwrap())).unwrap();
       let msg: [u8; 32] = arr_from_hex(c[hash_field].as_str().unwrap());
 
-      let sig = sk_share.sign(S::msg_ref(&msg));
+      let sig = sk_share.sign_digest(&msg);
       let pk = sk_share.public_key();
       assert!(
-        pk.verify(S::msg_ref(&msg), &sig).is_ok(),
+        pk.verify_digest(&msg, &sig).is_ok(),
         "{} failed self-verification at member {}",
         label,
         c["member_idx"],
@@ -745,7 +753,7 @@ mod tests {
         let sid_display = member_id.to_string();
         let idx = member_ids.iter().position(|m| *m == sid_display).unwrap();
         let sk = BlsSecretKey::<S>::from_bytes(&arr_from_hex(commits[idx]["sk_share"].as_str().unwrap())).unwrap();
-        BlsSkShare::new(member_id, sk).sign(S::msg_ref(&quorum_hash))
+        BlsSkShare::new(member_id, sk).sign_digest(&quorum_hash)
       })
       .collect();
 
@@ -755,7 +763,7 @@ mod tests {
     let quorum_pk =
       BlsPublicKey::<S>::from_bytes(&arr_from_hex(commits[0]["quorum_public_key"].as_str().unwrap())).unwrap();
     assert!(
-      quorum_pk.verify(S::msg_ref(&quorum_hash), &recovered).is_ok(),
+      quorum_pk.verify_digest(&quorum_hash, &recovered).is_ok(),
       "recovered quorum sig failed verification"
     );
 
@@ -769,7 +777,7 @@ mod tests {
       .zip(all_ids.iter())
       .map(|(c, id)| {
         let sk = BlsSecretKey::<S>::from_bytes(&arr_from_hex(c["sk_share"].as_str().unwrap())).unwrap();
-        BlsSkShare::new(*id, sk).sign(S::msg_ref(&quorum_hash))
+        BlsSkShare::new(*id, sk).sign_digest(&quorum_hash)
       })
       .collect();
     let all_refs: Vec<&BlsSigShare<S>> = all_shares.iter().collect();
@@ -801,7 +809,7 @@ mod tests {
       .iter()
       .map(|c| {
         let sk = BlsSecretKey::<S>::from_bytes(&arr_from_hex(c["sk_share"].as_str().unwrap())).unwrap();
-        sk.sign(S::msg_ref(&commitment_hash))
+        sk.sign_digest(&commitment_hash)
       })
       .collect();
     let sig_refs: Vec<&BlsSignature<S>> = member_sigs.iter().collect();
@@ -818,7 +826,7 @@ mod tests {
 
     assert!(
       agg_sig
-        .fast_verify_aggregates(S::msg_ref(&commitment_hash), &pk_refs)
+        .fast_verify_aggregates_digest(&commitment_hash, &pk_refs)
         .is_ok(),
       "aggregated member sigs failed fast_verify"
     );
@@ -859,15 +867,15 @@ mod tests {
   fn assert_share_eq_and_hash<S: BlsScheme>() {
     let sk = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap();
     let other_sk = BlsSecretKey::<S>::from_ikm(&RSEED[1]).unwrap();
-    let msg = S::msg_ref(&MSG_DEADBEEF);
+    let msg = &MSG_DEADBEEF;
 
-    let share = BlsSkShare::new(make_id(1), sk.clone()).sign(msg);
-    let same = BlsSkShare::new(make_id(1), sk.clone()).sign(msg);
+    let share = BlsSkShare::new(make_id(1), sk.clone()).sign_digest(msg);
+    let same = BlsSkShare::new(make_id(1), sk.clone()).sign_digest(msg);
 
     // One field varies at a time, or a dropped field would hide behind the other
     // still differing.
-    let other_id = BlsSkShare::new(make_id(2), sk).sign(msg);
-    let other_sig = BlsSkShare::new(make_id(1), other_sk).sign(msg);
+    let other_id = BlsSkShare::new(make_id(2), sk).sign_digest(msg);
+    let other_sig = BlsSkShare::new(make_id(1), other_sk).sign_digest(msg);
 
     assert_eq!(share, same);
     assert_eq!(hash_of(&share), hash_of(&same));
@@ -892,7 +900,7 @@ mod tests {
 
       fn assert_share_serde_roundtrip<S: BlsScheme>() {
         let sk = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap();
-        assert_json_rt(&BlsSkShare::new(make_id(1), sk).sign(S::msg_ref(&MSG_DEADBEEF)));
+        assert_json_rt(&BlsSkShare::new(make_id(1), sk).sign_digest(&MSG_DEADBEEF));
       }
 
       #[rstest]

@@ -144,7 +144,7 @@ mod tests {
     let sks = keys::<S>(4);
     let sk_values: Vec<BlsSkValue> = sks.iter().map(|sk| sk_value(sk, kind)).collect();
     let pks: Vec<BlsPublicKey<S>> = sks.iter().map(BlsSecretKey::public_key).collect();
-    let sigs: Vec<BlsSignature<S>> = sks.iter().map(|sk| sk.sign(S::msg_ref(&msg))).collect();
+    let sigs: Vec<BlsSignature<S>> = sks.iter().map(|sk| sk.sign_digest(&msg)).collect();
     let pk_values: Vec<BlsPkValue> = pks
       .iter()
       .map(|pk| BlsPkValue::from_canonical(&pk.to_bytes(), kind).unwrap())

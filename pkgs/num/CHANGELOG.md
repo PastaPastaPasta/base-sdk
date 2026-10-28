@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.0-beta] - 2026-10-20
+
 ### Added
 
 - `CompactTarget::block_proof`, the work contributed by a block with that target, zero for negative, overflowing or
@@ -20,10 +22,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- `HashBlob`, `make_hash!` types and `Arith256` serialize as their little-endian storage bytes for machine-readable
-  formats, JSON retains hex encoded big-endian string encoding.
-- `CompactTarget::from_str` requires exactly 8 hex digits, optionally `0x`/`0X`-prefixed. Shorter input is now
-  rejected with `ParseHexError::OddLength` or `ParseHexError::InvalidLength`.
+- **The minimum supported Rust version is raised from 1.85 to 1.89.**
+- **`HashBlob`, `make_hash!` types and `Arith256` serialize as their little-endian storage bytes for machine-readable
+  formats.** JSON retains the hex-encoded big-endian string.
+- **The `serde` feature no longer implies `codec`.** `CompactTarget` implements `Serialize` and `Deserialize` without
+  `codec`. Callers that relied on `serde` to enable `codec` must enable it explicitly.
+- `CompactTarget::from_str` requires exactly 8 hex digits, optionally `0x`/`0X`-prefixed. Shorter input is rejected
+  with `ParseHexError::OddLength` or `ParseHexError::InvalidLength`.
+- `Arith256::to_f64` rounds like the reference implementation, where it was one ULP off on roughly 1% of inputs.
 
 ### Removed
 
@@ -31,13 +37,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The `dash_types::Numeric` re-export in favour of a wholesale crate re-export. `dash_num::Numeric` imports must switch
   to `dash_num::__deps::dash_types::Numeric` or depend on `dash-types` directly.
 
-### Fixed
-
-- `Arith256::to_f64` rounds like the reference implementation. It was one ULP off on roughly 1% of inputs.
-
 ## [0.1.0-beta] - 2026-09-14
 
 - Initial release.
 
-[unreleased]: https://github.com/dashpay/base-sdk/compare/dash-num-0.1.0-beta...HEAD
+[unreleased]: https://github.com/dashpay/base-sdk/compare/dash-num-0.2.0-beta...HEAD
+[0.2.0-beta]: https://github.com/dashpay/base-sdk/compare/dash-num-0.1.0-beta...dash-num-0.2.0-beta
 [0.1.0-beta]: https://github.com/dashpay/base-sdk/releases/tag/dash-num-0.1.0-beta

@@ -96,7 +96,7 @@ struct DynBitsetSerde {
 
 impl BaseCodec for DynBitset {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let size = CompactSize::decode_size(data)?;
+    let size = CompactSize::decode(data)?;
     let num_bits = size.to_base();
     let byte_len = size.into_len(MAX_SER_SIZE)?.div_ceil(8);
     let raw = codec::read_bytes(data, byte_len)?;

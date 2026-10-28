@@ -1,6 +1,6 @@
 [package]
 name = "dash-types"
-version = "0.1.0-beta"
+version = "0.2.0-beta"
 description = "Fixed-width and buffered type (de)serialization for the Dash Base SDK"
 keywords = ["base-sdk", "dash", "dashcore", "dashpay"]
 categories = [
@@ -21,6 +21,9 @@ homepage.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+
+[lib]
+bench = false
 
 [features]
 default = ["codec"]
@@ -47,7 +50,6 @@ full = [
   "std",
 ]
 serde = [
-  "codec",
   "dep:serde",
   "hex-conservative/alloc",
 ]
@@ -61,6 +63,7 @@ cfg-if = "1"
 dash-types-marker = { version = "0.1.0-beta", path = "marker", optional = true }
 hex-conservative = { workspace = true }
 subtle = { workspace = true }
+thiserror = { workspace = true }
 serde = { workspace = true, features = [
   "derive",
   "alloc",

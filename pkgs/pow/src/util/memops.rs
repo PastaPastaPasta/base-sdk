@@ -86,6 +86,36 @@ pub(crate) const fn store_u64_be(buf: &mut [u8], i: usize, v: u64) {
   buf[off + 7] = b[7];
 }
 
+/// Writes the first sixteen words little-endian into a digest.
+#[inline]
+pub(crate) fn digest_from_u32_le<const N: usize>(words: &[u32; N]) -> [u8; 64] {
+  const { assert!(N >= 16) };
+  let mut out = [0u8; 64];
+  for (bytes, word) in out.chunks_exact_mut(4).zip(words) {
+    bytes.copy_from_slice(&word.to_le_bytes());
+  }
+  out
+}
+
+/// Writes the first eight words little-endian into a digest.
+#[inline]
+pub(crate) fn digest_from_u64_le<const N: usize>(words: &[u64; N]) -> [u8; 64] {
+  const { assert!(N >= 8) };
+  let mut out = [0u8; 64];
+  for (bytes, word) in out.chunks_exact_mut(8).zip(words) {
+    bytes.copy_from_slice(&word.to_le_bytes());
+  }
+  out
+}
+
+/// Copies `bytes` into the start of a zeroed `N`-byte buffer.
+#[inline]
+pub(crate) fn zero_extend<const N: usize>(bytes: &[u8]) -> [u8; N] {
+  let mut out = [0u8; N];
+  out[..bytes.len()].copy_from_slice(bytes);
+  out
+}
+
 /// Copies `N` bytes from `src` starting at `offset` into a fixed-size array,
 /// avoiding range-based slice indexing which is not yet const-stable.
 #[inline]
@@ -122,4 +152,16 @@ pub(crate) const fn unpack_nibbles(bytes: &[u8; 32]) -> [u8; 64] {
     i += 1;
   }
   out
+}
+
+/// Reads `N` little-endian `u64` words from the start of `buf`.
+#[inline]
+pub(crate) fn load_u64s_le<const N: usize>(buf: &[u8]) -> [u64; N] {
+  core::array::from_fn(|i| load_u64_le(buf, i))
+}
+
+/// Reads `N` little-endian `u32` words from the start of `buf`.
+#[inline]
+pub(crate) fn load_u32s_le<const N: usize>(buf: &[u8]) -> [u32; N] {
+  core::array::from_fn(|i| load_u32_le(buf, i))
 }

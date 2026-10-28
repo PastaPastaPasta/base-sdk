@@ -55,15 +55,15 @@ mod tests {
     // Any threshold-sized subset recovers the master signature. Comparing
     // against the master's own signature, not just verifying, is what pins
     // interpolation to the right point rather than to a self-consistent one.
-    let msg = S::msg_ref(&MSG_DEADBEEF);
-    let sig_shares: Vec<BlsSigShare<S>> = shares[..3].iter().map(|s| s.sign(msg)).collect();
+    let msg = &MSG_DEADBEEF;
+    let sig_shares: Vec<BlsSigShare<S>> = shares[..3].iter().map(|s| s.sign_digest(msg)).collect();
     let refs: Vec<&BlsSigShare<S>> = sig_shares.iter().collect();
     let recovered = BlsSignature::<S>::recover_shares(&refs).unwrap();
-    assert!(pk.verify(msg, &recovered).is_ok());
-    assert_eq!(recovered.to_bytes(), sk.sign(msg).to_bytes());
+    assert!(pk.verify_digest(msg, &recovered).is_ok());
+    assert_eq!(recovered.to_bytes(), sk.sign_digest(msg).to_bytes());
 
     // A different subset recovers the identical signature.
-    let sig_shares2: Vec<BlsSigShare<S>> = shares[2..5].iter().map(|s| s.sign(msg)).collect();
+    let sig_shares2: Vec<BlsSigShare<S>> = shares[2..5].iter().map(|s| s.sign_digest(msg)).collect();
     let refs2: Vec<&BlsSigShare<S>> = sig_shares2.iter().collect();
     let recovered2 = BlsSignature::<S>::recover_shares(&refs2).unwrap();
     assert_eq!(recovered.to_bytes(), recovered2.to_bytes());
@@ -82,14 +82,14 @@ mod tests {
     let sk = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap();
     let pk = sk.public_key();
     let shares = sk.split(3, &sequential_ids(5), &mut UnwrapErr(SysRng)).unwrap();
-    let msg = S::msg_ref(&MSG_DEADBEEF);
-    let signed: Vec<BlsSigShare<S>> = shares.iter().map(|s| s.sign(msg)).collect();
+    let msg = &MSG_DEADBEEF;
+    let signed: Vec<BlsSigShare<S>> = shares.iter().map(|s| s.sign_digest(msg)).collect();
 
     let below = BlsSignature::<S>::recover_shares(&[&signed[0], &signed[1]]).unwrap();
-    assert!(pk.verify(msg, &below).is_err());
+    assert!(pk.verify_digest(msg, &below).is_err());
 
     let at = BlsSignature::<S>::recover_shares(&[&signed[0], &signed[2], &signed[4]]).unwrap();
-    assert!(pk.verify(msg, &at).is_ok());
+    assert!(pk.verify_digest(msg, &at).is_ok());
   }
 
   #[rstest]
@@ -108,7 +108,7 @@ mod tests {
     let sk = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap();
     let ids = sequential_ids(3);
     let shares = sk.split(2, &ids, &mut UnwrapErr(SysRng)).unwrap();
-    let one = shares[0].sign(S::msg_ref(&MSG_DEADBEEF));
+    let one = shares[0].sign_digest(&MSG_DEADBEEF);
     assert!(matches!(
       BlsSignature::<S>::recover_shares(&[&one]),
       Err(BlsError::InsufficientShares)
@@ -128,7 +128,7 @@ mod tests {
     let sk = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap();
     let ids = sequential_ids(3);
     let shares = sk.split(2, &ids, &mut UnwrapErr(SysRng)).unwrap();
-    let signed: Vec<BlsSigShare<S>> = shares.iter().map(|s| s.sign(S::msg_ref(&MSG_DEADBEEF))).collect();
+    let signed: Vec<BlsSigShare<S>> = shares.iter().map(|s| s.sign_digest(&MSG_DEADBEEF)).collect();
 
     let id_refs: Vec<&BlsShareId> = ids.iter().collect();
     let sig_refs: Vec<&S::InnerSig> = signed[..2].iter().map(|s| &s.signature().0).collect();
@@ -168,7 +168,7 @@ mod tests {
       for (i, (sk_hex, sig_hex)) in sk_shares.iter().zip(sig_shares).enumerate() {
         let sk = BlsSecretKey::<S>::from_bytes(&arr_from_hex(sk_hex.as_str().unwrap())).unwrap();
         let share = BlsSkShare::new(make_id(i as u32 + 1), sk);
-        let signed = share.sign(S::msg_ref(&msg));
+        let signed = share.sign_digest(&msg);
         assert_eq!(
           signed.signature().to_bytes().to_lower_hex_string(),
           sig_hex.as_str().unwrap()
@@ -197,7 +197,7 @@ mod tests {
         expected,
         "recovery must match the master"
       );
-      assert_eq!(master.sign(S::msg_ref(&msg)).to_bytes().to_lower_hex_string(), expected);
+      assert_eq!(master.sign_digest(&msg).to_bytes().to_lower_hex_string(), expected);
     }
   }
 

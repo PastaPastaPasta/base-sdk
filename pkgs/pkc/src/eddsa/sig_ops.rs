@@ -93,11 +93,11 @@ mod tests {
       let sk = EddsaSecretKey::from_bytes(&arr_from_hex(&v.sk));
       let pk = sk.public_key();
       let msg = vec_from_hex(&v.msg);
-      let sig = sk.sign(&msg);
+      let sig = sk.sign_message(&msg);
 
       assert_eq!(pk.to_bytes(), arr_from_hex::<32>(&v.pk));
       assert_eq!(sig.to_bytes(), arr_from_hex::<EDDSA_SIG_LEN>(&v.sig));
-      assert!(pk.verify(&msg, &sig).is_ok());
+      assert!(pk.verify_message(&msg, &sig).is_ok());
     }
   }
 
@@ -125,7 +125,9 @@ mod tests {
     let mut bytes = alice_sig.to_bytes();
     bytes[index] ^= mask;
 
-    assert!(alice_pk.verify(MSG, &EddsaSignature::from_bytes(&bytes)).is_err());
+    assert!(alice_pk
+      .verify_message(MSG, &EddsaSignature::from_bytes(&bytes))
+      .is_err());
   }
 
   #[rstest]

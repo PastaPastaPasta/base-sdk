@@ -14,9 +14,17 @@ extern crate std;
 
 mod addrs;
 mod opcode;
+mod params;
 #[allow(unused_imports, reason = "ergonomic shim, exports may be unused")]
 mod prelude;
 mod sigops;
+
+#[doc(hidden)]
+pub mod __private {
+  pub mod params {
+    pub use crate::params::{MAINNET, REGTEST, TESTNET};
+  }
+}
 
 pub use addrs::{AddrParams, Recipient};
 pub use dash_pkc::__private::__EcdsaPkHash as PubKeyHash;

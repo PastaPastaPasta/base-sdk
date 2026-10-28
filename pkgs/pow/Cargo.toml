@@ -1,6 +1,19 @@
 [package]
 name = "dash-pow"
-version = "0.0.0"
+version = "0.1.0-beta"
+description = "Proof of Work hash primitive for the Dash Base SDK"
+keywords = ["base-sdk", "dash", "dashcore", "dashpay", "x11"]
+categories = [
+  "cryptography",
+  "cryptography::cryptocurrencies",
+  "no-std",
+  "wasm",
+]
+exclude = [
+  "bench",
+  "corpus",
+  "tests",
+]
 readme = "README.md"
 authors.workspace = true
 edition.workspace = true
@@ -9,46 +22,37 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[lib]
+bench = false
+
 [features]
-default = []
-std = []
-full = ["std", "aes_hw", "simd"]
-aes_hw = []
-simd = []
+default = ["portable"]
+std = [
+  "wide/std",
+]
+
+full = [
+  "std",
+]
+portable = []
+
+[dependencies]
+digest = { workspace = true }
+wide = { workspace = true }
 
 [dev-dependencies]
-dash-dev = { version = "0.0.0", path = "../dev", features = ["full"] }
+dash-dev = { path = "../../meta/dev", features = ["full"] }
 divan = { workspace = true }
 hex-conservative = { workspace = true }
 rstest = { workspace = true }
 
-[[test]]
-name = "blake"
-[[test]]
-name = "bmw"
-[[test]]
-name = "cubehash"
-[[test]]
-name = "echo"
-[[test]]
-name = "groestl"
-[[test]]
-name = "jh"
-[[test]]
-name = "keccak"
-[[test]]
-name = "luffa"
-[[test]]
-name = "shavite"
-[[test]]
-name = "simd_hash"
-[[test]]
-name = "skein"
 [[bench]]
 name = "pow"
 path = "bench/main.rs"
 harness = false
-required-features = ["simd"]
 
 [lints]
 workspace = true
+
+[package.metadata.docs.rs]
+features = ["portable"]

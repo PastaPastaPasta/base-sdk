@@ -5,9 +5,13 @@ python := if os() == "windows" { "python" } else { "python3" }
 # `[env]` attribute unavailable on just 1.40 packaged with Debian trixie
 # (see https://packages.debian.org/trixie/just)
 export RUSTDOCFLAGS := "-D warnings"
-export RUSTFLAGS := "-D warnings"
 
-nextest := "cargo nextest run --config-file maint/nextest.toml --profile=ci"
+mod fuzz "fuzz/mod.just"
+
+import "bazel/mod.just"
+
+each := "cargo hack --workspace --exclude-features default --each-feature"
+powerset := "cargo hack --workspace --exclude-features default --feature-powerset"
 
 [private]
 default:
@@ -17,17 +21,25 @@ bench:
     cargo bench --workspace --features full
 
 build:
-    cargo build --workspace --features full
-    cargo build --workspace --no-default-features
+    {{ each }} build
 
 comb:
-    {{ python }} contrib/git_filter.py --fast-fail develop HEAD -- just test lint
+    {{ python }} contrib/git_filter.py --fast-fail --env NEXTEST_PROFILE=fail-fast develop HEAD -- just test lint fuzz::test
 
 lint:
     @just --fmt --check
     {{ python }} maint/lint_all.py --exclude lint_codeql
     {{ python }} maint/lint/lint_codeql.py check
     {{ python }} maint/lint/lint_codeql.py run --lang=rust --with-suite=rust-security-and-quality
+
+[positional-arguments]
+[unix]
+mutants *args:
+    cargo mutants "$@"
+
+[windows]
+mutants *args:
+    cargo mutants {{ args }}
 
 sh:
     nix develop ./contrib/nix#dev
@@ -36,9 +48,11 @@ preview:
     {{ python }} docs/build_docs.py preview
 
 test:
-    cargo clippy --all-targets --no-default-features
-    cargo clippy --all-targets --features full
-    {{ nextest }} --fail-fast --workspace --features full
-    cargo test --doc --workspace --features full
+    {{ powerset }} clippy --all-targets -- -D warnings
+    {{ each }} nextest run --config-file .cargo/nextest.toml --no-tests=warn
+    {{ each }} test --doc
     cargo doc --workspace --no-deps --features full
-    cargo bench --workspace --features full --no-run
+    {{ each }} test --benches
+
+zbuild *flags:
+    bazel build {{ flags }} //...

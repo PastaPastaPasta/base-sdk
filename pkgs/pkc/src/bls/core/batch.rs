@@ -268,7 +268,7 @@ mod tests {
       source,
       id,
       hash: h,
-      sig: BlsSigValue::from_canonical(&signer.sign(S::msg_ref(&h)).to_bytes(), kind).unwrap(),
+      sig: BlsSigValue::from_canonical(&signer.sign_digest(&h).to_bytes(), kind).unwrap(),
       pk: BlsPkValue::from_canonical(&sk.public_key().to_bytes(), kind).unwrap(),
       valid,
     });

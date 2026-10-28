@@ -6,15 +6,17 @@
 
 //! Groestl-512 hash function.
 
-#[doc(hidden)]
-pub mod consts;
-#[doc(hidden)]
-pub mod scalar;
-#[cfg(feature = "simd")]
-#[doc(hidden)]
-pub mod simd;
+mod common;
 
-#[cfg(not(feature = "simd"))]
-pub use scalar::hash512;
-#[cfg(feature = "simd")]
-pub use simd::hash512;
+use crate::aes::{hardware_aes, software_aes};
+
+software_aes! {
+  mod aes_cols;
+  use self::aes_cols as backend;
+}
+hardware_aes! {
+  mod aes_rows;
+  use self::aes_rows as backend;
+}
+
+pub use self::common::Groestl512;

@@ -12,7 +12,7 @@ use crate::error::P2pDecodeError;
 use crate::prelude::*;
 
 use dash_num::Hash256;
-use dash_pkc::bls::{BlsIesBlobBytes, BlsPkBytes, BlsScIetf, BlsSigBytes};
+use dash_pkc::bls::{BlsIesBlobBytes, BlsPkBytes, BlsSigBytes};
 use dash_primitives::{hash_impl, LlmqType, QuorumHash, TxHash};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
@@ -38,7 +38,7 @@ pub struct RecoveredSig {
   /// Hash of the signed message.
   pub msg_hash: Hash256,
   /// The recovered signature.
-  pub sig: BlsSigBytes<BlsScIetf>,
+  pub sig: BlsSigBytes,
 }
 
 codec_p2p!(RecoveredSig {
@@ -202,7 +202,7 @@ impl BaseCodec for QData {
 hash_impl!(QData);
 
 /// A quorum's verification vector, as `qdata` carries it.
-pub type VerificationVector = Vec<BlsPkBytes<BlsScIetf>>;
+pub type VerificationVector = Vec<BlsPkBytes>;
 
 /// The data of a `qdata` message, read as Core's handler reads it.
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq, Unencodable)]
@@ -214,7 +214,7 @@ pub struct QuorumData {
   pub vvec: Option<VerificationVector>,
   /// The member's encrypted contributions, when asked for, as read. The
   /// scheme of their keys comes from the context, not the type's tag.
-  pub contributions: Option<Vec<BlsIesBlobBytes<BlsScIetf>>>,
+  pub contributions: Option<Vec<BlsIesBlobBytes>>,
 }
 
 impl QData {
@@ -269,7 +269,7 @@ impl QData {
     &self,
     mut rest: &[u8],
     max_contributions: usize,
-  ) -> Result<Option<Vec<BlsIesBlobBytes<BlsScIetf>>>, P2pDecodeError> {
+  ) -> Result<Option<Vec<BlsIesBlobBytes>>, P2pDecodeError> {
     if self.request.data_mask & QUORUM_DATA_CONTRIBUTIONS == 0 {
       return Ok(None);
     }

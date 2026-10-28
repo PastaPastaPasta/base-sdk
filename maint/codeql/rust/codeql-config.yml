@@ -1,5 +1,7 @@
 disable-default-queries: true
 paths-ignore:
+  - .cache
   - public
+  - target
 queries:
   - uses: ./maint/codeql/rust

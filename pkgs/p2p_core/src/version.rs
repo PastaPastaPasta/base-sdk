@@ -65,3 +65,19 @@ impl ProtocolVersion {
   /// `MSG_ASSET_UNLOCK` inventory (v24.0).
   pub const ASSET_UNLOCK_INV: Self = Self(70242);
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  use dash_types::codec::BaseCodec;
+  use rstest::rstest;
+
+  /// A set top bit reads as a version below every minimum.
+  #[rstest]
+  fn top_bit_reads_below_every_minimum() {
+    let decoded = ProtocolVersion::decode(&mut &[0xFF, 0xFF, 0xFF, 0xFF][..]);
+    assert_eq!(decoded, Ok(ProtocolVersion(-1)));
+    assert!(ProtocolVersion(-1) < ProtocolVersion::MIN_PEER);
+  }
+}

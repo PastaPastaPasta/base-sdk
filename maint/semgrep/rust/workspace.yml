@@ -4,7 +4,7 @@ rules:
     severity: ERROR
     languages: [rust]
     paths:
-      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs]
+      include: [/meta/**/*.rs, /pkgs/**/*.rs, /docs/samples/**/*.rs, /fuzz/**/*.rs]
     pattern-regex: |-
       (?xm)
       ^[ \t]*                   # line start, optional indent
@@ -19,13 +19,15 @@ rules:
     severity: ERROR
     languages: [rust]
     paths:
-      include: [/pkgs/**/*.rs]
+      include: [/meta/**/*.rs, /pkgs/**/*.rs]
       exclude:
         - "**/lib.rs"
         - "**/main.rs"
         - "**/mod.rs"
         - "**/build.rs"
+        - /meta/**/tests/**
         - /pkgs/**/tests/**
+        - /meta/**/bench/**
         - /pkgs/**/bench/**
     pattern-regex: '(?m)^\s*#!\['
 
@@ -34,7 +36,7 @@ rules:
     severity: ERROR
     languages: [generic]
     paths:
-      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs]
+      include: [/meta/**/*.rs, /pkgs/**/*.rs, /docs/samples/**/*.rs, /fuzz/**/*.rs]
       exclude: ["**/lib.rs", "**/main.rs", "**/mod.rs"]
     options:
       generic_multiline: true
@@ -50,7 +52,7 @@ rules:
     severity: ERROR
     languages: [rust]
     paths:
-      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs]
+      include: [/meta/**/*.rs, /pkgs/**/*.rs, /docs/samples/**/*.rs, /fuzz/**/*.rs]
     patterns:
       - pattern-regex: |-
           (?xm)
@@ -81,7 +83,7 @@ rules:
     severity: ERROR
     languages: [rust]
     paths:
-      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs]
+      include: [/meta/**/*.rs, /pkgs/**/*.rs, /docs/samples/**/*.rs, /fuzz/**/*.rs]
     pattern-regex: 'derive\([^)]*(?<!:)serde::'
 
   - id: enum-bare-unknown
@@ -89,7 +91,7 @@ rules:
     severity: ERROR
     languages: [rust]
     paths:
-      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs]
+      include: [/meta/**/*.rs, /pkgs/**/*.rs, /docs/samples/**/*.rs, /fuzz/**/*.rs]
     pattern-regex: '(?m)^\s+Unknown\s*[,}=]'
 
   - id: impl-no-into
@@ -97,7 +99,7 @@ rules:
     severity: ERROR
     languages: [rust]
     paths:
-      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs]
+      include: [/meta/**/*.rs, /pkgs/**/*.rs, /docs/samples/**/*.rs, /fuzz/**/*.rs]
     pattern-regex: '\bimpl\b[^{]*\bInto\s*<.*>\s+for\b'
 
   - id: macro-export-no-serde-cfg
@@ -106,6 +108,7 @@ rules:
     languages: [rust]
     paths:
       include:
+        - /meta/**/*.rs
         - /pkgs/**/*.rs
       exclude:
         - /pkgs/types/marker/**
@@ -125,6 +128,7 @@ rules:
     languages: [rust]
     paths:
       include:
+        - /meta/**/*.rs
         - /pkgs/**/*.rs
       exclude:
         - /pkgs/types/marker/**
@@ -139,6 +143,7 @@ rules:
     languages: [rust]
     paths:
       include:
+        - /meta/**/*.rs
         - /pkgs/**/*.rs
       exclude:
         - /pkgs/types/marker/**
@@ -153,9 +158,11 @@ rules:
     severity: ERROR
     languages: [rust]
     paths:
-      include: [/pkgs/**/*.rs]
+      include: [/meta/**/*.rs, /pkgs/**/*.rs]
       exclude:
+        - /meta/**/prelude.rs
         - /pkgs/**/prelude.rs
+        - /meta/**/prelude/mod.rs
         - /pkgs/**/prelude/mod.rs
         - /docs/samples/**
     pattern-regex: '\buse\s+(::)?alloc(::|\s)'
@@ -165,20 +172,38 @@ rules:
     severity: ERROR
     languages: [rust]
     paths:
-      include: [/pkgs/**/*.rs]
+      include: [/meta/**/*.rs, /pkgs/**/*.rs]
       exclude:
+        - /meta/**/prelude.rs
         - /pkgs/**/prelude.rs
+        - /meta/**/prelude/mod.rs
         - /pkgs/**/prelude/mod.rs
         - /docs/samples/**
     pattern-regex: '\buse\s+crate::prelude::[^*]'
+
+  - id: style-no-from-raw
+    message: "byte constructors are named from_bytes, not from_raw"
+    severity: ERROR
+    languages: [rust]
+    paths:
+      include: [/meta/**/*.rs, /pkgs/**/*.rs, /docs/samples/**/*.rs, /fuzz/**/*.rs]
+    patterns:
+      - pattern-either:
+          - pattern: |
+              fn $FN(...) { ... }
+          - pattern: |
+              fn $FN(...) -> $RET { ... }
+      - metavariable-regex:
+          metavariable: $FN
+          regex: "^from_raw$"
 
   - id: style-no-get-prefix
     message: "getters omit the get_ prefix"
     severity: ERROR
     languages: [rust]
     paths:
-      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs]
-      exclude: [/pkgs/**/tests/**, /pkgs/**/bench/**]
+      include: [/meta/**/*.rs, /pkgs/**/*.rs, /docs/samples/**/*.rs, /fuzz/**/*.rs]
+      exclude: [/meta/**/tests/**, /meta/**/bench/**, /pkgs/**/tests/**, /pkgs/**/bench/**]
     patterns:
       - pattern-either:
           - pattern: |
@@ -206,7 +231,7 @@ rules:
     severity: ERROR
     languages: [rust]
     paths:
-      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs]
+      include: [/meta/**/*.rs, /pkgs/**/*.rs, /docs/samples/**/*.rs, /fuzz/**/*.rs]
     pattern-regex: '^\s*//[/!]?\s*[-=]{4,}|^\s*//\s+--\s'
 
   - id: style-latin1-source
@@ -214,7 +239,7 @@ rules:
     severity: ERROR
     languages: [rust]
     paths:
-      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs]
+      include: [/meta/**/*.rs, /pkgs/**/*.rs, /docs/samples/**/*.rs, /fuzz/**/*.rs]
     pattern-regex: '[^\x00-\xFF]'
 
   - id: typeid-no-manual-impl
@@ -223,8 +248,10 @@ rules:
     languages: [rust]
     paths:
       include:
+        - /meta/**/*.rs
         - /pkgs/**/*.rs
         - /docs/samples/**/*.rs
+        - /fuzz/**/*.rs
       exclude:
         - /pkgs/types/marker/**
     pattern-regex: '\bconst[ \t]+TYPE_ID[ \t]*:[^;]*='
@@ -234,7 +261,7 @@ rules:
     severity: ERROR
     languages: [rust]
     paths:
-      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs]
+      include: [/meta/**/*.rs, /pkgs/**/*.rs, /docs/samples/**/*.rs, /fuzz/**/*.rs]
       exclude: ["**/lib.rs", "**/mod.rs"]
     pattern-regex: '^\s*pub\s+use\s'
 
@@ -243,7 +270,7 @@ rules:
     severity: ERROR
     languages: [rust]
     paths:
-      include: [/pkgs/**/*.rs, /docs/samples/**/*.rs]
+      include: [/meta/**/*.rs, /pkgs/**/*.rs, /docs/samples/**/*.rs, /fuzz/**/*.rs]
       exclude:
         - /pkgs/types/src/entity.rs # declares the generator
         - /pkgs/types/src/secret.rs # declares its secret sibling

@@ -18,6 +18,9 @@ mod gov;
 mod payload;
 #[allow(unused_imports, reason = "ergonomic shim, exports may be unused")]
 mod prelude;
+mod provider;
+mod sign;
+mod sptx;
 mod support;
 mod transaction;
 mod types;
@@ -34,16 +37,11 @@ pub mod serialize;
 pub use block::{
   Block, BlockHash, BlockHeader, BlockInvalid, MerkleRoot, MAX_DIP0001_BLOCK_SIZE, MAX_LEGACY_BLOCK_SIZE,
 };
-pub use gov::{
-  GovData, GovObject, GovObjectType, GovVote, Proposal, ProposalInvalid, Trigger, VoteOutcome, VoteSignal,
-};
-pub use payload::{
-  commitment_bls_scheme, llmq_sign_hash, protx_bls_scheme, AssetLock, AssetLockInvalid, AssetUnlock,
-  AssetUnlockInvalid, CbTxInvalid, CoinbaseCommitment, CollateralShare, Commitment, CommitmentInvalid, CompactSig,
-  FinalCommitment, InputsHash, MnHardFork, MnHardForkInvalid, MnType, PayloadDecode, PayloadError, PayloadInvalid,
-  PayoutShare, PlatformNodeId, ProDisTx, ProRegTx, ProTxInvalid, ProUpRegTx, ProUpRevTx, ProUpServTx, ProUpShareTx,
-  ProUpSharedRegTx, QuorumHash, QuorumVvecHash, SpecialPayload, TxType, COMPACT_SIG_LEN, VERSIONBITS_NUM_BITS,
-};
+pub use gov::*;
+pub use payload::*;
+pub use provider::*;
+pub use sign::MESSAGE_MAGIC;
+pub use sptx::*;
 pub use support::{DynBitset, DynBitsetIterator, LlmqType, RevocationReason};
 pub use transaction::{
   OutPoint, Transaction, TxHash, TxIn, TxInvalid, TxOut, ASSET_UNLOCK_PAYLOAD_SIZE, ASSET_UNLOCK_QUORUM_INFO_SIZE,

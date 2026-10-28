@@ -16,8 +16,8 @@ use crate::prelude::*;
 use dash_num::Hash256;
 use dash_params::LlmqParams;
 use dash_pkc::bls::{
-  BlsCtx, BlsDecodeError, BlsEagerPk, BlsEagerSig, BlsEagerSk, BlsIesMultiBytes, BlsPkBytes, BlsScIetf,
-  BlsSchemeSource, BlsSigBytes, BLS_PK_LEN, BLS_SIG_LEN, BLS_SK_LEN,
+  BlsCtx, BlsDecodeError, BlsEagerPk, BlsEagerSig, BlsEagerSk, BlsIesMultiBytes, BlsPkBytes, BlsSchemeSource,
+  BlsSigBytes, BLS_PK_LEN, BLS_SIG_LEN, BLS_SK_LEN,
 };
 use dash_primitives::{DynBitset, LlmqType, QuorumHash, QuorumVvecHash, TxHash};
 use dash_types::codec::BaseCodec;
@@ -138,7 +138,7 @@ pub fn dkg_inventory_hash(payload: &[u8]) -> Hash256 {
 }
 
 /// A public key as Core's eager read leaves it under `bls`.
-fn eager_pk(key: &BlsPkBytes<BlsScIetf>, bls: BlsCtx) -> Result<BlsPkBytes<BlsScIetf>, BlsDecodeError> {
+fn eager_pk(key: &BlsPkBytes, bls: BlsCtx) -> Result<BlsPkBytes, BlsDecodeError> {
   let read = BlsEagerPk::decode(key.as_bytes(), BlsSchemeSource::Global(bls))?;
   Ok(BlsPkBytes::from_bytes(read.to_bytes(bls.scheme())))
 }
@@ -149,7 +149,7 @@ fn eager_sk(key: &[u8; BLS_SK_LEN], bls: BlsCtx) -> Result<[u8; BLS_SK_LEN], Bls
 }
 
 /// A signature as Core's eager read leaves it under `bls`.
-fn eager_sig(sig: &BlsSigBytes<BlsScIetf>, bls: BlsCtx) -> Result<BlsSigBytes<BlsScIetf>, BlsDecodeError> {
+fn eager_sig(sig: &BlsSigBytes, bls: BlsCtx) -> Result<BlsSigBytes, BlsDecodeError> {
   let read = BlsEagerSig::decode(sig.as_bytes(), BlsSchemeSource::Global(bls))?;
   Ok(BlsSigBytes::from_bytes(read.to_bytes(bls.scheme())))
 }
@@ -199,7 +199,7 @@ impl Walk<'_> {
 
   /// `ReadCompactSize(ds)`, with Core's `MAX_SIZE` range check.
   fn count(&mut self) -> Option<u64> {
-    CompactSize::decode_size(&mut self.0).ok().map(|n| n.to_base())
+    CompactSize::decode(&mut self.0).ok().map(|n| n.to_base())
   }
 
   /// Core's `ReadBoundedDynBitset`: a bit count above `max` fails, then the
@@ -264,11 +264,11 @@ pub struct DkgContribution {
   /// Registration transaction hash of the contributing member.
   pub pro_tx_hash: TxHash,
   /// The member's verification vector, as read.
-  pub vvec: Vec<BlsPkBytes<BlsScIetf>>,
+  pub vvec: Vec<BlsPkBytes>,
   /// The secret key shares, one blob per member.
-  pub contributions: BlsIesMultiBytes<BlsScIetf>,
+  pub contributions: BlsIesMultiBytes,
   /// The member's signature, as read.
-  pub sig: BlsSigBytes<BlsScIetf>,
+  pub sig: BlsSigBytes,
 }
 
 codec_p2p!(DkgContribution {
@@ -362,7 +362,7 @@ pub struct DkgComplaint {
   /// Members whose contribution is complained of, by index.
   pub complain_for_members: DynBitset,
   /// The member's signature, as read.
-  pub sig: BlsSigBytes<BlsScIetf>,
+  pub sig: BlsSigBytes,
 }
 
 codec_p2p!(DkgComplaint {
@@ -443,7 +443,7 @@ pub struct DkgJustification {
   /// The revealed shares.
   pub contributions: Vec<DkgRevealedShare>,
   /// The member's signature, as read.
-  pub sig: BlsSigBytes<BlsScIetf>,
+  pub sig: BlsSigBytes,
 }
 
 codec_p2p!(DkgJustification {
@@ -517,13 +517,13 @@ pub struct DkgPrematureCommitment {
   /// Members the committing member counts valid, by index.
   pub valid_members: DynBitset,
   /// The quorum public key, as read.
-  pub quorum_public_key: BlsPkBytes<BlsScIetf>,
+  pub quorum_public_key: BlsPkBytes,
   /// Hash of the quorum's verification vector.
   pub quorum_vvec_hash: QuorumVvecHash,
   /// The member's threshold signature share of the commitment, as read.
-  pub quorum_sig: BlsSigBytes<BlsScIetf>,
+  pub quorum_sig: BlsSigBytes,
   /// The member's own signature of the commitment, as read.
-  pub sig: BlsSigBytes<BlsScIetf>,
+  pub sig: BlsSigBytes,
 }
 
 codec_p2p!(DkgPrematureCommitment {

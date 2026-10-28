@@ -228,7 +228,7 @@ mod tests {
     let normalized = high_sig.normalize_s().unwrap();
     assert!(normalized.is_low_s());
     assert_eq!(normalized, alice_sig);
-    assert!(alice_pk.verify(&MSG, normalized).is_ok());
+    assert!(alice_pk.verify_digest(&MSG, normalized).is_ok());
   }
 
   #[cfg(feature = "serde")]

@@ -1,0 +1,16 @@
+//
+// Copyright (c) 2026-present, The Dash Core developers
+// SPDX-License-Identifier: MIT
+// See the accompanying file LICENSE or https://opensource.org/license/MIT
+//
+
+//! Differential fuzz target for Skein.
+
+use dash_pow::__private::Skein512;
+use dash_pow_fuzz::{assert_input, sph};
+
+fn main() {
+  afl::fuzz!(|data: &[u8]| {
+    assert_input::<Skein512, _>("skein", sph::skein, data);
+  });
+}

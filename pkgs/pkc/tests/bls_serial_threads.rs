@@ -51,8 +51,8 @@ impl<S: BlsScheme> Fixture<S> {
       .collect();
     let pks: Vec<BlsPublicKey<S>> = sks.iter().map(BlsSecretKey::public_key).collect();
     let msgs: Vec<[u8; 32]> = (0u8..4).map(|i| [i ^ 0x5a; 32]).collect();
-    let sigs: Vec<BlsSignature<S>> = sks.iter().zip(&msgs).map(|(sk, m)| sk.sign(S::msg_ref(m))).collect();
-    let same: Vec<BlsSignature<S>> = sks.iter().map(|sk| sk.sign(S::msg_ref(&msgs[0]))).collect();
+    let sigs: Vec<BlsSignature<S>> = sks.iter().zip(&msgs).map(|(sk, m)| sk.sign_digest(m)).collect();
+    let same: Vec<BlsSignature<S>> = sks.iter().map(|sk| sk.sign_digest(&msgs[0])).collect();
     let same_refs: Vec<&BlsSignature<S>> = same.iter().collect();
     let pk_refs: Vec<&BlsPublicKey<S>> = pks.iter().collect();
     let sig_refs: Vec<&BlsSignature<S>> = sigs.iter().collect();
@@ -157,7 +157,7 @@ fn core_verify_starts_no_thread() {
   );
 
   // The control: blst's pooled verify starts its pool, so the count moves.
-  assert!(ietf.pks[0].verify(&ietf.msgs[0], &ietf.sigs[0]).is_ok());
+  assert!(ietf.pks[0].verify_digest(&ietf.msgs[0], &ietf.sigs[0]).is_ok());
   let pooled = threads();
   assert!(
     pooled > before,

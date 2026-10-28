@@ -1,0 +1,21 @@
+rules:
+  - id: pow-require-static-tables
+    message: "declare lookup tables as `static`; a `const` array is copied onto the stack at each use in debug builds"
+    severity: ERROR
+    languages: [rust]
+    paths:
+      include: [/pkgs/pow/src/**/*.rs]
+    pattern-regex: '\bconst\s+[A-Za-z_][A-Za-z0-9_]*\s*:\s*\['
+
+  - id: pow-prohibit-unconditional-inline
+    message: >
+      do not unconditionally inline functions, may result in debug frame
+      inflation. use `#[cfg_attr(not(debug_assertions), inline(always))]`
+      instead.
+    severity: ERROR
+    languages: [rust]
+    paths:
+      include: [/pkgs/pow/src/**/*.rs]
+    patterns:
+      - pattern-regex: '\binline\s*\(\s*always\s*\)'
+      - pattern-not-regex: '#\[cfg_attr\(not\(debug_assertions\), inline\(always\)\)\]'

@@ -33,10 +33,10 @@ ANSI_RED = "\033[31m"
 ANSI_RESET = "\033[0m"
 
 # Cargo workspace roots, relative to the repository root.
-CARGO_WORKSPACES: tuple[str, ...] = (".", "docs/samples")
+CARGO_WORKSPACES: tuple[str, ...] = (".", "docs/samples", "fuzz")
 
 # Rust source roots the analysers scan, relative to the repository root.
-SOURCE_DIRS: tuple[str, ...] = ("pkgs", "docs/samples")
+SOURCE_DIRS: tuple[str, ...] = ("meta", "pkgs", "docs/samples", "fuzz")
 
 # Assumed base branch for codebase.
 DEFAULT_BASE = "develop"
@@ -242,6 +242,20 @@ def touched(repo_root: Path, suffixes: tuple[str, ...]) -> list[str]:
     name
     for name in git_out(repo_root, "diff", "--name-only", base).splitlines()
     if name.endswith(suffixes) and is_plain_file(repo_root, name)
+  ]
+
+
+def repo_files(repo_root: Path, *pathspecs: str) -> list[Path]:
+  """Return the tracked files *pathspecs* match, minus submodules.
+
+  Staged files count, so a new file is checked once it is added.
+  """
+  listed = git_out(repo_root, "ls-files", "-z", "--cached", "--", *pathspecs)
+  # A submodule lists as its own directory, which is not a plain file.
+  return [
+    repo_root / name
+    for name in sorted({name for name in listed.split("\0") if name})
+    if is_plain_file(repo_root, name)
   ]
 
 

@@ -41,7 +41,7 @@ jobs:
         run: nix develop ./contrib/nix#dev --command true
 
       - name: Validate toolchains
-        run: nix develop ./contrib/nix#dev --command ./contrib/nix/smoke_test.sh
+        run: nix develop ./contrib/nix#dev --command ./contrib/smoke_test.py
 
   build:
     name: ${{ matrix.target }}
@@ -85,7 +85,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: cargo-deps-${{ hashFiles('Cargo.lock', 'docs/samples/Cargo.lock') }}
+          key: cargo-deps-${{ hashFiles('Cargo.lock', 'docs/samples/Cargo.lock', 'fuzz/Cargo.lock') }}
           restore-keys: cargo-deps-
 
       - name: Manage build artifacts

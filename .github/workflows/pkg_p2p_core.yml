@@ -4,18 +4,18 @@ on:
   workflow_dispatch:
   push:
     paths: &paths
-      - pkgs/p2p_core/**
+      - .cargo/nextest.toml
+      - .github/workflows/build_msrv.yml
+      - .github/workflows/pkg_p2p_core.yml
+      - Cargo.lock
+      - Cargo.toml
+      - contrib/nix/**
       - pkgs/num/**
+      - pkgs/p2p_core/**
       - pkgs/params/**
       - pkgs/primitives/**
       - pkgs/script/**
       - pkgs/types/**
-      - Cargo.lock
-      - Cargo.toml
-      - .github/workflows/pkg_p2p_core.yml
-      - .github/workflows/build_stable.yml
-      - .github/workflows/build_nightly.yml
-      - contrib/nix/**
       - pyproject.toml
       - rust-toolchain.toml
       - uv.lock
@@ -27,14 +27,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  stable:
-    uses: ./.github/workflows/build_stable.yml
-    with:
-      package: dash-p2p-core
-      package_dir: p2p_core
-
-  nightly:
-    uses: ./.github/workflows/build_nightly.yml
+  msrv:
+    uses: ./.github/workflows/build_msrv.yml
     with:
       package: dash-p2p-core
       package_dir: p2p_core

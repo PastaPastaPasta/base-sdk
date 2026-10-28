@@ -1,0 +1,22 @@
+[package]
+name = "dash-meta-bazel"
+version = "0.0.0"
+description = "Crate used for dependency graph resolution by Bazel"
+publish = false
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lib]
+bench = false
+
+[features]
+default = []
+std = []
+full = ["std"]
+
+[lints]
+workspace = true

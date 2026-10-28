@@ -87,7 +87,7 @@ impl_p2p!(GetQrInfo);
 impl BaseCodec for GetQrInfo {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     // Core checks the count against the limit before reading any entry.
-    CompactSize::decode_size(&mut &data[..])?.into_len(MAX_QRINFO_BASE_HASHES)?;
+    CompactSize::decode(&mut &data[..])?.into_len(MAX_QRINFO_BASE_HASHES)?;
     Ok(Self {
       base_block_hashes: Vec::<BlockHash>::decode(data)?,
       block_request_hash: BlockHash::decode(data)?,
@@ -217,7 +217,7 @@ impl QrInfo {
     };
     let last_commitment_per_index = Vec::<Commitment>::decode(data)?;
     let quorum_snapshot_list = Vec::<QuorumSnapshot>::decode(data)?;
-    let count = CompactSize::decode_size(data)?.into_len(data.len())?;
+    let count = CompactSize::decode(data)?.into_len(data.len())?;
     let mut mn_list_diff_list = Vec::new();
     for _ in 0..count {
       mn_list_diff_list.push(MnListDiff::decode_as(data, format)?);

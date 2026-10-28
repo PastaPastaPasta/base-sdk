@@ -16,7 +16,7 @@ use dash_num::Hash256;
 use dash_primitives::{hash_impl, ServiceV1};
 use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{make_num, CompactSize, CoreBool};
+use dash_types::{make_num, CompactSize};
 
 use core::fmt;
 use core::ops::{BitAnd, BitOr, BitOrAssign};
@@ -74,16 +74,11 @@ impl BitOrAssign for ServiceFlags {
 }
 
 /// The user agent exceeds the 256-byte limit.
-#[derive(Debug, Clone, PartialEq, Eq, Unencodable)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, Unencodable)]
+#[error("user agent too long: {len} bytes, max {MAX_USER_AGENT}")]
 pub struct UserAgentTooLong {
   /// Actual length in bytes.
   pub len: usize,
-}
-
-impl fmt::Display for UserAgentTooLong {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "user agent too long: {} bytes, max {MAX_USER_AGENT}", self.len)
-  }
 }
 
 /// CompactSize-prefixed user agent bytestring.
@@ -95,7 +90,7 @@ impl_p2p!(UserAgent);
 
 impl BaseCodec for UserAgent {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let len = CompactSize::decode_size(data)?.into_len(MAX_USER_AGENT)?;
+    let len = CompactSize::decode_len(data, MAX_USER_AGENT)?;
     let raw = codec::read_bytes(data, len)?;
     Ok(Self(raw.to_vec()))
   }
@@ -209,11 +204,11 @@ pub struct Version {
   /// Sender's best block height.
   pub start_height: Option<i32>,
   /// Whether the sender wants transaction relay.
-  pub relay: Option<CoreBool>,
+  pub relay: Option<bool>,
   /// Dash: masternode authentication challenge.
   pub mnauth_challenge: Option<Hash256>,
   /// Dash: whether the sender identifies as a masternode.
-  pub mn_connection: Option<CoreBool>,
+  pub mn_connection: Option<bool>,
 }
 
 impl_p2p!(Version);

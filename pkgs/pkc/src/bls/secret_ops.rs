@@ -6,7 +6,7 @@
 
 //! Scheme-generic BLS secret key.
 
-use super::dh_bytes::BlsDhBytes;
+use super::byte_bags::BlsDhBytes;
 use super::error::BlsError;
 use super::public_ops::BlsPublicKey;
 use super::scalar::Fr;
@@ -34,7 +34,7 @@ use core::fmt::{Debug, Formatter, Result as FmtResult};
 pub struct BlsSecretKey<S: BlsScheme>(pub(crate) S::InnerSk);
 
 #[cfg(feature = "codec")]
-dlgt_scodec!(for[S: BlsScheme] BlsSecretKey<S> => BlsSkBytes<S>, Hash256, BlsError, BLS_SK_LEN);
+dlgt_scodec!(for[S: BlsScheme] BlsSecretKey<S> => BlsSkBytes, Hash256, BlsError, BLS_SK_LEN);
 
 impl<S: BlsScheme> BlsSecretKey<S> {
   /// Derive a secret key from input keying material (>= 32 bytes).
@@ -129,9 +129,18 @@ impl<S: BlsScheme> BlsSecretKey<S> {
     self.public_key() == *pubkey
   }
 
-  /// Sign a message of the scheme's message type.
-  pub fn sign(&self, msg: &S::Msg) -> BlsSignature<S> {
-    BlsSignature::from_inner(S::sign(&self.0, msg))
+  /// Sign a 32-byte hashed message.
+  pub fn sign_digest(&self, digest: &[u8; 32]) -> BlsSignature<S> {
+    BlsSignature::from_inner(S::sign(&self.0, S::digest_msg(digest)))
+  }
+
+  /// Sign an arbitrary-length message.
+  ///
+  /// The legacy scheme signs the SHA-256 digest of `msg`, which equals
+  /// [`Self::sign_digest`] over that digest. The IETF scheme hashes `msg` to
+  /// the curve directly.
+  pub fn sign_message(&self, msg: &[u8]) -> BlsSignature<S> {
+    BlsSignature::from_inner(S::sign(&self.0, S::plaintext_msg(msg)))
   }
 
   /// Compute a DH shared key: `self * peer_pk`.
@@ -140,7 +149,7 @@ impl<S: BlsScheme> BlsSecretKey<S> {
   ///
   /// Returns `InvalidPublicKey` when the peer key or the product point
   /// is invalid.
-  pub fn dh_exchange(&self, peer_pk: &BlsPublicKey<S>) -> Result<BlsDhBytes<S>, BlsError> {
+  pub fn dh_exchange(&self, peer_pk: &BlsPublicKey<S>) -> Result<BlsDhBytes, BlsError> {
     S::dh_bytes(&self.0, &peer_pk.0)
   }
 
@@ -203,13 +212,31 @@ impl<S: BlsScheme> Zeroize for BlsSecretKey<S> {
 
 impl<S: BlsScheme> ZeroizeOnDrop for BlsSecretKey<S> {}
 
-type_cvrt!(for[S: BlsScheme] From<BlsSecretKey<S>> for BlsSkBytes<S>, |sk| {
+type_cvrt!(for[S: BlsScheme] From<BlsSecretKey<S>> for BlsSkBytes, |sk| {
   Self::from_bytes(*sk.to_bytes())
 });
 
-type_cvrt!(for[S: BlsScheme] TryFrom<BlsSkBytes<S>> for BlsSecretKey<S>, BlsError, |bytes| {
+type_cvrt!(for[S: BlsScheme] TryFrom<BlsSkBytes> for BlsSecretKey<S>, BlsError, |bytes| {
   Self::from_bytes(bytes.as_bytes())
 });
+
+impl BlsSkBytes {
+  /// Validates the bytes as a secret key under scheme `S`.
+  ///
+  /// # Errors
+  ///
+  /// Returns `InvalidSecretKey` when the bytes are not a valid scalar.
+  pub fn to<S: BlsScheme>(&self) -> Result<BlsSecretKey<S>, BlsError> {
+    BlsSecretKey::try_from(self)
+  }
+
+  /// Whether `S` decodes the bytes to a secret key that re-encodes to them.
+  ///
+  /// Null bytes pass, so pair with [`is_null`](Self::is_null) to require a key.
+  pub fn is_canonical<S: BlsScheme>(&self) -> bool {
+    self.is_null() || self.to::<S>().is_ok()
+  }
+}
 
 type_cvrt!(for[S: BlsScheme] TryFrom<BlsSecretKey<S>> for Zeroizing<Fr>, BlsError, |sk| {
   Fr::from_bendian_reduce(&sk.to_bytes()).map(Zeroizing::new)
@@ -230,6 +257,72 @@ mod tests {
   use hex_conservative::DisplayHex;
   use rstest::rstest;
   use serde::Deserialize;
+
+  /// Returns `GROUP_ORDER + delta` for a `delta` that leaves the high bytes
+  /// unchanged.
+  fn order_plus(delta: i8) -> [u8; 32] {
+    let mut bytes = GROUP_ORDER;
+    bytes[31] = bytes[31].wrapping_add_signed(delta);
+    bytes
+  }
+
+  fn small_scalar(v: u8) -> [u8; 32] {
+    let mut bytes = [0u8; 32];
+    bytes[31] = v;
+    bytes
+  }
+
+  type CanonicalFn = fn([u8; 32], bool);
+
+  fn assert_sk_bytes_canonical<S: BlsScheme>(bytes: [u8; 32], canonical: bool) {
+    assert_eq!(BlsSkBytes::from_bytes(bytes).is_canonical::<S>(), canonical);
+  }
+
+  #[rstest]
+  #[case::zero([0u8; 32], true)]
+  #[case::one(small_scalar(1), true)]
+  #[case::order_minus_one(order_plus(-1), true)]
+  #[case::order(GROUP_ORDER, false)]
+  #[case::order_plus_one(order_plus(1), false)]
+  #[case::max([0xFF; 32], false)]
+  fn sk_bytes_canonical_iff_null_or_scalar_in_range(
+    #[case] bytes: [u8; 32],
+    #[case] canonical: bool,
+    #[values(assert_sk_bytes_canonical::<BlsScChia>, assert_sk_bytes_canonical::<BlsScIetf>)] assertion: CanonicalFn,
+  ) {
+    assertion(bytes, canonical);
+  }
+
+  /// Bytes from every constructor parse back to the key they came from, which
+  /// lets `is_canonical` skip a re-encoding comparison.
+  fn assert_constructed_sk_is_canonical<S: BlsScheme>() {
+    let base = BlsSecretKey::<S>::from_ikm(&RSEED[1]).unwrap();
+    let other = BlsSecretKey::<S>::from_ikm(&RSEED[2]).unwrap();
+    let tweak = small_scalar(7);
+    let keys = [
+      BlsSecretKey::<S>::try_from(Fr::from_bendian_reduce(&order_plus(1)).unwrap()).unwrap(),
+      BlsSecretKey::<S>::try_from(Fr::from_bendian_reduce(&[0xFF; 32]).unwrap()).unwrap(),
+      BlsSecretKey::<S>::from_bytes(&order_plus(-1)).unwrap(),
+      base.add_tweak(&tweak).unwrap(),
+      base.mul_tweak(&tweak).unwrap(),
+      base.negate().unwrap(),
+      BlsSecretKey::aggregate(&[&base, &other]).unwrap(),
+      base.to_scheme::<BlsScIetf>().unwrap().to_scheme::<S>().unwrap(),
+      base,
+    ];
+    for sk in keys {
+      let bytes = BlsSkBytes::from(sk.clone());
+      assert!(bytes.is_canonical::<S>());
+      assert_eq!(*bytes.to::<S>().unwrap().to_bytes(), *sk.to_bytes());
+    }
+  }
+
+  #[rstest]
+  #[case::chia(assert_constructed_sk_is_canonical::<BlsScChia>)]
+  #[case::ietf(assert_constructed_sk_is_canonical::<BlsScIetf>)]
+  fn constructed_sk_is_canonical(#[case] assertion: fn()) {
+    assertion();
+  }
 
   #[derive(Clone, Copy, Debug)]
   enum Tweak {
@@ -268,8 +361,8 @@ mod tests {
     assert_eq!(tweaked_sk.public_key(), tweaked_pk);
     assert!(tweaked_sk.verify_pubkey(&tweaked_pk));
 
-    let msg = S::msg_ref(&[0x5a; 32]);
-    assert_eq!(tweaked_pk.verify(msg, &tweaked_sk.sign(msg)), Ok(()));
+    let msg = &[0x5a; 32];
+    assert_eq!(tweaked_pk.verify_digest(msg, &tweaked_sk.sign_digest(msg)), Ok(()));
   }
 
   #[rstest]

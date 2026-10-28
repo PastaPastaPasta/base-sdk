@@ -11,7 +11,7 @@ use crate::prelude::*;
 
 use bitcoin_hashes::sha256d;
 use dash_num::Hash256;
-use dash_pkc::bls::{BlsScIetf, BlsSigBytes};
+use dash_pkc::bls::BlsSigBytes;
 use dash_primitives::{codec_base, hash_impl, QuorumHash, TxHash};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
@@ -34,7 +34,7 @@ pub struct MnAuth {
   pub pro_reg_tx_hash: TxHash,
   /// Operator signature over the connection's challenge, as read. Its scheme
   /// comes from the context, not the type's tag.
-  pub sig: BlsSigBytes<BlsScIetf>,
+  pub sig: BlsSigBytes,
 }
 
 codec_p2p!(MnAuth { pro_reg_tx_hash, sig });
@@ -108,7 +108,7 @@ pub struct PlatformBan {
   /// Hash of the signing quorum.
   pub quorum_hash: QuorumHash,
   /// Recovered threshold signature of the signing quorum.
-  pub sig: BlsSigBytes<BlsScIetf>,
+  pub sig: BlsSigBytes,
 }
 
 codec_base!(PlatformBan, MAX_P2P_PAYLOAD_SIZE, {

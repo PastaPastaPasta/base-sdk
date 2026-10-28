@@ -9,14 +9,13 @@
 use crate::codec::codec_p2p;
 
 use dash_types::type_id::TypeId;
-use dash_types::CoreBool;
 
 /// Whether the peer wants CoinJoin queue (`dsq`) messages.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct SendDsq {
   /// Core's `fSendDSQueue`.
-  pub send_dsq: CoreBool,
+  pub send_dsq: bool,
 }
 
 codec_p2p!(SendDsq { send_dsq });
@@ -26,7 +25,7 @@ codec_p2p!(SendDsq { send_dsq });
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct QSendRecSigs {
   /// Core's `fSendRecSigs`.
-  pub send_rec_sigs: CoreBool,
+  pub send_rec_sigs: bool,
 }
 
 codec_p2p!(QSendRecSigs { send_rec_sigs });

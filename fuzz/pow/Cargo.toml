@@ -1,0 +1,111 @@
+[package]
+name = "dash-pow-fuzz"
+version = "0.0.0"
+publish = false
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+afl = "0.18.2"
+dash-pow = { version = "0.1.0-beta", path = "../../pkgs/pow", default-features = false }
+digest = { version = "0.11.3", default-features = false }
+
+[build-dependencies]
+cc = "1"
+
+[dev-dependencies]
+rstest = "0.25"
+
+[[bin]]
+name = "blake"
+path = "targets/blake.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "bmw"
+path = "targets/bmw.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "cubehash"
+path = "targets/cubehash.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "echo"
+path = "targets/echo.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "groestl"
+path = "targets/groestl.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "jh"
+path = "targets/jh.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "keccak"
+path = "targets/keccak.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "luffa"
+path = "targets/luffa.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "shavite"
+path = "targets/shavite.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "simd"
+path = "targets/simd.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "skein"
+path = "targets/skein.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "x11"
+path = "targets/x11.rs"
+test = false
+doc = false
+bench = false
+
+[lints]
+workspace = true

@@ -12,7 +12,7 @@ from __future__ import annotations
 import subprocess
 import sys
 
-from common import RETCODE_ERR, require_bin, root_dir
+from common import RETCODE_ERR, repo_files, require_bin, root_dir
 
 ESLINT_VERSION = "9.39.3"
 
@@ -31,7 +31,10 @@ def main() -> int:
   if not config_path.is_file():
     raise FileNotFoundError(f"error: eslint config not found: {config_path}")
 
-  targets = [str(repo_root / t) for t in DEFAULT_TARGETS]
+  targets = repo_files(
+    repo_root,
+    *(f"{t}/*.{ext}" for t in DEFAULT_TARGETS for ext in ("js", "mjs", "cjs")),
+  )
 
   result = subprocess.run(  # noqa: S603
     [
@@ -40,7 +43,7 @@ def main() -> int:
       f"eslint@{ESLINT_VERSION}",
       "--config",
       str(config_path),
-      *targets,
+      *[str(p) for p in targets],
     ],
     check=False,
     cwd=str(repo_root),

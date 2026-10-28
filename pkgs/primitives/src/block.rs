@@ -12,8 +12,9 @@ use crate::{codec_base, codec_type, hash_impl};
 
 use bitcoin_hashes::sha256d;
 use dash_num::{make_hash, Arith256, CompactTarget, Hash256};
-use dash_pow::hash as pow_hash;
-use dash_types::codec::BaseCodec;
+use dash_pow::__deps::digest::Digest;
+use dash_pow::X11;
+use dash_types::codec::{self, BaseCodec};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{ArrayBuf, Checkable, Hashable, Numeric};
 
@@ -73,7 +74,8 @@ impl Hashable for BlockHeader {
   fn hash(&self) -> BlockHash {
     let mut buf = ArrayBuf::<80>::new();
     self.encode(&mut buf);
-    BlockHash::from(pow_hash(&buf.into_array()))
+    let digest: [u8; 32] = X11::digest(buf.into_array()).into();
+    BlockHash::from(digest)
   }
 }
 
@@ -88,36 +90,32 @@ impl fmt::Display for BlockHeader {
 }
 
 /// Block validation failure.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Unencodable)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, thiserror::Error, Unencodable)]
 pub enum BlockInvalid {
   /// Decoded target is negative, zero, overflows, or the hash exceeds it.
+  #[error("bad-proof-of-work")]
   BadProofOfWork,
   /// Computed merkle root does not match the header.
+  #[error("bad-merkle-root")]
   BadMerkleRoot,
+  /// `bad-txns-duplicate`
+  #[error("bad-txns-duplicate")]
+  DuplicateTransactions,
   /// `bad-blk-length`
+  #[error("bad-blk-length: {size} bytes")]
   BadBlockLength { size: usize },
   /// `bad-cb-missing`
+  #[error("bad-cb-missing")]
   MissingCoinbase,
   /// `bad-cb-multiple`
+  #[error("bad-cb-multiple: tx {index}")]
   MultipleCoinbases { index: usize },
   /// `bad-blk-sigops`
+  #[error("bad-blk-sigops: {count} > {limit}")]
   TooManySigops { count: usize, limit: usize },
   /// A contained transaction failed validation.
+  #[error("tx {index}: {error}")]
   Transaction { index: usize, error: TxInvalid },
-}
-
-impl fmt::Display for BlockInvalid {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      Self::BadProofOfWork => write!(f, "bad-proof-of-work"),
-      Self::BadMerkleRoot => write!(f, "bad-merkle-root"),
-      Self::BadBlockLength { size } => write!(f, "bad-blk-length: {size} bytes"),
-      Self::MissingCoinbase => write!(f, "bad-cb-missing"),
-      Self::MultipleCoinbases { index } => write!(f, "bad-cb-multiple: tx {index}"),
-      Self::TooManySigops { count, limit } => write!(f, "bad-blk-sigops: {count} > {limit}"),
-      Self::Transaction { index, error } => write!(f, "tx {index}: {error}"),
-    }
-  }
 }
 
 /// A Dash block: header followed by a vector of transactions.
@@ -142,13 +140,17 @@ impl Checkable for Block {
       return Some(BlockInvalid::BadProofOfWork);
     }
 
-    let (root, _mutated) = self.merkle();
+    let (root, mutated) = self.merkle();
     if root != self.header.merkle_root {
       return Some(BlockInvalid::BadMerkleRoot);
     }
+    if mutated {
+      return Some(BlockInvalid::DuplicateTransactions);
+    }
 
-    if self.transactions.is_empty() {
-      return Some(BlockInvalid::BadBlockLength { size: 0 });
+    let size = codec::encoded_size(self);
+    if self.transactions.is_empty() || size > MAX_DIP0001_BLOCK_SIZE {
+      return Some(BlockInvalid::BadBlockLength { size });
     }
 
     if !self.transactions[0].is_coinbase() {
@@ -240,9 +242,14 @@ impl fmt::Display for Block {
 #[expect(clippy::panic, clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
+  use crate::sptx::TxType;
+  use crate::transaction::{OutPoint, TxIn, TxOut};
 
+  use bitcoin_primitives::script::{ScriptPubKeyBuf, ScriptSigBuf};
   use dash_dev::{assert_serde_rt, check_wire, Corpus};
+  use dash_script::Opcode;
   use rstest::rstest;
+  use serde::Deserialize;
 
   #[rstest]
   fn corpus_block() {
@@ -259,5 +266,78 @@ mod tests {
       assert!(!mutated, "{label}: merkle mutated");
     });
     assert_serde_rt("blocks", &items);
+  }
+
+  #[derive(Deserialize)]
+  struct TxShape {
+    inputs: Vec<u8>,
+    lock_time: u32,
+    sigops: usize,
+    pad: usize,
+  }
+
+  impl TxShape {
+    fn build(&self) -> Transaction {
+      let inputs = self.inputs.iter().enumerate().map(|(i, &seed)| TxIn {
+        prevout: OutPoint {
+          hash: TxHash::from_lendian([seed; 32]),
+          index: if seed == 0 { u32::MAX } else { 0 },
+        },
+        script_sig: ScriptSigBuf::from_bytes(vec![0; if i == 0 { 2 } else { 0 }]),
+        sequence: u32::MAX,
+      });
+      let mut script = vec![Opcode::CheckSig.to_base(); self.sigops];
+      script.resize(self.sigops + self.pad, 0);
+      Transaction {
+        version: 3,
+        tx_type: TxType::Spend,
+        inputs: inputs.collect(),
+        outputs: vec![TxOut {
+          value: 1,
+          script_pubkey: ScriptPubKeyBuf::from_bytes(script),
+        }],
+        lock_time: self.lock_time,
+        extra_payload: vec![],
+      }
+    }
+  }
+
+  #[derive(Deserialize)]
+  struct CheckVector {
+    txs: Vec<TxShape>,
+    merkle_root: MerkleRoot,
+    size: usize,
+    reason: String,
+  }
+
+  fn reason(result: Option<BlockInvalid>) -> String {
+    match result {
+      None => String::new(),
+      Some(BlockInvalid::Transaction { error, .. }) => crate::transaction::tests::reason(Some(error)),
+      Some(error) => error.to_string().split(':').next().unwrap_or_default().into(),
+    }
+  }
+
+  #[rstest]
+  fn check_matches_vectors() {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "block_check");
+    for (i, v) in corpus.vectors::<CheckVector>("check").into_iter().enumerate() {
+      let mut block = Block {
+        header: BlockHeader {
+          bits: 0x207f_ffff,
+          ..BlockHeader::default()
+        },
+        transactions: v.txs.iter().map(TxShape::build).collect(),
+      };
+      block.header.merkle_root = block.merkle().0;
+      assert_eq!(block.header.merkle_root, v.merkle_root, "vector {i}");
+      while block.check() == Some(BlockInvalid::BadProofOfWork) {
+        block.header.nonce += 1;
+      }
+      let mut buf = Vec::new();
+      block.encode(&mut buf);
+      assert_eq!(buf.len(), v.size, "vector {i}");
+      assert_eq!(reason(block.check()), v.reason, "vector {i}");
+    }
   }
 }

@@ -79,9 +79,9 @@ fn ephemeral<S: BlsScheme>(rng: &mut impl CryptoRng) -> Result<(BlsSecretKey<S>,
 
 /// A BLS-IES encrypted blob under an ephemeral key.
 #[cfg_attr(
-  feature = "serde",
+  all(feature = "codec", feature = "serde"),
   derive(::serde::Serialize, ::serde::Deserialize),
-  serde(into = "BlsIesBlobBytes<S>", try_from = "BlsIesBlobBytes<S>"),
+  serde(into = "BlsIesBlobBytes", try_from = "BlsIesBlobBytes"),
   serde(bound(serialize = "", deserialize = ""))
 )]
 #[cfg_attr(feature = "codec", derive(TypeId))]
@@ -92,7 +92,7 @@ pub struct BlsIesBlob<S: BlsScheme> {
 }
 
 #[cfg(feature = "codec")]
-dlgt_codec!(for[S: BlsScheme] BlsIesBlob<S> => BlsIesBlobBytes<S>, Hash256, BlsError, MAX_SER_SIZE);
+dlgt_codec!(for[S: BlsScheme] BlsIesBlob<S> => BlsIesBlobBytes, Hash256, BlsError, MAX_SER_SIZE);
 
 impl<S: BlsScheme> BlsIesBlob<S> {
   /// Constructs from an ephemeral key, an IV seed and a ciphertext.
@@ -171,11 +171,11 @@ impl<S: BlsScheme> PartialEq for BlsIesBlob<S> {
   }
 }
 
-type_cvrt!(for[S: BlsScheme] From<BlsIesBlob<S>> for BlsIesBlobBytes<S>, |blob| {
+type_cvrt!(for[S: BlsScheme] From<BlsIesBlob<S>> for BlsIesBlobBytes, |blob| {
   Self::new(BlsPkBytes::from(&blob.ephemeral_pk), blob.iv_seed, blob.data.clone())
 });
 
-type_cvrt!(for[S: BlsScheme] TryFrom<BlsIesBlobBytes<S>> for BlsIesBlob<S>, BlsError, |bytes| {
+type_cvrt!(for[S: BlsScheme] TryFrom<BlsIesBlobBytes> for BlsIesBlob<S>, BlsError, |bytes| {
   Ok(Self::new(
     BlsPublicKey::from_bytes(bytes.ephemeral_pk().as_bytes())?,
     *bytes.iv_seed(),
@@ -183,11 +183,23 @@ type_cvrt!(for[S: BlsScheme] TryFrom<BlsIesBlobBytes<S>> for BlsIesBlob<S>, BlsE
   ))
 });
 
+impl BlsIesBlobBytes {
+  /// Validates the ephemeral key under scheme `S`.
+  ///
+  /// # Errors
+  ///
+  /// Returns `InvalidPublicKey` when the ephemeral key is not a valid point
+  /// under `S`.
+  pub fn to<S: BlsScheme>(&self) -> Result<BlsIesBlob<S>, BlsError> {
+    BlsIesBlob::try_from(self)
+  }
+}
+
 /// One ciphertext per recipient under an ephemeral key.
 #[cfg_attr(
-  feature = "serde",
+  all(feature = "codec", feature = "serde"),
   derive(::serde::Serialize, ::serde::Deserialize),
-  serde(into = "BlsIesMultiBytes<S>", try_from = "BlsIesMultiBytes<S>"),
+  serde(into = "BlsIesMultiBytes", try_from = "BlsIesMultiBytes"),
   serde(bound(serialize = "", deserialize = ""))
 )]
 #[cfg_attr(feature = "codec", derive(TypeId))]
@@ -198,7 +210,7 @@ pub struct BlsIesMulti<S: BlsScheme> {
 }
 
 #[cfg(feature = "codec")]
-dlgt_codec!(for[S: BlsScheme] BlsIesMulti<S> => BlsIesMultiBytes<S>, Hash256, BlsError, MAX_SER_SIZE);
+dlgt_codec!(for[S: BlsScheme] BlsIesMulti<S> => BlsIesMultiBytes, Hash256, BlsError, MAX_SER_SIZE);
 
 impl<S: BlsScheme> BlsIesMulti<S> {
   /// Constructs from an ephemeral key, an IV seed and one ciphertext per
@@ -296,17 +308,30 @@ impl<S: BlsScheme> PartialEq for BlsIesMulti<S> {
   }
 }
 
-type_cvrt!(for[S: BlsScheme] From<BlsIesMulti<S>> for BlsIesMultiBytes<S>, |multi| {
+type_cvrt!(for[S: BlsScheme] From<BlsIesMulti<S>> for BlsIesMultiBytes, |multi| {
   Self::new(BlsPkBytes::from(&multi.ephemeral_pk), multi.iv_seed, multi.blobs.clone())
 });
 
-type_cvrt!(for[S: BlsScheme] TryFrom<BlsIesMultiBytes<S>> for BlsIesMulti<S>, BlsError, |bytes| {
+type_cvrt!(for[S: BlsScheme] TryFrom<BlsIesMultiBytes> for BlsIesMulti<S>, BlsError, |bytes| {
   Self::new(
     BlsPublicKey::from_bytes(bytes.ephemeral_pk().as_bytes())?,
     *bytes.iv_seed(),
     bytes.blobs().to_vec(),
   )
 });
+
+impl BlsIesMultiBytes {
+  /// Validates the ephemeral key under scheme `S`.
+  ///
+  /// # Errors
+  ///
+  /// Returns `InvalidPublicKey` when the ephemeral key is not a valid point
+  /// under `S`, and `IndexTooLarge` when there are more recipients than
+  /// [`MAX_IES_RECIPIENTS`].
+  pub fn to<S: BlsScheme>(&self) -> Result<BlsIesMulti<S>, BlsError> {
+    BlsIesMulti::try_from(self)
+  }
+}
 
 impl<S: BlsScheme> BlsPublicKey<S> {
   /// Encrypt one blob for this recipient.
@@ -835,7 +860,7 @@ mod tests {
       #[rstest]
       fn decoding_rejects_an_invalid_ephemeral_key() {
         let bag =
-          BlsIesBlobBytes::<BlsScIetf>::new(BlsPkBytes::from_bytes([0xab; 48]), [0xcd; IV_SEED_LEN], vec![0x11; 16]);
+          BlsIesBlobBytes::new(BlsPkBytes::from_bytes([0xab; 48]), [0xcd; IV_SEED_LEN], vec![0x11; 16]);
 
         assert_eq!(
           BlsIesBlob::<BlsScIetf>::try_from(&bag).unwrap_err(),

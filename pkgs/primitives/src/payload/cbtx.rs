@@ -73,7 +73,7 @@ impl BaseCodec for CoinbaseCommitment {
     if version < 3 {
       return Ok(cbtx);
     }
-    cbtx.best_cl_height_diff = Some(CompactSize::decode_size(data)?.to_base());
+    cbtx.best_cl_height_diff = Some(CompactSize::decode(data)?.to_base());
     cbtx.best_cl_signature = Some(bls::read_global(data)?);
     cbtx.credit_pool_balance = Some(i64::decode(data)?);
     if version >= 4 {
@@ -103,24 +103,18 @@ impl BaseCodec for CoinbaseCommitment {
   }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Unencodable)]
+/// Coinbase commitment validation failure.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, thiserror::Error, Unencodable)]
 pub enum CbTxInvalid {
   /// `bad-cbtx-version`
+  #[error("bad-cbtx-version: {version}")]
   BadVersion { version: u16 },
   /// `bad-cbtx-missing-field`
+  #[error("bad-cbtx-missing-field")]
   MissingField,
   /// `bad-cbtx-unexpected-field`
+  #[error("bad-cbtx-unexpected-field")]
   UnexpectedField,
-}
-
-impl core::fmt::Display for CbTxInvalid {
-  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-    match self {
-      Self::BadVersion { version } => write!(f, "bad-cbtx-version: {version}"),
-      Self::MissingField => write!(f, "bad-cbtx-missing-field"),
-      Self::UnexpectedField => write!(f, "bad-cbtx-unexpected-field"),
-    }
-  }
 }
 
 impl Checkable for CoinbaseCommitment {

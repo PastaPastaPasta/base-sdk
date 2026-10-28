@@ -33,30 +33,23 @@ codec_type!(AssetLock {
 });
 
 /// Asset lock validation failure.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Unencodable)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, thiserror::Error, Unencodable)]
 pub enum AssetLockInvalid {
   /// `bad-assetlocktx-version`
+  #[error("bad-assetlocktx-version: {version}")]
   BadVersion { version: u8 },
   /// `bad-assetlocktx-emptycreditoutputs`
+  #[error("bad-assetlocktx-emptycreditoutputs")]
   EmptyCreditOutputs,
   /// `bad-assetlocktx-credit-outofrange`
+  #[error("bad-assetlocktx-credit-outofrange: output {index}")]
   CreditOutOfRange { index: usize },
   /// `bad-assetlocktx-pubKeyHash`
+  #[error("bad-assetlocktx-pubKeyHash: output {index}")]
   CreditNotP2pkh { index: usize },
   /// `bad-assetlocktx-script-pubkey` (v2: neither P2PKH nor P2SH)
+  #[error("bad-assetlocktx-script-pubkey: output {index}")]
   CreditBadScript { index: usize },
-}
-
-impl core::fmt::Display for AssetLockInvalid {
-  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-    match self {
-      Self::BadVersion { version } => write!(f, "bad-assetlocktx-version: {version}"),
-      Self::EmptyCreditOutputs => write!(f, "bad-assetlocktx-emptycreditoutputs"),
-      Self::CreditOutOfRange { index } => write!(f, "bad-assetlocktx-credit-outofrange: output {index}"),
-      Self::CreditNotP2pkh { index } => write!(f, "bad-assetlocktx-pubKeyHash: output {index}"),
-      Self::CreditBadScript { index } => write!(f, "bad-assetlocktx-script-pubkey: output {index}"),
-    }
-  }
 }
 
 impl Checkable for AssetLock {

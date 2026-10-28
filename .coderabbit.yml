@@ -29,6 +29,8 @@ reviews:
     base_branches:
       - "develop"
     drafts: false
+    labels:
+      - "!tag:skip-review"
   changed_files_summary: false
   collapse_walkthrough: true
   estimate_code_review_effort: false
@@ -43,6 +45,8 @@ reviews:
     - "!**/*.json"
     - "!**/*.json5"
     - "!**/*.lock"
+    - "!**/fuzz/*/corpora/**"
+    - "!**/fuzz/dicts/**"
   poem: false
   pre_merge_checks:
     docstrings:

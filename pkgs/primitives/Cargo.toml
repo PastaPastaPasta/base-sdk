@@ -9,6 +9,9 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[lib]
+bench = false
+
 [features]
 default = []
 std = [
@@ -32,20 +35,22 @@ serde = [
   "dash-types/serde",
 ]
 full = ["std", "serde"]
+portable = ["dash-pkc/portable", "dash-pow/portable", "dash-script/portable"]
 
 [dependencies]
 bitcoin-consensus-encoding = { workspace = true, features = ["alloc"] }
 bitcoin-primitives = { workspace = true, features = ["alloc"] }
 bitcoin_hashes = { workspace = true, features = ["alloc"] }
 bitcoin-units = { workspace = true, features = ["alloc"] }
-dash-num = { version = "0.1.0-beta", path = "../num", features = ["codec"] }
-dash-pkc = { version = "0.1.0-beta", path = "../pkc", default-features = false, features = [
+dash-num = { version = "0.2.0-beta", path = "../num", features = ["codec"] }
+dash-pkc = { version = "0.2.0-beta", path = "../pkc", default-features = false, features = [
   "bls",
   "codec",
+  "ecdsa",
 ] }
-dash-pow = { version = "0.0.0", path = "../pow" }
+dash-pow = { version = "0.1.0-beta", path = "../pow", default-features = false }
 dash-script = { version = "0.0.0", path = "../script" }
-dash-types = { version = "0.1.0-beta", path = "../types", default-features = false, features = [
+dash-types = { version = "0.2.0-beta", path = "../types", default-features = false, features = [
   "bitcoin-primitives",
   "codec",
 ] }
@@ -58,10 +63,11 @@ serde = { workspace = true, features = [
   "alloc",
   "derive",
 ], optional = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
-dash-dev = { version = "0.0.0", path = "../dev", features = ["full"] }
-dash-pkc = { version = "0.1.0-beta", path = "../pkc", features = [
+dash-dev = { version = "0.0.0", path = "../../meta/dev", features = ["full"] }
+dash-pkc = { version = "0.2.0-beta", path = "../pkc", features = [
   "bls",
   "ecdsa",
 ] }
@@ -70,3 +76,6 @@ serde = { workspace = true, features = ["derive", "std"] }
 
 [lints]
 workspace = true
+
+[package.metadata.docs.rs]
+features = ["portable"]

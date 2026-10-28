@@ -12,11 +12,13 @@ use super::curve_consts::HALF_P;
 use super::error::BlsError;
 use super::group::{G1Affine, G2Affine, Point, G1, G2};
 use super::scalar::FR_BITS;
-use super::scheme_ops::{sealed::Sealed, BlsScheme};
+use super::scheme_ops::BlsScheme;
 use super::schemes::BlsScChia;
 use crate::prelude::*;
+use crate::sealed::Sealed;
 
 use blst::min_pk;
+use sha2::{Digest, Sha256};
 use zeroize::{Zeroize, Zeroizing};
 
 /// y.c1 > (p-1)/2, matching the legacy sign convention.
@@ -30,7 +32,7 @@ impl BlsScheme for BlsScChia {
   type InnerSk = blst::blst_scalar;
   type InnerPk = G1Affine;
   type InnerSig = G2Affine;
-  type Msg = [u8; 32];
+  type Msg<'a> = [u8; 32];
 
   /// Derive via draft-03 keygen, then range-check the scalar.
   fn sk_from_ikm(ikm: &[u8]) -> Result<Self::InnerSk, BlsError> {
@@ -211,15 +213,15 @@ impl BlsScheme for BlsScChia {
   }
 
   /// Hash the message to G2 and multiply by the secret scalar (no DST).
-  fn sign(sk: &Self::InnerSk, msg: &Self::Msg) -> Self::InnerSig {
-    let h = chia_h2c::hash_to_g2(msg);
+  fn sign(sk: &Self::InnerSk, msg: Self::Msg<'_>) -> Self::InnerSig {
+    let h = chia_h2c::hash_to_g2(&msg);
     // blst_sign_pk_in_g1 applies IETF transformations, do manually instead.
     h.mul_scalar(&sk.b, FR_BITS).to_affine()
   }
 
   /// Check the pairing e(sig, G1) == e(H(msg), pk).
-  fn verify(sig: &Self::InnerSig, msg: &Self::Msg, pk: &Self::InnerPk) -> Result<(), BlsError> {
-    let h_proj = chia_h2c::hash_to_g2(msg);
+  fn verify(sig: &Self::InnerSig, msg: Self::Msg<'_>, pk: &Self::InnerPk) -> Result<(), BlsError> {
+    let h_proj = chia_h2c::hash_to_g2(&msg);
     if blst_ffi::pairings_equal_with_g1_generator(sig, &h_proj, pk) {
       Ok(())
     } else {
@@ -227,9 +229,14 @@ impl BlsScheme for BlsScChia {
     }
   }
 
-  /// The Chia message type is already a fixed 32-byte array.
-  fn msg_ref(m: &[u8; 32]) -> &Self::Msg {
-    m
+  /// The legacy message is the 32-byte digest itself.
+  fn digest_msg(digest: &[u8; 32]) -> Self::Msg<'_> {
+    *digest
+  }
+
+  /// The legacy scheme signs the SHA-256 digest of the message.
+  fn plaintext_msg(msg: &[u8]) -> Self::Msg<'_> {
+    Sha256::digest(msg).into()
   }
 
   /// Sum the public keys in G1.
@@ -257,7 +264,7 @@ impl BlsScheme for BlsScChia {
   }
 
   /// Sum the keys, then verify once against the shared message.
-  fn fast_verify_aggregates(sig: &Self::InnerSig, msg: &Self::Msg, pks: &[&Self::InnerPk]) -> Result<(), BlsError> {
+  fn fast_verify_aggregates(sig: &Self::InnerSig, msg: Self::Msg<'_>, pks: &[&Self::InnerPk]) -> Result<(), BlsError> {
     if pks.is_empty() {
       return Err(BlsError::EmptyAggregation);
     }
@@ -266,7 +273,7 @@ impl BlsScheme for BlsScChia {
   }
 
   /// Hash each message on its own, then verify all pairs in one multi-pairing.
-  fn verify_aggregates(sig: &Self::InnerSig, msgs: &[&Self::Msg], pks: &[&Self::InnerPk]) -> Result<(), BlsError> {
+  fn verify_aggregates(sig: &Self::InnerSig, msgs: &[Self::Msg<'_>], pks: &[&Self::InnerPk]) -> Result<(), BlsError> {
     if pks.len() != msgs.len() {
       return Err(BlsError::CountMismatch);
     }
@@ -274,7 +281,7 @@ impl BlsScheme for BlsScChia {
       return Err(BlsError::EmptyAggregation);
     }
 
-    let hashes: Vec<G2> = msgs.iter().map(|msg| chia_h2c::hash_to_g2(msg)).collect();
+    let hashes: Vec<G2> = msgs.iter().map(chia_h2c::hash_to_g2).collect();
     if blst_ffi::pairings_equal_with_g1_generator_prod(sig, &hashes, pks) {
       Ok(())
     } else {
@@ -338,7 +345,7 @@ mod tests {
     for v in &vecs {
       let sk = BlsScChia::sk_from_bytes(&arr_from_hex(&v.sk)).unwrap();
       let msg: [u8; 32] = arr_from_hex(&v.msg);
-      let sig = BlsScChia::sign(&sk, &msg);
+      let sig = BlsScChia::sign(&sk, msg);
       assert_eq!(BlsScChia::sig_to_bytes(&sig).to_lower_hex_string(), v.sig);
     }
   }
@@ -349,12 +356,12 @@ mod tests {
     let sk1 = BlsScChia::sk_from_ikm(&RSEED[1]).unwrap();
     let pk0 = BlsScChia::derive_pk(&sk0);
     let pk1 = BlsScChia::derive_pk(&sk1);
-    let sig = BlsScChia::sign(&sk0, &MSG_DEADBEEF);
+    let sig = BlsScChia::sign(&sk0, MSG_DEADBEEF);
 
-    assert!(BlsScChia::verify(&sig, &MSG_DEADBEEF, &pk0).is_ok());
-    assert!(BlsScChia::verify(&sig, &MSG_8BADFOOD, &pk0).is_err());
-    assert!(BlsScChia::verify(&sig, &MSG_DEADBEEF, &pk1).is_err());
-    assert_eq!(BlsScChia::sign(&sk0, &MSG_DEADBEEF), sig);
+    assert!(BlsScChia::verify(&sig, MSG_DEADBEEF, &pk0).is_ok());
+    assert!(BlsScChia::verify(&sig, MSG_8BADFOOD, &pk0).is_err());
+    assert!(BlsScChia::verify(&sig, MSG_DEADBEEF, &pk1).is_err());
+    assert_eq!(BlsScChia::sign(&sk0, MSG_DEADBEEF), sig);
   }
 
   #[test]
@@ -365,8 +372,8 @@ mod tests {
     // The identity key serializes to the infinity marker (bits 6-7 set).
     assert_eq!(BlsScChia::pk_to_bytes(&inf_pk)[0] & 0xc0, 0xc0);
 
-    let sig = BlsScChia::sign(&sk, &MSG_DEADBEEF);
-    let res = BlsScChia::secure_verify_aggregates(&sig, &MSG_DEADBEEF, &[&real_pk, &inf_pk]);
+    let sig = BlsScChia::sign(&sk, MSG_DEADBEEF);
+    let res = BlsScChia::secure_verify_aggregates(&sig, MSG_DEADBEEF, &[&real_pk, &inf_pk]);
     assert!(matches!(res, Err(BlsError::InvalidPublicKey)));
   }
 

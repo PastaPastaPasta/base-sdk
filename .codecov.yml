@@ -9,37 +9,65 @@ coverage:
     project:
       default:
         target: auto
+      dash-num:
+        flags: [dash-num]
+      dash-p2p-core:
+        flags: [dash-p2p-core]
+      dash-params:
+        flags: [dash-params]
+      dash-pkc:
+        flags: [dash-pkc]
+      dash-pow:
+        flags: [dash-pow]
+      dash-primitives:
+        flags: [dash-primitives]
+      dash-script:
+        flags: [dash-script]
+      dash-types:
+        flags: [dash-types]
     patch:
       default:
         target: auto
+      dash-num:
+        flags: [dash-num]
+      dash-p2p-core:
+        flags: [dash-p2p-core]
+      dash-params:
+        flags: [dash-params]
+      dash-pkc:
+        flags: [dash-pkc]
+      dash-pow:
+        flags: [dash-pow]
+      dash-primitives:
+        flags: [dash-primitives]
+      dash-script:
+        flags: [dash-script]
+      dash-types:
+        flags: [dash-types]
 flags:
   dash-num:
-    paths:
-      - pkgs/num/
+    paths: [pkgs/num/]
+    carryforward: true
   dash-script:
-    paths:
-      - pkgs/script/
+    paths: [pkgs/script/]
+    carryforward: true
   dash-p2p-core:
-    paths:
-      - pkgs/p2p_core/
+    paths: [pkgs/p2p_core/]
+    carryforward: true
   dash-params:
-    paths:
-      - pkgs/params/
+    paths: [pkgs/params/]
+    carryforward: true
   dash-pkc:
-    paths:
-      - pkgs/pkc/
+    paths: [pkgs/pkc/]
+    carryforward: true
   dash-pow:
-    paths:
-      - pkgs/pow/
+    paths: [pkgs/pow/]
+    carryforward: true
   dash-primitives:
-    paths:
-      - pkgs/primitives/
+    paths: [pkgs/primitives/]
+    carryforward: true
   dash-types:
-    paths:
-      - pkgs/types/
-      - pkgs/types/marker/
-flag_management:
-  default_rules:
+    paths: [pkgs/types/, pkgs/types/marker/]
     carryforward: true
 ignore:
   - "**/bench/**"

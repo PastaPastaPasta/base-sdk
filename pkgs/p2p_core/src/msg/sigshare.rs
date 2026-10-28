@@ -20,7 +20,7 @@ use crate::prelude::*;
 
 use dash_num::Hash256;
 use dash_params::MAX_LLMQ_SIZE;
-use dash_pkc::bls::{BlsScIetf, BlsSigBytes};
+use dash_pkc::bls::BlsSigBytes;
 use dash_primitives::{hash_impl, DynBitset, LlmqType, QuorumHash};
 use dash_types::codec::{read_bytes, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
@@ -201,7 +201,7 @@ impl_p2p!(SigSharesInv);
 impl BaseCodec for SigSharesInv {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let session_id = read_varint_u32(data)?;
-    let size = CompactSize::decode_size(data)?.to_base();
+    let size = CompactSize::decode(data)?.to_base();
     if size > MAX_BATCHED_SIGS as u64 {
       return Err(DecodeError::CompactSizeExceedsLimit {
         limit: MAX_BATCHED_SIGS,
@@ -233,7 +233,7 @@ pub struct BatchedSigShare {
   /// Index of the member in the quorum.
   pub quorum_member: u16,
   /// The member's signature share, as read.
-  pub sig_share: BlsSigBytes<BlsScIetf>,
+  pub sig_share: BlsSigBytes,
 }
 
 codec_p2p!(BatchedSigShare {
@@ -257,7 +257,7 @@ impl_p2p!(BatchedSigShares);
 impl BaseCodec for BatchedSigShares {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let session_id = read_varint_u32(data)?;
-    let count = CompactSize::decode_size(data)?.into_len(MAX_BATCHED_SIGS)?;
+    let count = CompactSize::decode(data)?.into_len(MAX_BATCHED_SIGS)?;
     let mut sig_shares = Vec::new();
     for _ in 0..count {
       sig_shares.push(BatchedSigShare::decode(data)?);
@@ -289,7 +289,7 @@ pub struct SigShare {
   /// Hash of the message signed.
   pub msg_hash: Hash256,
   /// The member's signature share, as read.
-  pub sig_share: BlsSigBytes<BlsScIetf>,
+  pub sig_share: BlsSigBytes,
 }
 
 codec_p2p!(SigShare {

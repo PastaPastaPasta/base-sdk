@@ -27,7 +27,7 @@ use dash_params::ChainParams;
 use dash_primitives::{hash_impl, Transaction, TxHash, TxIn, TxOut};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
-use dash_types::{CompactSize, CoreBool, Numeric};
+use dash_types::{CompactSize, Numeric};
 
 /// Core's `COINJOIN_ENTRY_MAX_SIZE`, the most inputs or outputs one
 /// participant may add.
@@ -183,7 +183,7 @@ impl DsSignedInputs {
   /// past [`max_pool_entries`], which Core answers with `ERR_MAXIMUM`, and
   /// otherwise a count that does not read (Core logs it).
   pub fn check_payload(payload: &[u8], params: &ChainParams) -> Result<(), P2pDecodeError> {
-    let count = CompactSize::decode_size(&mut &payload[..])?.to_base();
+    let count = CompactSize::decode(&mut &payload[..])?.to_base();
     let max = max_pool_entries(params) as u64;
     if count > max {
       return Err(P2pDecodeError::TooManyEntries {
@@ -259,7 +259,7 @@ pub struct DsQueue {
   /// The queue's time, in seconds.
   pub time: i64,
   /// Whether the session is ready to mix.
-  pub ready: CoreBool,
+  pub ready: bool,
   /// The masternode's BLS signature, as read.
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::hex"))]
   pub sig: Vec<u8>,

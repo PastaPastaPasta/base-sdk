@@ -1,0 +1,175 @@
+//
+// Context-free block check vectors. Generated with the reference
+// implementation (dashpay/dash v24.0.0-rc.3, 0364ed626e).
+//
+// To run the program, paste it at the end of the `validation_tests` suite in
+// `src/test/validation_tests.cpp` at the specified revision, build it with
+// `make -C src test/test_dash` and run
+// `./src/test/test_dash --run_test=validation_tests/block_check_shapes`. The
+// output should match the section.
+//
+
+{
+/*
+struct BlockTxShape {
+    std::vector<uint8_t> inputs;
+    uint32_t lock_time;
+    size_t sigops;
+    size_t pad;
+};
+
+struct BlockShape {
+    std::vector<BlockTxShape> txs;
+    size_t target;
+};
+
+static CBlock BuildBlock(const std::vector<BlockTxShape>& txs)
+{
+    CBlock block;
+    for (const BlockTxShape& t : txs) {
+        CMutableTransaction tx;
+        tx.nVersion = 3;
+        tx.nLockTime = t.lock_time;
+        for (const uint8_t seed : t.inputs) {
+            COutPoint prevout;
+            if (seed) {
+                uint256 hash;
+                std::fill(hash.begin(), hash.end(), seed);
+                prevout = COutPoint{hash, 0};
+            }
+            tx.vin.emplace_back(prevout);
+        }
+        if (!tx.vin.empty()) tx.vin[0].scriptSig.resize(2);
+        CScript script;
+        script.insert(script.end(), t.sigops, static_cast<unsigned char>(OP_CHECKSIG));
+        script.resize(t.sigops + t.pad);
+        tx.vout.emplace_back(1, script);
+        block.vtx.push_back(MakeTransactionRef(std::move(tx)));
+    }
+    block.hashMerkleRoot = BlockMerkleRoot(block);
+    return block;
+}
+
+BOOST_AUTO_TEST_CASE(block_check_shapes)
+{
+    for (const BlockShape& s : std::vector<BlockShape>{
+             {{{{0}, 0, 0, 0}}, 0},
+             {{{{0}, 0, 0, 0}, {{1}, 0, 0, 0}}, 0},
+             {{{{0}, 0, 0, 0}, {{1}, 0, 0, 0}, {{2}, 0, 0, 0}}, 0},
+             {{}, 0},
+             {{{{1}, 0, 0, 0}}, 0},
+             {{{{1}, 0, 0, 0}, {{0}, 0, 0, 0}}, 0},
+             {{{{0}, 0, 0, 0}, {{0}, 1, 0, 0}}, 0},
+             {{{{0}, 0, 0, 0}, {{1, 1}, 0, 0, 0}}, 0},
+             {{{{0}, 0, 0, 0}, {{1, 0}, 0, 0, 0}}, 0},
+             {{{{1}, 0, 0, 0}, {{1, 1}, 0, 0, 0}}, 0},
+             {{{{0}, 0, MaxBlockSigOps(), 0}}, 0},
+             {{{{0}, 0, MaxBlockSigOps() + 1, 0}}, 0},
+             {{{{0}, 0, 20000, 0}, {{1}, 0, 20001, 0}}, 0},
+             {{{{0}, 0, MaxBlockSigOps() + 1, 0}, {{1, 1}, 0, 0, 0}}, 0},
+             {{{{0, 1}, 0, 0, 0}}, 0},
+             {{{{0}, 0, 0, 0}, {{1}, 0, 0, 0}, {{2}, 0, 0, 0}, {{2}, 0, 0, 0}}, 0},
+             {{{{0}, 0, 0, 0}, {{1}, 0, 0, 0}, {{2}, 0, 0, 0}, {{2}, 0, 0, 0}, {{3}, 0, 0, 0}, {{4}, 0, 0, 0}}, 0},
+             {{{{0}, 0, 0, 0}, {{1}, 0, 0, 0}, {{1}, 0, 0, 0}}, 0},
+             {{{{0}, 0, 0, 0}, {{1}, 0, 0, 0}, {{2}, 0, 0, 0}, {{3}, 0, 0, 0}, {{2}, 0, 0, 0}, {{3}, 0, 0, 0}}, 0},
+             {{{{0}, 0, 0, 0}, {{1}, 0, 0, 0}, {{2}, 0, 0, 0}, {{3}, 0, 0, 0}, {{4}, 0, 0, 0}, {{5}, 0, 0, 0}, {{4}, 0, 0, 0}, {{5}, 0, 0, 0}}, 0},
+             {{{{1}, 0, 0, 0}, {{1}, 0, 0, 0}}, 0},
+             {{{{0}, 0, 0, 0}, {{1, 1}, 0, 0, 0}, {{1, 1}, 0, 0, 0}}, 0},
+             {{{{0}, 0, 0, 0}, {{1}, 0, 0, 900000}, {{2}, 0, 0, 900000}}, MaxBlockSize()},
+             {{{{0}, 0, 0, 0}, {{1}, 0, 0, 900000}, {{2}, 0, 0, 900000}}, MaxBlockSize() + 1},
+             {{{{1}, 0, 0, 0}, {{2}, 0, 0, 900000}, {{3}, 0, 0, 900000}}, MaxBlockSize() + 1},
+             {{{{0}, 0, 0, 0}, {{1}, 0, 0, 900000}, {{1, 1}, 0, 0, 900000}}, MaxBlockSize() + 1},
+             {{{{0}, 0, 0, 0}, {{1}, 0, 0, 600000}, {{2}, 0, 0, 600000}, {{2}, 0, 0, 600000}}, MaxBlockSize() + 1},
+         }) {
+        std::vector<BlockTxShape> txs{s.txs};
+        const auto size = [&] { return ::GetSerializeSize(BuildBlock(txs), PROTOCOL_VERSION); };
+        while (s.target && size() != s.target) {
+            txs[0].pad = txs[0].pad + s.target - size();
+        }
+        const CBlock block{BuildBlock(txs)};
+        BlockValidationState state;
+        CheckBlock(block, state, Params().GetConsensus(), false, true);
+        std::printf("    { \"txs\": [");
+        for (size_t i = 0; i < txs.size(); ++i) {
+            std::printf("%s{ \"inputs\": [", i ? ", " : "");
+            for (size_t j = 0; j < txs[i].inputs.size(); ++j) std::printf("%s%u", j ? ", " : "", txs[i].inputs[j]);
+            std::printf("], \"lock_time\": %u, \"sigops\": %zu, \"pad\": %zu }", txs[i].lock_time, txs[i].sigops,
+                        txs[i].pad);
+        }
+        std::printf("], \"merkle_root\": \"%s\", \"size\": %zu, \"reason\": \"%s\" },\n",
+                    block.hashMerkleRoot.ToString().c_str(), ::GetSerializeSize(block, PROTOCOL_VERSION),
+                    state.GetRejectReason().c_str());
+    }
+}
+*/
+  // Each vector lists the transactions of a block. Every transaction has
+  // version 3 and one input per seed in `inputs`, where 0 is the null
+  // outpoint and any other seed spends output 0 of the hash filled with that
+  // byte. Input 0 has a `script_sig` of two zero bytes. The single output has
+  // value 1 and a script of `sigops` OP_CHECKSIG bytes followed by `pad` zero
+  // bytes. The header commits to the transactions and its proof of work is
+  // not checked. `size` is the serialized size and `reason` the rejection
+  // reason, empty when the block passes.
+  "check": [
+    // A block with only a coinbase passes.
+    { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 0, "pad": 0 }], "merkle_root": "80daf4acbb833c31f852f5c360b6bb2bc01217b7a61db658786ac395353e1555", "size": 143, "reason": "" },
+    // An even number of transactions passes.
+    { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [1], "lock_time": 0, "sigops": 0, "pad": 0 }], "merkle_root": "a0c01031d4635995fc7d802f757dd570e46d786cb410ca980d3fe45df3e431de", "size": 205, "reason": "" },
+    // An odd number of transactions passes. Its last hash is paired with
+    // itself, which is not a mutation.
+    { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [1], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [2], "lock_time": 0, "sigops": 0, "pad": 0 }], "merkle_root": "9bf3b3859e5d751f8eda17f50de6f18031473441fcfb952955f0507767382c05", "size": 267, "reason": "" },
+    // A block without transactions fails the length check.
+    { "txs": [], "merkle_root": "0000000000000000000000000000000000000000000000000000000000000000", "size": 81, "reason": "bad-blk-length" },
+    // The first transaction is not a coinbase.
+    { "txs": [{ "inputs": [1], "lock_time": 0, "sigops": 0, "pad": 0 }], "merkle_root": "34361e759c45ae4df8e124ba93eafc721839be7eeaa23151f09a97fb7615e58b", "size": 143, "reason": "bad-cb-missing" },
+    // A coinbase that is not first is reported as missing.
+    { "txs": [{ "inputs": [1], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [0], "lock_time": 0, "sigops": 0, "pad": 0 }], "merkle_root": "8045587b7ded74bf2c63d821a0c14af1cc8cd81f5708c14e095a8006b9712210", "size": 205, "reason": "bad-cb-missing" },
+    // A second coinbase, made distinct by its lock time.
+    { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [0], "lock_time": 1, "sigops": 0, "pad": 0 }], "merkle_root": "2f121bf37023d8d4bba5cbebf924dbc9b170a9ab2f752b0e982e70d7e39444f2", "size": 205, "reason": "bad-cb-multiple" },
+    // A transaction that fails its own check rejects the block with the
+    // transaction's reason.
+    { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [1, 1], "lock_time": 0, "sigops": 0, "pad": 0 }], "merkle_root": "09013038b36c983b5a363584dc9ceb1e132c23018821d1874e2885753cc7031f", "size": 246, "reason": "bad-txns-inputs-duplicate" },
+    // A null prevout in a transaction after the coinbase.
+    { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [1, 0], "lock_time": 0, "sigops": 0, "pad": 0 }], "merkle_root": "e8c2caa146dbe1f6c03ba8eb7c989b08a838d4db1aeed98f4ed1caa51cb802ae", "size": 246, "reason": "bad-txns-prevout-null" },
+    // The coinbase checks run before the transaction checks.
+    { "txs": [{ "inputs": [1], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [1, 1], "lock_time": 0, "sigops": 0, "pad": 0 }], "merkle_root": "b2c035d2160f0a36ba3a747dd7bfeb9cf8a1148dbe2a0a979ca19384d54be2a2", "size": 246, "reason": "bad-cb-missing" },
+    // Exactly 40,000 signature operations, the block limit, pass.
+    { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 40000, "pad": 0 }], "merkle_root": "a02cb9da783ac642f0b414a5efe59ef2218f5c9e04bc15674c4113c37e851662", "size": 40145, "reason": "" },
+    // One signature operation above the block limit.
+    { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 40001, "pad": 0 }], "merkle_root": "1358d05c7f9f71ff410df8534583dfb4b04cf3c00a2098f9b78439a9d9b0c2ef", "size": 40146, "reason": "bad-blk-sigops" },
+    // Signature operations are summed across transactions.
+    { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 20000, "pad": 0 }, { "inputs": [1], "lock_time": 0, "sigops": 20001, "pad": 0 }], "merkle_root": "7e66e22bf7ebe801285245d69c419e142d5b36ad51c132e0a1685dd7d1089863", "size": 40210, "reason": "bad-blk-sigops" },
+    // The transaction checks run before the signature operation count.
+    { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 40001, "pad": 0 }, { "inputs": [1, 1], "lock_time": 0, "sigops": 0, "pad": 0 }], "merkle_root": "55a30aa7bfdf66caa7c06f9e8d5a66d15a84442558ec9aa41b0d29d25f2eaac5", "size": 40249, "reason": "bad-txns-inputs-duplicate" },
+    // A first transaction with two inputs and a null first prevout is not a
+    // coinbase.
+    { "txs": [{ "inputs": [0, 1], "lock_time": 0, "sigops": 0, "pad": 0 }], "merkle_root": "f298c50ccc8d18ffbe3d25c8aa68e1aff2efb405937d64ae8779b283d96166e7", "size": 184, "reason": "bad-cb-missing" },
+    // Repeating the last of three transactions gives the merkle root of a block
+    // of the first three, so the tree is mutated.
+    { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [1], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [2], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [2], "lock_time": 0, "sigops": 0, "pad": 0 }], "merkle_root": "9bf3b3859e5d751f8eda17f50de6f18031473441fcfb952955f0507767382c05", "size": 329, "reason": "bad-txns-duplicate" },
+    // Equal sibling hashes before the end of a level also mutate the tree.
+    { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [1], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [2], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [2], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [3], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [4], "lock_time": 0, "sigops": 0, "pad": 0 }], "merkle_root": "fb46fe83ed1ab5f72db91b6f715f050f636506f3818243d6bac10cd1d1c3aca9", "size": 453, "reason": "bad-txns-duplicate" },
+    // Copies of a transaction that are not siblings do not mutate the tree.
+    { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [1], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [1], "lock_time": 0, "sigops": 0, "pad": 0 }], "merkle_root": "621fb8a6eb01bd484f6f083dd5e2b28d7772d1cf3eb24d24f7753632f5c50afb", "size": 267, "reason": "" },
+    // A repeated pair whose hashes are not siblings one level up does not
+    // mutate the tree.
+    { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [1], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [2], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [3], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [2], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [3], "lock_time": 0, "sigops": 0, "pad": 0 }], "merkle_root": "66dd12db2b16d9fac53c22b07fffbaf5c71ea979869a46906b67518ad38490bc", "size": 453, "reason": "" },
+    // A repeated pair gives equal sibling hashes one level up.
+    { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [1], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [2], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [3], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [4], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [5], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [4], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [5], "lock_time": 0, "sigops": 0, "pad": 0 }], "merkle_root": "385f1514d8e52289ae90d820c1b2cd254ba9f95259eb6b72cb27741d8429435f", "size": 577, "reason": "bad-txns-duplicate" },
+    // The mutation check runs before the coinbase checks.
+    { "txs": [{ "inputs": [1], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [1], "lock_time": 0, "sigops": 0, "pad": 0 }], "merkle_root": "915a3d525c0a2a0092ead5f3342fceb8080c530e4cbfe7330e3b0d8eb2e62ba5", "size": 205, "reason": "bad-txns-duplicate" },
+    // Copies that are not siblings leave the duplicate inputs to the
+    // transaction check.
+    { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [1, 1], "lock_time": 0, "sigops": 0, "pad": 0 }, { "inputs": [1, 1], "lock_time": 0, "sigops": 0, "pad": 0 }], "merkle_root": "34c4aabd2abeca7c487bb5d32499bfe058aa39cb34f17c83fa5625c052521429", "size": 349, "reason": "bad-txns-inputs-duplicate" },
+    // A block of exactly 2,000,000 bytes, the size limit, passes.
+    { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 0, "pad": 199721 }, { "inputs": [1], "lock_time": 0, "sigops": 0, "pad": 900000 }, { "inputs": [2], "lock_time": 0, "sigops": 0, "pad": 900000 }], "merkle_root": "4a1b77076c19ac432085ef65b7fbe28df049da0262654c5e01bb168ffd8d380d", "size": 2000000, "reason": "" },
+    // A block one byte above the size limit.
+    { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 0, "pad": 199722 }, { "inputs": [1], "lock_time": 0, "sigops": 0, "pad": 900000 }, { "inputs": [2], "lock_time": 0, "sigops": 0, "pad": 900000 }], "merkle_root": "3797d82d646442259bb72c775c22f28c83c22a168c53347b995808d6d772164e", "size": 2000001, "reason": "bad-blk-length" },
+    // The size is checked before the coinbase checks.
+    { "txs": [{ "inputs": [1], "lock_time": 0, "sigops": 0, "pad": 199722 }, { "inputs": [2], "lock_time": 0, "sigops": 0, "pad": 900000 }, { "inputs": [3], "lock_time": 0, "sigops": 0, "pad": 900000 }], "merkle_root": "127ec3277ad19d51f2d2df80b7a7ab6d21d58b4852bbb6537dbb0f2778f72117", "size": 2000001, "reason": "bad-blk-length" },
+    // The size is checked before the transaction checks.
+    { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 0, "pad": 199681 }, { "inputs": [1], "lock_time": 0, "sigops": 0, "pad": 900000 }, { "inputs": [1, 1], "lock_time": 0, "sigops": 0, "pad": 900000 }], "merkle_root": "ba07b035801669886f79cfa68471382d364132c0941e588fee82b2cfd18a186f", "size": 2000001, "reason": "bad-blk-length" },
+    // The mutation check runs before the size check.
+    { "txs": [{ "inputs": [0], "lock_time": 0, "sigops": 0, "pad": 199656 }, { "inputs": [1], "lock_time": 0, "sigops": 0, "pad": 600000 }, { "inputs": [2], "lock_time": 0, "sigops": 0, "pad": 600000 }, { "inputs": [2], "lock_time": 0, "sigops": 0, "pad": 600000 }], "merkle_root": "61a04aac6a1cf6a65764a53e6ee30b222d484e6824a99235ee73f87118d4dce1", "size": 2000001, "reason": "bad-txns-duplicate" },
+  ],
+}

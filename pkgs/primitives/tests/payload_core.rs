@@ -15,7 +15,8 @@
 use dash_dev::{Corpus, Value};
 use dash_pkc::bls::{BlsCtx, BlsEager, BlsLazyPk, BlsSchemeKind, BlsWire};
 use dash_primitives::{
-  CoinbaseCommitment, Commitment, MnType, NIEntry, NITrait, NetInfo, PayloadDecode, SpecialPayload, Transaction,
+  CoinbaseCommitment, Commitment, MnType, NIEntry, NITrait, NetInfo, PayloadDecode, ProTxVersion, SpecialPayload,
+  Transaction,
 };
 use dash_types::codec::BaseCodec;
 use dash_types::{Checkable, Numeric};
@@ -241,7 +242,7 @@ fn compare(label: &str, payload: &SpecialPayload, core: &Value, bls: BlsCtx) {
   let mut f = Fields::new(label, core);
   match payload {
     SpecialPayload::ProviderRegister(p) => {
-      f.eq("version", p.version);
+      f.eq("version", p.version.to_base());
       f.eq("type", p.mn_type.to_base());
       f.eq("collateralHash", p.collateral_hash.to_string());
       f.eq("collateralIndex", p.collateral_index);
@@ -272,7 +273,7 @@ fn compare(label: &str, payload: &SpecialPayload, core: &Value, bls: BlsCtx) {
       }
     }
     SpecialPayload::ProviderUpdateService(p) => {
-      f.eq("version", p.version);
+      f.eq("version", p.version.to_base());
       // Core prints its default type for v1, which carries none.
       f.eq("type", p.mn_type.to_base());
       f.eq("proTxHash", p.pro_tx_hash.to_string());
@@ -281,7 +282,7 @@ fn compare(label: &str, payload: &SpecialPayload, core: &Value, bls: BlsCtx) {
       f.eq("inputsHash", p.inputs_hash.to_string());
     }
     SpecialPayload::ProviderUpdateRegistrar(p) => {
-      f.eq("version", p.version);
+      f.eq("version", p.version.to_base());
       f.eq("proTxHash", p.pro_tx_hash.to_string());
       f.eq("pubKeyOperator", lazy_hex(&p.pub_key_operator));
       for (i, payout) in p.payouts.iter().enumerate() {
@@ -291,7 +292,7 @@ fn compare(label: &str, payload: &SpecialPayload, core: &Value, bls: BlsCtx) {
       f.eq("inputsHash", p.inputs_hash.to_string());
     }
     SpecialPayload::ProviderUpdateRevoke(p) => {
-      f.eq("version", p.version);
+      f.eq("version", p.version.to_base());
       f.eq("proTxHash", p.pro_tx_hash.to_string());
       f.eq("reason", p.reason.to_base());
       f.eq("inputsHash", p.inputs_hash.to_string());
@@ -350,7 +351,7 @@ fn compare(label: &str, payload: &SpecialPayload, core: &Value, bls: BlsCtx) {
       f.eq("inputsHash", p.inputs_hash.to_string());
     }
     SpecialPayload::ProviderUpdateSharedRegistrar(p) => {
-      f.eq("version", p.version);
+      f.eq("version", p.version.to_base());
       f.eq("proTxHash", p.pro_tx_hash.to_string());
       f.eq("pubKeyOperator", lazy_hex(&p.pub_key_operator));
       f.eq("inputsHash", p.inputs_hash.to_string());
@@ -569,7 +570,7 @@ fn version_sourced_fields_encode_under_the_version_at_encoding() {
     panic!()
   };
   assert!(rev.sig.is_valid());
-  rev.version = 2;
+  rev.version = ProTxVersion::BasicBls;
   let written = redecode(&rev);
   assert_eq!(
     (written.sig.scheme(), written.sig.is_valid()),
@@ -582,7 +583,7 @@ fn version_sourced_fields_encode_under_the_version_at_encoding() {
   };
   let key = reg.pub_key_operator.get();
   assert!(key.is_valid());
-  reg.version = 2;
+  reg.version = ProTxVersion::BasicBls;
   let written = redecode(&reg);
   assert_eq!(written.pub_key_operator.scheme(), BlsSchemeKind::Basic);
   assert_eq!(written.pub_key_operator.get(), key, "same object");

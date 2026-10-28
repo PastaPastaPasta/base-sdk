@@ -15,7 +15,7 @@ All symbolic links must meet these criteria:
 - They must not dangle (i.e. point to non-existent resources)
 - They must not have a depth >1 (i.e. cannot point to another symlink)
 - They must not point to resources outside the repository (to prevent escapes)
-- They must not appear inside a crate directory (`pkgs/`)
+- They must not appear inside a publishable crate directory (`pkgs/`)
 """
 
 from __future__ import annotations
@@ -109,7 +109,8 @@ def main() -> int:
         faults.append(f"{path} -> {target}: {fault}")
       elif path.startswith("pkgs/"):
         faults.append(
-          f"{path} -> {target}: symlink inside a crate directory is prohibited",
+          f"{path} -> {target}: symlink inside a publishable crate directory "
+          "is prohibited",
         )
     elif mode in _MODE_FILE:
       fault = _hard_link_fault(repo_root, path)

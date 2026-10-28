@@ -30,12 +30,12 @@ use core::hash::{Hash, Hasher};
 /// A BLS public key (48-byte compressed G1 point)
 #[cfg_attr(feature = "codec", derive(TypeId))]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(into = "BlsPkBytes<S>", try_from = "BlsPkBytes<S>",))]
+#[cfg_attr(feature = "serde", serde(into = "BlsPkBytes", try_from = "BlsPkBytes",))]
 #[cfg_attr(feature = "serde", serde(bound(serialize = "", deserialize = "")))]
 pub struct BlsPublicKey<S: BlsScheme>(pub(crate) S::InnerPk);
 
 #[cfg(feature = "codec")]
-dlgt_codec!(for[S: BlsScheme] BlsPublicKey<S> => BlsPkBytes<S>, BlsPkHash<S>, BlsError, BLS_PK_LEN);
+dlgt_codec!(for[S: BlsScheme] BlsPublicKey<S> => BlsPkBytes, BlsPkHash, BlsError, BLS_PK_LEN);
 
 impl<S: BlsScheme> BlsPublicKey<S> {
   /// Deserialize from 48 bytes.
@@ -108,10 +108,9 @@ impl<S: BlsScheme> BlsPublicKey<S> {
 
   /// Aggregate public keys under secure-verification weighting.
   ///
-  /// The weights are those applied by
-  /// [`secure_verify_aggregates`](super::BlsSignature::secure_verify_aggregates)
-  /// to keys sorted by encoding, so the result is order-independent and a
-  /// signature passing that check verifies plainly against this key.
+  /// Keys are weighted in [`BlsSignature::secure_verify_aggregates_digest`],
+  /// sorted by encoding, so the result is order-independent and a signature
+  /// passing that check verifies plainly against this key.
   ///
   /// # Errors
   ///
@@ -122,13 +121,23 @@ impl<S: BlsScheme> BlsPublicKey<S> {
     S::secure_aggregate_pk(&inner_refs).map(Self::from_inner)
   }
 
-  /// Verify `sig` over a message of the scheme's message type.
+  /// Verify `sig` over a 32-byte hashed message.
   ///
   /// # Errors
   ///
   /// Returns `VerifyFailed` when the pairing check does not hold.
-  pub fn verify(&self, msg: &S::Msg, sig: &BlsSignature<S>) -> Result<(), BlsError> {
-    S::verify(sig.as_inner(), msg, &self.0)
+  pub fn verify_digest(&self, digest: &[u8; 32], sig: &BlsSignature<S>) -> Result<(), BlsError> {
+    S::verify(sig.as_inner(), S::digest_msg(digest), &self.0)
+  }
+
+  /// Verify `sig` over an arbitrary-length message, hashed as
+  /// [`BlsSecretKey::sign_message`](super::BlsSecretKey::sign_message) does.
+  ///
+  /// # Errors
+  ///
+  /// Returns `VerifyFailed` when the pairing check does not hold.
+  pub fn verify_message(&self, msg: &[u8], sig: &BlsSignature<S>) -> Result<(), BlsError> {
+    S::verify(sig.as_inner(), S::plaintext_msg(msg), &self.0)
   }
 
   pub(crate) fn from_inner(inner: S::InnerPk) -> Self {
@@ -176,13 +185,31 @@ impl<S: BlsScheme> PartialEq for BlsPublicKey<S> {
   }
 }
 
-type_cvrt!(for[S: BlsScheme] From<BlsPublicKey<S>> for BlsPkBytes<S>, |pk| {
+type_cvrt!(for[S: BlsScheme] From<BlsPublicKey<S>> for BlsPkBytes, |pk| {
   Self::from_bytes(pk.to_bytes())
 });
 
-type_cvrt!(for[S: BlsScheme] TryFrom<BlsPkBytes<S>> for BlsPublicKey<S>, BlsError, |bytes| {
+type_cvrt!(for[S: BlsScheme] TryFrom<BlsPkBytes> for BlsPublicKey<S>, BlsError, |bytes| {
   Self::from_bytes(bytes.as_bytes())
 });
+
+impl BlsPkBytes {
+  /// Validates the bytes as a public key under scheme `S`.
+  ///
+  /// # Errors
+  ///
+  /// Returns `InvalidPublicKey` when the bytes are not a valid point under `S`.
+  pub fn to<S: BlsScheme>(&self) -> Result<BlsPublicKey<S>, BlsError> {
+    BlsPublicKey::try_from(self)
+  }
+
+  /// Whether `S` decodes the bytes to a key that re-encodes to them.
+  ///
+  /// Null bytes pass, so pair with [`is_null`](Self::is_null) to require a key.
+  pub fn is_canonical<S: BlsScheme>(&self) -> bool {
+    self.is_null() || self.to::<S>().is_ok_and(|pk| pk.to_bytes() == *self.as_bytes())
+  }
+}
 
 type_cvrt!(for[S: BlsScheme] TryFrom<BlsPublicKey<S>> for G1, BlsError, |pk| {
   S::pk_to_g1(&pk.0)
@@ -458,6 +485,54 @@ mod tests {
     );
   }
 
+  fn assert_pk_bytes_canonical<S: BlsScheme>() {
+    let clean = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap().public_key().to_bytes();
+    assert!(BlsPkBytes::from_bytes(clean).is_canonical::<S>());
+    assert!(BlsPkBytes::from_bytes([0u8; 48]).is_canonical::<S>());
+
+    let mut infinity = [0u8; 48];
+    infinity[0] = 0xc0;
+    assert!(!BlsPkBytes::from_bytes(infinity).is_canonical::<S>());
+  }
+
+  #[rstest]
+  #[case::chia(assert_pk_bytes_canonical::<BlsScChia>)]
+  #[case::ietf(assert_pk_bytes_canonical::<BlsScIetf>)]
+  fn pk_bytes_canonical_keys_and_null(#[case] assertion: fn()) {
+    assertion();
+  }
+
+  /// The Chia decoder masks stray bits, so only `is_canonical` tells a masked
+  /// encoding apart.
+  #[rstest]
+  #[case::bit_five(0x20)]
+  #[case::bit_six(0x40)]
+  fn chia_pk_bytes_with_stray_bits_are_not_canonical(#[case] stray: u8) {
+    let clean = BlsSecretKey::<BlsScChia>::from_ikm(&RSEED[0])
+      .unwrap()
+      .public_key()
+      .to_bytes();
+    // A set sign bit would turn `0x40` into the infinity marker `0xc0`.
+    assert_eq!(clean[0] & 0x80, 0);
+    let mut mutated = clean;
+    mutated[0] |= stray;
+
+    assert!(BlsPublicKey::<BlsScChia>::from_bytes(&mutated).is_ok());
+    assert!(!BlsPkBytes::from_bytes(mutated).is_canonical::<BlsScChia>());
+  }
+
+  fn assert_pk_bytes_not_canonical<S: BlsScheme>(encoded: [u8; 48]) {
+    assert!(!BlsPkBytes::from_bytes(encoded).is_canonical::<S>());
+  }
+
+  #[rstest]
+  #[case::chia_x_eq_prime(assert_pk_bytes_not_canonical::<BlsScChia>, G1_X_EQ_PRIME_CHIA)]
+  #[case::ietf_x_eq_prime(assert_pk_bytes_not_canonical::<BlsScIetf>, ietf_g1_encoding(G1_X_EQ_PRIME_CHIA))]
+  #[case::ietf_off_subgroup(assert_pk_bytes_not_canonical::<BlsScIetf>, G1_OFF_SUBGROUP_IETF)]
+  fn pk_bytes_undecodable_are_not_canonical(#[case] assertion: fn([u8; 48]), #[case] encoded: [u8; 48]) {
+    assertion(encoded);
+  }
+
   /// The same G1 point encodes differently under the two schemes, and each
   /// encoding must round-trip through the wrapper of its own scheme.
   #[rstest]
@@ -512,8 +587,8 @@ mod tests {
 
       let sig = BlsSignature::<S>::from_bytes(&arr_from_hex(&v.agg_sig_secure)).unwrap();
       let msg: [u8; 32] = arr_from_hex(&v.msg);
-      assert!(agg_pk.verify(S::msg_ref(&msg), &sig).is_ok());
-      assert!(sig.secure_verify_aggregates(S::msg_ref(&msg), &refs).is_ok());
+      assert!(agg_pk.verify_digest(&msg, &sig).is_ok());
+      assert!(sig.secure_verify_aggregates_digest(&msg, &refs).is_ok());
     }
   }
 
@@ -558,9 +633,9 @@ mod tests {
     let alone = BlsPublicKey::<S>::secure_aggregate(&[&pk]).unwrap();
     assert_ne!(alone, pk, "a single key went through unweighted");
 
-    let sig = sk.sign(S::msg_ref(&MSG_8BADFOOD));
+    let sig = sk.sign_digest(&MSG_8BADFOOD);
     let weighted = BlsSignature::<S>::secure_aggregate(&[&sig], &[&pk]).unwrap();
-    assert!(alone.verify(S::msg_ref(&MSG_8BADFOOD), &weighted).is_ok());
+    assert!(alone.verify_digest(&MSG_8BADFOOD, &weighted).is_ok());
 
     let none: [&BlsPublicKey<S>; 0] = [];
     assert_eq!(

@@ -12,7 +12,7 @@
 //! without the flag. The other fields encode under the scheme their rule
 //! gives when the payload is encoded, as Core's serializers do.
 
-use super::PROTX_VERSION_LEGACY_BLS;
+use crate::provider::ProTxVersion;
 
 use dash_pkc::bls::{BlsEager, BlsGlobal, BlsLazy, BlsSchemeKind, BlsSchemeSource, BlsWire, BlsWirePoint};
 use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
@@ -28,8 +28,8 @@ const QC_VERSION_LEGACY_BLS_INDEXED: u16 = 2;
 ///
 /// Core passes `nVersion == ProTxVersion::LegacyBLS` to the field's version
 /// wrapper, when reading and when writing.
-pub const fn protx_bls_scheme(version: u16) -> BlsSchemeKind {
-  BlsSchemeKind::from_legacy(version == PROTX_VERSION_LEGACY_BLS)
+pub const fn protx_bls_scheme(version: ProTxVersion) -> BlsSchemeKind {
+  BlsSchemeKind::from_legacy(matches!(version, ProTxVersion::LegacyBls))
 }
 
 /// The scheme of a final commitment's BLS fields: legacy for versions 1 and
@@ -39,7 +39,7 @@ pub const fn commitment_bls_scheme(version: u16) -> BlsSchemeKind {
 }
 
 /// The scheme source of a ProTx BLS field, [`protx_bls_scheme`].
-pub(crate) const fn protx_source(version: u16) -> BlsSchemeSource {
+pub(crate) const fn protx_source(version: ProTxVersion) -> BlsSchemeSource {
   BlsSchemeSource::Version(protx_bls_scheme(version))
 }
 
@@ -297,12 +297,10 @@ mod tests {
   /// `nVersion == ProTxVersion::LegacyBLS` to their version wrappers at both
   /// pins.
   #[rstest]
-  #[case::v0(0, BlsSchemeKind::Basic)]
-  #[case::legacy(1, BlsSchemeKind::Legacy)]
-  #[case::basic(2, BlsSchemeKind::Basic)]
-  #[case::ext_addr(3, BlsSchemeKind::Basic)]
-  #[case::unknown(0xffff, BlsSchemeKind::Basic)]
-  fn protx_version_picks_scheme(#[case] version: u16, #[case] scheme: BlsSchemeKind) {
+  #[case::legacy(ProTxVersion::LegacyBls, BlsSchemeKind::Legacy)]
+  #[case::basic(ProTxVersion::BasicBls, BlsSchemeKind::Basic)]
+  #[case::ext_addr(ProTxVersion::ExtAddr, BlsSchemeKind::Basic)]
+  fn protx_version_picks_scheme(#[case] version: ProTxVersion, #[case] scheme: BlsSchemeKind) {
     assert_eq!(protx_bls_scheme(version), scheme);
     assert_eq!(protx_source(version), BlsSchemeSource::Version(scheme));
   }

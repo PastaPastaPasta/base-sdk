@@ -43,13 +43,13 @@ fn pyecc_basic_sign() {
   for row in rows {
     let sk = BlsSecretKey::<BlsScIetf>::from_bytes(&arr_from_hex(&row.sk)).unwrap();
     let msg = vec_from_hex(&row.msg);
-    let sig = sk.sign(&msg);
+    let sig = sk.sign_message(&msg);
     assert_eq!(sig.to_bytes().to_lower_hex_string(), row.sig);
     assert_eq!(
       BlsSignature::<BlsScIetf>::from_bytes(&arr_from_hex(&row.sig)).unwrap(),
       sig
     );
-    sk.public_key().verify(&msg, &sig).unwrap();
+    sk.public_key().verify_message(&msg, &sig).unwrap();
   }
 }
 
@@ -106,8 +106,8 @@ fn chia_v1_basic() {
     assert_eq!(fingerprint(&pk1), r.pk1_fp);
     assert_eq!(fingerprint(&pk2), r.pk2_fp);
 
-    let sig1 = sk1.sign(&m1);
-    let sig2 = sk2.sign(&m2);
+    let sig1 = sk1.sign_message(&m1);
+    let sig2 = sk2.sign_message(&m2);
     assert_eq!(sig1.to_bytes().to_lower_hex_string(), r.sig1);
     assert_eq!(sig2.to_bytes().to_lower_hex_string(), r.sig2);
     // The vector's signatures also decode to what was signed.
@@ -123,17 +123,23 @@ fn chia_v1_basic() {
       core.to_bytes(BlsSchemeKind::Basic).to_lower_hex_string(),
       r.agg_sig1_sig2
     );
-    agg1.verify_aggregates(&[&m1, &m2], &[&pk1, &pk2]).unwrap();
-    assert!(sig1.verify_aggregates(&[&m1, &m2], &[&pk1, &pk2]).is_err());
-    assert!(pk1.verify(&m1, &sig2).is_err());
-    assert!(pk1.verify(&m2, &sig1).is_err());
+    agg1
+      .verify_aggregates_messages(&[&m1[..], &m2[..]], &[&pk1, &pk2])
+      .unwrap();
+    assert!(sig1
+      .verify_aggregates_messages(&[&m1[..], &m2[..]], &[&pk1, &pk2])
+      .is_err());
+    assert!(pk1.verify_message(&m1, &sig2).is_err());
+    assert!(pk1.verify_message(&m2, &sig1).is_err());
 
-    let sig3 = sk1.sign(&m3);
-    let sig4 = sk1.sign(&m4);
-    let sig5 = sk2.sign(&m5);
+    let sig3 = sk1.sign_message(&m3);
+    let sig4 = sk1.sign_message(&m4);
+    let sig5 = sk2.sign_message(&m5);
     let agg2 = Sig::aggregate(&[&sig3, &sig4, &sig5]).unwrap();
     assert_eq!(agg2.to_bytes().to_lower_hex_string(), r.agg_sig3_sig4_sig5);
-    agg2.verify_aggregates(&[&m3, &m4, &m5], &[&pk1, &pk1, &pk2]).unwrap();
+    agg2
+      .verify_aggregates_messages(&[&m3[..], &m4[..], &m5[..]], &[&pk1, &pk1, &pk2])
+      .unwrap();
   }
 }
 
@@ -193,7 +199,11 @@ fn legacy_threshold_gist() {
   // Every share signs the hash to the listed signature.
   for (i, r) in rows.iter().enumerate() {
     let sk = BlsSecretKey::<BlsScChia>::from_bytes(&arr_from_hex(&r.sk)).unwrap();
-    assert_eq!(sk.sign(&hash).to_bytes().to_lower_hex_string(), r.sig, "share {i}");
+    assert_eq!(
+      sk.sign_digest(&hash).to_bytes().to_lower_hex_string(),
+      r.sig,
+      "share {i}"
+    );
   }
 
   // The shares recover the threshold signature, which verifies under the
@@ -214,7 +224,7 @@ fn legacy_threshold_gist() {
     m.threshold_sig
   );
   let pk = BlsPublicKey::<BlsScChia>::from_bytes(&arr_from_hex(&m.threshold_pk)).unwrap();
-  pk.verify(&hash, &recovered).unwrap();
+  pk.verify_digest(&hash, &recovered).unwrap();
 
   // The display order is not what Core passes: those ids recover another point.
   let wrong = legacy_shares(&rows, |r| &r.id_display);

@@ -102,26 +102,31 @@ impl_num!(NIEntryCode, u8);
 hash_impl!(NIEntryCode);
 
 /// Network info validation error.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, thiserror::Error)]
 pub enum NIError {
   /// Address failed validation.
+  #[error("invalid address: {error}")]
   BadAddr {
     /// The underlying address error.
     error: NetAddrError,
   },
   /// Port is zero or invalid for context.
+  #[error("invalid port {port}")]
   BadPort {
     /// The invalid port value.
     port: u16,
   },
   /// Entry or address type not valid for this purpose.
+  #[error("unsupported entry type {entry_type}")]
   BadType {
     /// The offending entry type byte.
     entry_type: u8,
   },
   /// Duplicate address:port within the structure.
+  #[error("duplicate entry")]
   Duplicate,
   /// Too many entries or purpose groups.
+  #[error("too many entries: {count} exceeds limit {max}")]
   MaxLimit {
     /// Actual count.
     count: usize,
@@ -129,28 +134,9 @@ pub enum NIError {
     max: usize,
   },
   /// Structural integrity violation.
+  #[error("malformed structure")]
   Malformed,
 }
-
-impl fmt::Display for NIError {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      Self::BadAddr { error } => write!(f, "invalid address: {error}"),
-      Self::BadPort { port } => write!(f, "invalid port {port}"),
-      Self::BadType { entry_type } => {
-        write!(f, "unsupported entry type {entry_type}")
-      }
-      Self::Duplicate => f.write_str("duplicate entry"),
-      Self::MaxLimit { count, max } => {
-        write!(f, "too many entries: {count} exceeds limit {max}")
-      }
-      Self::Malformed => f.write_str("malformed structure"),
-    }
-  }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for NIError {}
 
 /// A single network info entry within a purpose group.
 ///
@@ -183,7 +169,7 @@ impl BaseCodec for NIEntry {
       NIEntryCode::Domain => {
         // v24 caps the name with `LIMITED_STRING` and lets a failed read fail
         // the payload.
-        let name_len = CompactSize::decode_size(data)?.into_len(DOMAIN_MAX)?;
+        let name_len = CompactSize::decode_len(data, DOMAIN_MAX)?;
         let name = codec::read_bytes(data, name_len)?.to_vec();
         let port = codec::read_u16_be(data)?;
         Ok(if is_valid_domain_port(&name, port) {
@@ -232,7 +218,7 @@ fn read_service_entry(data: &mut &[u8]) -> NIEntry {
 /// read fails, as Core's `ReadCompactSize` does.
 fn read_service_v2(data: &mut &[u8]) -> Result<Option<ServiceV2>, DecodeError> {
   let network = NetworkType::from_base(u8::decode(data)?);
-  let size = CompactSize::decode_size(data)?.into_len(MAX_ADDR_LEN)?;
+  let size = CompactSize::decode(data)?.into_len(MAX_ADDR_LEN)?;
   let Some(expected) = network.expected_len() else {
     // An unknown network's bytes are skipped and the address is invalid.
     codec::read_bytes(data, size)?;
@@ -435,7 +421,7 @@ impl BaseCodec for NetInfoV2 {
       });
     }
     // Each group takes 2 bytes or more.
-    let purpose_count = CompactSize::decode_size(data)?.into_len(data.len() / MIN_GROUP_LEN)?;
+    let purpose_count = CompactSize::decode(data)?.into_len(data.len() / MIN_GROUP_LEN)?;
     let mut entries: Vec<(NIPurpose, Vec<NIEntry>)> = Vec::new();
     for _ in 0..purpose_count {
       let purpose = read_purpose(data, entries.last().map(|(last, _)| *last))?;
@@ -992,6 +978,23 @@ mod tests {
       port,
     };
     assert_eq!(entry.check(), expected);
+  }
+
+  fn domain_wire(len: usize) -> Vec<u8> {
+    let mut wire = Vec::new();
+    NIEntry::Domain {
+      name: vec![b'a'; len],
+      port: 443,
+    }
+    .encode(&mut wire);
+    wire
+  }
+
+  #[rstest]
+  #[case::at_limit(DOMAIN_MAX, Ok(NIEntry::Domain { name: vec![b'a'; DOMAIN_MAX], port: 443 }))]
+  #[case::past_limit(DOMAIN_MAX + 1, Err(DecodeError::CompactSizeExceedsLimit { limit: DOMAIN_MAX, value: 254 }))]
+  fn nientry_domain_decodes_at_most_253_bytes(#[case] len: usize, #[case] expected: Result<NIEntry, DecodeError>) {
+    assert_eq!(NIEntry::decode(&mut domain_wire(len).as_slice()), expected);
   }
 
   #[rstest]

@@ -1,1 +1,6 @@
-* text=auto eol=lf
+*                 text=auto eol=lf
+*.bat             text      eol=crlf
+*.lock                      linguist-generated
+*.lock.yml                  linguist-generated
+*.rs                        diff=rust
+fuzz/*/corpora/** binary    linguist-generated

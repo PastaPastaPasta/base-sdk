@@ -13,10 +13,23 @@ extern crate self as dash_pkc;
 #[cfg(feature = "std")]
 extern crate std;
 
+#[cfg(all(
+  not(any(doc, feature = "portable")),
+  feature = "bls",
+  target_arch = "x86_64",
+  not(target_feature = "adx")
+))]
+compile_error!("dash-pkc requires ADX with `bls`, build with `-C target-feature=+adx` or enable `portable`");
+
 #[cfg(feature = "bls")]
 mod aes_cbc;
 #[allow(unused_imports, reason = "ergonomic shim, exports may be unused")]
 mod prelude;
+#[cfg(feature = "bls")]
+mod sealed {
+  /// Sealing marker for traits only this crate implements.
+  pub trait Sealed {}
+}
 #[cfg(test)]
 mod tests;
 

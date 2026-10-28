@@ -28,7 +28,7 @@ consensus-stable types, including
 To import `dash-pkc` to your project, add the following to the `[dependencies]` section in `Cargo.toml`
 
 ```toml
-dash-pkc = "0.1.0-beta"
+dash-pkc = "0.2.0-beta"
 ```
 
 To use an unpublished revision of this crate, identify the commit hash to pin against and use the following replacing
@@ -51,11 +51,12 @@ This crate is `#![no_std]` + `alloc` by default.
 | Feature | Default | Description |
 | ------- | ------- | ----------- |
 | `bls` | | Enables support for BLS12-381 operations backed by [`blst`](https://docs.rs/blst). Byte types are available without enabling this feature. |
-| `codec` | :white_check_mark: | Enables support for encoding and decoding types using [`bitcoin-consensus-encoding`](https://docs.rs/bitcoin-consensus-encoding) |
+| `codec` | ✅ | Enables support for encoding and decoding types using [`bitcoin-consensus-encoding`](https://docs.rs/bitcoin-consensus-encoding) |
 | `ecdsa` | | Enables secp256k1 operations backed by [`rust-secp256k1`](https://docs.rs/secp256k1). Byte types are available without enabling this feature. |
 | `eddsa` | | Enables ed25519 operations backed by [`ed25519-dalek`](https://docs.rs/ed25519-dalek). Byte types are available without enabling this feature. |
 | `full` | | Enables all features and `std` support. |
-| `serde` | | Enables support for encoding and decoding `codec`-backed types using [`serde`](https://github.com/serde-rs/serde). _Implies `codec`._ |
+| `portable` | | Disables optimizations that constrain CPU support for the target architecture. |
+| `serde` | | Enables support for encoding and decoding types using [`serde`](https://github.com/serde-rs/serde). Types serialized as their wire image also need `codec`. |
 
 ## Documentation
 

@@ -15,10 +15,10 @@ use crate::version::ProtocolVersion;
 
 use bitcoin_hashes::sha256d;
 use dash_num::Hash256;
-use dash_pkc::bls::{BlsPkBytes, BlsScIetf, BlsSigBytes};
+use dash_pkc::bls::{BlsPkBytes, BlsSigBytes};
 use dash_primitives::{
-  hash_impl, protx_bls_scheme, BlockHash, Commitment, LlmqType, MnType, NetInfo, NetInfoV1, NetInfoV2, PlatformNodeId,
-  Transaction, TxHash,
+  hash_impl, BlockHash, Commitment, LlmqType, MnType, NetInfo, NetInfoV1, NetInfoV2, PlatformNodeId, Transaction,
+  TxHash,
 };
 use dash_script::PubKeyHash;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
@@ -33,6 +33,9 @@ const SMLE_VERSION_EXT_ADDR: u16 = 3;
 
 /// Entry version from which entries carry their type.
 const SMLE_VERSION_BASIC_BLS: u16 = 2;
+
+/// Entry version whose operator key uses the legacy BLS scheme.
+const SMLE_VERSION_LEGACY_BLS: u16 = 1;
 
 /// Version of an entry or diff that carries none on the wire.
 const DEFAULT_VERSION: u16 = 1;
@@ -219,7 +222,7 @@ impl MnListDiff {
       version = u16::decode(data)?;
     }
     let deleted_mns = Vec::<TxHash>::decode(data)?;
-    let count = CompactSize::decode_size(data)?.into_len(data.len())?;
+    let count = CompactSize::decode(data)?.into_len(data.len())?;
     let mut mn_list = Vec::new();
     for _ in 0..count {
       mn_list.push(SimplifiedMnListEntry::decode_as(data, format.has_entry_version())?);
@@ -283,7 +286,7 @@ impl fmt::Display for MnListDiff {
 pub struct QuorumClSig {
   /// BLS signature, as read. Its scheme comes from the context, not the
   /// type's tag.
-  pub sig: BlsSigBytes<BlsScIetf>,
+  pub sig: BlsSigBytes,
   /// Indexes into the `new_quorums` vector, ascending.
   pub index_set: BTreeSet<u16>,
 }
@@ -293,7 +296,7 @@ impl_p2p!(QuorumClSig);
 impl BaseCodec for QuorumClSig {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let sig = BlsSigBytes::decode(data)?;
-    let count = CompactSize::decode_size(data)?.into_len(data.len())?;
+    let count = CompactSize::decode(data)?.into_len(data.len())?;
     let mut index_set = BTreeSet::new();
     for _ in 0..count {
       index_set.insert(u16::decode(data)?);
@@ -334,7 +337,7 @@ pub struct SimplifiedMnListEntry {
   pub net_info: NetInfo,
   /// BLS operator public key, as read. Its scheme comes from
   /// [`SimplifiedMnListEntry::operator_key_scheme`], not the type's tag.
-  pub operator_key: BlsPkBytes<BlsScIetf>,
+  pub operator_key: BlsPkBytes,
   /// Voting key hash (HASH160).
   pub voting_key_id: PubKeyHash,
   /// Whether this masternode is currently valid, read as 0 or 1: Core
@@ -454,7 +457,7 @@ impl SimplifiedMnListEntry {
 
   /// The scheme of the operator key: legacy for version 1, basic otherwise.
   pub fn operator_key_scheme(&self) -> dash_pkc::bls::BlsSchemeKind {
-    protx_bls_scheme(self.version)
+    dash_pkc::bls::BlsSchemeKind::from_legacy(self.version == SMLE_VERSION_LEGACY_BLS)
   }
 }
 

@@ -204,11 +204,11 @@ mod tests {
       assert_eq!(sk.to_bytes(kind), *typed_sk.to_bytes());
       assert_eq!(pk.to_bytes(kind), typed_pk.to_bytes());
       assert_eq!(typed_sk.public_key(), typed_pk);
-      let sig = typed_sk.sign(S::msg_ref(&msg));
+      let sig = typed_sk.sign_digest(&msg);
       sigs.push(BlsSigValue::from_canonical(&sig.to_bytes(), kind).unwrap());
       typed_shares.push(BlsSigShare::new(share_id, sig));
     }
-    let master = p.msk[0].sign(S::msg_ref(&msg)).to_bytes();
+    let master = p.msk[0].sign_digest(&msg).to_bytes();
     for range in [0..3, 2..5, 0..5, 1..4] {
       let typed = BlsSignature::recover_shares(&typed_shares[range.clone()].iter().collect::<Vec<_>>()).unwrap();
       let got = recover(&sigs[range.clone()], &ids[range]).unwrap();

@@ -1,90 +1,36 @@
-name: MSRV (1.85)
+name: MSRV (1.89)
 
 on:
-  push:
-    branches: [develop]
-  pull_request:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  workflow_call:
+    inputs:
+      package:
+        description: Cargo package name (e.g. dash-num)
+        required: true
+        type: string
+      package_dir:
+        description: Package directory relative to pkgs/ (e.g. num)
+        required: true
+        type: string
+      fuzz_package_dir:
+        description: Fuzz package directory relative to fuzz/ (e.g. pow)
+        required: false
+        type: string
+        default: ""
+    secrets:
+      CACHIX_AUTH_TOKEN:
+        required: false
+      CODECOV_TOKEN:
+        required: false
 
 permissions:
   contents: read
 
 jobs:
-  lint:
-    name: Lint
-    runs-on: ubuntu-24.04
-
-    defaults:
-      run:
-        shell: nix develop ./contrib/nix#ci --command bash -eo pipefail {0}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 100
-
-      - name: Run pull request checks
-        if: github.event_name == 'pull_request'
-        shell: bash
-        run: |
-          source .github/ci.env
-          commits=${{ github.event.pull_request.commits }}
-          if [ "${commits}" -gt "${MAX_PR_COMMITS}" ]; then
-            echo "::error::PR has ${commits} commits (limit: ${MAX_PR_COMMITS})"
-            exit 1
-          fi
-
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v22
-        with:
-          extra-conf: |
-            extra-substituters = https://dashpay-base-sdk.cachix.org
-            extra-trusted-public-keys = dashpay-base-sdk.cachix.org-1:TAoDyYL2e60lUEG8n10gvIZmujM5rJAhaG613fNfOWI=
-
-      - name: Cache Nix
-        uses: cachix/cachix-action@v17
-        with:
-          name: dashpay-base-sdk
-          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
-          skipAddingSubstituter: true
-
-      - name: Restore cargo registry
-        uses: actions/cache/restore@v5
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: cargo-deps-${{ hashFiles('Cargo.lock', 'docs/samples/Cargo.lock') }}
-          restore-keys: cargo-deps-
-
-      - name: Manage CodeQL packs
-        uses: actions/cache@v5
-        with:
-          path: ~/.codeql
-          key: codeql-packs-${{ hashFiles('maint/codeql/*/codeql-pack.lock.yml') }}
-
-      - name: Run linters
-        run: just lint
-
-      - name: Check PR title
-        if: github.event_name == 'pull_request'
-        env:
-          PR_TITLE: ${{ github.event.pull_request.title }}
-        run: python3 maint/lint/lint_commit.py -m "${PR_TITLE}"
-
-      - name: Check PR commit messages
-        if: github.event_name == 'pull_request'
-        run: >
-          python3 maint/lint/lint_commit.py
-          -r "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
-
   build:
     name: Build and test
     runs-on: ubuntu-24.04-arm
+    env:
+      HAS_CODECOV: ${{ secrets.CODECOV_TOKEN != '' }}
 
     defaults:
       run:
@@ -95,6 +41,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 1
+          submodules: ${{ inputs.fuzz_package_dir != '' }}
 
       - name: Run pull request checks
         if: github.event_name == 'pull_request'
@@ -127,27 +74,62 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: cargo-deps-${{ hashFiles('Cargo.lock', 'docs/samples/Cargo.lock') }}
+          key: cargo-deps-${{ hashFiles('Cargo.lock', 'docs/samples/Cargo.lock', 'fuzz/Cargo.lock') }}
           restore-keys: cargo-deps-
 
       - name: Manage build artifacts
         uses: actions/cache@v5
         with:
-          path: target
-          key: cargo-build-msrv-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
+          path: |
+            target
+            !target/nextest
+            fuzz/target
+          key: cargo-build-msrv-${{ runner.os }}-${{ runner.arch }}-${{ inputs.package }}-${{ github.sha }}
           restore-keys: |
-            cargo-build-msrv-${{ runner.os }}-${{ runner.arch }}-
+            cargo-build-msrv-${{ runner.os }}-${{ runner.arch }}-${{ inputs.package }}-
 
-      - name: Build workspace
+      - name: Select the MSRV toolchain
         run: |
-          export RUSTC="$TOOLCHAIN_MSRV/bin/rustc"
-          export RUSTDOC="$TOOLCHAIN_MSRV/bin/rustdoc"
-          "$TOOLCHAIN_MSRV/bin/cargo" build --workspace --exclude dash-pow --features full
-          "$TOOLCHAIN_MSRV/bin/cargo" build -p dash-pow --features std,aes_hw
+          {
+            echo "RUSTC=$TOOLCHAIN_MSRV/bin/rustc"
+            echo "RUSTDOC=$TOOLCHAIN_MSRV/bin/rustdoc"
+            echo "CARGO=$TOOLCHAIN_MSRV/bin/cargo"
+          } >> "$GITHUB_ENV"
 
-      - name: Test workspace
+      - name: Build every feature
+        run: '"$CARGO" hack -p ${{ inputs.package }} --exclude-features default --each-feature build'
+
+      - name: Test every feature
         run: |
-          export RUSTC="$TOOLCHAIN_MSRV/bin/rustc"
-          export RUSTDOC="$TOOLCHAIN_MSRV/bin/rustdoc"
-          "$TOOLCHAIN_MSRV/bin/cargo" test --workspace --exclude dash-pow --features full
-          "$TOOLCHAIN_MSRV/bin/cargo" test -p dash-pow --features std,aes_hw
+          "$CARGO" hack -p ${{ inputs.package }} --exclude-features default --each-feature nextest run --config-file .cargo/nextest.toml --no-tests=warn
+          "$CARGO" hack -p ${{ inputs.package }} --exclude-features default --each-feature test --doc
+
+      - name: Test package (with coverage)
+        run: |
+          "$CARGO" llvm-cov clean --workspace
+          "$CARGO" llvm-cov --no-report nextest --config-file .cargo/nextest.toml --package ${{ inputs.package }} --features full
+          "$CARGO" llvm-cov report --lcov --output-path lcov.info
+
+      - name: Upload coverage to Codecov
+        if: env.HAS_CODECOV == 'true'
+        uses: codecov/codecov-action@v5
+        with:
+          files: lcov.info
+          flags: ${{ inputs.package }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() && env.HAS_CODECOV == 'true' && hashFiles('target/nextest/default/junit.xml') != '' }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: target/nextest/default/junit.xml
+          report_type: test_results
+          flags: ${{ inputs.package }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Replay fuzz corpora
+        if: inputs.fuzz_package_dir != ''
+        run: PATH="$TOOLCHAIN_MSRV/bin:$PATH" just fuzz::test
+
+      - name: Sanity check benchmarks
+        run: '"$CARGO" hack -p ${{ inputs.package }} --exclude-features default --each-feature test --benches'

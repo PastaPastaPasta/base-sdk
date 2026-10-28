@@ -18,8 +18,8 @@ Usage:
   ./contrib/git_filter.py feature -- cargo test -F full
   ./contrib/git_filter.py base_branch feature -- cargo test
   ./contrib/git_filter.py --fast-fail -- cargo clippy
-  ./contrib/git_filter.py --env RUSTFLAGS=-Dwarnings -- cargo check
-"""
+  ./contrib/git_filter.py --env RUSTUP_TOOLCHAIN=nightly-2026-02-01 -- cargo check
+"""  # noqa: E501
 
 from __future__ import annotations
 
