@@ -12,10 +12,9 @@ use super::{
   PlatformNodeId, ProTxVersion,
 };
 use crate::payload::bls::{self, protx_bls_scheme, protx_source};
-use crate::sptx::{check_sptx_netinfo, InputsHash, MnType, ProTxInvalid};
-
 use crate::prelude::*;
 use crate::sign::sha256d;
+use crate::sptx::{check_sptx_netinfo, InputsHash, MnType, ProTxInvalid};
 use crate::types::{NITrait, NetInfo};
 use crate::{hash_impl, TxHash};
 
@@ -121,6 +120,41 @@ impl BaseCodec for ProUpServTx {
   }
 }
 
+/// The operator signs the SHA256d of [`ProUpServTx::sig_hash_bytes`] under the
+/// version's scheme.
+impl Signable for ProUpServTx {
+  type Key = BlsPkBytes;
+  type Context = ();
+  type Error = BlsError;
+
+  fn payload(&self, _ctx: &()) -> Vec<u8> {
+    sha256d(&self.sig_hash_bytes()).to_vec()
+  }
+
+  fn set_signature(&mut self, sig: &[u8], key: &BlsPkBytes, _ctx: &()) -> Result<(), BlsError> {
+    let sig = <[u8; BLS_SIG_LEN]>::try_from(sig).map_err(|_| BlsError::InvalidSignature)?;
+    verify_operator(
+      self.version,
+      &self.payload(&()),
+      &OperatorSig::new(BlsSigBytes::from_bytes(sig)),
+      key,
+    )?;
+    self.sig = bls::eager_from(&sig, protx_source(self.version)).map_err(|_| BlsError::InvalidSignature)?;
+    Ok(())
+  }
+
+  fn reset_signature(&mut self) {
+    self.sig = BlsEagerSig::new(BlsValue::invalid(), protx_bls_scheme(self.version));
+  }
+
+  fn verify(&self, key: &BlsPkBytes, _ctx: &()) -> Option<BlsError> {
+    let sig = OperatorSig::new(BlsSigBytes::from_bytes(
+      self.sig.to_bytes(protx_bls_scheme(self.version)),
+    ));
+    verify_operator(self.version, &self.payload(&()), &sig, key).err()
+  }
+}
+
 impl Checkable for ProUpServTx {
   type Error = ProTxInvalid;
 
@@ -169,41 +203,6 @@ impl Checkable for ProUpServTx {
 }
 
 hash_impl!(ProUpServTx);
-
-/// The operator signs the SHA256d of [`ProUpServTx::sig_hash_bytes`] under the
-/// version's scheme.
-impl Signable for ProUpServTx {
-  type Key = BlsPkBytes;
-  type Context = ();
-  type Error = BlsError;
-
-  fn payload(&self, _ctx: &()) -> Vec<u8> {
-    sha256d(&self.sig_hash_bytes()).to_vec()
-  }
-
-  fn set_signature(&mut self, sig: &[u8], key: &BlsPkBytes, _ctx: &()) -> Result<(), BlsError> {
-    let sig = <[u8; BLS_SIG_LEN]>::try_from(sig).map_err(|_| BlsError::InvalidSignature)?;
-    verify_operator(
-      self.version,
-      &self.payload(&()),
-      &OperatorSig::new(BlsSigBytes::from_bytes(sig)),
-      key,
-    )?;
-    self.sig = bls::eager_from(&sig, protx_source(self.version)).map_err(|_| BlsError::InvalidSignature)?;
-    Ok(())
-  }
-
-  fn reset_signature(&mut self) {
-    self.sig = BlsEagerSig::new(BlsValue::invalid(), protx_bls_scheme(self.version));
-  }
-
-  fn verify(&self, key: &BlsPkBytes, _ctx: &()) -> Option<BlsError> {
-    let sig = OperatorSig::new(BlsSigBytes::from_bytes(
-      self.sig.to_bytes(protx_bls_scheme(self.version)),
-    ));
-    verify_operator(self.version, &self.payload(&()), &sig, key).err()
-  }
-}
 
 impl ProUpServTx {
   /// The payload's `SER_GETHASH` serialization, which leaves out `sig`. The

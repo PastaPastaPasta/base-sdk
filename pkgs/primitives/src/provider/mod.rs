@@ -17,13 +17,12 @@ mod shares;
 mod sig;
 mod version;
 
+#[cfg(feature = "serde")]
+pub(crate) use self::sig::compact_hex;
 use crate::sptx::{MnType, ProTxInvalid};
 use crate::types::{NetInfo, NetInfoV1, NetInfoV2};
 
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
-
-#[cfg(feature = "serde")]
-pub(crate) use self::sig::compact_hex;
 
 pub use self::prodistx::ProDisTx;
 pub use self::proregtx::ProRegTx;

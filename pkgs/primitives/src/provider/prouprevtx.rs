@@ -84,20 +84,6 @@ impl BaseCodec for ProUpRevTx {
   }
 }
 
-impl Checkable for ProUpRevTx {
-  type Error = ProTxInvalid;
-
-  fn check(&self) -> Option<Self::Error> {
-    if matches!(self.reason, RevocationReason::Unknown(_)) {
-      return Some(ProTxInvalid::BadReason { reason: self.reason });
-    }
-
-    None
-  }
-}
-
-hash_impl!(ProUpRevTx);
-
 /// The operator signs the SHA256d of [`ProUpRevTx::sig_hash_bytes`] under the
 /// version's scheme.
 impl Signable for ProUpRevTx {
@@ -132,6 +118,20 @@ impl Signable for ProUpRevTx {
     verify_operator(self.version, &self.payload(&()), &sig, key).err()
   }
 }
+
+impl Checkable for ProUpRevTx {
+  type Error = ProTxInvalid;
+
+  fn check(&self) -> Option<Self::Error> {
+    if matches!(self.reason, RevocationReason::Unknown(_)) {
+      return Some(ProTxInvalid::BadReason { reason: self.reason });
+    }
+
+    None
+  }
+}
+
+hash_impl!(ProUpRevTx);
 
 impl ProUpRevTx {
   /// The payload's `SER_GETHASH` serialization, which leaves out `sig`. The

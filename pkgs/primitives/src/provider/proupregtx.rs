@@ -115,6 +115,32 @@ impl BaseCodec for ProUpRegTx {
   }
 }
 
+impl Signable for ProUpRegTx {
+  type Key = PubKeyHash;
+  type Context = ();
+  type Error = EcdsaError;
+
+  fn payload(&self, _ctx: &()) -> Vec<u8> {
+    unsigned_digest(self, &self.vch_sig).to_vec()
+  }
+
+  fn set_signature(&mut self, sig: &[u8], key: &PubKeyHash, _ctx: &()) -> Result<(), EcdsaError> {
+    let sig = <[u8; ECDSA_REC_SIG_LEN]>::try_from(sig).map_err(|_| EcdsaError::InvalidSignature)?;
+    verify_compact(&self.payload(&()), &sig, key)?;
+    self.vch_sig = OwnerSig::new(sig);
+    Ok(())
+  }
+
+  fn reset_signature(&mut self) {
+    self.vch_sig = OwnerSig::default();
+  }
+
+  fn verify(&self, key: &PubKeyHash, _ctx: &()) -> Option<EcdsaError> {
+    let sig = self.vch_sig.as_bytes().ok_or(EcdsaError::InvalidSignature);
+    sig.and_then(|sig| verify_compact(&self.payload(&()), sig, key)).err()
+  }
+}
+
 /// Part of Core's `IsTriviallyValid`, without chain context. The v3 payout
 /// list rules (`IsPayoutListTriviallyValid`) are dash-evo's; of the payout
 /// rules, this checks the scripts.
@@ -152,32 +178,6 @@ impl Checkable for ProUpRegTx {
 }
 
 hash_impl!(ProUpRegTx);
-
-impl Signable for ProUpRegTx {
-  type Key = PubKeyHash;
-  type Context = ();
-  type Error = EcdsaError;
-
-  fn payload(&self, _ctx: &()) -> Vec<u8> {
-    unsigned_digest(self, &self.vch_sig).to_vec()
-  }
-
-  fn set_signature(&mut self, sig: &[u8], key: &PubKeyHash, _ctx: &()) -> Result<(), EcdsaError> {
-    let sig = <[u8; ECDSA_REC_SIG_LEN]>::try_from(sig).map_err(|_| EcdsaError::InvalidSignature)?;
-    verify_compact(&self.payload(&()), &sig, key)?;
-    self.vch_sig = OwnerSig::new(sig);
-    Ok(())
-  }
-
-  fn reset_signature(&mut self) {
-    self.vch_sig = OwnerSig::default();
-  }
-
-  fn verify(&self, key: &PubKeyHash, _ctx: &()) -> Option<EcdsaError> {
-    let sig = self.vch_sig.as_bytes().ok_or(EcdsaError::InvalidSignature);
-    sig.and_then(|sig| verify_compact(&self.payload(&()), sig, key)).err()
-  }
-}
 
 impl ProUpRegTx {
   /// The payload's `SER_GETHASH` serialization, which leaves out

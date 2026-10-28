@@ -195,6 +195,34 @@ impl BaseCodec for ProRegTx {
   }
 }
 
+/// The digest is that of [`ProRegTx::sign_string`], Core's `MakeSignString`,
+/// which covers the v3 payout list.
+impl Signable for ProRegTx {
+  type Key = PubKeyHash;
+  type Context = AddrParams;
+  type Error = EcdsaError;
+
+  fn payload(&self, ctx: &AddrParams) -> Vec<u8> {
+    message_digest(self.sign_string(ctx).as_bytes()).to_vec()
+  }
+
+  fn set_signature(&mut self, sig: &[u8], key: &PubKeyHash, ctx: &AddrParams) -> Result<(), EcdsaError> {
+    let sig = <[u8; ECDSA_REC_SIG_LEN]>::try_from(sig).map_err(|_| EcdsaError::InvalidSignature)?;
+    verify_compact(&self.payload(ctx), &sig, key)?;
+    self.vch_sig = CollateralSig::new(sig);
+    Ok(())
+  }
+
+  fn reset_signature(&mut self) {
+    self.vch_sig = CollateralSig::default();
+  }
+
+  fn verify(&self, key: &PubKeyHash, ctx: &AddrParams) -> Option<EcdsaError> {
+    let sig = self.vch_sig.as_bytes().ok_or(EcdsaError::InvalidSignature);
+    sig.and_then(|sig| verify_compact(&self.payload(ctx), sig, key)).err()
+  }
+}
+
 /// Part of Core's `IsTriviallyValid`, without chain context. The v3 payout
 /// and share list rules (`IsPayoutListTriviallyValid`,
 /// `IsShareListTriviallyValid`) and the shared-registration rules are
@@ -399,34 +427,6 @@ impl ProRegTx {
       self.platform_p2p_port,
       self.platform_http_port,
     );
-  }
-}
-
-/// The digest is that of [`ProRegTx::sign_string`], Core's `MakeSignString`,
-/// which covers the v3 payout list.
-impl Signable for ProRegTx {
-  type Key = PubKeyHash;
-  type Context = AddrParams;
-  type Error = EcdsaError;
-
-  fn payload(&self, ctx: &AddrParams) -> Vec<u8> {
-    message_digest(self.sign_string(ctx).as_bytes()).to_vec()
-  }
-
-  fn set_signature(&mut self, sig: &[u8], key: &PubKeyHash, ctx: &AddrParams) -> Result<(), EcdsaError> {
-    let sig = <[u8; ECDSA_REC_SIG_LEN]>::try_from(sig).map_err(|_| EcdsaError::InvalidSignature)?;
-    verify_compact(&self.payload(ctx), &sig, key)?;
-    self.vch_sig = CollateralSig::new(sig);
-    Ok(())
-  }
-
-  fn reset_signature(&mut self) {
-    self.vch_sig = CollateralSig::default();
-  }
-
-  fn verify(&self, key: &PubKeyHash, ctx: &AddrParams) -> Option<EcdsaError> {
-    let sig = self.vch_sig.as_bytes().ok_or(EcdsaError::InvalidSignature);
-    sig.and_then(|sig| verify_compact(&self.payload(ctx), sig, key)).err()
   }
 }
 
