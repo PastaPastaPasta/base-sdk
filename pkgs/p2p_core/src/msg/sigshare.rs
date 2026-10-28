@@ -113,7 +113,7 @@ fn read_auto_bitset(data: &mut &[u8], size: u64) -> Result<DynBitset, DecodeErro
   match u8::decode(data)? {
     0 => {
       let bytes = read_bytes(data, len)?;
-      if size % 8 != 0 && bytes[len - 1] >> (size % 8) != 0 {
+      if !size.is_multiple_of(8) && bytes[len - 1] >> (size % 8) != 0 {
         return Err(DecodeError::InvalidValue {
           expected: vec![0],
           actual: u64::from(bytes[len - 1] >> (size % 8)),
