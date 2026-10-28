@@ -8,8 +8,7 @@
 //! batches: a count the input cannot fill costs at most one batch.
 
 #![cfg(feature = "std")]
-#![expect(unsafe_code, reason = "a counting test allocator")]
-#![expect(clippy::unwrap_used, reason = "test code")]
+#![expect(unsafe_code, clippy::unwrap_used, reason = "a counting test allocator in test code")]
 
 use dash_primitives::{NetInfoV2, Transaction};
 use dash_types::codec::BaseCodec;

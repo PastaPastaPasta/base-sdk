@@ -69,3 +69,7 @@ line_length = 120
 heading_line_length = 120
 code_blocks = false
 tables = false
+
+# Changelogs repeat `### Added` and the like under every release.
+[tool.pymarkdown.plugins.md024]
+siblings_only = true
