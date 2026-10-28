@@ -133,7 +133,7 @@ impl BaseCodec for ProRegTx {
   /// Decodes a payload of a known version.
   ///
   /// Core reads only the version of an unknown one, which
-  /// [`SpecialPayload::decode`](super::SpecialPayload::decode) reports.
+  /// [`SpecialPayload::decode`](crate::SpecialPayload::decode) reports.
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let version = ProTxVersion::decode(data)?;
     let mn_type = MnType::from_base(u16::decode(data)?);
