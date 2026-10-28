@@ -54,12 +54,24 @@ jobs:
         uses: DeterminateSystems/nix-installer-action@v22
 
       - name: Cache Nix
+        id: niks3
         uses: Mic92/niks3-action@v1
         if: vars.CACHE_NIX_URL != ''
         with:
           server-url: ${{ vars.CACHE_NIX_URL }}
           skip-push: ${{ steps.cache_write.outputs.allowed != 'true' }}
 
+      - name: Upload devshell
+        if: steps.cache_write.outputs.allowed == 'true' && vars.CACHE_NIX_URL != ''
+        shell: bash
+        env:
+          NIKS3: ${{ steps.niks3.outputs.binary-dir }}/niks3
+          NIKS3_SERVER_URL: ${{ vars.CACHE_NIX_URL }}
+          NIKS3_TOKEN_SCRIPT: ${{ steps.niks3.outputs.auth-token-script }}
+        run: |
+          nix develop ./contrib/nix#ci --profile "${RUNNER_TEMP}/devshell" --command true
+          "${NIKS3}" push --server-url "${NIKS3_SERVER_URL}" --auth-token-script "${NIKS3_TOKEN_SCRIPT}" \
+            "$(readlink -f "${RUNNER_TEMP}/devshell")"
 
       - name: Restore cargo registry
         uses: actions/cache/restore@v5
