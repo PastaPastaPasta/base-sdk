@@ -1,0 +1,217 @@
+# Fork-only CI for PastaPastaPasta/base-sdk. This file lives only on the
+# orphan `fork-ci` branch, the fork's default branch, so it can never reach a
+# branch bound for dashpay/base-sdk. It runs the local comb on GitHub: one job
+# per commit of base..tip, each running `just test lint fuzz::test` as
+# `contrib/git_filter.py` would, with the CodeQL CLI the local comb pins.
+name: fork-ci
+run-name: "fork-ci ${{ inputs.label }} ${{ inputs.base }}..${{ inputs.tip }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      label:
+        description: Fork branch the tip was pushed as
+        required: true
+        type: string
+      base:
+        description: Full SHA the comb starts after (git_filter.py base)
+        required: true
+        type: string
+      tip:
+        description: Full SHA of the last commit to comb (git_filter.py tip)
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: fork-ci-${{ inputs.tip }}
+  cancel-in-progress: false
+
+env:
+  CODEQL_VERSION: 2.27.2
+  CODEQL_SHA256: ac0a4ea06843577ed3a1f5af145756c3085ebfd42e59a5aff1b66489f29d16dc
+  MAX_COMMITS: "64"
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      commits: ${{ steps.range.outputs.commits }}
+
+    steps:
+      - name: Validate inputs
+        env:
+          LABEL: ${{ inputs.label }}
+          BASE: ${{ inputs.base }}
+          TIP: ${{ inputs.tip }}
+        run: |
+          [[ "${LABEL}" =~ ^[A-Za-z0-9._/-]{1,80}$ ]] || { echo "::error::bad label"; exit 1; }
+          [[ "${BASE}" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::base is not a full SHA"; exit 1; }
+          [[ "${TIP}" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::tip is not a full SHA"; exit 1; }
+
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.tip }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: List the commits
+        id: range
+        env:
+          BASE: ${{ inputs.base }}
+          TIP: ${{ inputs.tip }}
+        run: |
+          git merge-base --is-ancestor "${BASE}" "${TIP}" || { echo "::error::base is not an ancestor of tip"; exit 1; }
+          git rev-list --reverse --first-parent "${BASE}..${TIP}" > "${RUNNER_TEMP}/commits.txt"
+          n=$(wc -l < "${RUNNER_TEMP}/commits.txt")
+          if [ "${n}" -lt 1 ] || [ "${n}" -gt "${MAX_COMMITS}" ]; then
+            echo "::error::${n} commits in range (allowed 1..${MAX_COMMITS})"
+            exit 1
+          fi
+          echo "commits=$(jq -Rnc '[inputs | {sha: ., short: .[0:12]}]' < "${RUNNER_TEMP}/commits.txt")" >> "${GITHUB_OUTPUT}"
+          {
+            echo "### ${n} commits, ${BASE:0:12}..${TIP:0:12}"
+            echo
+            # shellcheck disable=SC2016
+            git log --no-walk=unsorted --format='- `%h` %s' --stdin < "${RUNNER_TEMP}/commits.txt"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  comb:
+    name: comb ${{ matrix.commit.short }}
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        commit: ${{ fromJSON(needs.plan.outputs.commits) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ matrix.commit.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The linters' "changed on this branch" checks diff against `develop`.
+      - name: Point develop at the comb base
+        env:
+          BASE: ${{ inputs.base }}
+        run: git branch -f develop "${BASE}"
+
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@ceedf095f4ec1a097402bc6bd80831f2e1a6fde6 # v2.0.0
+        with:
+          large-packages: false
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+        with:
+          extra-conf: |
+            extra-substituters = https://dashpay-base-sdk.cachix.org
+            extra-trusted-public-keys = dashpay-base-sdk.cachix.org-1:TAoDyYL2e60lUEG8n10gvIZmujM5rJAhaG613fNfOWI=
+
+      - name: Manage cargo registry
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: fork-ci-cargo-${{ hashFiles('Cargo.lock', 'docs/samples/Cargo.lock', 'fuzz/Cargo.lock') }}
+          restore-keys: fork-ci-cargo-
+
+      - name: Manage the CodeQL CLI
+        id: codeql_cli
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ~/codeql-dist
+          key: fork-ci-codeql-cli-${{ env.CODEQL_VERSION }}-linux64
+
+      - name: Manage CodeQL packs
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ~/.codeql
+          key: fork-ci-codeql-packs-${{ hashFiles('maint/codeql/*/codeql-pack.lock.yml') }}
+
+      - name: Install the CodeQL CLI
+        run: |
+          zip="${HOME}/codeql-dist/codeql-linux64.zip"
+          if [ ! -f "${zip}" ]; then
+            mkdir -p "${HOME}/codeql-dist"
+            curl -fsSL --retry 3 -o "${zip}" \
+              "https://github.com/github/codeql-cli-binaries/releases/download/v${CODEQL_VERSION}/codeql-linux64.zip"
+          fi
+          echo "${CODEQL_SHA256}  ${zip}" | sha256sum -c -
+          unzip -q "${zip}" -d "${RUNNER_TEMP}/codeql-${CODEQL_VERSION}"
+          echo "CODEQL_DIR=${RUNNER_TEMP}/codeql-${CODEQL_VERSION}/codeql" >> "${GITHUB_ENV}"
+
+      - name: just test lint fuzz::test
+        shell: nix develop ./contrib/nix#ci --command bash -eo pipefail {0}
+        env:
+          NEXTEST_PROFILE: fail-fast
+          EIO_BACKEND: posix
+        run: |
+          export PATH="${CODEQL_DIR}:${PATH}"
+          test "$(codeql version --format=terse)" = "${CODEQL_VERSION}"
+          ( while sleep 5; do free -m | awk '/^Mem:/ { print $3 }'; done ) > "${RUNNER_TEMP}/mem.txt" &
+          sampler=$!
+          start=$(date +%s)
+          rc=0
+          just test lint fuzz::test 2>&1 | tee "${RUNNER_TEMP}/comb.log" || rc=$?
+          kill "${sampler}" || true
+          {
+            echo "### ${GITHUB_JOB} $(git rev-parse --short=12 HEAD): exit ${rc}"
+            echo
+            echo "- elapsed $(( ($(date +%s) - start) / 60 )) min"
+            echo "- peak used memory $(sort -n "${RUNNER_TEMP}/mem.txt" | tail -1) MiB"
+            echo "- disk at the end: $(df -h --output=used,avail / | tail -1)"
+          } >> "${GITHUB_STEP_SUMMARY}"
+          if grep -q "codeql binary not found" "${RUNNER_TEMP}/comb.log"; then
+            echo "::error::CodeQL was skipped"
+            exit 1
+          fi
+          exit "${rc}"
+
+  verdict:
+    name: Verdict
+    needs: [plan, comb]
+    if: always()
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+
+    steps:
+      - name: Summarise the comb
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PLAN: ${{ needs.plan.result }}
+          COMB: ${{ needs.comb.result }}
+          COMMITS: ${{ needs.plan.outputs.commits }}
+        run: |
+          gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}/jobs" \
+            --jq '.jobs[] | [.name, (.conclusion // "none")] | @tsv' > "${RUNNER_TEMP}/jobs.tsv"
+          {
+            echo "| Hash | Status |"
+            echo "|------|--------|"
+            for short in $(jq -r '.[].short' <<< "${COMMITS:-[]}"); do
+              c=$(awk -F'\t' -v n="comb ${short}" '$1 == n { print $2 }' "${RUNNER_TEMP}/jobs.tsv")
+              case "${c}" in
+                success) s=PASS ;;
+                failure) s=FAIL ;;
+                *) s="${c:-none}" ;;
+              esac
+              echo "| ${short} | ${s} |"
+            done
+          } >> "${GITHUB_STEP_SUMMARY}"
+          echo "plan ${PLAN}, comb ${COMB}"
+          [ "${PLAN}" = success ] && [ "${COMB}" = success ]
