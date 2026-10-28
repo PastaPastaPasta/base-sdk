@@ -63,9 +63,9 @@ macro_rules! const_array {
 pub(crate) use const_array;
 
 /// Invokes `$step!(i)` for each literal `i`.
-macro_rules! unroll {
+macro_rules! unroll_steps {
   ($step:ident; $($i:literal),* $(,)?) => {
     $($step!($i);)*
   };
 }
-pub(crate) use unroll;
+pub(crate) use unroll_steps;

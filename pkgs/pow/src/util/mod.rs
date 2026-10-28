@@ -14,7 +14,7 @@ pub(crate) mod math;
 pub(crate) mod memops;
 pub(crate) mod threefish;
 
-pub(crate) use macros::{const_array, impl_digest, impl_hash, unroll};
+pub(crate) use macros::{const_array, impl_digest, impl_hash, unroll_steps};
 
 #[cfg(test)]
 #[inline]

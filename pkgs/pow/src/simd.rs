@@ -22,7 +22,7 @@ use crate::consts::simd::{
 use crate::util::arx::rotl_u32x8;
 use crate::util::buffer::{Buffer, Compress};
 use crate::util::memops::{digest_from_u32_le, load_u32s_le};
-use crate::util::{impl_digest, unroll};
+use crate::util::{impl_digest, unroll_steps};
 
 use digest::{FixedOutput, Output, Update};
 use wide::{i16x8, u32x4, u32x8, u8x16};
@@ -364,7 +364,7 @@ fn wbread_adjacent(q: &[i16; QBUF], sb: usize, w: &mut [u32; 64]) {
       w[$u + 4..$u + 8].copy_from_slice(&pack_pairs(load_coeffs(q, v + 8) * MM));
     };
   }
-  unroll!(step; 0, 8, 16, 24, 32, 40, 48, 56);
+  unroll_steps!(step; 0, 8, 16, 24, 32, 40, 48, 56);
 }
 
 /// Reads 64 schedule words of rounds 2 and 3, whose low and high limbs sit at
@@ -384,7 +384,7 @@ fn wbread_split(q: &[i16; QBUF], sb: usize, o1: i32, o2: i32, w: &mut [u32; 64])
       w[$u + 4..$u + 8].copy_from_slice(&pack_pairs(b));
     };
   }
-  unroll!(step; 0, 8, 16, 24, 32, 40, 48, 56);
+  unroll_steps!(step; 0, 8, 16, 24, 32, 40, 48, 56);
 }
 
 /// Loads eight words starting at `offset`, a multiple of eight.

@@ -13,7 +13,7 @@
 use crate::consts::bmw::*;
 use crate::util::buffer::{Buffer, Compress};
 use crate::util::memops::{digest_from_u64_le, load_u64s_le};
-use crate::util::{impl_digest, unroll};
+use crate::util::{impl_digest, unroll_steps};
 
 use digest::{FixedOutput, Output, Update};
 
@@ -56,11 +56,11 @@ fn compute_w(mh: &[u64; WORDS]) -> [u64; WORDS] {
           acc = if OPS[$t - 1] { acc.wrapping_add(mh[IDX[$t]]) } else { acc.wrapping_sub(mh[IDX[$t]]) };
         };
       }
-      unroll!(term; 1, 2, 3, 4);
+      unroll_steps!(term; 1, 2, 3, 4);
       w[$i] = acc;
     }};
   }
-  unroll!(word; 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+  unroll_steps!(word; 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
   w
 }
 
@@ -147,7 +147,7 @@ fn fold_schedule(message: &[u64; WORDS], q: &[u64; QWORDS], out: &mut [u64; WORD
       out[$i] = mixed.wrapping_add(xl ^ q[24 + $i] ^ q[$i]);
     }};
   }
-  unroll!(fold1; 0, 1, 2, 3, 4, 5, 6, 7);
+  unroll_steps!(fold1; 0, 1, 2, 3, 4, 5, 6, 7);
 
   macro_rules! fold2 {
     ($i:literal) => {{
@@ -157,7 +157,7 @@ fn fold_schedule(message: &[u64; WORDS], q: &[u64; QWORDS], out: &mut [u64; WORD
         .wrapping_add((xh ^ q[24 + $i] ^ message[8 + $i]).wrapping_add(STEP.2.apply(xl) ^ q[STEP.3] ^ q[8 + $i]));
     }};
   }
-  unroll!(fold2; 0, 1, 2, 3, 4, 5, 6, 7);
+  unroll_steps!(fold2; 0, 1, 2, 3, 4, 5, 6, 7);
 }
 
 #[cfg_attr(not(debug_assertions), inline(always))]
@@ -173,7 +173,7 @@ fn compress(message: &[u64; WORDS], state: &[u64; WORDS], out: &mut [u64; WORDS]
       q[$i] = mix_word($i % 5, w[$i]).wrapping_add(state[($i + 1) & 15]);
     };
   }
-  unroll!(layer; 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+  unroll_steps!(layer; 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
 
   let rotated_message = expand_message(message);
   expand_schedule(&mut q, state, &rotated_message);

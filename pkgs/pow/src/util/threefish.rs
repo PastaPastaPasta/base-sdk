@@ -14,7 +14,7 @@
 //! Used as the core permutation in Skein-512. Runs 72 rounds with key injection
 //! every 4 rounds (19 injections total).
 
-use crate::util::unroll;
+use crate::util::unroll_steps;
 
 /// Key schedule parity constant C240 (Skein 1.3 Section 8.3).
 const PARITY: u64 = 0x1bd11bdaa9fc1a22;
@@ -103,7 +103,7 @@ pub(crate) const fn encrypt(block: &mut [u64; NW], key: &[u64; NW], tweak: &[u64
     };
   }
 
-  unroll!(four_rounds; 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17);
+  unroll_steps!(four_rounds; 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17);
   inject!(18);
 
   *block = [x0, x1, x2, x3, x4, x5, x6, x7];
