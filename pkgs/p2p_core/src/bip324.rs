@@ -19,7 +19,7 @@ use dash_types::codec::BaseCodec;
 pub fn encode_v2(msg: &P2pMsg, buf: &mut Vec<u8>) {
   match msg.short_id() {
     Some(id) => {
-      buf.push(id.0);
+      buf.push(id.get());
     }
     None => {
       // Long format: ID 0 + 12-byte command string.
@@ -49,7 +49,7 @@ const MAX_V2_CONTENTS_SIZE: usize = 1 + 12 + MAX_P2P_PAYLOAD_SIZE;
 pub fn decode_v2(contents: &[u8]) -> Result<P2pMsg, P2pDecodeError> {
   let mut payload = contents;
   let short_id = u8::decode(&mut payload).map_err(|_| P2pDecodeError::MissingCommand)?;
-  let id = ShortId(short_id);
+  let id = ShortId::new(short_id);
   let cmd = if id == ShortId::LONG_FORMAT {
     Some(CommandString::decode(&mut payload).map_err(|_| P2pDecodeError::MissingCommand)?)
   } else if id.is_in_table() {

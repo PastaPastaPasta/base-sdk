@@ -9,16 +9,18 @@
 use crate::codec::codec_p2p;
 
 use dash_types::type_id::TypeId;
+use getset::CopyGetters;
 
+codec_p2p! {
 /// Asks the peer to relay recovered signatures, or to stop.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, Copy, CopyGetters, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct QSendRecSigs {
   /// Whether the sender wants `qsigrec` messages.
-  pub relay: bool,
+  #[getset(get_copy = "pub")]
+  relay: bool,
 }
-
-codec_p2p!(QSendRecSigs { relay });
+}
 
 #[cfg(all(test, feature = "serde"))]
 mod tests {

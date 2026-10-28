@@ -12,41 +12,40 @@ use crate::version::ProtocolVersion;
 
 use dash_primitives::BlockHash;
 use dash_types::type_id::TypeId;
+use getset::{CopyGetters, Getters};
 
+codec_p2p! {
 /// Announces compact block support, and whether new blocks should be
 /// announced to the sender as compact blocks.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, Copy, CopyGetters, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct SendCmpct {
   /// Whether the sender wants new blocks announced with `cmpctblock`.
-  pub high_bandwidth: bool,
+  #[getset(get_copy = "pub")]
+  high_bandwidth: bool,
   /// Compact block protocol version.
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::str_u64"))]
-  pub version: u64,
+  #[getset(get_copy = "pub")]
+  version: u64,
+}
 }
 
-codec_p2p!(SendCmpct {
-  high_bandwidth,
-  version
-});
-
+codec_p2p! {
 /// Requests the hashes of the blocks that follow a locator.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct GetBlocks {
   /// Protocol version.
-  pub version: ProtocolVersion,
+  #[getset(get_copy = "pub")]
+  version: ProtocolVersion,
   /// Block locator hashes (newest first).
-  pub locator_hashes: Vec<BlockHash>,
+  #[getset(get = "pub")]
+  locator_hashes: Vec<BlockHash>,
   /// Stop hash (zero to get as many as possible).
-  pub hash_stop: BlockHash,
+  #[getset(get_copy = "pub")]
+  hash_stop: BlockHash,
 }
-
-codec_p2p!(GetBlocks {
-  version,
-  locator_hashes,
-  hash_stop
-});
+}
 
 #[cfg(all(test, feature = "serde"))]
 mod tests {

@@ -117,7 +117,7 @@ macro_rules! define_p2p {
 
       /// Resolves the short ID to its command name, if one is assigned.
       pub const fn to_command_str(self) -> Option<&'static str> {
-        match self.0 {
+        match self.get() {
           $( $( $p_sid => Some($p_wire), )? )*
           $( $( $pe_sid => Some($pe_wire), )? )*
           $( $( $s_sid => Some($s_wire), )? )*
@@ -132,10 +132,10 @@ macro_rules! define_p2p {
       /// the long format.
       pub fn from_command(cmd: &CommandString) -> Option<Self> {
         match *cmd {
-          $( $( CommandString::$p_cmd => Some(Self($p_sid)), )? )*
-          $( $( CommandString::$pe_cmd => Some(Self($pe_sid)), )? )*
-          $( $( CommandString::$s_cmd => Some(Self($s_sid)), )? )*
-          $( $( CommandString::$se_cmd => Some(Self($se_sid)), )? )*
+          $( $( CommandString::$p_cmd => Some(Self::new($p_sid)), )? )*
+          $( $( CommandString::$pe_cmd => Some(Self::new($pe_sid)), )? )*
+          $( $( CommandString::$s_cmd => Some(Self::new($s_sid)), )? )*
+          $( $( CommandString::$se_cmd => Some(Self::new($se_sid)), )? )*
           _ => None,
         }
       }

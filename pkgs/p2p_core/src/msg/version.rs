@@ -14,7 +14,8 @@ use dash_num::Hash256;
 use dash_primitives::{hash_impl, ServiceV1};
 use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{make_num, CompactSize};
+use dash_types::{impl_new, make_num, CompactSize};
+use getset::{CopyGetters, Getters};
 
 use core::fmt;
 use core::ops::{BitAnd, BitOr, BitOrAssign};
@@ -71,17 +72,20 @@ impl BitOrAssign for ServiceFlags {
   }
 }
 
+impl_new! {
 /// The user agent exceeds the 256-byte limit.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, Unencodable)]
-#[error("user agent too long: {len} bytes, max {MAX_USER_AGENT}")]
+#[derive(Debug, Clone, CopyGetters, PartialEq, Eq, thiserror::Error, Unencodable)]
+#[error("user agent too long: {size} bytes, max {MAX_USER_AGENT}")]
 pub struct UserAgentTooLong {
   /// Actual length in bytes.
-  pub len: usize,
+  #[getset(get_copy = "pub")]
+  size: usize,
+}
 }
 
 /// CompactSize-prefixed user agent bytestring.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
-#[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(::serde::Serialize))]
 pub struct UserAgent(#[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::utf8_lossy"))] Vec<u8>);
 
 impl_p2p!(UserAgent);
@@ -108,7 +112,7 @@ impl UserAgent {
   /// Returns `UserAgentTooLong` if `bytes` exceeds 256 bytes.
   pub fn new(bytes: Vec<u8>) -> Result<Self, UserAgentTooLong> {
     if bytes.len() > MAX_USER_AGENT {
-      return Err(UserAgentTooLong { len: bytes.len() });
+      return Err(UserAgentTooLong::new(bytes.len()));
     }
     Ok(Self(bytes))
   }
@@ -151,19 +155,29 @@ impl TryFrom<Vec<u8>> for UserAgent {
   }
 }
 
+#[cfg(feature = "serde")]
+impl<'de> ::serde::Deserialize<'de> for UserAgent {
+  fn deserialize<D: ::serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+    let bytes = dash_types::serialize::utf8_lossy::deserialize(deserializer)?;
+    Self::new(bytes).map_err(::serde::de::Error::custom)
+  }
+}
+
+codec_p2p! {
 /// Network address with service flags (used inside the version message).
 ///
 /// Wire format: `u64 services` + `[u8; 16] addr` + `u16 BE port`.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct VersionAddr {
   /// Advertised services.
-  pub services: ServiceFlags,
+  #[getset(get_copy = "pub")]
+  services: ServiceFlags,
   /// IPv4-mapped IPv6 address + port.
-  pub addr: ServiceV1,
+  #[getset(get = "pub")]
+  addr: ServiceV1,
 }
-
-codec_p2p!(VersionAddr { services, addr });
+}
 
 impl fmt::Display for VersionAddr {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -171,57 +185,56 @@ impl fmt::Display for VersionAddr {
   }
 }
 
+codec_p2p! {
 /// The `version` message initiates the P2P handshake.
 ///
 /// Dash extends the Bitcoin version message with two additional
 /// fields for masternode authentication.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct Version {
   /// Sender's protocol version.
-  pub protocol_version: ProtocolVersion,
+  #[getset(get_copy = "pub")]
+  protocol_version: ProtocolVersion,
   /// Sender's advertised services.
-  pub services: ServiceFlags,
+  #[getset(get_copy = "pub")]
+  services: ServiceFlags,
   /// Unix timestamp of the sender.
-  pub timestamp: i64,
+  #[getset(get_copy = "pub")]
+  timestamp: i64,
   /// Receiver's address as seen by the sender.
-  pub addr_recv: VersionAddr,
+  #[getset(get = "pub")]
+  addr_recv: VersionAddr,
   /// Sender's own address.
-  pub addr_send: VersionAddr,
+  #[getset(get = "pub")]
+  addr_send: VersionAddr,
   /// Random nonce for connection deduplication.
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::str_u64"))]
-  pub nonce: u64,
+  #[getset(get_copy = "pub")]
+  nonce: u64,
   /// User agent string.
-  pub user_agent: UserAgent,
+  #[getset(get = "pub")]
+  user_agent: UserAgent,
   /// Sender's best block height.
-  pub start_height: i32,
+  #[getset(get_copy = "pub")]
+  start_height: i32,
   /// Whether the sender wants transaction relay.
-  pub relay: bool,
+  #[getset(get_copy = "pub")]
+  relay: bool,
   /// Dash: masternode authentication challenge.
-  pub mnauth_challenge: Hash256,
+  #[getset(get_copy = "pub")]
+  mnauth_challenge: Hash256,
   /// Dash: whether the sender identifies as a masternode.
-  pub mn_connection: bool,
+  #[getset(get_copy = "pub")]
+  mn_connection: bool,
 }
-
-codec_p2p!(Version {
-  protocol_version,
-  services,
-  timestamp,
-  addr_recv,
-  addr_send,
-  nonce,
-  user_agent,
-  start_height,
-  relay,
-  mnauth_challenge,
-  mn_connection,
-});
+}
 
 #[cfg(all(test, feature = "serde"))]
 mod tests {
   use super::*;
 
-  use dash_dev::{assert_json_rt, assert_serde_rt, check_wire, Corpus};
+  use dash_dev::{assert_json_rt, assert_serde_rt, check_wire, json_rejects, to_json, Corpus};
   use rstest::rstest;
 
   #[rstest]
@@ -231,6 +244,12 @@ mod tests {
   #[case::max(alloc::vec![0x80; MAX_USER_AGENT])]
   fn user_agent_json_round_trips(#[case] bytes: Vec<u8>) {
     assert_json_rt(&UserAgent(bytes));
+  }
+
+  #[rstest]
+  fn user_agent_json_rejects_oversize() {
+    let json = to_json(&UserAgent(alloc::vec![b'a'; MAX_USER_AGENT + 1]));
+    assert!(json_rejects::<UserAgent>(&json));
   }
 
   #[rstest]

@@ -468,6 +468,7 @@ dependencies = [
  "dash-primitives",
  "dash-script",
  "dash-types",
+ "getset",
  "hex-conservative",
  "rstest",
  "serde",

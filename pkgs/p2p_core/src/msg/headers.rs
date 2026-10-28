@@ -13,7 +13,8 @@ use crate::version::ProtocolVersion;
 use dash_primitives::{hash_impl, BlockHash, BlockHeader, MerkleRoot};
 use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
-use dash_types::CompactSize;
+use dash_types::{impl_new, CompactSize};
+use getset::{CopyGetters, Getters};
 
 /// Size of the smallest `headers` entry, an 80-byte header and a one-byte
 /// tx count.
@@ -29,33 +30,35 @@ pub(super) fn decode_count(data: &mut &[u8], max_count: usize, min_size: usize) 
   Ok(count)
 }
 
+codec_p2p! {
 /// Requests block headers starting from a locator.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct GetHeaders {
   /// Protocol version.
-  pub version: ProtocolVersion,
+  #[getset(get_copy = "pub")]
+  version: ProtocolVersion,
   /// Block locator hashes (newest first).
-  pub locator_hashes: Vec<BlockHash>,
+  #[getset(get = "pub")]
+  locator_hashes: Vec<BlockHash>,
   /// Stop hash (zero to get as many as possible).
-  pub hash_stop: BlockHash,
+  #[getset(get_copy = "pub")]
+  hash_stop: BlockHash,
+}
 }
 
-codec_p2p!(GetHeaders {
-  version,
-  locator_hashes,
-  hash_stop
-});
-
+impl_new! {
 /// Response carrying block headers.
 ///
 /// Each header is followed by a CompactSize transaction count
 /// (always zero, since full blocks are not included).
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct Headers {
   /// Block headers.
-  pub headers: Vec<BlockHeader>,
+  #[getset(get = "pub")]
+  headers: Vec<BlockHeader>,
+}
 }
 
 impl_p2p!(Headers);

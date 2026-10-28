@@ -14,7 +14,8 @@ use crate::version::ProtocolVersion;
 use dash_primitives::{hash_impl, BlockHash, BlockHeader, MerkleRoot};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{CompactSize, Hashable};
+use dash_types::{impl_new, CompactSize, Hashable};
+use getset::{CopyGetters, Getters};
 
 /// Size of the smallest compressed header, made of flags, a merkle root, a
 /// time delta and a nonce.
@@ -36,13 +37,15 @@ const FLAG_TIMESTAMP_FULL: u8 = 0b0001_0000;
 const FLAG_NBITS: u8 = 0b0010_0000;
 
 /// Stateful compressor/decompressor for a stream of block headers.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, Unencodable)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct CompressionState {
   /// MRU version cache (front = most recently used).
-  pub version_cache: Vec<i32>,
+  #[getset(get = "pub")]
+  version_cache: Vec<i32>,
   /// Previous fully-resolved header.
-  pub prev_header: Option<BlockHeader>,
+  #[getset(get_copy = "pub")]
+  prev_header: Option<BlockHeader>,
   /// Cached block hash of `prev_header`.
   #[cfg_attr(feature = "serde", serde(skip))]
   prev_block_hash: Option<BlockHash>,
@@ -56,6 +59,11 @@ impl CompressionState {
       prev_header: None,
       prev_block_hash: None,
     }
+  }
+
+  /// Returns the block hash of `prev_header`, reusing the cached value if set.
+  pub fn prev_block_hash(&self) -> Option<BlockHash> {
+    self.prev_block_hash.or_else(|| self.prev_header.map(|h| h.hash()))
   }
 
   /// Moves the version at `position` to the front of the cache.
@@ -80,7 +88,7 @@ impl CompressionState {
   /// Returns cached hash, recomputing from `prev_header` if the cache is cold.
   fn prev_hash(&mut self) -> Option<BlockHash> {
     if self.prev_block_hash.is_none() {
-      self.prev_block_hash = self.prev_header.as_ref().map(|h| h.hash());
+      self.prev_block_hash = self.prev_header.map(|h| h.hash());
     }
     self.prev_block_hash
   }
@@ -220,30 +228,32 @@ impl Default for CompressionState {
   }
 }
 
+codec_p2p! {
 /// Requests compressed block headers starting from a locator.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct GetHeaders2 {
   /// Protocol version.
-  pub version: ProtocolVersion,
+  #[getset(get_copy = "pub")]
+  version: ProtocolVersion,
   /// Block locator hashes (newest first).
-  pub locator_hashes: Vec<BlockHash>,
+  #[getset(get = "pub")]
+  locator_hashes: Vec<BlockHash>,
   /// Stop hash (zero to get as many as possible).
-  pub hash_stop: BlockHash,
+  #[getset(get_copy = "pub")]
+  hash_stop: BlockHash,
+}
 }
 
-codec_p2p!(GetHeaders2 {
-  version,
-  locator_hashes,
-  hash_stop
-});
-
+impl_new! {
 /// Response carrying delta-compressed block headers.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct Headers2 {
   /// Fully resolved block headers.
-  pub headers: Vec<BlockHeader>,
+  #[getset(get = "pub")]
+  headers: Vec<BlockHeader>,
+}
 }
 
 impl_p2p!(Headers2);
@@ -382,6 +392,6 @@ mod tests {
   #[case::below(70234, 2_000)]
   #[case::at(70235, 8_000)]
   fn max_count_follows_the_common_version(#[case] common: i32, #[case] max: usize) {
-    assert_eq!(Headers2::max_count(ProtocolVersion(common)), max);
+    assert_eq!(Headers2::max_count(ProtocolVersion::new(common)), max);
   }
 }

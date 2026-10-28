@@ -18,7 +18,7 @@ extensions:
       # | ------------------ | ------------------------ |
       - ["dash-dev",           "private, no-derive"]
       - ["dash-num",           "enforced"]
-      - ["dash-p2p-core",      "enforced, unencodable"]
+      - ["dash-p2p-core",      "enforced, getter, unencodable"]
       - ["dash-params",        "enforced, no-serde, unencodable"]
       - ["dash-pkc",           "enforced, unencodable, opaque"]
       - ["dash-pow",           "no-serde"]
