@@ -62,6 +62,10 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Check cache write access
+        id: cache_write
+        uses: ./.github/actions/cache_write
+
       # LLVM alone unpacks to 11 GB on a Linux host.
       - name: Free disk space
         if: runner.os == 'Linux'
@@ -74,15 +78,11 @@ jobs:
         with:
           tool: just
 
-      - name: Manage Bazel downloads
-        uses: actions/cache@v5
+      - name: Configure the remote cache
+        uses: ./.github/actions/bazel_remote
         with:
-          path: |
-            .cache/bazel/cache/repos
-            .cache/bazelisk
-          key: bazel-repos-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', 'bazel/*.MODULE.bazel') }}
-          restore-keys: |
-            bazel-repos-${{ runner.os }}-${{ runner.arch }}-
+          url: ${{ vars.CACHE_BZL_URL }}
+          auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_BZL_AUTH || '' }}
 
       - name: Build every target
         run: just zbuild

@@ -1,0 +1,45 @@
+name: Configure the Bazel remote cache
+description: Configures Bazel to use the remote cache, and its downloader or GitHub's cache for downloads
+
+inputs:
+  url:
+    description: Remote cache endpoint over gRPC, which the downloader requires, empty to leave Bazel unchanged
+    required: false
+    default: ""
+  auth:
+    description: Base64 of the `ci` user and its password, which permits uploads, empty to read anonymously
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Write the remote cache settings
+      if: inputs.url != ''
+      shell: bash
+      env:
+        CACHE_BZL_URL: ${{ inputs.url }}
+        CACHE_BZL_AUTH: ${{ inputs.auth }}
+      run: |
+        echo "build --remote_cache=${CACHE_BZL_URL}" >> .bazelrc.user
+        # The downloader refuses anonymous calls. When it cannot fetch a file,
+        # Bazel fetches it from the origin.
+        if [ -n "${CACHE_BZL_AUTH}" ]; then
+          echo "common \"--remote_header=Authorization=Basic ${CACHE_BZL_AUTH}\"" >> .bazelrc.user
+          echo "common --experimental_remote_downloader=${CACHE_BZL_URL}" >> .bazelrc.user
+          echo "common --experimental_remote_downloader_local_fallback" >> .bazelrc.user
+        else
+          echo "build --remote_upload_local_results=false" >> .bazelrc.user
+        fi
+
+    # GitHub's cache scopes entries to their branch, so untrusted runs may save.
+    - name: Manage Bazel downloads
+      if: inputs.url == '' || inputs.auth == ''
+      uses: actions/cache@v5
+      with:
+        path: |
+          .cache/bazel/cache/repos
+          .cache/bazelisk
+        key: bazel-repos-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', 'bazel/*.MODULE.bazel') }}
+        restore-keys: |
+          bazel-repos-${{ runner.os }}-${{ runner.arch }}-

@@ -96,15 +96,11 @@ jobs:
           path: ~/.codeql
           key: codeql-packs-${{ hashFiles('maint/codeql/*/codeql-pack.lock.yml') }}
 
-      - name: Manage Bazel downloads
-        uses: actions/cache@v5
+      - name: Configure the remote cache
+        uses: ./.github/actions/bazel_remote
         with:
-          path: |
-            .cache/bazel/cache/repos
-            .cache/bazelisk
-          key: bazel-lint-repos-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', 'bazel/*.MODULE.bazel') }}
-          restore-keys: |
-            bazel-lint-repos-${{ runner.os }}-${{ runner.arch }}-
+          url: ${{ vars.CACHE_BZL_URL }}
+          auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_BZL_AUTH || '' }}
 
       - name: Run linters
         run: just lint
