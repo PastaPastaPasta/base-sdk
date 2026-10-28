@@ -74,27 +74,43 @@ jobs:
             "$(readlink -f "${RUNNER_TEMP}/devshell")"
 
       - name: Restore cargo registry
-        uses: actions/cache/restore@v5
+        uses: ./.github/actions/gha_cache
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
           key: cargo-deps-${{ hashFiles('Cargo.lock', 'docs/samples/Cargo.lock', 'fuzz/Cargo.lock') }}
           restore-keys: cargo-deps-
+          restore-only: "true"
+          url: ${{ vars.CACHE_GHA_URL }}
+          bucket: ${{ vars.CACHE_GHA_BUCKET }}
+          region: ${{ vars.CACHE_GHA_REGION }}
+          key-id: ${{ vars.CACHE_GHA_KEY_ID }}
+          auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_GHA_AUTH || '' }}
 
       - name: Manage build artifacts
-        uses: actions/cache@v5
+        uses: ./.github/actions/gha_cache
         with:
           path: target
           key: cargo-build-lint-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
           restore-keys: |
             cargo-build-lint-${{ runner.os }}-${{ runner.arch }}-
+          url: ${{ vars.CACHE_GHA_URL }}
+          bucket: ${{ vars.CACHE_GHA_BUCKET }}
+          region: ${{ vars.CACHE_GHA_REGION }}
+          key-id: ${{ vars.CACHE_GHA_KEY_ID }}
+          auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_GHA_AUTH || '' }}
 
       - name: Manage CodeQL packs
-        uses: actions/cache@v5
+        uses: ./.github/actions/gha_cache
         with:
           path: ~/.codeql
           key: codeql-packs-${{ hashFiles('maint/codeql/*/codeql-pack.lock.yml') }}
+          url: ${{ vars.CACHE_GHA_URL }}
+          bucket: ${{ vars.CACHE_GHA_BUCKET }}
+          region: ${{ vars.CACHE_GHA_REGION }}
+          key-id: ${{ vars.CACHE_GHA_KEY_ID }}
+          auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_GHA_AUTH || '' }}
 
       - name: Configure the remote cache
         uses: ./.github/actions/bazel_remote
@@ -141,6 +157,10 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Check cache write access
+        id: cache_write
+        uses: ./.github/actions/cache_write
+
       - name: Run pull request checks
         if: github.event_name == 'pull_request'
         shell: bash
@@ -167,21 +187,32 @@ jobs:
           tool: cargo-hack
 
       - name: Manage cargo registry
-        uses: actions/cache@v5
+        uses: ./.github/actions/gha_cache
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
           key: cargo-deps-${{ hashFiles('Cargo.lock', 'docs/samples/Cargo.lock', 'fuzz/Cargo.lock') }}
           restore-keys: cargo-deps-
+          restore-only: ${{ runner.os != 'Linux' }}
+          url: ${{ vars.CACHE_GHA_URL }}
+          bucket: ${{ vars.CACHE_GHA_BUCKET }}
+          region: ${{ vars.CACHE_GHA_REGION }}
+          key-id: ${{ vars.CACHE_GHA_KEY_ID }}
+          auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_GHA_AUTH || '' }}
 
       - name: Manage build artifacts
-        uses: actions/cache@v5
+        uses: ./.github/actions/gha_cache
         with:
           path: target
           key: cargo-build-stable-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
           restore-keys: |
             cargo-build-stable-${{ runner.os }}-${{ runner.arch }}-
+          url: ${{ vars.CACHE_GHA_URL }}
+          bucket: ${{ vars.CACHE_GHA_BUCKET }}
+          region: ${{ vars.CACHE_GHA_REGION }}
+          key-id: ${{ vars.CACHE_GHA_KEY_ID }}
+          auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_GHA_AUTH || '' }}
 
       - name: Build every feature
         run: cargo hack --workspace --exclude-features default --each-feature build

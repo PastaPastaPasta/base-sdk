@@ -25,6 +25,8 @@ bazel:
   - pkgs/**
 
 msrv:
+  - .github/actions/cache_write/**
+  - .github/actions/gha_cache/**
   - .github/workflows/build_msrv.yml
 
 num:

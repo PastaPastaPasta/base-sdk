@@ -64,14 +64,20 @@ jobs:
       - name: Test documentation tooling
         run: pytest
 
-      - name: Manage cargo registry
-        uses: actions/cache@v5
+      - name: Restore cargo registry
+        uses: ./.github/actions/gha_cache
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
           key: cargo-deps-${{ hashFiles('Cargo.lock', 'docs/samples/Cargo.lock', 'fuzz/Cargo.lock') }}
           restore-keys: cargo-deps-
+          restore-only: "true"
+          url: ${{ vars.CACHE_GHA_URL }}
+          bucket: ${{ vars.CACHE_GHA_BUCKET }}
+          region: ${{ vars.CACHE_GHA_REGION }}
+          key-id: ${{ vars.CACHE_GHA_KEY_ID }}
+          auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_GHA_AUTH || '' }}
 
       - name: Build documentation
         run: python3 docs/build_docs.py build

@@ -17,6 +17,8 @@ on:
         type: string
         default: ""
     secrets:
+      CACHE_GHA_AUTH:
+        required: false
       CODECOV_TOKEN:
         required: false
 
@@ -106,16 +108,22 @@ jobs:
           skip-push: ${{ steps.cache_write.outputs.allowed != 'true' }}
 
       - name: Restore cargo registry
-        uses: actions/cache/restore@v5
+        uses: ./.github/actions/gha_cache
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
           key: cargo-deps-${{ hashFiles('Cargo.lock', 'docs/samples/Cargo.lock', 'fuzz/Cargo.lock') }}
           restore-keys: cargo-deps-
+          restore-only: "true"
+          url: ${{ vars.CACHE_GHA_URL }}
+          bucket: ${{ vars.CACHE_GHA_BUCKET }}
+          region: ${{ vars.CACHE_GHA_REGION }}
+          key-id: ${{ vars.CACHE_GHA_KEY_ID }}
+          auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_GHA_AUTH || '' }}
 
       - name: Manage build artifacts
-        uses: actions/cache@v5
+        uses: ./.github/actions/gha_cache
         with:
           path: |
             target
@@ -124,6 +132,11 @@ jobs:
           key: cargo-build-msrv-${{ runner.os }}-${{ runner.arch }}-${{ inputs.package }}-${{ github.sha }}
           restore-keys: |
             cargo-build-msrv-${{ runner.os }}-${{ runner.arch }}-${{ inputs.package }}-
+          url: ${{ vars.CACHE_GHA_URL }}
+          bucket: ${{ vars.CACHE_GHA_BUCKET }}
+          region: ${{ vars.CACHE_GHA_REGION }}
+          key-id: ${{ vars.CACHE_GHA_KEY_ID }}
+          auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_GHA_AUTH || '' }}
 
       - name: Select the MSRV toolchain
         run: |
