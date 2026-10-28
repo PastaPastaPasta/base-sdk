@@ -77,7 +77,8 @@ the consensus oracle (its README, "Checking the upstream files", gives the class
 - Checker: `python3 contrib/vectors/bls_oracle/check_upstream.py --probe <probe> --corpus-dir pkgs/pkc/corpus`.
 - Test: `src/bls/secret_ops.rs`, `src/bls/public_ops.rs` and `src/bls/sig_aggregate.rs`, `aggregate_matches_vectors`;
   `src/bls/sig_aggregate.rs`, `aggregate_verify_matches_vectors`.
-- `bls_aggregate.json5` sha256 `9a1a638e6fee731061d97d1c7fc96bdd60b90b4d695d2cfb257f16bf6b9c45c5`
+- `bls_aggregate.json5` sha256 `10ec6acfc3d216a56aae14d6c58472af239a61aec049d60ee61e9f7f0611686e`: upstream `7f6b0ea6`'s copy, the `33fcc59e` values plus its
+  unchecked `verify_message` cases.
 
 ## bls_dh.json5
 
@@ -191,7 +192,8 @@ the consensus oracle (its README, "Checking the upstream files", gives the class
 - Checker: `python3 contrib/vectors/bls_oracle/check_upstream.py --probe <probe> --corpus-dir pkgs/pkc/corpus`.
 - Test: `src/bls/public_ops.rs`, `secure_aggregate_is_what_verify_checks`; `src/bls/sig_aggregate.rs`,
   `secure_aggregate_matches_vectors` and `secure_verify_matches_vectors`.
-- `bls_secure_aggregate.json5` sha256 `18acd412bb0ca096eab2a940b1aa4dd017d30748331488dafc2e96d201b53ce8`
+- `bls_secure_aggregate.json5` sha256 `eb007c63f058aa48c59869a2783afbb51324495eea915d2b014b45b6f14a2aed`: upstream `7f6b0ea6`'s copy, the `33fcc59e` values plus its
+  unchecked `verify_message` cases.
 
 ## bls_serialize.json5
 
@@ -217,7 +219,8 @@ the consensus oracle (its README, "Checking the upstream files", gives the class
   the keys back). Checker: 90 values, 30 reproduced, 60 inputs.
 - Checker: `python3 contrib/vectors/bls_oracle/check_upstream.py --probe <probe> --corpus-dir pkgs/pkc/corpus`.
 - Test: `src/bls/scheme_chia.rs`, `src/bls/scheme_ietf.rs` and `src/bls/sig_basic.rs`, `signing_matches_vectors`.
-- `bls_sign.json5` sha256 `205383ce6c5fae6491f97d953cc3fbc8c675742f150162005724172b1b0366ba`
+- `bls_sign.json5` sha256 `27f1ef383e30803c1c400233ffc514418119c60ef025c3dfef9ca41a0953bcd4`: upstream `7f6b0ea6`'s copy, the `33fcc59e` values plus its
+  unchecked `sign_message` cases.
 
 ## bls_threshold.json5
 
