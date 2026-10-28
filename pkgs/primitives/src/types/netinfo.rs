@@ -980,10 +980,16 @@ mod tests {
     assert_eq!(entry.check(), expected);
   }
 
+  /// A `len`-byte name of 63-byte labels, valid when `len` is not a multiple of
+  /// 64 and at most `DOMAIN_MAX`.
+  fn domain_name(len: usize) -> Vec<u8> {
+    (0..len).map(|i| if i % 64 == 63 { b'.' } else { b'a' }).collect()
+  }
+
   fn domain_wire(len: usize) -> Vec<u8> {
     let mut wire = Vec::new();
     NIEntry::Domain {
-      name: vec![b'a'; len],
+      name: domain_name(len),
       port: 443,
     }
     .encode(&mut wire);
@@ -991,7 +997,7 @@ mod tests {
   }
 
   #[rstest]
-  #[case::at_limit(DOMAIN_MAX, Ok(NIEntry::Domain { name: vec![b'a'; DOMAIN_MAX], port: 443 }))]
+  #[case::at_limit(DOMAIN_MAX, Ok(NIEntry::Domain { name: domain_name(DOMAIN_MAX), port: 443 }))]
   #[case::past_limit(DOMAIN_MAX + 1, Err(DecodeError::CompactSizeExceedsLimit { limit: DOMAIN_MAX, value: 254 }))]
   fn nientry_domain_decodes_at_most_253_bytes(#[case] len: usize, #[case] expected: Result<NIEntry, DecodeError>) {
     assert_eq!(NIEntry::decode(&mut domain_wire(len).as_slice()), expected);
