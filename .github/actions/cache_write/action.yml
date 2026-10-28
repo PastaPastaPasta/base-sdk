@@ -1,0 +1,24 @@
+name: Check cache write access
+description: Checks whether the run may write to the caches
+
+outputs:
+  allowed:
+    description: "`true` when the run may write to the shared caches"
+    value: ${{ steps.check.outputs.allowed }}
+
+runs:
+  using: composite
+  steps:
+    - name: Match the ref
+      id: check
+      shell: bash
+      env:
+        EVENT: ${{ github.event_name }}
+        REF: ${{ github.ref }}
+      run: |
+        source .github/ci.env
+        allowed=false
+        if [ "${EVENT}" = push ] && [[ ",${CACHE_WRITE_REFS}," == *",${REF},"* ]]; then
+          allowed=true
+        fi
+        echo "allowed=${allowed}" >> "${GITHUB_OUTPUT}"

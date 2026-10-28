@@ -13,6 +13,8 @@ bazel:
   - .bazeliskrc
   - .bazelrc
   - .bazelversion
+  - .github/actions/bazel_remote/**
+  - .github/actions/cache_write/**
   - .github/workflows/build_bazel.yml
   - bazel/**
   - BUILD.bazel
@@ -20,8 +22,11 @@ bazel:
   - meta/bazel/**
   - MODULE.bazel
   - MODULE.bazel.lock
+  - pkgs/**
 
 msrv:
+  - .github/actions/cache_write/**
+  - .github/actions/gha_cache/**
   - .github/workflows/build_msrv.yml
 
 num:

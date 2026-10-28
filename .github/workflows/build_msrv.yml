@@ -17,7 +17,7 @@ on:
         type: string
         default: ""
     secrets:
-      CACHIX_AUTH_TOKEN:
+      CACHE_GHA_AUTH:
         required: false
       CODECOV_TOKEN:
         required: false
@@ -48,6 +48,10 @@ jobs:
       - name: Filter paths
         id: filter
         uses: dorny/paths-filter@v4
+        env:
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: fetch.recurseSubmodules
+          GIT_CONFIG_VALUE_0: "false"
         with:
           filters: .github/paths.yml
 
@@ -56,6 +60,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      id-token: write
     env:
       HAS_CODECOV: ${{ secrets.CODECOV_TOKEN != '' }}
 
@@ -69,6 +76,10 @@ jobs:
         with:
           fetch-depth: 1
           submodules: ${{ inputs.fuzz_package_dir != '' }}
+
+      - name: Check cache write access
+        id: cache_write
+        uses: ./.github/actions/cache_write
 
       - name: Run pull request checks
         if: github.event_name == 'pull_request'
@@ -88,29 +99,31 @@ jobs:
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v22
-        with:
-          extra-conf: |
-            extra-substituters = https://dashpay-base-sdk.cachix.org
-            extra-trusted-public-keys = dashpay-base-sdk.cachix.org-1:TAoDyYL2e60lUEG8n10gvIZmujM5rJAhaG613fNfOWI=
 
       - name: Cache Nix
-        uses: cachix/cachix-action@v17
+        uses: Mic92/niks3-action@v1
+        if: vars.CACHE_NIX_URL != ''
         with:
-          name: dashpay-base-sdk
-          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
-          skipAddingSubstituter: true
+          server-url: ${{ vars.CACHE_NIX_URL }}
+          skip-push: ${{ steps.cache_write.outputs.allowed != 'true' }}
 
       - name: Restore cargo registry
-        uses: actions/cache/restore@v5
+        uses: ./.github/actions/gha_cache
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
           key: cargo-deps-${{ hashFiles('Cargo.lock', 'docs/samples/Cargo.lock', 'fuzz/Cargo.lock') }}
           restore-keys: cargo-deps-
+          restore-only: "true"
+          url: ${{ vars.CACHE_GHA_URL }}
+          bucket: ${{ vars.CACHE_GHA_BUCKET }}
+          region: ${{ vars.CACHE_GHA_REGION }}
+          key-id: ${{ vars.CACHE_GHA_KEY_ID }}
+          auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_GHA_AUTH || '' }}
 
       - name: Manage build artifacts
-        uses: actions/cache@v5
+        uses: ./.github/actions/gha_cache
         with:
           path: |
             target
@@ -119,6 +132,11 @@ jobs:
           key: cargo-build-msrv-${{ runner.os }}-${{ runner.arch }}-${{ inputs.package }}-${{ github.sha }}
           restore-keys: |
             cargo-build-msrv-${{ runner.os }}-${{ runner.arch }}-${{ inputs.package }}-
+          url: ${{ vars.CACHE_GHA_URL }}
+          bucket: ${{ vars.CACHE_GHA_BUCKET }}
+          region: ${{ vars.CACHE_GHA_REGION }}
+          key-id: ${{ vars.CACHE_GHA_KEY_ID }}
+          auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_GHA_AUTH || '' }}
 
       - name: Select the MSRV toolchain
         run: |

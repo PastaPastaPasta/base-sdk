@@ -1,0 +1,87 @@
+name: Cache on S3
+description: Caches paths in the S3 bucket, or in GitHub's cache without credentials
+
+inputs:
+  path:
+    description: Paths to cache, one per line
+    required: true
+  key:
+    description: Key to restore and save under
+    required: true
+  restore-keys:
+    description: Key prefixes to restore from on a miss, one per line
+    required: false
+    default: ""
+  restore-only:
+    description: Restore without saving
+    required: false
+    default: "false"
+  url:
+    description: Endpoint of the S3 service
+    required: false
+    default: ""
+  bucket:
+    description: Name of the bucket
+    required: false
+    default: ""
+  region:
+    description: Region of the bucket
+    required: false
+    default: ""
+  key-id:
+    description: ID of the bucket key
+    required: false
+    default: ""
+  auth:
+    description: Secret of the bucket key, which permits saves, empty to use GitHub's cache
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Restore and save on S3
+      if: inputs.url != '' && inputs.bucket != '' && inputs.auth != '' && inputs.restore-only != 'true'
+      uses: runs-on/cache@v5.0.7
+      env:
+        RUNS_ON_S3_BUCKET_CACHE: ${{ inputs.bucket }}
+        RUNS_ON_S3_BUCKET_ENDPOINT: ${{ inputs.url }}
+        RUNS_ON_S3_FORCE_PATH_STYLE: "true"
+        AWS_REGION: ${{ inputs.region }}
+        AWS_ACCESS_KEY_ID: ${{ inputs.key-id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.auth }}
+      with:
+        path: ${{ inputs.path }}
+        key: ${{ inputs.key }}
+        restore-keys: ${{ inputs.restore-keys }}
+
+    - name: Restore from S3
+      if: inputs.url != '' && inputs.bucket != '' && inputs.auth != '' && inputs.restore-only == 'true'
+      uses: runs-on/cache/restore@v5.0.7
+      env:
+        RUNS_ON_S3_BUCKET_CACHE: ${{ inputs.bucket }}
+        RUNS_ON_S3_BUCKET_ENDPOINT: ${{ inputs.url }}
+        RUNS_ON_S3_FORCE_PATH_STYLE: "true"
+        AWS_REGION: ${{ inputs.region }}
+        AWS_ACCESS_KEY_ID: ${{ inputs.key-id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.auth }}
+      with:
+        path: ${{ inputs.path }}
+        key: ${{ inputs.key }}
+        restore-keys: ${{ inputs.restore-keys }}
+
+    - name: Restore and save on GitHub
+      if: (inputs.url == '' || inputs.bucket == '' || inputs.auth == '') && inputs.restore-only != 'true'
+      uses: actions/cache@v5
+      with:
+        path: ${{ inputs.path }}
+        key: ${{ inputs.key }}
+        restore-keys: ${{ inputs.restore-keys }}
+
+    - name: Restore from GitHub
+      if: (inputs.url == '' || inputs.bucket == '' || inputs.auth == '') && inputs.restore-only == 'true'
+      uses: actions/cache/restore@v5
+      with:
+        path: ${{ inputs.path }}
+        key: ${{ inputs.key }}
+        restore-keys: ${{ inputs.restore-keys }}
