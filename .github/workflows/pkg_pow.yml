@@ -21,8 +21,3 @@ jobs:
       package_dir: pow
       fuzz_package_dir: pow
     secrets: inherit
-
-  bazel:
-    uses: ./.github/workflows/build_bazel.yml
-    with:
-      package_dir: pow

@@ -1,12 +1,13 @@
 name: Build with Bazel
 
 on:
-  workflow_call:
-    inputs:
-      package_dir:
-        description: Package directory relative to pkgs/ (e.g. num)
-        required: true
-        type: string
+  workflow_dispatch:
+  push:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -19,7 +20,7 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      run: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.build == 'true' || steps.filter.outputs.bazel == 'true' || steps.filter.outputs[inputs.package_dir] == 'true' }}
+      run: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.build == 'true' || steps.filter.outputs.bazel == 'true' }}
 
     steps:
       - name: Checkout
@@ -84,10 +85,10 @@ jobs:
             bazel-repos-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Build every target
-        run: just ${{ inputs.package_dir }}::zbuild
+        run: just zbuild
 
       - name: Build every target with the release profile
-        run: just ${{ inputs.package_dir }}::zbuild -c opt
+        run: just zbuild -c opt
 
       - name: Check the output root
         run: test -d .cache/bazel/install

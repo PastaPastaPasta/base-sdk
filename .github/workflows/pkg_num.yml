@@ -20,8 +20,3 @@ jobs:
       package: dash-num
       package_dir: num
     secrets: inherit
-
-  bazel:
-    uses: ./.github/workflows/build_bazel.yml
-    with:
-      package_dir: num

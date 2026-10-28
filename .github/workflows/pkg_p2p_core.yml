@@ -20,8 +20,3 @@ jobs:
       package: dash-p2p-core
       package_dir: p2p_core
     secrets: inherit
-
-  bazel:
-    uses: ./.github/workflows/build_bazel.yml
-    with:
-      package_dir: p2p_core

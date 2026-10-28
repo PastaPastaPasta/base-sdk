@@ -20,6 +20,7 @@ bazel:
   - meta/bazel/**
   - MODULE.bazel
   - MODULE.bazel.lock
+  - pkgs/**
 
 msrv:
   - .github/workflows/build_msrv.yml
