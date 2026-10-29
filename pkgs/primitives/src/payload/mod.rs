@@ -14,6 +14,6 @@ mod quorum;
 
 pub use assetlock::{AssetLock, AssetLockInvalid};
 pub use assetunlock::{AssetUnlock, AssetUnlockInvalid};
-pub use cbtx::{CbTxInvalid, CoinbaseCommitment};
+pub use cbtx::{CbCommitmentVersion, CbTxInvalid, CoinbaseCommitment};
 pub use mnhftx::{MnHardFork, MnHardForkInvalid, VERSIONBITS_NUM_BITS};
 pub use quorum::{Commitment, CommitmentInvalid, FinalCommitment, QuorumVvecHash};
