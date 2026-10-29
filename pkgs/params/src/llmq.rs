@@ -6,17 +6,25 @@
 
 //! LLMQ type definitions.
 
+#[cfg(feature = "codec")]
 use crate::prelude::*;
 
+#[cfg(feature = "codec")]
 use bitcoin_hashes::sha256d;
+#[cfg(feature = "codec")]
 use dash_num::Hash256;
+#[cfg(feature = "codec")]
 use dash_types::codec::BaseCodec;
+#[cfg(feature = "codec")]
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{enum_map, impl_num, Hashable, Numeric};
+use dash_types::{enum_map, impl_num};
+#[cfg(feature = "codec")]
+use dash_types::{Hashable, Numeric};
 
 enum_map! {
   /// LLMQ type (quorum size/threshold configuration).
-  #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
+  #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+  #[cfg_attr(feature = "codec", derive(TypeId))]
   pub enum LlmqType, u8, Unknown {
     /// 50 members, 60% threshold.
     Llmq50_60 = 1 => "llmq_50_60",
@@ -53,6 +61,7 @@ enum_map! {
 
 impl_num!(LlmqType, u8);
 
+#[cfg(feature = "codec")]
 impl Hashable for LlmqType {
   type Hash = Hash256;
 
@@ -86,7 +95,8 @@ impl LlmqType {
 }
 
 /// DKG and signing parameters of an [`LlmqType`].
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct LlmqParams {
   /// Whether quorums of the type rotate their members under DIP-0024.
   pub use_rotation: bool,

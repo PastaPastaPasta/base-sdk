@@ -1,0 +1,44 @@
+Show build scripts the target's codegen flags
+
+Cargo hands build scripts its `-Ctarget-cpu` and `-Ctarget-feature` flags in
+CARGO_ENCODED_RUSTFLAGS, and applies them to the `rustc --print=cfg` behind
+CARGO_CFG_TARGET_FEATURE. Forward the toolchain's `extra_rustc_flags` alike.
+
+diff --git a/cargo/private/cargo_build_script.bzl b/cargo/private/cargo_build_script.bzl
+index b1c630a..63443da 100644
+--- a/cargo/private/cargo_build_script.bzl
++++ b/cargo/private/cargo_build_script.bzl
+@@ -528,6 +528,11 @@ def _cargo_build_script_impl(ctx):
+     env["CARGO_ENCODED_RUSTFLAGS"] = "\\x1f".join([
+         # Allow build scripts to locate the generated sysroot
+         "--sysroot=${{pwd}}/{}".format(toolchain.sysroot),
++    ] + [
++        # Cargo passes the target's codegen flags, which the toolchain carries.
++        flag
++        for flag in toolchain.extra_rustc_flags
++        if flag.startswith(("-Ctarget-cpu=", "-Ctarget-feature="))
+     ] + ctx.attr.rustc_flags)
+ 
+     for f in ctx.attr.crate_features:
+diff --git a/cargo/private/cargo_build_script_runner/bin.rs b/cargo/private/cargo_build_script_runner/bin.rs
+index d1fe235..c918ac7 100644
+--- a/cargo/private/cargo_build_script_runner/bin.rs
++++ b/cargo/private/cargo_build_script_runner/bin.rs
+@@ -507,12 +507,17 @@ impl Args {
+ 
+ fn get_target_env_vars<P: AsRef<Path>>(rustc: &P) -> Result<BTreeMap<String, String>, String> {
+     // As done by Cargo when constructing a cargo::core::compiler::build_context::target_info::TargetInfo.
++    // Cargo applies the codegen flags too, as they decide `target_feature`.
++    let encoded_rustflags = env::var("CARGO_ENCODED_RUSTFLAGS").unwrap_or_default();
+     let output = Command::new(rustc.as_ref())
+         .arg("--print=cfg")
+         .arg(format!(
+             "--target={}",
+             env::var("TARGET").expect("missing TARGET")
+         ))
++        .args(encoded_rustflags.split("\\x1f").filter(|flag| {
++            flag.starts_with("-Ctarget-cpu=") || flag.starts_with("-Ctarget-feature=")
++        }))
+         .output()
+         .map_err(|err| format!("Error running rustc to get target information: {err}"))?;
+     if !output.status.success() {

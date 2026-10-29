@@ -34,6 +34,8 @@ build --verbose_failures
 
 # Builds follow Cargo's dev profile unless `-c opt` asks for release. No Rust
 # toolchain matches `fastbuild`, which has no Cargo counterpart.
+#
+# `--//bazel:portable` swaps the `.cargo/config.toml` floor for each target's own baseline.
 build --compilation_mode=dbg
 
 # Fat LTO needs bitcode in every rlib, and rules_rust asks for none. The flag

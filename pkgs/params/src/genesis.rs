@@ -7,11 +7,13 @@
 //! Genesis block descriptor.
 
 use bitcoin_units::Amount;
+#[cfg(feature = "codec")]
 use dash_types::type_id::Unencodable;
 use hex_conservative::hex;
 
 /// Fields that define a genesis block with a single coinbase transaction.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct GenesisParams {
   /// Block version.
   pub version: i32,

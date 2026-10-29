@@ -24,6 +24,7 @@ mod prelude;
 
 use crate::params::{mainnet, regtest, test3};
 
+#[cfg(feature = "codec")]
 use dash_types::type_id::Unencodable;
 
 pub use addr::AddrParams;
@@ -34,7 +35,8 @@ pub use genesis::GenesisParams;
 pub use llmq::{LlmqParams, LlmqType};
 
 /// Dash network identifier.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub enum Network {
   /// Production network.
   Main,

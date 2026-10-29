@@ -43,15 +43,21 @@ bitcoin-consensus-encoding = { workspace = true, features = ["alloc"] }
 bitcoin-primitives = { workspace = true, features = ["alloc"] }
 bitcoin_hashes = { workspace = true, features = ["alloc"] }
 bitcoin-units = { workspace = true, features = ["alloc"] }
-dash-num = { version = "0.2.0-beta", path = "../num", features = ["codec"] }
-dash-params = { version = "0.0.0", path = "../params" }
+dash-num = { version = "0.2.0-beta", path = "../num", default-features = false, features = [
+  "codec",
+] }
+dash-params = { version = "0.0.0", path = "../params", default-features = false, features = [
+  "codec",
+] }
 dash-pkc = { version = "0.2.0-beta", path = "../pkc", default-features = false, features = [
   "bls",
   "codec",
   "ecdsa",
 ] }
 dash-pow = { version = "0.1.0-beta", path = "../pow", default-features = false }
-dash-script = { version = "0.0.0", path = "../script" }
+dash-script = { version = "0.0.0", path = "../script", default-features = false, features = [
+  "codec",
+] }
 dash-types = { version = "0.2.0-beta", path = "../types", default-features = false, features = [
   "bitcoin-primitives",
   "codec",

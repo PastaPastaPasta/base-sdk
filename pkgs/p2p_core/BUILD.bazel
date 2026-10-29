@@ -3,11 +3,11 @@ load("//bazel:rust.bzl", "dash_rust_library")
 dash_rust_library(
     name = "dash-p2p-core",
     crate_features = [
-        "default",
         "full",
         "serde",
         "std",
     ],
+    portable = True,
     deps = [
         "//pkgs/num:dash-num",
         "//pkgs/params:dash-params",
