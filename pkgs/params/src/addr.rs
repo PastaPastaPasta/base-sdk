@@ -6,10 +6,12 @@
 
 //! Network address parameters.
 
+#[cfg(feature = "codec")]
 use dash_types::type_id::Unencodable;
 
 /// Network address encoding parameters.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct AddrParams {
   /// P2PKH address version byte.
   pub pubkey_addr: u8,
