@@ -169,6 +169,34 @@ jobs:
           sed -i "s|${line}\$|& --exclude lint_commit|" Justfile
           grep -n "${line} --exclude lint_commit\$" Justfile
 
+      # DEC-753, fork only: RUSTSEC-2026-0418 (libz-sys < 1.1.31, under dash-dev's
+      # build dependency `built`) fails lint_cargo's cargo-deny on develop. Edits
+      # the runner's copy of .cargo/deny.toml only, to ignore that one advisory,
+      # and only while the commit's Cargo.lock still has an affected libz-sys.
+      # Remove this step once develop's Cargo.lock has libz-sys >= 1.1.31.
+      - name: Ignore RUSTSEC-2026-0418 (fork only)
+        run: |
+          lowest=$(awk '$0 == "name = \"libz-sys\"" { getline; gsub(/"/, "", $3); print $3 }' Cargo.lock | sort -V | head -1)
+          if [ -z "${lowest}" ] || [ "$(printf '%s\n' "${lowest}" 1.1.31 | sort -V | head -1)" = 1.1.31 ]; then
+            echo "::notice::Cargo.lock has libz-sys ${lowest:-nowhere}, so RUSTSEC-2026-0418 is not ignored; remove this step"
+            exit 0
+          fi
+          python3 -I - <<'PY'
+          import re, sys
+          path = ".cargo/deny.toml"
+          text = open(path, encoding="utf-8").read()
+          m = re.search(r"(?ms)^\[advisories\]\n(.*?)(?=^\[)", text)
+          if not m:
+            sys.exit("::error::no [advisories] table followed by another table in .cargo/deny.toml")
+          if re.search(r"(?m)^ignore\s*=", m.group(1)):
+            sys.exit("::error::[advisories] already has an ignore list; merge RUSTSEC-2026-0418 into it by hand")
+          entry = 'ignore = [\n  { id = "RUSTSEC-2026-0418", reason = "fork CI only, DEC-753" },\n]\n'
+          body = m.group(1).rstrip("\n") + "\n" + entry + "\n"
+          open(path, "w", encoding="utf-8").write(text[: m.start(1)] + body + text[m.end(1) :])
+          PY
+          echo "libz-sys ${lowest} < 1.1.31: the runner's .cargo/deny.toml ignores RUSTSEC-2026-0418 only"
+          sed -n '/^\[advisories\]/,/^\[bans\]/p' .cargo/deny.toml
+
       - name: just test lint fuzz::test
         shell: nix develop ./contrib/nix#ci --command bash -eo pipefail {0}
         env:
