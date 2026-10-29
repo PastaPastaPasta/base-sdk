@@ -68,7 +68,7 @@ Crate = tuple[str, str]
 _RUST_BZL = "bazel/rust.bzl"
 
 # The file defining profiles, target flags and Rust edition.
-_RUST_MODULE = "bazel/rust.MODULE.bazel"
+_WORKSPACE_BZL = "bazel/workspace.bzl"
 
 # The profile keys the toolchains restate. 'Cargo.toml' must pin each one, so a
 # change of Cargo's defaults cannot shift either build.
@@ -152,7 +152,7 @@ def _literals(path: Path) -> dict[str, object]:
 def _check_sync(repo_root: Path) -> int:
   """Hold Bazel's rustc flags and edition to the Cargo settings."""
   lints = _literals(repo_root / _RUST_BZL)
-  defs = _literals(repo_root / _RUST_MODULE)
+  defs = _literals(repo_root / _WORKSPACE_BZL)
   manifest = tomllib.loads(
     (repo_root / "Cargo.toml").read_text(encoding="utf-8"),
   )

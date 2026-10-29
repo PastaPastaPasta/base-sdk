@@ -12,6 +12,7 @@ include("//bazel:darwin.MODULE.bazel")
 include("//bazel:linux.MODULE.bazel")
 include("//bazel:llvm.MODULE.bazel")
 include("//bazel:rust.MODULE.bazel")
+include("//bazel:toolchains.MODULE.bazel")
 
 # The workspace manifest brings in `dash-meta-bazel`, whose `full` features
 # decide the third-party graph `crate_universe` resolves. An unlisted triple
