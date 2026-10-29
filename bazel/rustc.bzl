@@ -28,3 +28,12 @@ RUST_SHA256S = {
     "rust-std-1.99.1-x86_64-unknown-linux-gnu.tar.xz": "109b074225bf5b9ea3820890876bfdf4ed161adbfaf94b2b4b5984c85ee5d958",
     "rustc-1.99.1-x86_64-unknown-linux-gnu.tar.xz": "2ff05ff9c08a90861e7f6e4065b40a8b87463b4576186fd613871c3e37f2091f",
 }
+
+# rustc's default CPU for each triple. Naming it leaves codegen as it is but
+# shows build scripts a `-Ctarget-cpu`, as `blst` needs one to pick a mode.
+BASELINE_TARGET_CPUS = {
+    "aarch64-apple-darwin": "apple-m1",
+    "aarch64-unknown-linux-gnu": "generic",
+    "x86_64-apple-darwin": "penryn",
+    "x86_64-unknown-linux-gnu": "x86-64",
+}

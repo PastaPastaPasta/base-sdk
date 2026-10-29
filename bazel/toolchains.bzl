@@ -11,23 +11,27 @@ load("@rules_rust//rust/private:repositories.bzl", "rust_repository_set", "rust_
 
 # buildifier: disable=bzl-visibility
 load("@rules_rust//rust/private:repository_utils.bzl", "toolchain_repository_hub")
-load(":rustc.bzl", "RUST_SHA256S", "RUST_VERSION")
-load(":workspace.bzl", "HOST_TRIPLES", "PROFILE_RUSTC_FLAGS", "RUST_EDITION", "TARGET_RUSTC_FLAGS")
+load(":rustc.bzl", "BASELINE_TARGET_CPUS", "RUST_SHA256S", "RUST_VERSION")
+load(":workspace.bzl", "BUILD_PROFILES", "HOST_TRIPLES", "PROFILE_RUSTC_FLAGS", "RUST_EDITION", "TARGET_RUSTC_FLAGS")
 
 def _rust_toolchains_impl(module_ctx):
     # One set per supported host and profile. Toolchain flags reach every crate
     # built for the target. An empty `rustfmt_version` drops rustfmt.
     toolchains = {}
     for name, triple in HOST_TRIPLES.items():
-        for profile, flags in PROFILE_RUSTC_FLAGS.items():
+        for profile, (cargo_profile, workspace_flags) in BUILD_PROFILES.items():
+            if workspace_flags:
+                target_flags = TARGET_RUSTC_FLAGS[triple.split("-")[0]]
+            else:
+                target_flags = ["-Ctarget-cpu=" + BASELINE_TARGET_CPUS[triple]]
             toolchains.update(rust_repository_set(
                 name = "{}_{}".format(name, profile),
                 edition = RUST_EDITION,
                 exec_triple = triple,
-                extra_rustc_flags = TARGET_RUSTC_FLAGS[triple.split("-")[0]] + flags,
+                extra_rustc_flags = target_flags + PROFILE_RUSTC_FLAGS[cargo_profile],
                 rustfmt_version = "",
                 sha256s = RUST_SHA256S,
-                target_settings = [str(Label("//bazel:build_profile_" + profile))],
+                target_settings = [str(Label("//bazel:profile_" + profile))],
                 versions = [RUST_VERSION],
             ))
 

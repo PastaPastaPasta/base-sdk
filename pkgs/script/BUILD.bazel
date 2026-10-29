@@ -8,6 +8,7 @@ dash_rust_library(
         "serde",
         "std",
     ],
+    portable = True,
     deps = [
         "//pkgs/num:dash-num",
         "//pkgs/params:dash-params",

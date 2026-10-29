@@ -6,4 +6,5 @@ dash_rust_library(
         "full",
         "std",
     ],
+    portable = True,
 )

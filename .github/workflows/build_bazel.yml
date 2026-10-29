@@ -90,5 +90,10 @@ jobs:
       - name: Build every target with the release profile
         run: just zbuild -c opt
 
+      - name: Build every target with the portable profiles
+        run: |
+          just zbuild --//bazel:portable
+          just zbuild -c opt --//bazel:portable
+
       - name: Check the output root
         run: test -d .cache/bazel/install

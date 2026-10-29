@@ -4,8 +4,7 @@
 RUST_EDITION = "2021"
 
 # Mirrors `[profile.dev]` and `[profile.release]`, with each of Cargo's
-# defaults spelled out. Keyed on the `bazel/BUILD.bazel` setting for each
-# compilation mode.
+# defaults spelled out. Keyed on the Cargo profile `BUILD_PROFILES` names.
 PROFILE_RUSTC_FLAGS = {
     "debug": [
         "-Ccodegen-units=256",
@@ -35,6 +34,16 @@ TARGET_RUSTC_FLAGS = {
         "-Ctarget-cpu=x86-64-v3",
         "-Ctarget-feature=+adx,+aes",
     ],
+}
+
+# Each `//bazel` profile, keyed by its name, with the Cargo profile it mirrors
+# and whether it builds with `TARGET_RUSTC_FLAGS`. Without them, rustc's
+# defaults for the target apply.
+BUILD_PROFILES = {
+    "debug": ("debug", True),
+    "portable_debug": ("debug", False),
+    "portable_release": ("release", False),
+    "release": ("release", True),
 }
 
 # Every supported host, keyed by the name its toolchain sets start with.
