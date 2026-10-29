@@ -20,7 +20,7 @@ pub use self::proregtx::ProRegTx;
 pub use self::proupregtx::ProUpRegTx;
 pub use self::prouprevtx::ProUpRevTx;
 pub use self::proupservtx::ProUpServTx;
-pub use self::sig::{CollateralSig, OperatorSig, OwnerSig};
+pub use self::sig::{CollateralSig, EcdsaRecSigArray, OperatorSig, OwnerSig};
 pub use self::version::ProTxVersion;
 
 pub use dash_pkc::__private::__EddsaPkHash as PlatformNodeId;
