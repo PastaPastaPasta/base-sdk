@@ -13,24 +13,38 @@ use bitcoin_units::BlockHeight;
 use dash_pkc::bls::BlsSigBytes;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{impl_new, Checkable, CompactSize, Numeric};
+use dash_types::{enum_map, impl_new, impl_num, Checkable, CompactSize, Numeric};
 use getset::CopyGetters;
 
 use core::fmt;
 
+enum_map! {
+  /// Coinbase commitment payload version. Each version adds fields to the one
+  /// before it.
+  #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
+  pub enum CbCommitmentVersion, u16, Unknown {
+    /// Merkle root of the masternode list.
+    MerkleRootMnList = 1 => "merkle_root_mn_list",
+    /// Merkle root of quorum commitments.
+    MerkleRootQuorums = 2 => "merkle_root_quorums",
+    /// ChainLock proof and credit pool balance.
+    ClSigAndBalance = 3 => "clsig_and_balance",
+  }
+}
+
+impl_num!(CbCommitmentVersion, u16);
+
+hash_impl!(CbCommitmentVersion);
+
 impl_new! {
 /// CoinbaseCommitment -- coinbase commitment payload.
-///
-/// - v1: base fields (version, height, merkle_root_mn_list)
-/// - v2: adds merkle_root_quorums
-/// - v3: adds ChainLock proof and credit pool balance
 #[derive(Clone, CopyGetters, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct CoinbaseCommitment {
-  /// Payload version (1, 2, or 3).
+  /// Payload version.
   #[getset(get_copy = "pub")]
-  version: u16,
+  version: CbCommitmentVersion,
   /// Block height.
   #[getset(get_copy = "pub")]
   height: BlockHeight,
@@ -56,15 +70,15 @@ impl_payload!(CoinbaseCommitment);
 
 impl BaseCodec for CoinbaseCommitment {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let version = u16::decode(data)?;
+    let version = CbCommitmentVersion::decode(data)?;
     let height = BlockHeight::from_u32(u32::decode(data)?);
     let merkle_root_mn_list = MerkleRoot::decode(data)?;
-    let merkle_root_quorums = if version >= 2 {
+    let merkle_root_quorums = if version.to_base() >= 2 {
       Some(MerkleRoot::decode(data)?)
     } else {
       None
     };
-    let (best_cl_height_diff, best_cl_signature, credit_pool_balance) = if version >= 3 {
+    let (best_cl_height_diff, best_cl_signature, credit_pool_balance) = if version.to_base() >= 3 {
       (
         Some(CompactSize::decode(data)?.to_base()),
         Some(BlsSigBytes::decode(data)?),
@@ -122,11 +136,12 @@ impl Checkable for CoinbaseCommitment {
   type Error = CbTxInvalid;
 
   fn check(&self) -> Option<Self::Error> {
-    if self.version == 0 || self.version >= 4 {
-      return Some(CbTxInvalid::BadVersion { version: self.version });
+    let version = self.version.to_base();
+    if matches!(self.version, CbCommitmentVersion::Unknown(_)) {
+      return Some(CbTxInvalid::BadVersion { version });
     }
 
-    if self.version >= 2 {
+    if version >= 2 {
       if self.merkle_root_quorums.is_none() {
         return Some(CbTxInvalid::MissingField);
       }
@@ -134,7 +149,7 @@ impl Checkable for CoinbaseCommitment {
       return Some(CbTxInvalid::UnexpectedField);
     }
 
-    if self.version >= 3 {
+    if version >= 3 {
       if self.best_cl_height_diff.is_none() || self.best_cl_signature.is_none() || self.credit_pool_balance.is_none() {
         return Some(CbTxInvalid::MissingField);
       }
@@ -153,7 +168,12 @@ hash_impl!(CoinbaseCommitment);
 
 impl fmt::Display for CoinbaseCommitment {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "CoinbaseCommitment {{ v{}, height: {} }}", self.version, self.height)
+    write!(
+      f,
+      "CoinbaseCommitment {{ v{}, height: {} }}",
+      self.version.to_base(),
+      self.height
+    )
   }
 }
 
