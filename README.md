@@ -14,3 +14,6 @@ lint fuzz::test`) with one job per commit. To run it:
 gh workflow run fork-ci.yml -R PastaPastaPasta/base-sdk --ref fork-ci \
   -f label=<branch> -f base=<full sha> -f tip=<full sha>
 ```
+
+Add `-f skip_commit_lint=true` only for `node-sdk-integration`, whose commits carry agent trailers that
+`lint_commit` blocks. It skips that one linter; branches bound for dashpay/base-sdk never set it.

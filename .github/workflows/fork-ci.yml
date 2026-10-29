@@ -21,6 +21,11 @@ on:
         description: Full SHA of the last commit to comb (git_filter.py tip)
         required: true
         type: string
+      skip_commit_lint:
+        description: Skip lint_commit only (fork integration commits carry agent trailers)
+        required: false
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -154,6 +159,16 @@ jobs:
           unzip -q "${zip}" -d "${RUNNER_TEMP}/codeql-${CODEQL_VERSION}"
           echo "CODEQL_DIR=${RUNNER_TEMP}/codeql-${CODEQL_VERSION}/codeql" >> "${GITHUB_ENV}"
 
+      # Edits the runner's copy of the Justfile only; the tree's own recipe
+      # still runs, with lint_commit added to the linters it excludes.
+      - name: Skip the commit-message lint
+        if: inputs.skip_commit_lint
+        run: |
+          line='maint/lint_all.py --exclude lint_codeql'
+          [ "$(grep -c "${line}\$" Justfile)" = 1 ] || { echo "::error::no single '${line}' line in the Justfile"; exit 1; }
+          sed -i "s|${line}\$|& --exclude lint_commit|" Justfile
+          grep -n "${line} --exclude lint_commit\$" Justfile
+
       - name: just test lint fuzz::test
         shell: nix develop ./contrib/nix#ci --command bash -eo pipefail {0}
         env:
@@ -174,7 +189,7 @@ jobs:
             echo "- elapsed $(( ($(date +%s) - start) / 60 )) min"
             echo "- peak used memory $(sort -n "${RUNNER_TEMP}/mem.txt" | tail -1) MiB"
             echo "- disk at the end: $(df -h --output=used,avail / | tail -1)"
-          } >> "${GITHUB_STEP_SUMMARY}"
+          } | tee -a "${GITHUB_STEP_SUMMARY}"
           if grep -q "codeql binary not found" "${RUNNER_TEMP}/comb.log"; then
             echo "::error::CodeQL was skipped"
             exit 1
