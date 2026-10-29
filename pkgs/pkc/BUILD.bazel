@@ -5,7 +5,6 @@ dash_rust_library(
     crate_features = [
         "bls",
         "codec",
-        "default",
         "ecdsa",
         "eddsa",
         "full",

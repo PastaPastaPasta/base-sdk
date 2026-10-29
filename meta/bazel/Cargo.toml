@@ -14,31 +14,31 @@ rust-version.workspace = true
 bench = false
 
 [dependencies]
-dash-num = { version = "0.2.0-beta", path = "../../pkgs/num", features = [
+dash-num = { version = "0.2.0-beta", path = "../../pkgs/num", default-features = false, features = [
   "full",
 ] }
-dash-p2p-core = { version = "0.0.0", path = "../../pkgs/p2p_core", features = [
+dash-p2p-core = { version = "0.0.0", path = "../../pkgs/p2p_core", default-features = false, features = [
   "full",
 ] }
-dash-params = { version = "0.0.0", path = "../../pkgs/params", features = [
+dash-params = { version = "0.0.0", path = "../../pkgs/params", default-features = false, features = [
   "full",
 ] }
-dash-pkc = { version = "0.2.0-beta", path = "../../pkgs/pkc", features = [
+dash-pkc = { version = "0.2.0-beta", path = "../../pkgs/pkc", default-features = false, features = [
   "full",
 ] }
 dash-pow = { version = "0.1.0-beta", path = "../../pkgs/pow", default-features = false, features = [
   "full",
 ] }
-dash-primitives = { version = "0.0.0", path = "../../pkgs/primitives", features = [
+dash-primitives = { version = "0.0.0", path = "../../pkgs/primitives", default-features = false, features = [
   "full",
 ] }
-dash-script = { version = "0.0.0", path = "../../pkgs/script", features = [
+dash-script = { version = "0.0.0", path = "../../pkgs/script", default-features = false, features = [
   "full",
 ] }
-dash-types = { version = "0.2.0-beta", path = "../../pkgs/types", features = [
+dash-types = { version = "0.2.0-beta", path = "../../pkgs/types", default-features = false, features = [
   "full",
 ] }
-dash-types-marker = { version = "0.1.0-beta", path = "../../pkgs/types/marker" }
+dash-types-marker = { version = "0.1.0-beta", path = "../../pkgs/types/marker", default-features = false }
 
 [features]
 default = []

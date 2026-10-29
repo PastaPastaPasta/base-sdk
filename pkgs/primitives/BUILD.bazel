@@ -3,7 +3,6 @@ load("//bazel:rust.bzl", "dash_rust_library")
 dash_rust_library(
     name = "dash-primitives",
     crate_features = [
-        "default",
         "full",
         "serde",
         "std",
