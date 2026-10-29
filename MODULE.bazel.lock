@@ -512,7 +512,7 @@
           "FILE:@@//pkgs/pow/Cargo.toml 3f33e4320c8dc8836ac9655cbadd5e9cacee225b30950e309f265a66d5c29512",
           "FILE:@@//pkgs/primitives/Cargo.toml 256b6997333d94e6f1c96db7ae6aeaca1d32fa83d9d5f125aea40cb58faa7ddc",
           "FILE:@@//pkgs/pkc/Cargo.toml a16f6907ab4048fbe3aa7423f49aaa615ec5ecdc1faabf13ee4e958593cea8cf",
-          "FILE:@@//pkgs/script/Cargo.toml 838e6193c864910948f747f3f8ec168f0ca2143e15029437b1d237f439444261",
+          "FILE:@@//pkgs/script/Cargo.toml 4af90a885200f6b1397f7775f0079ae22d4fbbc8cc65b0f125a0624df46dcd48",
           "FILE:@@//pkgs/p2p_core/Cargo.toml dcf3a49468c1f58ec54f8e5547493ee918096eefb097afed33e1d393ac6ec8d0"
         ],
         "generatedRepoSpecs": {

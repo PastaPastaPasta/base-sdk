@@ -3,6 +3,7 @@ load("//bazel:rust.bzl", "dash_rust_library")
 dash_rust_library(
     name = "dash-script",
     crate_features = [
+        "codec",
         "default",
         "full",
         "serde",
