@@ -16,7 +16,7 @@ use dash_p2p_core::{
   DkgContribution, DkgJustification, DkgMessage, DkgPrematureCommitment, P2pDecodeError, P2pMsg, ProtoCtx,
   ProtocolVersion, SigSesAnn, SigSesAnnMsg, SigSharesInv, MAX_BATCHED_SIGS,
 };
-use dash_params::{LlmqParams, LlmqType};
+use dash_params::{available_params, LlmqParams, LlmqType};
 use dash_pkc::bls::{BlsCtx, BlsSigBytes};
 use dash_primitives::DynBitset;
 use dash_types::codec::{BaseCodec, DecodeError};
@@ -45,7 +45,7 @@ fn count(n: usize) -> Vec<u8> {
 }
 
 fn params(llmq_type: LlmqType) -> LlmqParams {
-  llmq_type.params().unwrap()
+  available_params(llmq_type).unwrap()
 }
 
 /// `llmqType`, `quorumHash`, `proTxHash`.

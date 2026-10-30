@@ -16,7 +16,7 @@ use dash_p2p_core::{
   dkg_inventory_hash, dkg_quorum, CommandString, DkgComplaint, DkgContribution, DkgJustification, DkgMessage,
   DkgPrematureCommitment, P2pDecodeError, P2pMsg, ProtoCtx, ProtocolVersion,
 };
-use dash_params::{LlmqParams, LlmqType};
+use dash_params::{available_params, LlmqParams, LlmqType};
 use dash_pkc::bls::{BlsCtx, BlsDecodeError};
 use dash_types::{Hashable, Numeric};
 use hex_conservative::decode_to_array;
@@ -105,7 +105,7 @@ fn params(quorum: [i32; 3]) -> Option<LlmqParams> {
     size: size?,
     min_size: min_size?,
     threshold: threshold?,
-    ..LlmqType::LlmqTest.params()?
+    ..available_params(LlmqType::LlmqTest)?
   })
 }
 

@@ -19,7 +19,7 @@ use crate::error::P2pDecodeError;
 use crate::prelude::*;
 
 use dash_num::Hash256;
-use dash_params::LlmqType;
+use dash_params::{LlmqType, MAX_LLMQ_SIZE};
 use dash_pkc::bls::BlsSigBytes;
 use dash_primitives::{hash_impl, DynBitset, QuorumHash};
 use dash_types::codec::{read_bytes, BaseCodec, DecodeError, EncodeBuf};
@@ -28,7 +28,7 @@ use dash_types::{CompactSize, Numeric};
 
 /// Core's `MAX_MSGS_TOTAL_BATCHED_SIGS`, the largest quorum: the most shares
 /// one inventory, batch or `qbsigs` message holds.
-pub const MAX_BATCHED_SIGS: usize = 400;
+pub const MAX_BATCHED_SIGS: usize = MAX_LLMQ_SIZE as usize;
 
 /// Core's `MAX_MSGS_CNT_QSIGSESANN`, the most announcements in a `qsigsesann`.
 pub const MAX_SIG_SES_ANNS: usize = 100;
