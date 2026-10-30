@@ -62,9 +62,11 @@ rust-version = "1.89.0"
 [profile.release]
 codegen-units = 1
 debug = false
+debug-assertions = false
 incremental = false
 lto = "fat"
 opt-level = 3
+overflow-checks = false
 panic = "abort"
 strip = "symbols"
 
@@ -78,4 +80,10 @@ overflow-checks = true
 
 [profile.dev]
 codegen-units = 256
+debug = true
+debug-assertions = true
+lto = false
+opt-level = 0
 overflow-checks = true
+panic = "unwind"
+strip = "none"

@@ -16,9 +16,9 @@ use dash_p2p_core::{
   DkgContribution, DkgJustification, DkgMessage, DkgPrematureCommitment, P2pDecodeError, P2pMsg, ProtoCtx,
   ProtocolVersion, SigSesAnn, SigSesAnnMsg, SigSharesInv, MAX_BATCHED_SIGS,
 };
-use dash_params::LlmqParams;
+use dash_params::{LlmqParams, LlmqType};
 use dash_pkc::bls::{BlsCtx, BlsSigBytes};
-use dash_primitives::{DynBitset, LlmqType};
+use dash_primitives::DynBitset;
 use dash_types::codec::{BaseCodec, DecodeError};
 use dash_types::{CompactSize, Hashable, Numeric};
 use rstest::rstest;
@@ -45,7 +45,7 @@ fn count(n: usize) -> Vec<u8> {
 }
 
 fn params(llmq_type: LlmqType) -> LlmqParams {
-  *LlmqParams::available(llmq_type).unwrap()
+  llmq_type.params().unwrap()
 }
 
 /// `llmqType`, `quorumHash`, `proTxHash`.
@@ -117,8 +117,8 @@ fn dkg_size_caps_are_cores(#[case] llmq_type: LlmqType, #[case] caps: [usize; 4]
 #[rstest]
 fn dkg_sizes_cap_at_one_mebibyte() {
   let mut p = params(LlmqType::Llmq400_60);
-  p.size = i32::MAX;
-  p.threshold = -1;
+  p.size = u16::MAX;
+  p.threshold = 0;
   assert_eq!(DkgContribution::max_size(&p), 1 << 20);
   assert_eq!(DkgJustification::max_size(&p), 1 << 20);
 }

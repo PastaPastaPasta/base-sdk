@@ -4,228 +4,121 @@
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
 
-//! Long-living masternode quorum (LLMQ) parameters.
+//! LLMQ type definitions.
 
-use dash_primitives::LlmqType;
+use crate::prelude::*;
 
-/// Largest quorum size the v24 signing protocol supports. v24 refuses larger
-/// `-llmqtestparams` and `-llmqdevnetparams` sizes; v23 has no such limit.
-pub const MAX_LLMQ_SIZE: i32 = 400;
+use bitcoin_hashes::sha256d;
+use dash_num::Hash256;
+use dash_types::codec::BaseCodec;
+use dash_types::type_id::{TypeId, Unencodable};
+use dash_types::{enum_map, impl_num, Hashable, Numeric};
 
-/// Parameters of one LLMQ type and its DKG, as Core's `Consensus::LLMQParams`.
-///
-/// Fields keep Core's `int` so every value an override can set is
-/// representable. Core checks none of them, so after `-llmqtestparams` or
-/// `-llmqdevnetparams` a size may be 0 or negative and a threshold may exceed
-/// the size. The defaults are in [`AVAILABLE_LLMQS`].
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+enum_map! {
+  /// LLMQ type (quorum size/threshold configuration).
+  #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
+  pub enum LlmqType, u8, Unknown {
+    /// 50 members, 60% threshold.
+    Llmq50_60 = 1 => "llmq_50_60",
+    /// 400 members, 60% threshold.
+    Llmq400_60 = 2 => "llmq_400_60",
+    /// 400 members, 85% threshold.
+    Llmq400_85 = 3 => "llmq_400_85",
+    /// 100 members, 67% threshold.
+    Llmq100_67 = 4 => "llmq_100_67",
+    /// 60 members, 75% threshold.
+    Llmq60_75 = 5 => "llmq_60_75",
+    /// 25 members, 67% threshold.
+    Llmq25_67 = 6 => "llmq_25_67",
+    /// Regtest quorum.
+    LlmqTest = 100 => "llmq_test",
+    /// Devnet quorum.
+    LlmqDevnet = 101 => "llmq_devnet",
+    /// Test v17-era quorum.
+    LlmqTestV17 = 102 => "llmq_test_v17",
+    /// Test DIP-0024 rotated quorum.
+    LlmqTestDip0024 = 103 => "llmq_test_dip0024",
+    /// Test InstantSend quorum.
+    LlmqTestInstantsend = 104 => "llmq_test_instantsend",
+    /// Devnet DIP-0024 rotated quorum.
+    LlmqDevnetDip0024 = 105 => "llmq_devnet_dip0024",
+    /// Test Platform quorum.
+    LlmqTestPlatform = 106 => "llmq_test_platform",
+    /// Devnet Platform quorum.
+    LlmqDevnetPlatform = 107 => "llmq_devnet_platform",
+    /// No quorum type.
+    LlmqNone = 0xff => "llmq_none",
+  }
+}
+
+impl_num!(LlmqType, u8);
+
+impl Hashable for LlmqType {
+  type Hash = Hash256;
+
+  fn hash(&self) -> Self::Hash {
+    let mut buf = Vec::new();
+    self.encode(&mut buf);
+    Hash256::from_lendian(sha256d::Hash::hash(&buf).to_byte_array())
+  }
+}
+
+impl LlmqType {
+  /// DKG and signing parameters of the type, or `None` for
+  /// [`LlmqType::LlmqNone`] and unknown types.
+  pub const fn params(self) -> Option<LlmqParams> {
+    Some(match self {
+      Self::Llmq50_60 => LlmqParams::LLMQ_50_60,
+      Self::Llmq400_60 => LlmqParams::LLMQ_400_60,
+      Self::Llmq400_85 => LlmqParams::LLMQ_400_85,
+      Self::Llmq100_67 => LlmqParams::LLMQ_100_67,
+      Self::Llmq60_75 => LlmqParams::LLMQ_60_75,
+      Self::Llmq25_67 => LlmqParams::LLMQ_25_67,
+      Self::LlmqTest | Self::LlmqTestV17 | Self::LlmqTestInstantsend => LlmqParams::LLMQ_TEST,
+      Self::LlmqTestPlatform => LlmqParams::LLMQ_TEST_PLATFORM,
+      Self::LlmqTestDip0024 => LlmqParams::LLMQ_TEST_DIP0024,
+      Self::LlmqDevnet => LlmqParams::LLMQ_DEVNET,
+      Self::LlmqDevnetDip0024 => LlmqParams::LLMQ_DEVNET_DIP0024,
+      Self::LlmqDevnetPlatform => LlmqParams::LLMQ_DEVNET_PLATFORM,
+      Self::LlmqNone | Self::Unknown(_) => return None,
+    })
+  }
+}
+
+/// DKG and signing parameters of an [`LlmqType`].
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
 pub struct LlmqParams {
-  /// Quorum type.
-  pub llmq_type: LlmqType,
-  /// Core's name for the type, used by the LLMQ role options.
-  pub name: &'static str,
-  /// Whether this is a rotated (DIP0024) quorum.
+  /// Whether quorums of the type rotate their members under DIP-0024.
   pub use_rotation: bool,
   /// Number of members.
-  pub size: i32,
-  /// Minimum number of valid members after the DKG.
-  pub min_size: i32,
-  /// Signature shares needed to recover a signature.
-  pub threshold: i32,
-  /// Blocks between DKG sessions.
-  pub dkg_interval: i32,
+  pub size: u16,
+  /// Fewest valid members and signers a commitment may carry.
+  pub min_size: u16,
+  /// Number of signature shares that recover the quorum signature.
+  pub threshold: u16,
+  /// Blocks between the starts of two DKG sessions.
+  pub dkg_interval: u16,
   /// Blocks per DKG phase.
-  pub dkg_phase_blocks: i32,
-  /// First block of the commitment mining window, inclusive.
-  pub dkg_mining_window_start: i32,
-  /// Last block of the commitment mining window, inclusive.
-  pub dkg_mining_window_end: i32,
-  /// Complaint votes that mark a member bad.
-  pub dkg_bad_votes_threshold: i32,
-  /// Quorums active for signing sessions.
-  pub signing_active_quorum_count: i32,
-  /// Quorums whose intra-quorum connections are kept.
-  pub keep_old_connections: i32,
-  /// Quorums whose keys are kept.
-  pub keep_old_keys: i32,
-  /// Members to send all signature shares to before giving up.
-  pub recovery_members: i32,
+  pub dkg_phase_blocks: u16,
+  /// First block of the interval that must carry a commitment, inclusive.
+  pub dkg_mining_window_start: u16,
+  /// Last block of the interval that may carry a commitment, inclusive.
+  pub dkg_mining_window_end: u16,
+  /// Complaints that mark a member bad for every other member.
+  pub dkg_bad_votes_threshold: u16,
+  /// Number of recent quorums that take part in signing.
+  pub signing_active_quorum_count: u16,
+  /// Number of quorums whose intra-quorum connections a member keeps.
+  pub keep_old_connections: u16,
+  /// Number of quorums whose secret key shares a member keeps.
+  pub keep_old_keys: u16,
+  /// Members a signer sends its signature shares to before giving up.
+  pub recovery_members: u16,
 }
 
 impl LlmqParams {
-  /// Core's `max_cycles`: DKG cycles covering `quorums_count` quorums.
-  ///
-  /// Zero for a rotated type with no active quorums, where Core divides by
-  /// zero; no table entry has that.
-  pub const fn max_cycles(&self, quorums_count: i32) -> i32 {
-    if self.use_rotation {
-      match quorums_count.checked_div(self.signing_active_quorum_count) {
-        Some(cycles) => cycles,
-        None => 0,
-      }
-    } else {
-      quorums_count
-    }
-  }
-
-  /// Core's `max_store_depth`: blocks of recent DKG data to keep.
-  pub const fn max_store_depth(&self) -> i32 {
-    self.max_cycles(self.keep_old_keys).wrapping_mul(self.dkg_interval)
-  }
-
-  /// Core's `is_single_member`.
-  pub const fn is_single_member(&self) -> bool {
-    self.size == 1
-  }
-
-  /// The [`AVAILABLE_LLMQS`] entry for `llmq_type`.
-  pub fn available(llmq_type: LlmqType) -> Option<&'static LlmqParams> {
-    AVAILABLE_LLMQS.iter().find(|q| q.llmq_type == llmq_type)
-  }
-}
-
-/// Core's `available_llmqs`: every LLMQ type with its default parameters, in
-/// Core's order. Equal at both pinned releases.
-pub static AVAILABLE_LLMQS: [LlmqParams; 14] = [
-  LlmqParams {
-    llmq_type: LlmqType::LlmqTest,
-    name: "llmq_test",
-    use_rotation: false,
-    size: 3,
-    min_size: 2,
-    threshold: 2,
-    dkg_interval: 24,
-    dkg_phase_blocks: 2,
-    dkg_mining_window_start: 10,
-    dkg_mining_window_end: 18,
-    dkg_bad_votes_threshold: 2,
-    signing_active_quorum_count: 2,
-    keep_old_connections: 3,
-    keep_old_keys: 4,
-    recovery_members: 3,
-  },
-  LlmqParams {
-    llmq_type: LlmqType::LlmqTestInstantsend,
-    name: "llmq_test_instantsend",
-    use_rotation: false,
-    size: 3,
-    min_size: 2,
-    threshold: 2,
-    dkg_interval: 24,
-    dkg_phase_blocks: 2,
-    dkg_mining_window_start: 10,
-    dkg_mining_window_end: 18,
-    dkg_bad_votes_threshold: 2,
-    signing_active_quorum_count: 2,
-    keep_old_connections: 3,
-    keep_old_keys: 4,
-    recovery_members: 3,
-  },
-  LlmqParams {
-    llmq_type: LlmqType::LlmqTestV17,
-    name: "llmq_test_v17",
-    use_rotation: false,
-    size: 3,
-    min_size: 2,
-    threshold: 2,
-    dkg_interval: 24,
-    dkg_phase_blocks: 2,
-    dkg_mining_window_start: 10,
-    dkg_mining_window_end: 18,
-    dkg_bad_votes_threshold: 2,
-    signing_active_quorum_count: 2,
-    keep_old_connections: 3,
-    keep_old_keys: 4,
-    recovery_members: 3,
-  },
-  LlmqParams {
-    llmq_type: LlmqType::LlmqTestDip0024,
-    name: "llmq_test_dip0024",
-    use_rotation: true,
-    size: 4,
-    min_size: 4,
-    threshold: 3,
-    dkg_interval: 24,
-    dkg_phase_blocks: 2,
-    dkg_mining_window_start: 12,
-    dkg_mining_window_end: 20,
-    dkg_bad_votes_threshold: 2,
-    signing_active_quorum_count: 2,
-    keep_old_connections: 4,
-    keep_old_keys: 4,
-    recovery_members: 3,
-  },
-  LlmqParams {
-    llmq_type: LlmqType::LlmqTestPlatform,
-    name: "llmq_test_platform",
-    use_rotation: false,
-    size: 3,
-    min_size: 2,
-    threshold: 2,
-    dkg_interval: 24,
-    dkg_phase_blocks: 2,
-    dkg_mining_window_start: 10,
-    dkg_mining_window_end: 18,
-    dkg_bad_votes_threshold: 2,
-    signing_active_quorum_count: 2,
-    keep_old_connections: 4,
-    keep_old_keys: 1440,
-    recovery_members: 3,
-  },
-  LlmqParams {
-    llmq_type: LlmqType::LlmqDevnet,
-    name: "llmq_devnet",
-    use_rotation: false,
-    size: 12,
-    min_size: 7,
-    threshold: 6,
-    dkg_interval: 24,
-    dkg_phase_blocks: 2,
-    dkg_mining_window_start: 10,
-    dkg_mining_window_end: 18,
-    dkg_bad_votes_threshold: 7,
-    signing_active_quorum_count: 4,
-    keep_old_connections: 5,
-    keep_old_keys: 8,
-    recovery_members: 6,
-  },
-  LlmqParams {
-    llmq_type: LlmqType::LlmqDevnetDip0024,
-    name: "llmq_devnet_dip0024",
-    use_rotation: true,
-    size: 8,
-    min_size: 6,
-    threshold: 4,
-    dkg_interval: 48,
-    dkg_phase_blocks: 2,
-    dkg_mining_window_start: 12,
-    dkg_mining_window_end: 20,
-    dkg_bad_votes_threshold: 7,
-    signing_active_quorum_count: 2,
-    keep_old_connections: 4,
-    keep_old_keys: 4,
-    recovery_members: 4,
-  },
-  LlmqParams {
-    llmq_type: LlmqType::LlmqDevnetPlatform,
-    name: "llmq_devnet_platform",
-    use_rotation: false,
-    size: 12,
-    min_size: 9,
-    threshold: 8,
-    dkg_interval: 24,
-    dkg_phase_blocks: 2,
-    dkg_mining_window_start: 10,
-    dkg_mining_window_end: 18,
-    dkg_bad_votes_threshold: 7,
-    signing_active_quorum_count: 4,
-    keep_old_connections: 5,
-    keep_old_keys: 1440,
-    recovery_members: 6,
-  },
-  LlmqParams {
-    llmq_type: LlmqType::Llmq50_60,
-    name: "llmq_50_60",
+  /// Parameters of [`LlmqType::Llmq50_60`].
+  pub const LLMQ_50_60: Self = Self {
     use_rotation: false,
     size: 50,
     min_size: 40,
@@ -239,27 +132,10 @@ pub static AVAILABLE_LLMQS: [LlmqParams; 14] = [
     keep_old_connections: 25,
     keep_old_keys: 48,
     recovery_members: 25,
-  },
-  LlmqParams {
-    llmq_type: LlmqType::Llmq60_75,
-    name: "llmq_60_75",
-    use_rotation: true,
-    size: 60,
-    min_size: 50,
-    threshold: 45,
-    dkg_interval: 288,
-    dkg_phase_blocks: 2,
-    dkg_mining_window_start: 42,
-    dkg_mining_window_end: 50,
-    dkg_bad_votes_threshold: 48,
-    signing_active_quorum_count: 32,
-    keep_old_connections: 64,
-    keep_old_keys: 64,
-    recovery_members: 25,
-  },
-  LlmqParams {
-    llmq_type: LlmqType::Llmq400_60,
-    name: "llmq_400_60",
+  };
+
+  /// Parameters of [`LlmqType::Llmq400_60`].
+  pub const LLMQ_400_60: Self = Self {
     use_rotation: false,
     size: 400,
     min_size: 300,
@@ -273,10 +149,10 @@ pub static AVAILABLE_LLMQS: [LlmqParams; 14] = [
     keep_old_connections: 5,
     keep_old_keys: 8,
     recovery_members: 100,
-  },
-  LlmqParams {
-    llmq_type: LlmqType::Llmq400_85,
-    name: "llmq_400_85",
+  };
+
+  /// Parameters of [`LlmqType::Llmq400_85`].
+  pub const LLMQ_400_85: Self = Self {
     use_rotation: false,
     size: 400,
     min_size: 350,
@@ -290,10 +166,10 @@ pub static AVAILABLE_LLMQS: [LlmqParams; 14] = [
     keep_old_connections: 5,
     keep_old_keys: 8,
     recovery_members: 100,
-  },
-  LlmqParams {
-    llmq_type: LlmqType::Llmq100_67,
-    name: "llmq_100_67",
+  };
+
+  /// Parameters of [`LlmqType::Llmq100_67`].
+  pub const LLMQ_100_67: Self = Self {
     use_rotation: false,
     size: 100,
     min_size: 80,
@@ -307,10 +183,27 @@ pub static AVAILABLE_LLMQS: [LlmqParams; 14] = [
     keep_old_connections: 25,
     keep_old_keys: 1440,
     recovery_members: 50,
-  },
-  LlmqParams {
-    llmq_type: LlmqType::Llmq25_67,
-    name: "llmq_25_67",
+  };
+
+  /// Parameters of [`LlmqType::Llmq60_75`].
+  pub const LLMQ_60_75: Self = Self {
+    use_rotation: true,
+    size: 60,
+    min_size: 50,
+    threshold: 45,
+    dkg_interval: 288,
+    dkg_phase_blocks: 2,
+    dkg_mining_window_start: 42,
+    dkg_mining_window_end: 50,
+    dkg_bad_votes_threshold: 48,
+    signing_active_quorum_count: 32,
+    keep_old_connections: 64,
+    keep_old_keys: 64,
+    recovery_members: 25,
+  };
+
+  /// Parameters of [`LlmqType::Llmq25_67`].
+  pub const LLMQ_25_67: Self = Self {
     use_rotation: false,
     size: 25,
     min_size: 22,
@@ -324,5 +217,108 @@ pub static AVAILABLE_LLMQS: [LlmqParams; 14] = [
     keep_old_connections: 25,
     keep_old_keys: 1440,
     recovery_members: 12,
-  },
-];
+  };
+
+  /// Parameters of [`LlmqType::LlmqTest`], [`LlmqType::LlmqTestV17`] and
+  /// [`LlmqType::LlmqTestInstantsend`].
+  pub const LLMQ_TEST: Self = Self {
+    use_rotation: false,
+    size: 3,
+    min_size: 2,
+    threshold: 2,
+    dkg_interval: 24,
+    dkg_phase_blocks: 2,
+    dkg_mining_window_start: 10,
+    dkg_mining_window_end: 18,
+    dkg_bad_votes_threshold: 2,
+    signing_active_quorum_count: 2,
+    keep_old_connections: 3,
+    keep_old_keys: 4,
+    recovery_members: 3,
+  };
+
+  /// Parameters of [`LlmqType::LlmqTestPlatform`].
+  pub const LLMQ_TEST_PLATFORM: Self = Self {
+    use_rotation: false,
+    size: 3,
+    min_size: 2,
+    threshold: 2,
+    dkg_interval: 24,
+    dkg_phase_blocks: 2,
+    dkg_mining_window_start: 10,
+    dkg_mining_window_end: 18,
+    dkg_bad_votes_threshold: 2,
+    signing_active_quorum_count: 2,
+    keep_old_connections: 4,
+    keep_old_keys: 1440,
+    recovery_members: 3,
+  };
+
+  /// Parameters of [`LlmqType::LlmqTestDip0024`].
+  pub const LLMQ_TEST_DIP0024: Self = Self {
+    use_rotation: true,
+    size: 4,
+    min_size: 4,
+    threshold: 3,
+    dkg_interval: 24,
+    dkg_phase_blocks: 2,
+    dkg_mining_window_start: 12,
+    dkg_mining_window_end: 20,
+    dkg_bad_votes_threshold: 2,
+    signing_active_quorum_count: 2,
+    keep_old_connections: 4,
+    keep_old_keys: 4,
+    recovery_members: 3,
+  };
+
+  /// Parameters of [`LlmqType::LlmqDevnet`].
+  pub const LLMQ_DEVNET: Self = Self {
+    use_rotation: false,
+    size: 12,
+    min_size: 7,
+    threshold: 6,
+    dkg_interval: 24,
+    dkg_phase_blocks: 2,
+    dkg_mining_window_start: 10,
+    dkg_mining_window_end: 18,
+    dkg_bad_votes_threshold: 7,
+    signing_active_quorum_count: 4,
+    keep_old_connections: 5,
+    keep_old_keys: 8,
+    recovery_members: 6,
+  };
+
+  /// Parameters of [`LlmqType::LlmqDevnetDip0024`].
+  pub const LLMQ_DEVNET_DIP0024: Self = Self {
+    use_rotation: true,
+    size: 8,
+    min_size: 6,
+    threshold: 4,
+    dkg_interval: 48,
+    dkg_phase_blocks: 2,
+    dkg_mining_window_start: 12,
+    dkg_mining_window_end: 20,
+    dkg_bad_votes_threshold: 7,
+    signing_active_quorum_count: 2,
+    keep_old_connections: 4,
+    keep_old_keys: 4,
+    recovery_members: 4,
+  };
+
+  /// Parameters of [`LlmqType::LlmqDevnetPlatform`].
+  pub const LLMQ_DEVNET_PLATFORM: Self = Self {
+    use_rotation: false,
+    size: 12,
+    min_size: 9,
+    threshold: 8,
+    dkg_interval: 24,
+    dkg_phase_blocks: 2,
+    dkg_mining_window_start: 10,
+    dkg_mining_window_end: 18,
+    dkg_bad_votes_threshold: 7,
+    signing_active_quorum_count: 4,
+    keep_old_connections: 5,
+    keep_old_keys: 1440,
+    recovery_members: 6,
+  };
+}

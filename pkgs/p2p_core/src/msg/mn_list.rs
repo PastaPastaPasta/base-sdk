@@ -15,10 +15,10 @@ use crate::version::ProtocolVersion;
 
 use bitcoin_hashes::sha256d;
 use dash_num::Hash256;
+use dash_params::LlmqType;
 use dash_pkc::bls::{BlsPkBytes, BlsSigBytes};
 use dash_primitives::{
-  hash_impl, BlockHash, Commitment, LlmqType, MnType, NetInfo, NetInfoV1, NetInfoV2, PlatformNodeId, Transaction,
-  TxHash,
+  hash_impl, BlockHash, Commitment, MnType, NetInfo, NetInfoV1, NetInfoV2, PlatformNodeId, Transaction, TxHash,
 };
 use dash_script::PubKeyHash;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};

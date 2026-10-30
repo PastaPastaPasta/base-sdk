@@ -16,9 +16,8 @@ use dash_p2p_core::{
   dkg_inventory_hash, dkg_quorum, CommandString, DkgComplaint, DkgContribution, DkgJustification, DkgMessage,
   DkgPrematureCommitment, P2pDecodeError, P2pMsg, ProtoCtx, ProtocolVersion,
 };
-use dash_params::LlmqParams;
+use dash_params::{LlmqParams, LlmqType};
 use dash_pkc::bls::{BlsCtx, BlsDecodeError};
-use dash_primitives::LlmqType;
 use dash_types::{Hashable, Numeric};
 use hex_conservative::decode_to_array;
 use rstest::rstest;
@@ -98,10 +97,16 @@ fn le(h: Hash256) -> [u8; 32] {
   h.to_lendian()
 }
 
-fn params(quorum: [i32; 3]) -> LlmqParams {
-  let mut p = *LlmqParams::available(LlmqType::LlmqTest).unwrap();
-  [p.size, p.min_size, p.threshold] = quorum;
-  p
+/// `LLMQ_TEST` with `quorum`, or `None` where a value is outside `u16`,
+/// which [`LlmqParams`] cannot hold.
+fn params(quorum: [i32; 3]) -> Option<LlmqParams> {
+  let [size, min_size, threshold] = quorum.map(|v| u16::try_from(v).ok());
+  Some(LlmqParams {
+    size: size?,
+    min_size: min_size?,
+    threshold: threshold?,
+    ..LlmqType::LlmqTest.params()?
+  })
 }
 
 /// Core's DKG handler checks, before the worker's read.
@@ -114,7 +119,7 @@ fn dkg_checks(c: &Case, raw: &[u8]) -> Result<(), Stage> {
     _ => return Ok(()),
   };
   dkg_quorum(raw).ok_or(Stage::Oversized)?;
-  let checked = check(raw, &params(c.quorum));
+  let checked = check(raw, &params(c.quorum).unwrap());
   match checked {
     Ok(()) => Ok(()),
     Err(P2pDecodeError::HandlerPayloadTooLarge { .. }) => Err(Stage::Oversized),
@@ -193,7 +198,12 @@ fn cases() -> Vec<Case> {
 fn dkg_and_sig_share_reads_are_cores() {
   let cases = cases();
   assert!(cases.len() > 400);
+  let mut unrepresentable = 0;
   for c in &cases {
+    if params(c.quorum).is_none() {
+      unrepresentable += 1;
+      continue;
+    }
     let label = format!("{} ({}, legacy {}, quorum {:?})", c.name, c.command, c.legacy, c.quorum);
     let raw = c.raw.bytes();
     let ours = read(c, &raw);
@@ -240,4 +250,6 @@ fn dkg_and_sig_share_reads_are_cores() {
       }
     }
   }
+  // The DKG seeds with quorum (-1, -5, -2).
+  assert_eq!(unrepresentable, 15);
 }

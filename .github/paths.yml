@@ -1,0 +1,87 @@
+build:
+  - .cargo/nextest.toml
+  - .github/paths.yml
+  - Cargo.lock
+  - Cargo.toml
+  - contrib/nix/**
+  - pyproject.toml
+  - rust-toolchain.toml
+  - uv.lock
+
+bazel:
+  - .bazelignore
+  - .bazeliskrc
+  - .bazelrc
+  - .bazelversion
+  - .github/workflows/build_bazel.yml
+  - bazel/**
+  - BUILD.bazel
+  - Justfile
+  - meta/bazel/**
+  - MODULE.bazel
+  - MODULE.bazel.lock
+
+msrv:
+  - .github/workflows/build_msrv.yml
+
+num:
+  - .github/workflows/pkg_num.yml
+  - pkgs/num/**
+  - pkgs/types/**
+
+p2p_core:
+  - .github/workflows/pkg_p2p_core.yml
+  - pkgs/num/**
+  - pkgs/p2p_core/**
+  - pkgs/params/**
+  - pkgs/pkc/**
+  - pkgs/pow/**
+  - pkgs/primitives/**
+  - pkgs/script/**
+  - pkgs/types/**
+
+params:
+  - .github/workflows/pkg_params.yml
+  - pkgs/num/**
+  - pkgs/params/**
+  - pkgs/types/**
+
+pkc:
+  - .github/workflows/pkg_pkc.yml
+  - pkgs/num/**
+  - pkgs/pkc/**
+  - pkgs/types/**
+
+pow:
+  - .cargo/config.toml
+  - .github/workflows/pkg_pow.yml
+  - .gitmodules
+  - fuzz/Cargo.lock
+  - fuzz/Cargo.toml
+  - fuzz/mod.just
+  - fuzz/pow/**
+  - Justfile
+  - pkgs/num/**
+  - pkgs/pow/**
+
+primitives:
+  - .github/workflows/pkg_primitives.yml
+  - pkgs/num/**
+  - pkgs/params/**
+  - pkgs/pkc/**
+  - pkgs/pow/**
+  - pkgs/primitives/**
+  - pkgs/script/**
+  - pkgs/types/**
+
+script:
+  - .github/workflows/pkg_script.yml
+  - pkgs/num/**
+  - pkgs/params/**
+  - pkgs/pkc/**
+  - pkgs/script/**
+  - pkgs/types/**
+
+types:
+  - .github/workflows/pkg_types.yml
+  - pkgs/types/**

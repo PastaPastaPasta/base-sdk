@@ -427,6 +427,17 @@ dependencies = [
 [[package]]
 name = "dash-meta-bazel"
 version = "0.0.0"
+dependencies = [
+ "dash-num",
+ "dash-p2p-core",
+ "dash-params",
+ "dash-pkc",
+ "dash-pow",
+ "dash-primitives",
+ "dash-script",
+ "dash-types",
+ "dash-types-marker",
+]
 
 [[package]]
 name = "dash-num"
@@ -469,16 +480,14 @@ dependencies = [
 name = "dash-params"
 version = "0.0.0"
 dependencies = [
- "bitcoin-consensus-encoding",
- "bitcoin-primitives",
  "bitcoin-units",
+ "bitcoin_hashes",
  "dash-dev",
  "dash-num",
- "dash-primitives",
- "dash-script",
  "dash-types",
  "hex-conservative",
  "rstest",
+ "serde",
 ]
 
 [[package]]
@@ -534,6 +543,7 @@ dependencies = [
  "cfg-if",
  "dash-dev",
  "dash-num",
+ "dash-params",
  "dash-pkc",
  "dash-pow",
  "dash-script",
@@ -552,6 +562,7 @@ dependencies = [
  "base58ck",
  "bitcoin-consensus-encoding",
  "dash-num",
+ "dash-params",
  "dash-pkc",
  "dash-types",
  "hex-conservative",

@@ -10,9 +10,10 @@ use super::bls::{self, commitment_bls_scheme, qc_source};
 use crate::hash_impl;
 use crate::prelude::*;
 use crate::sptx::QuorumHash;
-use crate::support::{DynBitset, LlmqType};
+use crate::support::DynBitset;
 
 use dash_num::make_hash;
+use dash_params::LlmqType;
 use dash_pkc::bls::{BlsEagerPk, BlsEagerSig, BlsSchemeKind};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};

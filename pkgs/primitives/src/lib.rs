@@ -42,7 +42,7 @@ pub use payload::*;
 pub use provider::*;
 pub use sign::MESSAGE_MAGIC;
 pub use sptx::*;
-pub use support::{DynBitset, DynBitsetIterator, LlmqType, RevocationReason};
+pub use support::{DynBitset, DynBitsetIterator, RevocationReason};
 pub use transaction::{
   OutPoint, Transaction, TxHash, TxIn, TxInvalid, TxOut, ASSET_UNLOCK_PAYLOAD_SIZE, ASSET_UNLOCK_QUORUM_INFO_SIZE,
   ASSET_UNLOCK_STABLE_TXID_VERSION, MAX_COINBASE_SCRIPT_SIZE, MAX_TX_EXTRA_PAYLOAD,

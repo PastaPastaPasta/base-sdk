@@ -16,7 +16,7 @@ use dash_num::Hash256;
 use dash_p2p_core::{
   max_pool_entries, CommandString, DsAccept, DsSignedInputs, GovSync, P2pDecodeError, P2pMsg, ProtoCtx, ProtocolVersion,
 };
-use dash_params::{ChainParamsBuilder, NetworkKind, Release};
+use dash_params::Network;
 use dash_pkc::bls::BlsCtx;
 use dash_primitives::GovVote;
 use dash_types::codec::BaseCodec;
@@ -111,9 +111,7 @@ fn special_transactions_keep_their_payload() {
 
 #[rstest]
 fn dsi_and_dss_counts_are_the_pools() {
-  let params = &ChainParamsBuilder::new(NetworkKind::Mainnet, Release::V24_0)
-    .build()
-    .unwrap();
+  let params = Network::Main.chain();
   let max = max_pool_entries(params);
   assert_eq!(max, 180);
   let entry = |n: usize| [list(n, &txin()), tx(false), list(0, &[])].concat();

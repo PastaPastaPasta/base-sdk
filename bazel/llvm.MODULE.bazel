@@ -1,0 +1,27 @@
+# Every target compiles C and C++ against a pinned sysroot, the host's
+# included, so no artifact depends on what the builder has installed.
+
+# Clang takes the SDK version a macOS binary records from `-isysroot` alone,
+# which 1.8.0 does not pass.
+single_version_override(
+    module_name = "toolchains_llvm",
+    patch_strip = 1,
+    patches = ["//bazel/patches:toolchains_llvm-darwin-sdk-version.patch"],
+)
+
+# 20.1.3 matches the devshell's LLVM. It and 20.1.7 are the newest releases
+# with an archive for every supported host.
+llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm")
+llvm.toolchain(
+    llvm_version = "20.1.3",
+    # The Debian sysroots carry libstdc++ as a shared library only.
+    stdlib = {
+        "linux-aarch64": "dynamic-stdc++",
+        "linux-x86_64": "dynamic-stdc++",
+    },
+)
+use_repo(llvm, "llvm_toolchain")
+
+# Registered by the root module, the LLVM toolchain outranks any C toolchain
+# a dependency module registers.
+register_toolchains("@llvm_toolchain//:all")

@@ -1,0 +1,14 @@
+load("//bazel:rust.bzl", "dash_rust_library")
+
+dash_rust_library(
+    name = "dash-types",
+    crate_features = [
+        "bitcoin-primitives",
+        "codec",
+        "default",
+        "full",
+        "serde",
+        "std",
+    ],
+    proc_macro_deps = ["//pkgs/types/marker:dash-types-marker"],
+)

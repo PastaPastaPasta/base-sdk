@@ -7,6 +7,14 @@ python := if os() == "windows" { "python" } else { "python3" }
 export RUSTDOCFLAGS := "-D warnings"
 
 mod fuzz "fuzz/mod.just"
+mod num "pkgs/num/mod.just"
+mod p2p_core "pkgs/p2p_core/mod.just"
+mod params "pkgs/params/mod.just"
+mod pkc "pkgs/pkc/mod.just"
+mod pow "pkgs/pow/mod.just"
+mod primitives "pkgs/primitives/mod.just"
+mod script "pkgs/script/mod.just"
+mod types "pkgs/types/mod.just"
 
 import "bazel/mod.just"
 
@@ -27,8 +35,8 @@ comb:
     {{ python }} contrib/git_filter.py --fast-fail --env NEXTEST_PROFILE=fail-fast develop HEAD -- just test lint fuzz::test
 
 lint:
-    @just --fmt --check
     {{ python }} maint/lint_all.py --exclude lint_codeql
+    {{ python }} maint/lint/lint_bazel.py graph
     {{ python }} maint/lint/lint_codeql.py check
     {{ python }} maint/lint/lint_codeql.py run --lang=rust --with-suite=rust-security-and-quality
 
@@ -56,3 +64,6 @@ test:
 
 zbuild *flags:
     bazel build {{ flags }} //...
+
+zglock:
+    bazel mod deps --lockfile_mode=update

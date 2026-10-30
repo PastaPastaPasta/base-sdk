@@ -1,0 +1,19 @@
+load("//bazel:rust.bzl", "dash_rust_library")
+
+dash_rust_library(
+    name = "dash-primitives",
+    crate_features = [
+        "default",
+        "full",
+        "serde",
+        "std",
+    ],
+    deps = [
+        "//pkgs/num:dash-num",
+        "//pkgs/params:dash-params",
+        "//pkgs/pkc:dash-pkc",
+        "//pkgs/pow:dash-pow",
+        "//pkgs/script:dash-script",
+        "//pkgs/types:dash-types",
+    ],
+)

@@ -7,11 +7,14 @@
 //! Dash block (header + transactions).
 
 use crate::prelude::*;
-use crate::transaction::{Transaction, TxHash, TxInvalid};
+use crate::sptx::TxType;
+use crate::transaction::{OutPoint, Transaction, TxHash, TxIn, TxInvalid, TxOut};
 use crate::{codec_base, codec_type, hash_impl};
 
 use bitcoin_hashes::sha256d;
+use bitcoin_primitives::script::{ScriptPubKeyBuf, ScriptSigBuf};
 use dash_num::{make_hash, Arith256, CompactTarget, Hash256};
+use dash_params::GenesisParams;
 use dash_pow::__deps::digest::Digest;
 use dash_pow::X11;
 use dash_types::codec::{self, BaseCodec};
@@ -53,7 +56,7 @@ pub struct BlockHeader {
   pub merkle_root: MerkleRoot,
   /// Block timestamp (unix epoch seconds).
   pub time: u32,
-  /// Compact difficulty target (nBits).
+  /// Compact difficulty target.
   pub bits: u32,
   /// Nonce used for proof-of-work.
   pub nonce: u32,
@@ -235,6 +238,43 @@ impl Block {
 impl fmt::Display for Block {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(f, "Block {{ txs: {} }}", self.transactions.len())
+  }
+}
+
+impl From<&GenesisParams> for Block {
+  fn from(params: &GenesisParams) -> Self {
+    let coinbase = Transaction {
+      version: 1,
+      tx_type: TxType::Spend,
+      inputs: vec![TxIn {
+        prevout: OutPoint {
+          hash: TxHash::default(),
+          index: 0xFFFF_FFFF,
+        },
+        script_sig: ScriptSigBuf::from_bytes(params.script_sig.to_vec()),
+        sequence: 0xFFFF_FFFF,
+      }],
+      outputs: vec![TxOut::new(
+        params.reward,
+        ScriptPubKeyBuf::from_bytes(params.script_pubkey.to_vec()),
+      )],
+      lock_time: 0,
+      extra_payload: Vec::new(),
+    };
+
+    let mut block = Block {
+      header: BlockHeader {
+        version: params.version,
+        prev_hash: BlockHash::default(),
+        merkle_root: MerkleRoot::default(),
+        time: params.time,
+        bits: params.bits,
+        nonce: params.nonce,
+      },
+      transactions: vec![coinbase],
+    };
+    block.header.merkle_root = block.merkle().0;
+    block
   }
 }
 

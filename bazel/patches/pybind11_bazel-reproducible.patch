@@ -1,0 +1,16 @@
+Mark the configure extension reproducible
+
+The extension reads its own MODULE.bazel, which the lockfile records by
+path. With the output base inside the workspace, that path names the
+checkout, so the lockfile would differ per checkout.
+
+diff --git a/internal_configure.bzl b/internal_configure.bzl
+--- a/internal_configure.bzl
++++ b/internal_configure.bzl
+@@ -24,5 +24,6 @@ def _internal_configure_extension_impl(module_ctx):
+         strip_prefix = "pybind11-%s" % version,
+         urls = ["https://github.com/pybind/pybind11/archive/v%s.zip" % version],
+     )
++    return module_ctx.extension_metadata(reproducible = True)
+ 
+ internal_configure_extension = module_extension(implementation = _internal_configure_extension_impl)

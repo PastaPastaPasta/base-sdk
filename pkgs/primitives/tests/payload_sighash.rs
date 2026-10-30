@@ -17,37 +17,18 @@
 use bitcoin_hashes::sha256d;
 use dash_dev::{Corpus, Value};
 use dash_num::Hash256;
+use dash_params::{LlmqType, Network};
 use dash_pkc::bls::{
   BlsCtx, BlsEager, BlsEagerPk, BlsEagerSig, BlsPkBytes, BlsPublicKey, BlsScChia, BlsScIetf, BlsSchemeKind,
   BlsSchemeSource, BlsSigBytes, BlsSigId, BlsSignature,
 };
 use dash_pkc::ecdsa::{EcdsaPkBytes, EcdsaPublicKey, EcdsaRecSigBytes, EcdsaRecSignature};
-use dash_primitives::{llmq_sign_hash, CompactSig, LlmqType, PayloadDecode, QuorumHash, SpecialPayload, Transaction};
-use dash_script::AddrParams;
+use dash_primitives::{llmq_sign_hash, CompactSig, PayloadDecode, QuorumHash, SpecialPayload, Transaction};
 use dash_types::codec::BaseCodec;
 use dash_types::{Hashable, Numeric};
 use hex_conservative::DisplayHex;
 
 use std::collections::BTreeSet;
-
-/// Core's address encoding: `CMainParams`, and `CRegTestParams` (which
-/// testnet and devnets share).
-const MAINNET: AddrParams = AddrParams {
-  pubkey_addr: 76,
-  script_addr: 16,
-  secret_key: 204,
-  ext_pubkey: [0x04, 0x88, 0xB2, 0x1E],
-  ext_secret: [0x04, 0x88, 0xAD, 0xE4],
-  bip44_idx: 5,
-};
-const REGTEST: AddrParams = AddrParams {
-  pubkey_addr: 140,
-  script_addr: 19,
-  secret_key: 239,
-  ext_pubkey: [0x04, 0x35, 0x87, 0xCF],
-  ext_secret: [0x04, 0x35, 0x83, 0x94],
-  bip44_idx: 1,
-};
 
 fn corpus(section: &str) -> Value {
   Corpus::open(env!("CARGO_MANIFEST_DIR"), "sighash").into_value()[section].take()
@@ -137,8 +118,8 @@ fn check_signed(txid: &str, entry: &Value) -> (u16, u16) {
   let PayloadDecode { payload, .. } = tx.decode_payload().unwrap().unwrap();
   let signer = &entry["signer"];
   let addr = match entry["network"].as_str().unwrap() {
-    "mainnet" => &MAINNET,
-    _ => &REGTEST,
+    "mainnet" => Network::Main.addr(),
+    _ => Network::Regtest.addr(),
   };
   let key_ids: BTreeSet<String> = signer["key_ids"]
     .as_array()

@@ -1,19 +1,45 @@
 name: Build with Bazel
 
 on:
-  push:
-    branches: [develop]
-  pull_request:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  workflow_call:
+    inputs:
+      package_dir:
+        description: Package directory relative to pkgs/ (e.g. num)
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 jobs:
-  bazel:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.build == 'true' || steps.filter.outputs.bazel == 'true' || steps.filter.outputs[inputs.package_dir] == 'true' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: .github/paths.yml
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Filter paths
+        id: filter
+        uses: dorny/paths-filter@v4
+        with:
+          filters: .github/paths.yml
+
+  build:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -22,9 +48,8 @@ jobs:
           - ubuntu-24.04-arm
           - macos-latest
           - macos-15-intel
-          - windows-latest
 
-    name: ${{ matrix.os }} (bazel)
+    name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -33,23 +58,33 @@ jobs:
         with:
           fetch-depth: 1
 
+      # LLVM alone unpacks to 11 GB on a Linux host.
+      - name: Free disk space
+        if: runner.os == 'Linux'
+        uses: jlumbroso/free-disk-space@v2
+        with:
+          large-packages: false
+
       - name: Install just
         uses: taiki-e/install-action@v2
         with:
           tool: just
 
-      # Windows images ship Bazel beside Bazelisk, and either may come first.
-      - name: Uninstall Bazel
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          if (choco list bazel --exact --limit-output) {
-            choco uninstall bazel --yes --no-progress
-          }
+      - name: Manage Bazel downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            .cache/bazel/cache/repos
+            .cache/bazelisk
+          key: bazel-repos-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', 'bazel/*.MODULE.bazel') }}
+          restore-keys: |
+            bazel-repos-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Build every target
-        run: just zbuild
+        run: just ${{ inputs.package_dir }}::zbuild
+
+      - name: Build every target with the release profile
+        run: just ${{ inputs.package_dir }}::zbuild -c opt
 
       - name: Check the output root
-        shell: bash
         run: test -d .cache/bazel/install

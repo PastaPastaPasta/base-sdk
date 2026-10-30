@@ -1,0 +1,5 @@
+load("//bazel:rust.bzl", "dash_rust_proc_macro")
+
+dash_rust_proc_macro(
+    name = "dash-types-marker",
+)

@@ -8,11 +8,11 @@
 //! base-sdk's.
 
 #![cfg(feature = "serde")]
-#![expect(clippy::panic, clippy::unwrap_used, reason = "test code")]
+#![expect(clippy::panic, reason = "test code")]
 
 use dash_dev::{vec_from_hex, Corpus};
 use dash_p2p_core::{CommandString, DsSignedInputs, P2pDecodeError, P2pMsg, ProtoCtx, ProtocolVersion};
-use dash_params::{ChainParams, ChainParamsBuilder, NetworkKind, Release};
+use dash_params::{ChainParams, Network};
 use dash_pkc::bls::BlsCtx;
 use dash_types::{Hashable, Numeric};
 use rstest::rstest;
@@ -144,13 +144,11 @@ fn read(c: &Case, raw: &[u8], params: &ChainParams) -> Result<Read, Refusal> {
 fn coinjoin_and_governance_reads_are_cores() {
   let cases: Vec<Case> = Corpus::open(env!("CARGO_MANIFEST_DIR"), "core_overlay_iii").value("cases");
   assert!(cases.len() > 200);
-  let params = ChainParamsBuilder::new(NetworkKind::Mainnet, Release::V24_0)
-    .build()
-    .unwrap();
+  let params = Network::Main.chain();
   for c in &cases {
     let label = format!("{} ({} at {})", c.name, c.command, c.version);
     let raw = c.raw.bytes();
-    let ours = read(c, &raw, &params);
+    let ours = read(c, &raw, params);
     let Core {
       ok,
       consumed,

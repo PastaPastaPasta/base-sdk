@@ -12,8 +12,9 @@ use crate::error::P2pDecodeError;
 use crate::prelude::*;
 
 use dash_num::Hash256;
+use dash_params::LlmqType;
 use dash_pkc::bls::{BlsIesBlobBytes, BlsPkBytes, BlsSigBytes};
-use dash_primitives::{hash_impl, LlmqType, QuorumHash, TxHash};
+use dash_primitives::{hash_impl, QuorumHash, TxHash};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{enum_map, impl_num, Numeric};

@@ -14,12 +14,12 @@ use crate::error::P2pDecodeError;
 use crate::prelude::*;
 
 use dash_num::Hash256;
-use dash_params::LlmqParams;
+use dash_params::{LlmqParams, LlmqType};
 use dash_pkc::bls::{
   BlsCtx, BlsDecodeError, BlsEagerPk, BlsEagerSig, BlsEagerSk, BlsIesMultiBytes, BlsPkBytes, BlsSchemeSource,
   BlsSigBytes, BLS_PK_LEN, BLS_SIG_LEN, BLS_SK_LEN,
 };
-use dash_primitives::{DynBitset, LlmqType, QuorumHash, QuorumVvecHash, TxHash};
+use dash_primitives::{DynBitset, QuorumHash, QuorumVvecHash, TxHash};
 use dash_types::codec::BaseCodec;
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{CompactSize, Numeric};
@@ -225,9 +225,9 @@ fn walked(payload: &[u8], steps: impl FnOnce(&mut Walk<'_>) -> Option<()>) -> bo
   steps(&mut walk).is_some() && walk.0.is_empty()
 }
 
-/// A quorum parameter as Core's checks read it: negative counts as zero.
-fn param(value: i32) -> u64 {
-  u64::try_from(value).unwrap_or(0)
+/// A quorum parameter as Core's checks read it.
+fn param(value: u16) -> u64 {
+  u64::from(value)
 }
 
 /// Core's cap on a DKG payload: the message's bound plus slack, at most

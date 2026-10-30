@@ -12,12 +12,13 @@
 //! `SER_GETHASH` serialization, which leaves the signature out.
 
 use crate::prelude::*;
-use crate::{LlmqType, QuorumHash, Transaction};
+use crate::{QuorumHash, Transaction};
 
 use bitcoin_hashes::sha256d;
 use dash_num::Hash256;
+use dash_params::{AddrParams, LlmqType};
 use dash_pkc::bls::BLS_SIG_LEN;
-use dash_script::{AddrParams, Recipient};
+use dash_script::Recipient;
 use dash_types::codec::{BaseCodec, EncodeBuf};
 use dash_types::Numeric;
 use hex_conservative::DisplayHex;
