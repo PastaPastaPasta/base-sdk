@@ -54,6 +54,8 @@ def _xcode_sdk_impl(rctx):
     rctx.file("SDKSettings.json", _sdk_settings_json(rctx.attr.sdk_version))
     rctx.file("BUILD.bazel", _SDK_BUILD.format(frameworks = repr(rctx.attr.frameworks)))
 
+    return rctx.repo_metadata(reproducible = True)
+
 xcode_sdk = repository_rule(
     implementation = _xcode_sdk_impl,
     attrs = {
