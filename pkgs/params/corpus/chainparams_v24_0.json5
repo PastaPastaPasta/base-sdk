@@ -3815,14 +3815,6 @@
    "error": "Invalid LLMQ_TEST_PLATFORM threshold (2b)"
   },
   {
-   "name": "error/llmqtestplat_size_401",
-   "chain": "regtest",
-   "args": [
-    "-llmqtestplatformparams=1000000:2"
-   ],
-   "error": "Invalid LLMQ_TEST_PLATFORM size (1000000), must not exceed the maximum supported quorum size (400)"
-  },
-  {
    "name": "error/llmqtestisdip0024_name",
    "chain": "regtest",
    "args": [
@@ -4249,6 +4241,40 @@
    "delta": {}
   },
   {
+   "name": "extra/llmqdevnetparams_ignored_main",
+   "chain": "main",
+   "args": [
+    "-llmqdevnetparams=-2:9"
+   ],
+   "delta": {}
+  },
+  {
+   "name": "extra/llmqdevnetparams_ignored_test",
+   "chain": "test",
+   "args": [
+    "-llmqdevnetparams=-2:9"
+   ],
+   "delta": {}
+  },
+  {
+   "name": "extra/llmqdevnetparams_ignored_regtest",
+   "chain": "regtest",
+   "args": [
+    "-llmqdevnetparams=-2:9"
+   ],
+   "delta": {}
+  },
+  {
+   "name": "extra/llmqtestparams_ignored_devnet",
+   "chain": "devnet",
+   "args": [
+    "-llmqtestparams=-1:2",
+    "-llmqtestinstantsendparams=-3:-4",
+    "-llmqtestplatformparams=3:70000"
+   ],
+   "delta": {}
+  },
+  {
    "name": "extra/limit_spacing_big",
    "chain": "devnet",
    "args": [
@@ -4458,12 +4484,87 @@
    "deviation": 46
   },
   {
-   "name": "refused/llmq_size_70000",
+   "name": "error/neg_powtargetspacing_main",
+   "chain": "main",
+   "args": [
+    "-nopowtargetspacing"
+   ],
+   "error": "Negating of -powtargetspacing is meaningless and therefore forbidden"
+  },
+  {
+   "name": "error/neg_powtargetspacing_test",
+   "chain": "test",
+   "args": [
+    "-nopowtargetspacing"
+   ],
+   "error": "Negating of -powtargetspacing is meaningless and therefore forbidden"
+  },
+  {
+   "name": "error/neg_powtargetspacing_regtest",
+   "chain": "regtest",
+   "args": [
+    "-nopowtargetspacing"
+   ],
+   "error": "Negating of -powtargetspacing is meaningless and therefore forbidden"
+  },
+  {
+   "name": "error/neg_powtargetspacing_devnet",
+   "chain": "devnet",
+   "args": [
+    "-nopowtargetspacing"
+   ],
+   "error": "Negating of -powtargetspacing is meaningless and therefore forbidden"
+  },
+  {
+   "name": "error/neg_powtargetspacing_double",
+   "chain": "devnet",
+   "args": [
+    "-nopowtargetspacing=0"
+   ],
+   "error": "Negating of -powtargetspacing is meaningless and therefore forbidden"
+  },
+  {
+   "name": "error/neg_powtargetspacing_double_main",
+   "chain": "main",
+   "args": [
+    "-nopowtargetspacing=0"
+   ],
+   "error": "Negating of -powtargetspacing is meaningless and therefore forbidden"
+  },
+  {
+   "name": "error/neg_powtargetspacing_after_value",
+   "chain": "devnet",
+   "args": [
+    "-powtargetspacing=60",
+    "-nopowtargetspacing"
+   ],
+   "error": "Negating of -powtargetspacing is meaningless and therefore forbidden"
+  },
+  {
+   "name": "error/neg_powtargetspacing_after_chain_errors",
+   "chain": "regtest",
+   "args": [
+    "-dip3params=x",
+    "-llmqtestparams=-1:2",
+    "-nopowtargetspacing"
+   ],
+   "error": "Negating of -powtargetspacing is meaningless and therefore forbidden"
+  },
+  {
+   "name": "error/llmq_size_70000",
    "chain": "regtest",
    "args": [
     "-llmqtestparams=70000:2"
    ],
    "error": "Invalid LLMQ_TEST size (70000), must not exceed the maximum supported quorum size (400)"
+  },
+  {
+   "name": "error/llmqtestplat_size_1000000",
+   "chain": "regtest",
+   "args": [
+    "-llmqtestplatformparams=1000000:2"
+   ],
+   "error": "Invalid LLMQ_TEST_PLATFORM size (1000000), must not exceed the maximum supported quorum size (400)"
   },
   {
    "name": "regtest_fastprune",
@@ -4783,6 +4884,56 @@
    "args": [
     "-minsporkkeys=1",
     "-dip3params=x"
+   ],
+   "tool_only": true,
+   "error": "Invalid parameter -minsporkkeys=1"
+  },
+  {
+   "name": "spork/llmq_range_then_invalid",
+   "chain": "regtest",
+   "args": [
+    "-llmqtestparams=-1:2",
+    "-sporkaddr=invalid"
+   ],
+   "tool_only": true,
+   "error": "Invalid spork address specified with -sporkaddr"
+  },
+  {
+   "name": "spork/llmq_range_then_minkeys",
+   "chain": "regtest",
+   "args": [
+    "-llmqtestparams=-1:2",
+    "-minsporkkeys=2"
+   ],
+   "tool_only": true,
+   "error": "Invalid parameter -minsporkkeys=2"
+  },
+  {
+   "name": "spork/parse_negation_first",
+   "chain": "regtest",
+   "args": [
+    "-nopowtargetspacing",
+    "-minsporkkeys=1"
+   ],
+   "tool_only": true,
+   "error": "Negating of -powtargetspacing is meaningless and therefore forbidden"
+  },
+  {
+   "name": "spork/parse_minkeys_first",
+   "chain": "regtest",
+   "args": [
+    "-minsporkkeys=1",
+    "-nopowtargetspacing"
+   ],
+   "tool_only": true,
+   "error": "Invalid parameter -minsporkkeys=1"
+  },
+  {
+   "name": "error/llmq_range_then_min_spork_keys",
+   "chain": "regtest",
+   "args": [
+    "-llmqtestparams=-1:2",
+    "-minsporkkeys=1"
    ],
    "tool_only": true,
    "error": "Invalid parameter -minsporkkeys=1"
