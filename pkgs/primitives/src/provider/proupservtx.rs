@@ -257,6 +257,7 @@ impl fmt::Display for ProUpServTx {
 }
 
 #[cfg(all(test, feature = "serde"))]
+#[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
 
@@ -299,5 +300,22 @@ mod tests {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "proupservtx");
     let items = corpus.entries::<ProUpServTx>("proupservtx", check_sptx);
     assert_serde_rt("proupservtx", &items);
+  }
+
+  /// Checks on mainnet Evo update `e8812ae7`.
+  #[rstest]
+  #[case::null_platform_node_id(
+    |ptx: &mut ProUpServTx| ptx.platform_node_id = Some(PlatformNodeId::default()),
+    ProTxInvalid::NullPlatformNodeId
+  )]
+  fn check(#[case] edit: fn(&mut ProUpServTx), #[case] expected: ProTxInvalid) {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "proupservtx");
+    let mut ptx = corpus
+      .entries::<ProUpServTx>("proupservtx", |_, _, _| {})
+      .remove("e8812ae795f44406cbdc70fc5ebe8e975180e8b28d7ab4eb0f7b3e9d66b1d62b")
+      .unwrap();
+    assert_eq!(ptx.check(), None);
+    edit(&mut ptx);
+    assert_eq!(ptx.check(), Some(expected));
   }
 }

@@ -220,6 +220,9 @@ pub enum ProTxInvalid {
   /// `bad-protx-platform-fields`
   #[error("bad-protx-platform-fields")]
   BadPlatformFields,
+  /// `bad-protx-platform-nodeid`
+  #[error("bad-protx-platform-nodeid")]
+  NullPlatformNodeId,
 }
 
 /// Checks that an extended net info payload is trivially valid.
