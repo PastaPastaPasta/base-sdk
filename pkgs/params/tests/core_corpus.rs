@@ -13,6 +13,9 @@
 //! `spork.cpp` are unchanged from rc.3 to rc.4, so the v24 corpus holds for
 //! rc.4 too (Q10).
 //!
+//! Each corpus must hold exactly the cases of the hand-kept manifest
+//! `corpus/chainparams_cases.json5`, so a regeneration cannot drop one.
+//!
 //! The genesis and devnet genesis block bytes are checked in dash-primitives
 //! (`tests/chainparams_blocks.rs`), which builds blocks; this crate does not.
 
@@ -415,6 +418,46 @@ fn interpret_bool_as_core(#[case] s: &str, #[case] want: bool) {
   assert_eq!(interpret_bool(s), want);
 }
 
+/// The cases `corpus` must hold, from the hand-kept manifest
+/// `corpus/chainparams_cases.json5` in `dir`: chain and arguments by name.
+fn required_cases(dir: &str, corpus: &str) -> BTreeMap<String, Value> {
+  let manifest = Corpus::open(dir, "chainparams_cases").into_value();
+  let mut out = BTreeMap::new();
+  for entry in manifest[corpus].as_array().unwrap() {
+    let name = entry[0].as_str().unwrap();
+    let case = Value::Array(vec![entry[1].clone(), entry[2].clone()]);
+    assert!(
+      out.insert(name.to_owned(), case).is_none(),
+      "manifest {corpus}: duplicate {name}"
+    );
+  }
+  out
+}
+
+/// Asserts that `cases` are exactly the required cases of `corpus` in
+/// `dir`, each once, with its chain and arguments.
+fn assert_required_cases(dir: &str, corpus: &str, cases: &[Value]) {
+  let mut got = BTreeMap::new();
+  for case in cases {
+    let name = case["name"].as_str().unwrap();
+    let chain_args = Value::Array(vec![case["chain"].clone(), case["args"].clone()]);
+    assert!(
+      got.insert(name, chain_args).is_none(),
+      "{corpus}: duplicate case {name}"
+    );
+  }
+  let want = required_cases(dir, corpus);
+  let missing: Vec<&String> = want.keys().filter(|n| !got.contains_key(n.as_str())).collect();
+  let unlisted: Vec<&&str> = got.keys().filter(|n| !want.contains_key(**n)).collect();
+  assert!(
+    missing.is_empty() && unlisted.is_empty(),
+    "{corpus}: missing {missing:?}, not in the manifest {unlisted:?}"
+  );
+  for (name, chain_args) in &want {
+    assert_eq!(&got[name.as_str()], chain_args, "{corpus} {name}: chain and arguments");
+  }
+}
+
 #[rstest]
 #[case::v23_1(Release::V23_1, "chainparams_v23_1")]
 #[case::v24_0(Release::V24_0, "chainparams_v24_0")]
@@ -427,7 +470,7 @@ fn chain_params_equal_core(#[case] release: Release, #[case] corpus: &str) {
     .map(|(chain, v)| (chain.clone(), flat(v)))
     .collect();
   let cases = root["cases"].as_array().unwrap();
-  assert!(cases.len() > 100, "{corpus}: {} cases", cases.len());
+  assert_required_cases(env!("CARGO_MANIFEST_DIR"), corpus, cases);
   for case in cases {
     let name = case["name"].as_str().unwrap();
     let chain = case["chain"].as_str().unwrap();
