@@ -6,6 +6,7 @@
 
 //! Chain parameters of each network.
 
+pub(crate) mod devnet;
 pub(crate) mod mainnet;
 pub(crate) mod regtest;
 pub(crate) mod test3;

@@ -15,6 +15,17 @@ use dash_types::type_id::Unencodable;
 /// Block height paired with its block hash.
 pub type Checkpoint = (BlockHeight, Hash256);
 
+/// Core's `vecPeriods`: the masternode share of the block value, in permille,
+/// for each block reward reallocation period of three superblock cycles, in
+/// the classic reward era. The first period starts with the first superblock
+/// cycle after [`ConsensusParams::brr_height`]; the last share then holds.
+///
+/// The same at both releases and on every network. Core: `GetMasternodePayment`
+/// (v23.1.8 validation.cpp:1606, v24.0.0-rc.3 masternode/payments.cpp:103).
+pub const BRR_PERIODS_PERMILLE: [u16; 19] = [
+  513, 526, 533, 540, 546, 552, 557, 562, 567, 572, 577, 582, 585, 588, 591, 594, 597, 599, 600,
+];
+
 /// Buried deployment positions with hardcoded activation heights.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
 pub enum BuriedDeployment {
@@ -50,11 +61,75 @@ pub enum BuriedDeployment {
   Withdrawals,
 }
 
+impl BuriedDeployment {
+  /// Every buried deployment, in Core's `BuriedDeployment` order.
+  pub const ALL: [Self; 15] = [
+    Self::HeightInCoinbase,
+    Self::Cltv,
+    Self::DerSig,
+    Self::Bip147,
+    Self::Csv,
+    Self::Dip0001,
+    Self::Dip0003,
+    Self::Dip0008,
+    Self::Dip0020,
+    Self::Dip0024,
+    Self::Brr,
+    Self::V19,
+    Self::V20,
+    Self::MnRr,
+    Self::Withdrawals,
+  ];
+
+  /// Core's `DeploymentName`, as `getdeploymentinfo` reports it.
+  pub const fn name(self) -> &'static str {
+    match self {
+      Self::HeightInCoinbase => "bip34",
+      Self::Cltv => "bip65",
+      Self::DerSig => "bip66",
+      Self::Bip147 => "bip147",
+      Self::Csv => "csv",
+      Self::Dip0001 => "dip0001",
+      Self::Dip0003 => "dip0003",
+      Self::Dip0008 => "dip0008",
+      Self::Dip0020 => "dip0020",
+      Self::Dip0024 => "dip0024",
+      Self::Brr => "realloc",
+      Self::V19 => "v19",
+      Self::V20 => "v20",
+      Self::MnRr => "mn_rr",
+      Self::Withdrawals => "withdrawals",
+    }
+  }
+
+  /// The name regtest's `-testactivationheight` accepts, if it moves this
+  /// deployment.
+  pub const fn test_activation_name(self) -> Option<&'static str> {
+    match self {
+      Self::Bip147 => Some("bip147"),
+      Self::HeightInCoinbase => Some("bip34"),
+      Self::DerSig => Some("dersig"),
+      Self::Cltv => Some("cltv"),
+      Self::Csv => Some("csv"),
+      Self::Brr => Some("brr"),
+      Self::Dip0001 => Some("dip0001"),
+      Self::Dip0008 => Some("dip0008"),
+      Self::Dip0024 => Some("dip0024"),
+      Self::V19 => Some("v19"),
+      Self::V20 => Some("v20"),
+      Self::MnRr => Some("mn_rr"),
+      Self::Dip0003 | Self::Dip0020 | Self::Withdrawals => None,
+    }
+  }
+}
+
 /// Parameters that influence chain consensus.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
 pub struct ConsensusParams {
   /// Hash of the genesis block.
   pub hash_genesis_block: Hash256,
+  /// Hash of the devnet genesis block (height 1), zero off devnets.
+  pub hash_devnet_genesis_block: Hash256,
   /// Number of blocks between subsidy halvings.
   pub subsidy_halving_interval: i32,
   /// Block height at which masternode payments
@@ -160,6 +235,14 @@ pub struct ConsensusParams {
   /// Block hash assumed valid for fast initial
   /// sync.
   pub default_assume_valid: Hash256,
+  /// Blocks mined at minimum difficulty at the start of a devnet. A signed
+  /// count the reference implementation leaves unchecked.
+  pub minimum_difficulty_blocks: i32,
+  /// Blocks with a raised subsidy at the start of a devnet. A signed count
+  /// the reference implementation leaves unchecked.
+  pub high_subsidy_blocks: i32,
+  /// Subsidy multiplier for those blocks, which may be zero or negative.
+  pub high_subsidy_factor: i32,
   /// LLMQ types the chain runs, in the reference implementation's order.
   pub llmqs: &'static [LlmqType],
   /// LLMQ type used for ChainLocks.
@@ -199,5 +282,16 @@ impl ConsensusParams {
   /// chain does not run it.
   pub fn llmq(&self, llmq_type: LlmqType) -> Option<LlmqParams> {
     llmq_type.params().filter(|_| self.llmqs.contains(&llmq_type))
+  }
+
+  /// Core's `DifficultyAdjustmentInterval`, or `None` where it is 0.
+  ///
+  /// A devnet spacing above the timespan makes it 0, and Core's
+  /// `% DifficultyAdjustmentInterval()` then divides by zero.
+  pub const fn difficulty_adjustment_interval(&self) -> Option<i64> {
+    match self.pow_target_timespan.checked_div(self.pow_target_spacing) {
+      Some(0) | None => None,
+      interval => interval,
+    }
   }
 }

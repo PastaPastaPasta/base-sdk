@@ -19,6 +19,7 @@ use hex_conservative::hex;
 pub static PARAMS: ChainParams = ChainParams {
   consensus: ConsensusParams {
     hash_genesis_block: Hash256::from_bendian(hex!("00000bafbc94add76cb75e2ec92894837288a481e5c005f6563d91623bf8bc2c")),
+    hash_devnet_genesis_block: Hash256::from_bendian([0; 32]),
     subsidy_halving_interval: 210_240,
     masternode_payments_start_block: BlockHeight::from_u32(4010),
     masternode_payments_increase_block: BlockHeight::from_u32(4030),
@@ -108,6 +109,9 @@ pub static PARAMS: ChainParams = ChainParams {
     default_assume_valid: Hash256::from_bendian(hex!(
       "000000541a23f9db7411cddbe50f9f1ebd4aa7108ebdcad62214753f648c0239"
     )),
+    minimum_difficulty_blocks: 0,
+    high_subsidy_blocks: 0,
+    high_subsidy_factor: 1,
     llmqs: &[
       LlmqType::Llmq50_60,
       LlmqType::Llmq60_75,
