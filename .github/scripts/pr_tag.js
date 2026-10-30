@@ -20,41 +20,32 @@ const Labels = {
  * @param {{ github: import("@actions/github").getOctokit, context: import("@actions/github").context }} params
  */
 module.exports = async ({ github, context }) => {
-  const owner = context.repo.owner;
-  const repo = context.repo.repo;
+  const { owner, repo } = context.repo;
   const pulls = await listOpenPulls({ github, owner, repo });
   const now = new Date();
 
   for (const pr of pulls) {
     const labels = pr.labels.map((l) => l.name);
+    const issue = { owner, repo, issue_number: pr.number };
+    // Adds or removes a label so its presence matches `want`.
+    const sync = async (name, want) => {
+      if (want === labels.includes(name)) {
+        return;
+      }
+      // A label removed by hand after the listing is already gone.
+      await (want
+        ? github.rest.issues.addLabels({ ...issue, labels: [name] })
+        : github.rest.issues.removeLabel({ ...issue, name }).catch((error) => {
+            if (error.status !== 404) {
+              throw error;
+            }
+          }));
+      console.log(`PR #${pr.number}: ${want ? "tagged" : "removed"} ${name}`);
+    };
 
-    const { data: headCommit } = await github.rest.repos.getCommit({
-      owner,
-      repo,
-      ref: pr.head.sha,
-    });
-    const lastActivity = new Date(headCommit.commit.committer.date);
-    const daysSinceUpdate = Math.floor((now - lastActivity) / (1000 * 60 * 60 * 24));
-    const isStale = daysSinceUpdate >= STALE_DAYS;
-    const hasStale = labels.includes(Labels.STALE);
-
-    if (isStale && !hasStale) {
-      await github.rest.issues.addLabels({
-        owner,
-        repo,
-        issue_number: pr.number,
-        labels: [Labels.STALE],
-      });
-      console.log(`PR #${pr.number}: tagged stale (${daysSinceUpdate} days)`);
-    } else if (!isStale && hasStale) {
-      await github.rest.issues.removeLabel({
-        owner,
-        repo,
-        issue_number: pr.number,
-        name: Labels.STALE,
-      });
-      console.log(`PR #${pr.number}: removed stale`);
-    }
+    const { data: head } = await github.rest.repos.getCommit({ owner, repo, ref: pr.head.sha });
+    const idleDays = (now - new Date(head.commit.committer.date)) / (1000 * 60 * 60 * 24);
+    await sync(Labels.STALE, idleDays >= STALE_DAYS);
 
     const detail = await getPullDetail({ github, owner, repo, prNumber: pr.number });
 
@@ -62,25 +53,6 @@ module.exports = async ({ github, context }) => {
       continue;
     }
 
-    const hasConflicts = detail.mergeable_state === "dirty";
-    const hasRebaseLabel = labels.includes(Labels.NEEDS_REBASE);
-
-    if (hasConflicts && !hasRebaseLabel) {
-      await github.rest.issues.addLabels({
-        owner,
-        repo,
-        issue_number: pr.number,
-        labels: [Labels.NEEDS_REBASE],
-      });
-      console.log(`PR #${pr.number}: tagged needs-rebase`);
-    } else if (!hasConflicts && hasRebaseLabel) {
-      await github.rest.issues.removeLabel({
-        owner,
-        repo,
-        issue_number: pr.number,
-        name: Labels.NEEDS_REBASE,
-      });
-      console.log(`PR #${pr.number}: removed needs-rebase`);
-    }
+    await sync(Labels.NEEDS_REBASE, detail.mergeable_state === "dirty");
   }
 };
