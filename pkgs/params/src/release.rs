@@ -72,6 +72,15 @@ impl Release {
     }
   }
 
+  /// Core's default `nMinSporkKeys`, at releases with `-minsporkkeys`
+  /// (v23.1; v24 has one spork signer and no threshold).
+  pub const fn min_spork_keys(self) -> Option<i32> {
+    match self {
+      Self::V23_1 => Some(1),
+      Self::V24_0 => None,
+    }
+  }
+
   /// Whether Core caps the LLMQ size overrides at
   /// [`MAX_LLMQ_SIZE`](crate::MAX_LLMQ_SIZE).
   pub const fn caps_llmq_size(self) -> bool {

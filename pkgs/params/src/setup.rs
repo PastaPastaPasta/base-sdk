@@ -12,7 +12,7 @@ mod tables;
 use crate::prelude::*;
 use crate::{
   AddrParams, Bip9Deployment, Bip9Deployments, ChainParams, Checkpoint, ConsensusParams, DeploymentPos,
-  DevnetGenesisParams, LlmqParams, LlmqType, Network, ParamsError, Release,
+  DevnetGenesisParams, LlmqParams, LlmqType, Network, ParamsError, Release, SporkSigners,
 };
 
 use bitcoin_units::BlockHeight;
@@ -51,6 +51,8 @@ pub struct ChainSetup {
   pub devnet_name: Option<String>,
   /// The devnet genesis block (height 1), on a devnet.
   pub devnet_genesis: Option<DevnetGenesisParams>,
+  /// Spork signers after the spork options.
+  pub spork_signers: SporkSigners,
   /// Whether non-standard transactions are rejected by default (v23 release
   /// only).
   pub require_standard: Option<bool>,
@@ -91,6 +93,7 @@ impl ChainSetup {
       devnet_genesis: (network == Network::Devnet)
         .then(|| DevnetGenesisParams::find("devnet", &chain.genesis, chain.consensus.hash_genesis_block))
         .flatten(),
+      spork_signers: SporkSigners::default(),
       require_standard: release.require_standard(network),
       assumeutxo: tables::assumeutxo(network, release),
       fixed_seeds: extras.fixed_seeds,

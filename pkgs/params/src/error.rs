@@ -100,6 +100,13 @@ pub enum ParamsError {
   PowTargetSpacingParse(String),
   /// `-powtargetspacing` is below 1.
   PowTargetSpacingValue(String),
+  /// A `-sporkaddr` that is not a P2PKH address of the chain.
+  SporkAddress,
+  /// A v23 `-minsporkkeys` outside `(signers / 2, signers]`.
+  MinSporkKeys,
+  /// An option the release does not have, as Core's argument parser
+  /// reports it (`-minsporkkeys` at v24).
+  InvalidParameter(String),
   /// A height Core parses into an `int` without a range check is negative
   /// in the final parameters (a `-vbparams` minimum activation height, a
   /// `-dip3params` or a `-budgetparams` height). Heights here are unsigned,
@@ -156,6 +163,9 @@ impl fmt::Display for ParamsError {
       Self::LlmqRotation(o) => write!(f, "LLMQ type specified for {} must use rotation", o.name()),
       Self::PowTargetSpacingParse(v) => write!(f, "Invalid parsing of powTargetSpacing ({v})"),
       Self::PowTargetSpacingValue(v) => write!(f, "Invalid value of powTargetSpacing ({v})"),
+      Self::SporkAddress => f.write_str("Invalid spork address specified with -sporkaddr"),
+      Self::MinSporkKeys => f.write_str("Invalid minimum number of spork signers specified with -minsporkkeys"),
+      Self::InvalidParameter(arg) => write!(f, "Invalid parameter {arg}"),
       Self::NegativeHeight(o, v) => write!(f, "negative height {v} in {}", o.name()),
       Self::V20BelowDip3 => f.write_str("v20 height below dip0003 height"),
       Self::MnRrBelowV20 => f.write_str("mn_rr height below v20 height"),

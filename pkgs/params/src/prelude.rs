@@ -7,6 +7,7 @@
 //! Re-exports for no_std compatibility.
 
 pub(crate) use alloc::boxed::Box;
+pub(crate) use alloc::collections::BTreeSet;
 pub(crate) use alloc::format;
 pub(crate) use alloc::string::{String, ToString};
 pub(crate) use alloc::vec;
