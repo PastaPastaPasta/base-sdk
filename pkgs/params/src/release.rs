@@ -71,4 +71,10 @@ impl Release {
       Self::V24_0 => Some(hrp),
     }
   }
+
+  /// Whether Core caps the LLMQ size overrides at
+  /// [`MAX_LLMQ_SIZE`](crate::MAX_LLMQ_SIZE).
+  pub const fn caps_llmq_size(self) -> bool {
+    matches!(self, Self::V24_0)
+  }
 }

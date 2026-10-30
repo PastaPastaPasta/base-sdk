@@ -17,7 +17,7 @@ use rstest::rstest;
 use std::collections::BTreeSet;
 
 fn setup(network: Network, release: Release) -> ChainSetup {
-  ChainParamsBuilder::new(network, release).build()
+  ChainParamsBuilder::new(network, release).build().unwrap()
 }
 
 /// The [`ChainParams`] copy that `Deref` and coercion reach.

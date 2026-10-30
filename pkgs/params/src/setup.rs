@@ -12,7 +12,7 @@ mod tables;
 use crate::prelude::*;
 use crate::{
   AddrParams, Bip9Deployment, Bip9Deployments, ChainParams, Checkpoint, ConsensusParams, DeploymentPos,
-  DevnetGenesisParams, LlmqParams, LlmqType, Network, Release,
+  DevnetGenesisParams, LlmqParams, LlmqType, Network, ParamsError, Release,
 };
 
 use bitcoin_units::BlockHeight;
@@ -147,6 +147,28 @@ impl ChainSetup {
     }
   }
 
+  /// Makes this devnet the one Core calls `name` (`devnet-<name>`): its
+  /// devnet genesis block and the checkpoint on it.
+  ///
+  /// The checkpoint list of the [`ChainParams`] copy is leaked, to give it a
+  /// `'static` slice (DEC-911).
+  pub(crate) fn name_devnet(&mut self, name: String) -> Result<(), ParamsError> {
+    let genesis_hash = self.consensus.hash_genesis_block;
+    let Some(devnet_genesis) = DevnetGenesisParams::find(&name, &self.chain.genesis, genesis_hash) else {
+      return Err(ParamsError::DevnetGenesis(name));
+    };
+    self.consensus.hash_devnet_genesis_block = devnet_genesis.hash;
+    self.checkpoints = vec![
+      (BlockHeight::from_u32(0), genesis_hash),
+      (BlockHeight::from_u32(1), devnet_genesis.hash),
+    ];
+    self.chain.checkpoints = Box::leak(self.checkpoints.clone().into_boxed_slice());
+    self.chain.chain_tx_data.timestamp = i64::from(devnet_genesis.time);
+    self.devnet_name = Some(name);
+    self.devnet_genesis = Some(devnet_genesis);
+    Ok(())
+  }
+
   /// Writes the consensus values [`ChainParams`] can hold into its copy.
   pub(crate) fn sync_chain(&mut self) {
     self
@@ -274,6 +296,15 @@ impl ReleaseDeployments {
       DeploymentPos::TestDummy => Some(&self.test_dummy),
       DeploymentPos::V24 => Some(&self.v24),
       DeploymentPos::EvoShares => self.shares.as_ref(),
+    }
+  }
+
+  /// The deployment at `pos`, to change, if the release has it.
+  pub(crate) fn deployment_mut(&mut self, pos: DeploymentPos) -> Option<&mut Bip9Deployment> {
+    match pos {
+      DeploymentPos::TestDummy => Some(&mut self.test_dummy),
+      DeploymentPos::V24 => Some(&mut self.v24),
+      DeploymentPos::EvoShares => self.shares.as_mut(),
     }
   }
 

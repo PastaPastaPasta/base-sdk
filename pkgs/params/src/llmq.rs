@@ -64,6 +64,24 @@ impl Hashable for LlmqType {
 }
 
 impl LlmqType {
+  /// The types of Core's static LLMQ table, in its order.
+  pub const AVAILABLE: [Self; 14] = [
+    Self::LlmqTest,
+    Self::LlmqTestInstantsend,
+    Self::LlmqTestV17,
+    Self::LlmqTestDip0024,
+    Self::LlmqTestPlatform,
+    Self::LlmqDevnet,
+    Self::LlmqDevnetDip0024,
+    Self::LlmqDevnetPlatform,
+    Self::Llmq50_60,
+    Self::Llmq60_75,
+    Self::Llmq400_60,
+    Self::Llmq400_85,
+    Self::Llmq100_67,
+    Self::Llmq25_67,
+  ];
+
   /// DKG and signing parameters of the type, or `None` for
   /// [`LlmqType::LlmqNone`] and unknown types.
   pub const fn params(self) -> Option<LlmqParams> {
@@ -83,6 +101,20 @@ impl LlmqType {
       Self::LlmqNone | Self::Unknown(_) => return None,
     })
   }
+}
+
+/// Largest quorum size the v24 signing protocol supports. v24 refuses larger
+/// `-llmqtestparams` and `-llmqdevnetparams` sizes; v23 has no such limit.
+pub const MAX_LLMQ_SIZE: u16 = 400;
+
+/// The parameters of `llmq_type` in Core's static LLMQ table, which no
+/// override changes (Core's `Consensus::available_llmqs` lookup), or `None`
+/// for [`LlmqType::LlmqNone`] and unknown types.
+///
+/// A chain's own parameters, with its overrides, are
+/// [`ConsensusSetup::llmq`](crate::ConsensusSetup::llmq).
+pub const fn available_params(llmq_type: LlmqType) -> Option<LlmqParams> {
+  llmq_type.params()
 }
 
 /// DKG and signing parameters of an [`LlmqType`].
@@ -321,4 +353,30 @@ impl LlmqParams {
     keep_old_keys: 1440,
     recovery_members: 6,
   };
+
+  /// Core's `max_cycles`: DKG cycles covering `quorums_count` quorums.
+  ///
+  /// Zero for a rotated type with no active quorums, where Core divides by
+  /// zero; no table entry has that.
+  pub fn max_cycles(&self, quorums_count: i32) -> i32 {
+    if self.use_rotation {
+      quorums_count
+        .checked_div(i32::from(self.signing_active_quorum_count))
+        .unwrap_or(0)
+    } else {
+      quorums_count
+    }
+  }
+
+  /// Core's `max_store_depth`: blocks of recent DKG data to keep.
+  pub fn max_store_depth(&self) -> i32 {
+    self
+      .max_cycles(i32::from(self.keep_old_keys))
+      .wrapping_mul(i32::from(self.dkg_interval))
+  }
+
+  /// Core's `is_single_member`.
+  pub const fn is_single_member(&self) -> bool {
+    self.size == 1
+  }
 }
