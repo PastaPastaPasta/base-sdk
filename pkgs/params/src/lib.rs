@@ -37,6 +37,7 @@ pub use consensus::BRR_PERIODS_PERMILLE;
 pub use consensus::{BuriedDeployment, Checkpoint, ConsensusParams};
 pub use deployment::DeploymentPos;
 pub use deployment::{Bip9Deployment, Bip9Deployments};
+pub use genesis::DevnetGenesisParams;
 pub use genesis::GenesisParams;
 pub use llmq::{LlmqParams, LlmqType};
 pub use release::Release;

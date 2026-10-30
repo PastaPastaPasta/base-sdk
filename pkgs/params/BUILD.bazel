@@ -9,6 +9,7 @@ dash_rust_library(
     ],
     deps = [
         "//pkgs/num:dash-num",
+        "//pkgs/pow:dash-pow",
         "//pkgs/types:dash-types",
     ],
 )

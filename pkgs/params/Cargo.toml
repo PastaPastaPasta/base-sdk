@@ -21,11 +21,13 @@ std = [
   "dash-types/std",
 ]
 full = ["std"]
+portable = ["dash-pow/portable"]
 
 [dependencies]
 bitcoin_hashes = { workspace = true, features = ["alloc"] }
 bitcoin-units = { workspace = true, features = ["alloc"] }
 dash-num = { version = "0.2.0-beta", path = "../num", features = ["codec"] }
+dash-pow = { version = "0.1.0-beta", path = "../pow", default-features = false }
 dash-types = { version = "0.2.0-beta", path = "../types", default-features = false, features = [
   "codec",
 ] }

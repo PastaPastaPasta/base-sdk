@@ -11,8 +11,8 @@ mod tables;
 
 use crate::prelude::*;
 use crate::{
-  AddrParams, Bip9Deployment, Bip9Deployments, ChainParams, Checkpoint, ConsensusParams, DeploymentPos, LlmqParams,
-  LlmqType, Network, Release,
+  AddrParams, Bip9Deployment, Bip9Deployments, ChainParams, Checkpoint, ConsensusParams, DeploymentPos,
+  DevnetGenesisParams, LlmqParams, LlmqType, Network, Release,
 };
 
 use bitcoin_units::BlockHeight;
@@ -49,6 +49,8 @@ pub struct ChainSetup {
   /// Core's `GetDevNetName()` on a devnet (`devnet` or `devnet-<name>`),
   /// `None` elsewhere.
   pub devnet_name: Option<String>,
+  /// The devnet genesis block (height 1), on a devnet.
+  pub devnet_genesis: Option<DevnetGenesisParams>,
   /// Whether non-standard transactions are rejected by default (v23 release
   /// only).
   pub require_standard: Option<bool>,
@@ -86,6 +88,9 @@ impl ChainSetup {
       checkpoints: chain.checkpoints.to_vec(),
       platform_hrp: release.platform_hrp(chain.addr_params.bech32_hrp),
       devnet_name: (network == Network::Devnet).then(|| String::from("devnet")),
+      devnet_genesis: (network == Network::Devnet)
+        .then(|| DevnetGenesisParams::find("devnet", &chain.genesis, chain.consensus.hash_genesis_block))
+        .flatten(),
       require_standard: release.require_standard(network),
       assumeutxo: tables::assumeutxo(network, release),
       fixed_seeds: extras.fixed_seeds,

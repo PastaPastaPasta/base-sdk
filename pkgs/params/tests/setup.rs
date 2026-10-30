@@ -6,6 +6,8 @@
 
 //! The chain setup a node reads, against the network tables.
 
+#![expect(clippy::unwrap_used, reason = "test code")]
+
 use bitcoin_units::BlockHeight;
 use dash_params::{
   AddrSetup, Bip9Deployment, ChainParams, ChainParamsBuilder, ChainSetup, DeploymentPos, LlmqType, Network, Release,
@@ -157,6 +159,9 @@ fn data_dirs_are_cores(#[case] network: Network, #[case] dir: &str) {
 fn devnet_checkpoints_hold_its_devnet_genesis_block() {
   let setup = setup(Network::Devnet, Release::V24_0);
   assert_eq!(setup.devnet_name.as_deref(), Some("devnet"));
+  let devnet_genesis = setup.devnet_genesis.as_ref().unwrap();
+  assert_eq!(devnet_genesis.name, "devnet");
+  assert_eq!(devnet_genesis.hash, setup.consensus.hash_devnet_genesis_block);
   let consensus = &setup.consensus;
   assert_eq!(
     setup.checkpoints,

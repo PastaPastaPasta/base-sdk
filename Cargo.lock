@@ -484,6 +484,7 @@ dependencies = [
  "bitcoin_hashes",
  "dash-dev",
  "dash-num",
+ "dash-pow",
  "dash-types",
  "hex-conservative",
  "rstest",
