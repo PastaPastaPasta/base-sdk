@@ -123,6 +123,15 @@ impl ChainOption {
   pub fn from_name(name: &str) -> Option<Self> {
     Self::ALL.into_iter().find(|o| o.name() == name)
   }
+
+  /// Whether Core accepts `-no<option>`.
+  ///
+  /// Core registers `-powtargetspacing` with `DISALLOW_NEGATION`, so its
+  /// argument parser refuses every negation of it on every chain, the
+  /// double negative `-nopowtargetspacing=0` included.
+  pub const fn negatable(self) -> bool {
+    !matches!(self, Self::PowTargetSpacing)
+  }
 }
 
 /// Which rotation an LLMQ role option requires of the type it names.
@@ -144,7 +153,10 @@ enum Rotation {
 /// or [`negate`](Self::negate) is one occurrence, as `ArgsManager` stores it.
 /// A single-valued option reads its last occurrence and a repeatable one the
 /// values after its last negation. A bare option is the empty string, and a
-/// double negation such as `-nofastprune=0` is the value `1`.
+/// double negation such as `-nofastprune=0` is the value `1`, but only for a
+/// [`negatable`](ChainOption::negatable) option: every `-no` form of any
+/// other is a [`negate`](Self::negate), which Core refuses before it reads
+/// the value. The builder cannot tell a double negation from a value.
 ///
 /// The occurrences have command-line semantics only. Core merges other
 /// sources by other rules (a config file keeps its first value, network
@@ -227,17 +239,21 @@ impl ChainParamsBuilder {
   /// refuses where Core accepts or asserts (see [`ParamsError`]).
   ///
   /// The phases follow Core's startup: argument parsing (an option the
-  /// release lacks), the chain params, then the spork signers. An LLMQ size
+  /// release lacks or a negation Core forbids, in argument order), the
+  /// chain params, then the spork signers. An LLMQ size
   /// override outside `u16` is refused last, once Core's own checks have
   /// passed (quirk 46).
   pub fn build(&self) -> Result<ChainSetup, ParamsError> {
-    if self.release.min_spork_keys().is_none() {
-      if let Some((_, value)) = self.args.iter().find(|(o, _)| *o == ChainOption::MinSporkKeys) {
+    for (option, value) in &self.args {
+      if *option == ChainOption::MinSporkKeys && self.release.min_spork_keys().is_none() {
         return Err(ParamsError::InvalidParameter(match value.as_deref() {
           None => String::from("-nominsporkkeys"),
           Some("") => String::from("-minsporkkeys"),
           Some(v) => format!("-minsporkkeys={v}"),
         }));
+      }
+      if value.is_none() && !option.negatable() {
+        return Err(ParamsError::NegationForbidden(*option));
       }
     }
     let mut setup = ChainSetup::new(self.network, self.release);

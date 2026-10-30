@@ -250,6 +250,67 @@ fn negation_follows_cores_settings() {
 }
 
 #[rstest]
+fn only_pow_target_spacing_forbids_negation() {
+  let forbidden: Vec<ChainOption> = ChainOption::ALL.into_iter().filter(|o| !o.negatable()).collect();
+  assert_eq!(forbidden, [ChainOption::PowTargetSpacing]);
+}
+
+#[rstest]
+fn negated_pow_target_spacing_is_refused_on_every_chain(
+  #[values(Network::Main, Network::Testnet3, Network::Devnet, Network::Regtest)] network: Network,
+  #[values(Release::V23_1, Release::V24_0)] release: Release,
+) {
+  let forbidden = ParamsError::NegationForbidden(ChainOption::PowTargetSpacing);
+  let err = ChainParamsBuilder::new(network, release)
+    .negate(ChainOption::PowTargetSpacing)
+    .build()
+    .unwrap_err();
+  assert_eq!(err, forbidden);
+  assert_eq!(
+    err.to_string(),
+    "Negating of -powtargetspacing is meaningless and therefore forbidden"
+  );
+  // Argument parsing comes before the chain params, and a later value
+  // does not lift the refusal.
+  let err = ChainParamsBuilder::new(network, release)
+    .arg(ChainOption::Dip3Params, "x")
+    .arg(ChainOption::LlmqDevnetParams, "x")
+    .arg(ChainOption::LlmqTestParams, "-1:2")
+    .negate(ChainOption::PowTargetSpacing)
+    .pow_target_spacing(60)
+    .build()
+    .unwrap_err();
+  assert_eq!(err, forbidden);
+}
+
+#[rstest]
+fn argument_parsing_errors_follow_argument_order() {
+  let negation_first = |release| {
+    regtest(release)
+      .negate(ChainOption::PowTargetSpacing)
+      .arg(ChainOption::MinSporkKeys, "1")
+      .build()
+      .unwrap_err()
+  };
+  let min_keys_first = |release| {
+    regtest(release)
+      .arg(ChainOption::MinSporkKeys, "1")
+      .negate(ChainOption::PowTargetSpacing)
+      .build()
+      .unwrap_err()
+  };
+  let forbidden = ParamsError::NegationForbidden(ChainOption::PowTargetSpacing);
+  assert_eq!(negation_first(Release::V24_0), forbidden);
+  assert_eq!(
+    min_keys_first(Release::V24_0),
+    ParamsError::InvalidParameter("-minsporkkeys=1".into())
+  );
+  // v23 has -minsporkkeys.
+  assert_eq!(negation_first(Release::V23_1), forbidden);
+  assert_eq!(min_keys_first(Release::V23_1), forbidden);
+}
+
+#[rstest]
 fn zero_adjustment_interval_is_none() {
   let spaced = |s| build(devnet(Release::V24_0).pow_target_spacing(s));
   assert_eq!(spaced(150).consensus.difficulty_adjustment_interval(), Some(576));

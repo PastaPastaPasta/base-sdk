@@ -388,16 +388,16 @@ fn interpret_bool(s: &str) -> bool {
 
 /// Adds one command-line argument `-name[=value]` or `-noname[=value]` to
 /// `builder`, as Core's `InterpretValue` stores it: `-noname=v` with a false
-/// `v` is a double negative, stored as true.
+/// `v` is a double negative, stored as true, if Core allows the negation.
 fn add_arg(builder: ChainParamsBuilder, arg: &str) -> ChainParamsBuilder {
   let (key, value) = match arg.split_once('=') {
     Some((k, v)) => (k, Some(v)),
     None => (arg, None),
   };
   let option = |name: &str| ChainOption::from_name(name).expect("chain option");
-  match key.strip_prefix("-no") {
-    Some(name) if value.is_some_and(|v| !interpret_bool(v)) => builder.arg(option(&format!("-{name}")), "1"),
-    Some(name) => builder.negate(option(&format!("-{name}"))),
+  match key.strip_prefix("-no").map(|name| option(&format!("-{name}"))) {
+    Some(o) if o.negatable() && value.is_some_and(|v| !interpret_bool(v)) => builder.arg(o, "1"),
+    Some(o) => builder.negate(o),
     None => builder.arg(option(key), value.unwrap_or("")),
   }
 }
