@@ -302,8 +302,13 @@ impl ReleaseDeployments {
     }
   }
 
-  /// The deployment at `pos`, to change, if the release has it.
-  pub(crate) fn deployment_mut(&mut self, pos: DeploymentPos) -> Option<&mut Bip9Deployment> {
+  /// The deployment at `pos`, to change, if the release has it (not
+  /// `evo_shares` at v23.1).
+  ///
+  /// This changes the release's view, which [`get`](Self::get),
+  /// [`iter`](Self::iter) and [`ChainSetup::deployment`] read; the
+  /// [`ChainParams`] copy keeps the value it was built with.
+  pub fn deployment_mut(&mut self, pos: DeploymentPos) -> Option<&mut Bip9Deployment> {
     match pos {
       DeploymentPos::TestDummy => Some(&mut self.test_dummy),
       DeploymentPos::V24 => Some(&mut self.v24),

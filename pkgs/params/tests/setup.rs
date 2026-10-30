@@ -171,3 +171,38 @@ fn devnet_checkpoints_hold_its_devnet_genesis_block() {
     ]
   );
 }
+
+/// A caller outside the crate can change a deployment the release has, as
+/// the node's MNHF tests do, and the release's view reads the change.
+#[rstest]
+fn deployments_change_through_the_release_view() {
+  let mut v24 = setup(Network::Regtest, Release::V24_0);
+  let start = v24.deployment(DeploymentPos::EvoShares).unwrap().start_time;
+  let shares = v24
+    .consensus
+    .deployments
+    .deployment_mut(DeploymentPos::EvoShares)
+    .unwrap();
+  (shares.bit, shares.start_time, shares.timeout, shares.use_ehf) = (9, start + 30, start + 40, false);
+  let want = Bip9Deployment {
+    bit: 9,
+    start_time: start + 30,
+    timeout: start + 40,
+    use_ehf: false,
+    ..Network::Regtest.consensus().deployments.evo_shares
+  };
+  assert_eq!(v24.deployment(DeploymentPos::EvoShares), Some(&want));
+  let positions: Vec<DeploymentPos> = v24.deployments().map(|(pos, _)| pos).collect();
+  assert_eq!(
+    positions,
+    [DeploymentPos::TestDummy, DeploymentPos::V24, DeploymentPos::EvoShares]
+  );
+  assert_eq!(v24.deployments().last(), Some((DeploymentPos::EvoShares, &want)));
+
+  // v23.1 has no third deployment to change.
+  let mut v23 = setup(Network::Regtest, Release::V23_1);
+  let deployments = &mut v23.consensus.deployments;
+  assert_eq!(deployments.deployment_mut(DeploymentPos::EvoShares), None);
+  deployments.deployment_mut(DeploymentPos::V24).unwrap().bit = 9;
+  assert_eq!(v23.deployment(DeploymentPos::V24).unwrap().bit, 9);
+}
