@@ -8,7 +8,7 @@
 
 #![expect(clippy::unwrap_used, reason = "test code")]
 
-use dash_params::{ChainParams, DevnetGenesisParams, Network};
+use dash_params::{ChainParams, ChainParamsBuilder, DevnetGenesisParams, Network, Release};
 use dash_primitives::{Block, BlockHash, MerkleRoot};
 use dash_types::{Hashable, Numeric};
 use hex_conservative::hex;
@@ -23,6 +23,11 @@ use rstest::rstest;
 #[case::testnet(
   Block::from(&Network::Testnet3.chain().genesis),
   Network::Testnet3.chain(),
+  MerkleRoot::from_bendian(hex!("e0028eb9648db56b1ac77cf090b99048a8007e2bb64b68f092c03c7f56a662c7")),
+)]
+#[case::devnet(
+  Block::from(&Network::Devnet.chain().genesis),
+  Network::Devnet.chain(),
   MerkleRoot::from_bendian(hex!("e0028eb9648db56b1ac77cf090b99048a8007e2bb64b68f092c03c7f56a662c7")),
 )]
 #[case::regtest(
@@ -73,4 +78,35 @@ fn devnet_genesis_blocks_match_their_params(#[case] name: String, #[case] push: 
     BlockHash::from(chain.consensus.hash_genesis_block)
   );
   assert_eq!(block.header.merkle_root, block.merkle().0);
+}
+
+/// At each release, the setup's genesis block hashes to its genesis hash and,
+/// on a devnet, its devnet genesis block to the devnet genesis hash, which
+/// the setup's height-1 checkpoint holds.
+#[rstest]
+fn setup_genesis_blocks_match_their_hashes(
+  #[values(Network::Main, Network::Testnet3, Network::Devnet, Network::Regtest)] network: Network,
+  #[values(Release::V23_1, Release::V24_0)] release: Release,
+  #[values(None, Some("bs5"))] devnet_name: Option<&str>,
+) {
+  let mut builder = ChainParamsBuilder::new(network, release);
+  if let Some(name) = devnet_name {
+    builder = builder.devnet_name(name);
+  }
+  let setup = builder.build().unwrap();
+  let genesis = Block::from(&setup.genesis);
+  assert_eq!(
+    genesis.header.hash(),
+    BlockHash::from(setup.consensus.hash_genesis_block)
+  );
+  let Some(params) = &setup.devnet_genesis else {
+    assert_ne!(network, Network::Devnet);
+    return;
+  };
+  let block = Block::from(params);
+  let hash = BlockHash::from(setup.consensus.hash_devnet_genesis_block);
+  assert_eq!(block.header.hash(), hash);
+  assert_eq!(block.header.prev_hash, genesis.header.hash());
+  let (height, checkpoint) = setup.checkpoints[1];
+  assert_eq!((height.to_u32(), BlockHash::from(checkpoint)), (1, hash));
 }
