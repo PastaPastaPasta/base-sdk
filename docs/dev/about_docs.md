@@ -119,7 +119,7 @@ Links in spliced material are resolved against the file that defines them, not t
 
 > [!TIP]
 > To write directives as literal text without parsing it, wrap the text segment in a code block with
-> formatting type text (i.e. &#96;&#96;&#96;text). This will instruct the preprocessor to *not* interpret the
+> formatting type text (i.e. &#96;&#96;&#96;text). This will instruct the preprocessor to _not_ interpret the
 > captured segment as directives, quoting or otherwise.
 
 Example code has a recurring problem of staleness, where (especially in early incubation), code segments may undergo
