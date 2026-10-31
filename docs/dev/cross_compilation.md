@@ -40,6 +40,7 @@ The following platforms are supported as `target`s **excluding the `host` platfo
 
 For each target, the following environment variables are defined
 
+<!-- pyml disable-num-lines 6 table-column-style -->
 | Environment Variable           | Description                             |
 | ------------------------------ | --------------------------------------- |
 | `CC_<target>`                  | The C compiler for `target`             |

@@ -49,7 +49,7 @@ cargo build --package dash-pkc --all-features
 This crate is `#![no_std]` + `alloc` by default.
 
 | Feature | Default | Description |
-| ------- | ------- | ----------- |
+| --- | --- | --- |
 | `bls` | | Enables support for BLS12-381 operations backed by [`blst`](https://docs.rs/blst). Byte types are available without enabling this feature. |
 | `codec` | ✅ | Enables support for encoding and decoding types using [`bitcoin-consensus-encoding`](https://docs.rs/bitcoin-consensus-encoding) |
 | `ecdsa` | | Enables secp256k1 operations backed by [`rust-secp256k1`](https://docs.rs/secp256k1). Byte types are available without enabling this feature. |
@@ -62,14 +62,12 @@ This crate is `#![no_std]` + `alloc` by default.
 
 ## Documentation
 
-<!-- pyml disable-next-line no-bare-urls -->
-Documentation for the most recent release of `dash-pkc` is available at https://dashpay.github.io/base-sdk/pkc and
+Documentation for the most recent release of `dash-pkc` is available at <https://dashpay.github.io/base-sdk/pkc> and
 changes between versions are recorded in the [changelog](https://dashpay.github.io/base-sdk/pkc/changelog).
 
 <!-- [end:omit] -->
 
 ## License
 
-<!-- pyml disable-next-line no-bare-urls -->
 `dash-pkc` is released under the terms of the MIT license. Copyright &copy; 2026-present, The Dash Core developers.
-To read a copy of the license terms, visit https://opensource.org/license/MIT.
+To read a copy of the license terms, visit <https://opensource.org/license/MIT>.

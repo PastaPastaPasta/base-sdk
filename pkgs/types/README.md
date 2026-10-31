@@ -40,7 +40,7 @@ cargo build --package dash-types --all-features
 This crate is `#![no_std]` + `alloc` by default.
 
 | Feature | Default | Description |
-| ------- | ------- | ----------- |
+| --- | --- | --- |
 | `bitcoin-primitives` | | Enables [adapters](https://github.com/dashpay/base-sdk/blob/develop/pkgs/types/src/adapters.rs) for types defined in [`bitcoin-primitives`](https://docs.rs/bitcoin-primitives). _Implies `codec`._ |
 | `codec` | ✅ | Enables support for encoding and decoding types using [`bitcoin-consensus-encoding`](https://docs.rs/bitcoin-consensus-encoding) |
 | `full` | | Enables all features and `std` support. |
@@ -50,14 +50,12 @@ This crate is `#![no_std]` + `alloc` by default.
 
 ## Documentation
 
-<!-- pyml disable-next-line no-bare-urls -->
-Documentation for the most recent release of `dash-types` is available at https://dashpay.github.io/base-sdk/types and
+Documentation for the most recent release of `dash-types` is available at <https://dashpay.github.io/base-sdk/types> and
 changes between versions are recorded in the [changelog](https://dashpay.github.io/base-sdk/types/changelog).
 
 <!-- [end:omit] -->
 
 ## License
 
-<!-- pyml disable-next-line no-bare-urls -->
 `dash-types` is released under the terms of the MIT license. Copyright &copy; 2026-present, The Dash Core developers.
-To read a copy of the license terms, visit https://opensource.org/license/MIT.
+To read a copy of the license terms, visit <https://opensource.org/license/MIT>.

@@ -31,8 +31,8 @@ cargo build --package dash-pow --all-features
 This crate is `#![no_std]` + `alloc` by default.
 
 | Feature | Default | Description |
-| ------- | ------- | ----------- |
-| `full` |  | Enables all features and `std` support. |
+| --- | --- | --- |
+| `full` | | Enables all features and `std` support. |
 | `portable` | ✅ | Allows builds without the target features listed below, using software AES. |
 
 ## System Requirements
@@ -56,14 +56,12 @@ due to illegal instructions (`SIGILL`).
 
 ## Documentation
 
-<!-- pyml disable-next-line no-bare-urls -->
-Documentation for the most recent release of `dash-pow` is available at https://dashpay.github.io/base-sdk/pow and
+Documentation for the most recent release of `dash-pow` is available at <https://dashpay.github.io/base-sdk/pow> and
 changes between versions are recorded in the [changelog](https://dashpay.github.io/base-sdk/pow/changelog).
 
 <!-- [end:omit] -->
 
 ## License
 
-<!-- pyml disable-next-line no-bare-urls -->
 `dash-pow` is released under the terms of the MIT license. Copyright &copy; 2026-present, The Dash Core developers.
-To read a copy of the license terms, visit https://opensource.org/license/MIT.
+To read a copy of the license terms, visit <https://opensource.org/license/MIT>.

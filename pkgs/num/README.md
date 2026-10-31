@@ -36,7 +36,7 @@ cargo build --package dash-num --all-features
 This crate is `#![no_std]` + `alloc` by default.
 
 | Feature | Default | Description |
-| ------- | ------- | ----------- |
+| --- | --- | --- |
 | `codec` | ✅ | Enables support for encoding and decoding types using [`bitcoin-consensus-encoding`](https://docs.rs/bitcoin-consensus-encoding) |
 | `full` | | Enables all features and `std` support. |
 | `serde` | | Enables support for encoding and decoding types using [`serde`](https://github.com/serde-rs/serde). |
@@ -45,14 +45,12 @@ This crate is `#![no_std]` + `alloc` by default.
 
 ## Documentation
 
-<!-- pyml disable-next-line no-bare-urls -->
-Documentation for the most recent release of `dash-num` is available at https://dashpay.github.io/base-sdk/num and
+Documentation for the most recent release of `dash-num` is available at <https://dashpay.github.io/base-sdk/num> and
 changes between versions are recorded in the [changelog](https://dashpay.github.io/base-sdk/num/changelog).
 
 <!-- [end:omit] -->
 
 ## License
 
-<!-- pyml disable-next-line no-bare-urls -->
 `dash-num` is released under the terms of the MIT license. Copyright &copy; 2026-present, The Dash Core developers.
-To read a copy of the license terms, visit https://opensource.org/license/MIT.
+To read a copy of the license terms, visit <https://opensource.org/license/MIT>.

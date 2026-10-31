@@ -3,6 +3,7 @@ name: "dash-params"
 on:
   workflow_dispatch:
   push:
+    branches: [develop]
   pull_request:
 
 concurrency:

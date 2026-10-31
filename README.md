@@ -18,7 +18,7 @@
 <!-- [start:crate-info] -->
 
 | Crate | Description | CI | Coverage | Version |
-| ----- | ----------- | -------------- | -------- | ------- |
+| --- | --- | --- | --- | --- |
 | [dash-num](./pkgs/num) | Hash blobs, 256-bit arithmetic, compact target encoding | [![dash-num](https://img.shields.io/github/actions/workflow/status/dashpay/base-sdk/pkg_num.yml?style=flat&logo=github&logoColor=white&label=num)](https://github.com/dashpay/base-sdk/actions/workflows/pkg_num.yml) | [![dash-num](https://img.shields.io/codecov/c/github/dashpay/base-sdk/develop?flag=dash-num&style=flat&logo=codecov&logoColor=white&label=num)](https://app.codecov.io/github/dashpay/base-sdk/tree/develop/pkgs%2Fnum) | [![dash-num](https://img.shields.io/crates/v/dash-num?style=flat&logo=hackthebox&logoColor=white&label=num&color=teal)](https://crates.io/crates/dash-num) |
 | [dash-p2p-core](./pkgs/p2p_core) | P2P message types and wire format | [![dash-p2p-core](https://img.shields.io/github/actions/workflow/status/dashpay/base-sdk/pkg_p2p_core.yml?style=flat&logo=github&logoColor=white&label=p2p-core)](https://github.com/dashpay/base-sdk/actions/workflows/pkg_p2p_core.yml) | [![dash-p2p-core](https://img.shields.io/codecov/c/github/dashpay/base-sdk/develop?flag=dash-p2p-core&style=flat&logo=codecov&logoColor=white&label=p2p-core)](https://app.codecov.io/github/dashpay/base-sdk/tree/develop/pkgs%2Fp2p_core) | _Unreleased._ |
 | [dash-params](./pkgs/params) | Chain parameters for `mainnet`, `testnet3`, and `regtest` | [![dash-params](https://img.shields.io/github/actions/workflow/status/dashpay/base-sdk/pkg_params.yml?style=flat&logo=github&logoColor=white&label=params)](https://github.com/dashpay/base-sdk/actions/workflows/pkg_params.yml) | [![dash-params](https://img.shields.io/codecov/c/github/dashpay/base-sdk/develop?flag=dash-params&style=flat&logo=codecov&logoColor=white&label=params)](https://app.codecov.io/github/dashpay/base-sdk/tree/develop/pkgs%2Fparams) | _Unreleased._ |
@@ -38,8 +38,7 @@ See [`dash-pow`](./pkgs/pow/README.md) for more information.
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/dashpay/base-sdk)
 
-<!-- pyml disable-next-line no-bare-urls -->
-Documentation is hosted at https://dashpay.github.io/base-sdk. To render it locally or learn its syntax, visit the
+Documentation is hosted at <https://dashpay.github.io/base-sdk>. To render it locally or learn its syntax, visit the
 [getting started](https://dashpay.github.io/base-sdk/dev/about_docs) guide. Release notes for published crates are
 listed below.
 
@@ -51,5 +50,4 @@ listed below.
 ## Licensing
 
 Copyright &copy; 2026-present, The Dash Core developers. See the accompanying file [LICENSE](./LICENSE) or
-<!-- pyml disable-next-line no-bare-urls -->
-https://opensource.org/license/MIT
+<https://opensource.org/license/MIT>
