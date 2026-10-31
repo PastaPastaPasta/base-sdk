@@ -3,6 +3,7 @@ name: "dash-primitives"
 on:
   workflow_dispatch:
   push:
+    branches: [develop]
   pull_request:
 
 concurrency:
