@@ -104,7 +104,7 @@ mod tests {
   use super::*;
 
   use bitcoin_primitives::script::ScriptPubKeyBuf;
-  use dash_dev::{assert_serde_rt, check_sptx, vec_from_hex, Corpus};
+  use dash_dev::{assert_json_rt, assert_serde_rt, check_sptx, check_sptx_raw, vec_from_hex, Corpus};
   use rstest::rstest;
 
   const MAX: i64 = SignedAmount::MAX_MONEY.to_sat();
@@ -117,6 +117,21 @@ mod tests {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "assetlock");
     let items = corpus.entries::<AssetLock>("assetlock", check_sptx);
     assert_serde_rt("assetlock", &items);
+  }
+
+  /// Regtest transactions as txid and raw bytes, from functional tests of the
+  /// reference implementation at v24.0.0-rc.4.
+  /// `dash-cli -regtest decoderawtransaction <raw>` decodes each one.
+  const REGTEST: [(&str, &str); 1] = [
+    // feature_asset_locks.py line 1349
+    ("3a7308f287fa457fdfb7d6d54944a7e1c1bc1ac338a4936f3bad38a8c3b84f64", "0300080001303449dc5584043509b2f37e4cbd2f0913259877538580beeaac961b14381807000000006a47304402202e57f5d34f003f1c379a545b2f28a9575efca583564b33e0850ce3509d320f93022004d981f4802cbfd6a24155880279529a54a7ab1cc7f5ad5079438222777878f90121038af19f35924e37ad7c3c8045d1e19b9b90b7310e08b892e620c253a102fe49f0feffffff0216b87600000000001976a9148171436067401ef70060848afa678dfe4ff9df6f88ac00e1f50500000000026a00ed02000024020100e1f505000000001976a914764c1bde1104218e51bd29ff8ce80878e892199388ac"),
+  ];
+
+  #[rstest]
+  #[case::asset_locks_1349(REGTEST[0])]
+  fn regtest_vectors(#[case] vector: (&str, &str)) {
+    let (txid, raw) = vector;
+    assert_json_rt(&check_sptx_raw::<AssetLock>(&vec_from_hex(raw), txid));
   }
 
   #[rstest]

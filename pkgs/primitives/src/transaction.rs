@@ -451,7 +451,7 @@ impl fmt::Display for Transaction {
 pub(crate) mod tests {
   use super::*;
 
-  use dash_dev::{assert_serde_rt, check_tx, Corpus};
+  use dash_dev::{assert_json_rt, assert_serde_rt, check_sptx_raw, check_tx, vec_from_hex, Corpus};
   use rstest::rstest;
   use serde::Deserialize;
 
@@ -559,8 +559,11 @@ pub(crate) mod tests {
   /// A mainnet asset unlock with a version 1 payload.
   const MAINNET_UNLOCK: &str = "65fc488b35abd172726238a16cc71ef11eecb034ce05991e9a3e5ba4fd85094f";
 
-  /// A regtest asset unlock with a version 2 payload.
-  const REGTEST_UNLOCK: &str = "0f9db35643e5ebca413fe5be12144185adb7236f051dbcb872162c14cea2523a";
+  /// A regtest asset unlock with a version 2 payload, as txid and raw bytes,
+  /// from the reference implementation's functional test
+  /// feature_asset_locks.py line 1115 at v24.0.0-rc.4.
+  /// `dash-cli -regtest decoderawtransaction <raw>` decodes it.
+  const REGTEST_UNLOCK: (&str, &str) = ("0f9db35643e5ebca413fe5be12144185adb7236f051dbcb872162c14cea2523a", "03000900000190cff40500000000232102472c66bc4fd71f30167ac9b8888944ca749dcb0a130329ab95380be0a43c25b0ac000000009102210300000000000070110100c80300002a3631100ae30009d1bf863e5db641069985121ad4ab37dfda0800a65cc1116088250d04fb32aef4219a552f35627d46a9f448a742564cb9e7c4b107325e1f875f64a0c90d517b137cb44d359e401dce015a077ec33ba4c078e4b74f252181943daa2cc30eb90b693e3aee521016f22ddecc52b0e4c79781b76c8def1c66db46");
 
   /// The asset unlock `txid` of the corpus.
   fn unlock(txid: &str) -> Transaction {
@@ -630,10 +633,17 @@ pub(crate) mod tests {
     assert_ne!(other.instance_hash(), tx.instance_hash());
   }
 
+  #[rstest]
+  fn regtest_unlock() {
+    let (txid, raw) = REGTEST_UNLOCK;
+    assert_json_rt(&check_sptx_raw::<crate::AssetUnlock>(&vec_from_hex(raw), txid));
+  }
+
   /// The instance hash that the reference reports for the regtest unlock.
   #[rstest]
   fn instance_hash_matches_reference() {
     let expected = TxHash::from_hex("4661437eee9c8b84d6c966f396c93993f56a58140f916d3249a805859a07efb6").unwrap();
-    assert_eq!(unlock(REGTEST_UNLOCK).instance_hash(), expected);
+    let tx = Transaction::decode(&mut &vec_from_hex(REGTEST_UNLOCK.1)[..]).unwrap();
+    assert_eq!(tx.instance_hash(), expected);
   }
 }
