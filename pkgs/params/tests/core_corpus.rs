@@ -6,12 +6,21 @@
 
 //! Built chain parameters equal Dash Core's, case by case, at both pins.
 //!
-//! The corpora come from Core commits 23769258c239 (v24.0.0-rc.3,
-//! 0364ed626ec, plus the oracle shim only: `src/test/oracle` and its
-//! Makefile lines) and 350ce242a59c (v23.1.8 plus the same shim).
-//! `chainparams.cpp`, `chainparamsbase.cpp`, `llmq/params.h`, `init.cpp` and
-//! `spork.cpp` are unchanged from rc.3 to rc.4, so the v24 corpus holds for
-//! rc.4 too (Q10).
+//! The corpora come from Core commits 1cdab7d9033a (v24.0.0-rc.5,
+//! 8163290aa0, plus the oracle and state-digest test hooks; the chain
+//! params, their options and the spork signer code differ from the tag only
+//! in hook functions) and 350ce242a59c (v23.1.8 plus the oracle shim only:
+//! `src/test/oracle` and its Makefile lines). v23.1.8 keeps the blocks
+//! pruning keeps in a constant, so its corpus has no `ext.minBlocksToKeep`.
+//!
+//! From rc.4 to rc.5 these values moved, each checked here against rc.5's
+//! `chainparams.cpp`: mainnet's `v24` and `evo_shares` schedule (:213-214,
+//! :222-223); the minimum chain work and assumed-valid block (:230-231,
+//! :441-442), the newest checkpoint (:348, :533) and the transaction
+//! statistics (:357-362, :542-547) of mainnet and testnet; the fixed seeds
+//! (:279, :462, `chainparamsseeds.h`); the assumed mainnet size (:247); the
+//! testnet and devnet prune height (:451, :635); and the blocks pruning keeps
+//! (:246, :452, :636, :881).
 //!
 //! Each corpus must hold exactly the cases of the hand-kept manifest
 //! `corpus/chainparams_cases.json5`, so a regeneration cannot drop one.
@@ -311,6 +320,7 @@ fn dump(p: &ChainSetup) -> BTreeMap<String, Value> {
     Release::V24_0 => {
       out.put("ext.bech32PlatformHRP", p.platform_hrp.expect("v24 has a Platform HRP"));
       out.put("ext.MAX_LLMQ_SIZE", MAX_LLMQ_SIZE);
+      out.put("ext.minBlocksToKeep", p.min_blocks_to_keep);
     }
   }
   let signers = &p.spork_signers;

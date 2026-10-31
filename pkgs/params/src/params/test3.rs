@@ -104,10 +104,10 @@ pub static PARAMS: ChainParams = ChainParams {
     pow_kgw_height: BlockHeight::from_u32(4002),
     pow_dgw_height: BlockHeight::from_u32(4002),
     minimum_chain_work: Arith256::from_bendian(hex!(
-      "000000000000000000000000000000000000000000000000036c8f738da818d2"
+      "00000000000000000000000000000000000000000000000003ed573a939487fc"
     )),
     default_assume_valid: Hash256::from_bendian(hex!(
-      "000000541a23f9db7411cddbe50f9f1ebd4aa7108ebdcad62214753f648c0239"
+      "000000116cd3c11d44c88cbc0a26804bd277a5d790f684ec3a8aaa820690318c"
     )),
     minimum_difficulty_blocks: 0,
     high_subsidy_blocks: 0,
@@ -140,8 +140,8 @@ pub static PARAMS: ChainParams = ChainParams {
   default_platform_http_port: 22001,
   rpc_port: 19998,
   onion_service_target_port: 19996,
-  prune_after_height: 1000,
-  min_blocks_to_keep: 288,
+  prune_after_height: 3000,
+  min_blocks_to_keep: 2304,
   assumed_blockchain_size_gb: 10,
   assumed_chain_state_size_gb: 1,
   dns_seeds: &["testnet-seed.dashdot.io."],
@@ -164,14 +164,14 @@ pub static PARAMS: ChainParams = ChainParams {
   credit_pool_period_blocks: 576,
   checkpoints: &CHECKPOINTS,
   chain_tx_data: ChainTxData {
-    timestamp: 1_765_334_452,
-    tx_count: 8_182_713,
-    tx_rate: 0.1796716675173412,
+    timestamp: 1_788_899_589,
+    tx_count: 8_494_561,
+    tx_rate: 0.0139463532250889,
   },
 };
 
 #[rustfmt::skip]
-const CHECKPOINTS: [Checkpoint; 19] = [
+const CHECKPOINTS: [Checkpoint; 20] = [
   (BlockHeight::from_u32(     255), Hash256::from_bendian(hex!("0000080b600e06f4c07880673f027210f9314575f5f875fafe51971e268b886a"))),
   (BlockHeight::from_u32(     261), Hash256::from_bendian(hex!("00000c26026d0815a7e2ce4fa270775f61403c040647ff2c3091f99e894a4618"))),
   (BlockHeight::from_u32(   1_999), Hash256::from_bendian(hex!("00000052e538d27fa53693efe6fb6892a0c1d26c0235f599171c48a3cce553b1"))),
@@ -191,4 +191,5 @@ const CHECKPOINTS: [Checkpoint; 19] = [
   (BlockHeight::from_u32(1_189_000), Hash256::from_bendian(hex!("000001690314036dfbbecbdf382b230ead8e9c584241290a51f9f05a87a9cf7e"))),
   (BlockHeight::from_u32(1_295_700), Hash256::from_bendian(hex!("00000107d42829a38e31c1a38c660d621e1ca376a880df1520e85e38af175d3a"))),
   (BlockHeight::from_u32(1_380_000), Hash256::from_bendian(hex!("000000a98084beaf77ed26a905a7d59979009e23367a55b5d634962d7d65a1f9"))),
+  (BlockHeight::from_u32(1_550_000), Hash256::from_bendian(hex!("000000116cd3c11d44c88cbc0a26804bd277a5d790f684ec3a8aaa820690318c"))),
 ];

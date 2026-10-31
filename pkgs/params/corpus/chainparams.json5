@@ -1,6 +1,6 @@
 //
 // Chain parameter vectors. Generated with the reference implementation
-// (dashpay/dash v24.0.0-rc.3, 0364ed626e).
+// (dashpay/dash v24.0.0-rc.5, 8163290aa0).
 //
 // Each entry is the output of the command above it, keyed by chain. The node
 // of each chain runs with an empty data directory and no connections, so it
@@ -143,6 +143,32 @@
           "type": "buried",
           "active": false,
           "height": 2201472
+        },
+        "v24": {
+          "type": "bip9",
+          "active": false,
+          "bip9": {
+            "start_time": 1794182400,
+            "timeout": 1857340800,
+            "ehf": true,
+            "min_activation_height": 0,
+            "status": "defined",
+            "since": 0,
+            "status_next": "defined"
+          }
+        },
+        "evo_shares": {
+          "type": "bip9",
+          "active": false,
+          "bip9": {
+            "start_time": 1794182400,
+            "timeout": 1857340800,
+            "ehf": true,
+            "min_activation_height": 0,
+            "status": "defined",
+            "since": 0,
+            "status_next": "defined"
+          }
         }
       }
     },

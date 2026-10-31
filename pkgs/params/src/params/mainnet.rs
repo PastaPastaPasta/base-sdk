@@ -77,8 +77,8 @@ pub static PARAMS: ChainParams = ChainParams {
       },
       v24: Bip9Deployment {
         bit: 13,
-        start_time: Bip9Deployment::NEVER_ACTIVE,
-        timeout: Bip9Deployment::NO_TIMEOUT,
+        start_time: 1_794_182_400, // 9 November 2026, midnight UTC
+        timeout: 1_857_340_800,    // 9 November 2028, midnight UTC
         min_activation_height: BlockHeight::from_u32(0),
         window_size: 4032,
         threshold_start: 3226, // 80% of 4032
@@ -88,8 +88,8 @@ pub static PARAMS: ChainParams = ChainParams {
       },
       evo_shares: Bip9Deployment {
         bit: 14,
-        start_time: Bip9Deployment::NEVER_ACTIVE,
-        timeout: Bip9Deployment::NO_TIMEOUT,
+        start_time: 1_794_182_400, // 9 November 2026, midnight UTC
+        timeout: 1_857_340_800,    // 9 November 2028, midnight UTC
         min_activation_height: BlockHeight::from_u32(0),
         window_size: 4032,
         threshold_start: 3226, // 80% of 4032
@@ -106,10 +106,10 @@ pub static PARAMS: ChainParams = ChainParams {
     pow_kgw_height: BlockHeight::from_u32(15_200),
     pow_dgw_height: BlockHeight::from_u32(34_140),
     minimum_chain_work: Arith256::from_bendian(hex!(
-      "00000000000000000000000000000000000000000000ba7225adc3153945d14d"
+      "00000000000000000000000000000000000000000000c15981a81af44a6abe1a"
     )),
     default_assume_valid: Hash256::from_bendian(hex!(
-      "00000000000000119fe42827219e0686d3f7b494ae65f823194c740c5dbab492"
+      "000000000000000346a1804da4832b0b69dd9a7f96b14c7cb54585a9ac6ae98f"
     )),
     minimum_difficulty_blocks: 0,
     high_subsidy_blocks: 0,
@@ -142,8 +142,8 @@ pub static PARAMS: ChainParams = ChainParams {
   rpc_port: 9998,
   onion_service_target_port: 9996,
   prune_after_height: 100_000,
-  min_blocks_to_keep: 288,
-  assumed_blockchain_size_gb: 57,
+  min_blocks_to_keep: 2304,
+  assumed_blockchain_size_gb: 62,
   assumed_chain_state_size_gb: 1,
   dns_seeds: &["dnsseed.dash.org."],
   addr_params: AddrParams {
@@ -165,14 +165,14 @@ pub static PARAMS: ChainParams = ChainParams {
   credit_pool_period_blocks: 576,
   checkpoints: &CHECKPOINTS,
   chain_tx_data: ChainTxData {
-    timestamp: 1_781_318_234,
-    tx_count: 69_770_814,
-    tx_rate: 0.1569520632249578,
+    timestamp: 1_793_218_693,
+    tx_count: 71_411_418,
+    tx_rate: 0.1306891420721072,
   },
 };
 
 #[rustfmt::skip]
-const CHECKPOINTS: [Checkpoint; 39] = [
+const CHECKPOINTS: [Checkpoint; 40] = [
   (BlockHeight::from_u32(   1_500), Hash256::from_bendian(hex!("000000aaf0300f59f49bc3e970bad15c11f961fe2347accffff19d96ec9778e3"))),
   (BlockHeight::from_u32(   4_991), Hash256::from_bendian(hex!("000000003b01809551952460744d5dbb8fcbd6cbae3c220267bf7fa43f837367"))),
   (BlockHeight::from_u32(   9_918), Hash256::from_bendian(hex!("00000000213e229f332c0ffbe34defdaa9e74de87f2d8d1f01af8d121c3c170b"))),
@@ -212,4 +212,5 @@ const CHECKPOINTS: [Checkpoint; 39] = [
   (BlockHeight::from_u32(2_421_800), Hash256::from_bendian(hex!("000000000000000718ed026ebd644a8b70b42d4cbd7b25304c066c9bf15f85b7"))),
   (BlockHeight::from_u32(2_471_728), Hash256::from_bendian(hex!("000000000000001a19ad7270422a00f86123ea94e0b295a3a796d6861bd7b032"))),
   (BlockHeight::from_u32(2_487_500), Hash256::from_bendian(hex!("00000000000000119fe42827219e0686d3f7b494ae65f823194c740c5dbab492"))),
+  (BlockHeight::from_u32(2_563_000), Hash256::from_bendian(hex!("000000000000000346a1804da4832b0b69dd9a7f96b14c7cb54585a9ac6ae98f"))),
 ];

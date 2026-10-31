@@ -76,10 +76,8 @@ impl ChainSetup {
   /// The parameters of `network` at `release`, with no overrides.
   pub(crate) fn new(network: Network, release: Release) -> Self {
     let mut chain = *network.chain();
+    release.write_chain(network, &mut chain);
     let deployments = ReleaseDeployments::new(network, release, &chain.consensus.deployments);
-    if release == Release::V23_1 {
-      chain.consensus.deployments.evo_shares.start_time = Bip9Deployment::NEVER_ACTIVE;
-    }
     deployments.write_to(&mut chain.consensus.deployments);
     let extras = tables::extras(network);
     Self {
@@ -96,7 +94,7 @@ impl ChainSetup {
       spork_signers: SporkSigners::default(),
       require_standard: release.require_standard(network),
       assumeutxo: tables::assumeutxo(network, release),
-      fixed_seeds: extras.fixed_seeds,
+      fixed_seeds: tables::fixed_seeds(network, release),
       require_routable_external_ip: extras.require_routable_external_ip,
       allow_multiple_addresses_from_group: extras.allow_multiple_addresses_from_group,
       llmq_connection_retry_timeout: extras.llmq_connection_retry_timeout,

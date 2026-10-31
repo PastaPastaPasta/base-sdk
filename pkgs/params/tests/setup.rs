@@ -97,8 +97,9 @@ fn v24_setup_views_are_the_tables(
     .all(|(t, _)| network.consensus().llmqs.contains(&t)));
 }
 
-/// At v23.1, `evo_shares` does not exist, `v24` signals on bit 12 and there
-/// is no Platform address HRP; the [`ChainParams`] copy agrees.
+/// At v23.1, `evo_shares` does not exist, `v24` signals on bit 12 with no
+/// mainnet or testnet schedule and there is no Platform address HRP; the
+/// [`ChainParams`] copy agrees.
 #[rstest]
 fn v23_setup_has_the_v23_deployments(
   #[values(Network::Main, Network::Testnet3, Network::Devnet, Network::Regtest)] network: Network,
@@ -112,15 +113,16 @@ fn v23_setup_has_the_v23_deployments(
   let bits: BTreeSet<i32> = setup.deployments().map(|(_, d)| d.bit).collect();
   assert_eq!(bits, BTreeSet::from([12, 28]));
   let table = network.consensus().deployments;
-  let v24_start = match network {
-    Network::Testnet3 => Bip9Deployment::NEVER_ACTIVE,
-    _ => table.v24.start_time,
+  let (start_time, timeout) = match network {
+    Network::Main | Network::Testnet3 => (Bip9Deployment::NEVER_ACTIVE, Bip9Deployment::NO_TIMEOUT),
+    _ => (table.v24.start_time, table.v24.timeout),
   };
   assert_eq!(
     deployments.v24,
     Bip9Deployment {
       bit: 12,
-      start_time: v24_start,
+      start_time,
+      timeout,
       ..table.v24
     }
   );
@@ -131,6 +133,7 @@ fn v23_setup_has_the_v23_deployments(
   assert_eq!(copy.deployments.v24, deployments.v24);
   assert_eq!(copy.deployments.test_dummy, deployments.test_dummy);
   assert_eq!(copy.deployments.evo_shares.start_time, Bip9Deployment::NEVER_ACTIVE);
+  assert_eq!(copy.deployments.evo_shares.timeout, Bip9Deployment::NO_TIMEOUT);
 
   assert_eq!(setup.platform_hrp, None);
   assert_eq!(setup.base_sdk_addr_params().bech32_hrp, "");
@@ -146,13 +149,17 @@ fn only_v23_requires_standard(#[case] network: Network, #[case] v23: Option<bool
   assert_eq!(setup(network, Release::V24_0).require_standard, None);
 }
 
-/// Pruning keeps 288 blocks on every chain at both releases.
+/// The blocks pruning keeps: 288 on every chain at v23.1; at v24.0.0-rc.5,
+/// 2304 (four days) but 288 on regtest (chainparams.cpp:246, :452, :636,
+/// :881).
 #[rstest]
-fn min_blocks_to_keep_is_cores(
-  #[values(Network::Main, Network::Testnet3, Network::Devnet, Network::Regtest)] network: Network,
-  #[values(Release::V23_1, Release::V24_0)] release: Release,
-) {
-  assert_eq!(setup(network, release).min_blocks_to_keep, 288);
+#[case::mainnet(Network::Main, 2304)]
+#[case::testnet(Network::Testnet3, 2304)]
+#[case::devnet(Network::Devnet, 2304)]
+#[case::regtest(Network::Regtest, 288)]
+fn min_blocks_to_keep_is_cores(#[case] network: Network, #[case] v24: u32) {
+  assert_eq!(setup(network, Release::V23_1).min_blocks_to_keep, 288);
+  assert_eq!(setup(network, Release::V24_0).min_blocks_to_keep, v24);
 }
 
 #[rstest]
