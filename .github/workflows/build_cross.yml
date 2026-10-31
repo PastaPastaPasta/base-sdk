@@ -28,7 +28,7 @@ jobs:
 
       - name: Check cache write access
         id: cache_write
-        uses: ./.github/actions/cache_write
+        uses: $/.github/actions/cache_write
 
       - name: Free disk space
         uses: jlumbroso/free-disk-space@v2
@@ -62,7 +62,7 @@ jobs:
         run: nix develop ./contrib/nix#dev --command true
 
       - name: Configure the remote cache
-        uses: ./.github/actions/bazel_remote
+        uses: $/.github/actions/bazel_remote
         with:
           url: ${{ vars.CACHE_BZL_URL }}
           auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_BZL_AUTH || '' }}
@@ -97,7 +97,7 @@ jobs:
 
       - name: Check cache write access
         id: cache_write
-        uses: ./.github/actions/cache_write
+        uses: $/.github/actions/cache_write
 
       - name: Free disk space
         uses: jlumbroso/free-disk-space@v2
@@ -115,7 +115,7 @@ jobs:
           skip-push: ${{ steps.cache_write.outputs.allowed != 'true' }}
 
       - name: Restore cargo registry
-        uses: ./.github/actions/gha_cache
+        uses: $/.github/actions/gha_cache
         with:
           path: |
             ~/.cargo/registry
@@ -130,7 +130,7 @@ jobs:
           auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_GHA_AUTH || '' }}
 
       - name: Manage build artifacts
-        uses: ./.github/actions/gha_cache
+        uses: $/.github/actions/gha_cache
         with:
           path: target
           key: cargo-build-cross-${{ matrix.target }}-${{ github.sha }}

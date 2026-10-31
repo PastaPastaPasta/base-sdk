@@ -32,7 +32,7 @@ jobs:
 
       - name: Check cache write access
         id: cache_write
-        uses: ./.github/actions/cache_write
+        uses: $/.github/actions/cache_write
 
       - name: Run pull request checks
         if: github.event_name == 'pull_request'
@@ -74,7 +74,7 @@ jobs:
             "$(readlink -f "${RUNNER_TEMP}/devshell")"
 
       - name: Restore cargo registry
-        uses: ./.github/actions/gha_cache
+        uses: $/.github/actions/gha_cache
         with:
           path: |
             ~/.cargo/registry
@@ -89,7 +89,7 @@ jobs:
           auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_GHA_AUTH || '' }}
 
       - name: Manage build artifacts
-        uses: ./.github/actions/gha_cache
+        uses: $/.github/actions/gha_cache
         with:
           path: target
           key: cargo-build-lint-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
@@ -102,7 +102,7 @@ jobs:
           auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_GHA_AUTH || '' }}
 
       - name: Manage CodeQL packs
-        uses: ./.github/actions/gha_cache
+        uses: $/.github/actions/gha_cache
         with:
           path: ~/.codeql
           key: codeql-packs-${{ hashFiles('maint/codeql/*/codeql-pack.lock.yml') }}
@@ -113,7 +113,7 @@ jobs:
           auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_GHA_AUTH || '' }}
 
       - name: Configure the remote cache
-        uses: ./.github/actions/bazel_remote
+        uses: $/.github/actions/bazel_remote
         with:
           url: ${{ vars.CACHE_BZL_URL }}
           auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_BZL_AUTH || '' }}
@@ -159,7 +159,7 @@ jobs:
 
       - name: Check cache write access
         id: cache_write
-        uses: ./.github/actions/cache_write
+        uses: $/.github/actions/cache_write
 
       - name: Run pull request checks
         if: github.event_name == 'pull_request'
@@ -187,7 +187,7 @@ jobs:
           tool: cargo-hack
 
       - name: Manage cargo registry
-        uses: ./.github/actions/gha_cache
+        uses: $/.github/actions/gha_cache
         with:
           path: |
             ~/.cargo/registry
@@ -202,7 +202,7 @@ jobs:
           auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_GHA_AUTH || '' }}
 
       - name: Manage build artifacts
-        uses: ./.github/actions/gha_cache
+        uses: $/.github/actions/gha_cache
         with:
           path: target
           key: cargo-build-stable-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}

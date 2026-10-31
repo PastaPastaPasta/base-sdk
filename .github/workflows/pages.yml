@@ -44,7 +44,7 @@ jobs:
 
       - name: Check cache write access
         id: cache_write
-        uses: ./.github/actions/cache_write
+        uses: $/.github/actions/cache_write
 
       - name: Free disk space
         uses: jlumbroso/free-disk-space@v2
@@ -65,7 +65,7 @@ jobs:
         run: pytest
 
       - name: Restore cargo registry
-        uses: ./.github/actions/gha_cache
+        uses: $/.github/actions/gha_cache
         with:
           path: |
             ~/.cargo/registry
