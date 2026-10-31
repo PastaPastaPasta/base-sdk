@@ -22,7 +22,6 @@ runs:
         CACHE_BZL_AUTH: ${{ inputs.auth }}
       run: |
         echo "build --remote_cache=${CACHE_BZL_URL}" >> .bazelrc.user
-        echo "startup --experimental_remote_repo_contents_cache" >> .bazelrc.user
         # The proxy refuses calls without credentials or with a duplicate
         # header. The downloader shares the cache's URL and reuses its headers,
         # so only the cache sets Authorization.
