@@ -345,10 +345,17 @@ pub struct NetInfoV2 {
 impl_type!(NetInfoV2);
 
 impl BaseCodec for NetInfoV2 {
-  /// Decodes an extended network info. A group purpose that is unknown, or
-  /// not above the purpose before it, fails the decode.
+  /// Decodes an extended network info. Of an unsupported version, 0 or above
+  /// the current one, only the version is read. A group purpose that is
+  /// unknown, or not above the purpose before it, fails the decode.
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let version = u8::decode(data)?;
+    if !Self::is_supported(version) {
+      return Ok(Self {
+        version,
+        groups: Vec::new(),
+      });
+    }
     let purpose_count = CompactSize::decode_len(data, MAX_SER_SIZE)?;
     let mut groups: Vec<(NIPurpose, Vec<NIEntry>)> = Vec::with_capacity(purpose_count);
     for _ in 0..purpose_count {
@@ -363,8 +370,13 @@ impl BaseCodec for NetInfoV2 {
     Ok(Self { version, groups })
   }
 
+  /// Encodes an extended network info, only its version when that is
+  /// unsupported.
   fn encode(&self, buf: &mut impl EncodeBuf) {
     self.version.encode(buf);
+    if !Self::is_supported(self.version) {
+      return;
+    }
     CompactSize::from(self.groups.len()).encode(buf);
     for (purpose, group) in &self.groups {
       purpose.to_base().encode(buf);
@@ -380,7 +392,7 @@ impl Checkable for NetInfoV2 {
   type Error = NIError;
 
   fn check(&self) -> Option<Self::Error> {
-    if self.version == 0 || self.version > Self::CURRENT_VERSION {
+    if !Self::is_supported(self.version) {
       return Some(NIError::Malformed);
     }
     if self.groups.is_empty() {
@@ -467,6 +479,11 @@ hash_impl!(NetInfoV2);
 impl NetInfoV2 {
   /// Highest supported format version.
   const CURRENT_VERSION: u8 = 1;
+
+  /// Returns `true` for a format version from 1 to the current one.
+  const fn is_supported(version: u8) -> bool {
+    version != 0 && version <= Self::CURRENT_VERSION
+  }
 }
 
 impl fmt::Display for NetInfoV2 {
@@ -1025,6 +1042,27 @@ mod tests {
     let mut v2 = valid_v2();
     v2.version = version;
     assert_eq!(v2.check(), expected);
+  }
+
+  #[rstest]
+  #[case::zero(0)]
+  #[case::future(2)]
+  fn encode_v2_unsupported_version_alone(#[case] version: u8) {
+    let mut v2 = valid_v2();
+    v2.version = version;
+    let mut buf = Vec::new();
+    v2.encode(&mut buf);
+    assert_eq!(buf, [version]);
+  }
+
+  #[rstest]
+  #[case::zero(0)]
+  #[case::future(2)]
+  #[case::max(0xff)]
+  fn check_v2_unsupported_version_read(#[case] version: u8) {
+    let v2 = NetInfoV2::decode(&mut &[version][..]).unwrap();
+    assert!(!v2.is_empty());
+    assert_eq!(v2.check(), Some(NIError::Malformed));
   }
 
   #[rstest]
