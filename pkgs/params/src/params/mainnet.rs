@@ -142,6 +142,7 @@ pub static PARAMS: ChainParams = ChainParams {
   rpc_port: 9998,
   onion_service_target_port: 9996,
   prune_after_height: 100_000,
+  min_blocks_to_keep: 288,
   assumed_blockchain_size_gb: 57,
   assumed_chain_state_size_gb: 1,
   dns_seeds: &["dnsseed.dash.org."],

@@ -249,6 +249,23 @@ fn negation_follows_cores_settings() {
   assert_eq!(p.prune_after_height, 1000);
 }
 
+/// `-fastprune` moves regtest's prune height only; the number of blocks
+/// pruning keeps stays the chain's.
+#[rstest]
+fn fast_prune_keeps_min_blocks_to_keep(
+  #[values(Network::Main, Network::Testnet3, Network::Devnet, Network::Regtest)] network: Network,
+  #[values(Release::V23_1, Release::V24_0)] release: Release,
+) {
+  let plain = build(ChainParamsBuilder::new(network, release));
+  let fast = build(ChainParamsBuilder::new(network, release).fast_prune(true));
+  assert_eq!(fast.min_blocks_to_keep, plain.min_blocks_to_keep);
+  let fast_height = match network {
+    Network::Regtest => 100,
+    _ => plain.prune_after_height,
+  };
+  assert_eq!(fast.prune_after_height, fast_height);
+}
+
 #[rstest]
 fn only_pow_target_spacing_forbids_negation() {
   let forbidden: Vec<ChainOption> = ChainOption::ALL.into_iter().filter(|o| !o.negatable()).collect();

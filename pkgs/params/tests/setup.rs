@@ -146,6 +146,15 @@ fn only_v23_requires_standard(#[case] network: Network, #[case] v23: Option<bool
   assert_eq!(setup(network, Release::V24_0).require_standard, None);
 }
 
+/// Pruning keeps 288 blocks on every chain at both releases.
+#[rstest]
+fn min_blocks_to_keep_is_cores(
+  #[values(Network::Main, Network::Testnet3, Network::Devnet, Network::Regtest)] network: Network,
+  #[values(Release::V23_1, Release::V24_0)] release: Release,
+) {
+  assert_eq!(setup(network, release).min_blocks_to_keep, 288);
+}
+
 #[rstest]
 #[case::mainnet(Network::Main, "")]
 #[case::testnet(Network::Testnet3, "testnet3")]

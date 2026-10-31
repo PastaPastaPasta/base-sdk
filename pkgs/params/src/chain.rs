@@ -45,6 +45,9 @@ pub struct ChainParams {
   pub onion_service_target_port: u16,
   /// Height after which pruning may discard blocks.
   pub prune_after_height: u64,
+  /// Pruning keeps every block file holding a block within this many blocks
+  /// of the tip.
+  pub min_blocks_to_keep: u32,
   /// Estimated full blockchain size in gigabytes.
   pub assumed_blockchain_size_gb: u64,
   /// Estimated chain-state size in gigabytes.
