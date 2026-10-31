@@ -14,7 +14,7 @@ use crate::prelude::*;
 use crate::provider::PlatformNodeId;
 use crate::sign::unsigned_digest;
 use crate::sptx::{check_sptx_netinfo, InputsHash, MnType, ProTxInvalid};
-use crate::types::{NITrait, NetInfo, NetInfoV1, NetInfoV2, ServiceV1};
+use crate::types::{NITrait, NetInfo, NetInfoV1, NetInfoV2};
 use crate::{hash_impl, TxHash};
 
 use bitcoin_primitives::script::ScriptPubKeyBuf;
@@ -84,7 +84,7 @@ impl BaseCodec for ProUpServTx {
     let net_info = if version >= ProTxVersion::ExtAddr {
       NetInfo::Extended(NetInfoV2::decode(data)?)
     } else {
-      NetInfo::Legacy(NetInfoV1::new(ServiceV1::decode(data)?))
+      NetInfo::Legacy(NetInfoV1::decode(data)?)
     };
     let script_operator_payout = ScriptPubKeyBuf::decode(data)?;
     let inputs_hash = InputsHash::decode(data)?;
@@ -262,6 +262,37 @@ mod tests {
 
   use dash_dev::{assert_serde_rt, check_sptx, Corpus};
   use rstest::rstest;
+
+  /// An Evo update with an extended NetInfo whose version is unsupported reads
+  /// the version alone, and its next fields read from the byte after it.
+  #[rstest]
+  #[case::zero(0)]
+  #[case::future(2)]
+  fn unsupported_net_info_version(#[case] version: u8) {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "proupservtx");
+    let mut payload = corpus.entries::<ProUpServTx>("proupservtx", |_, _, _| {})
+      ["369881c12aa676d0a9829cdc849df0c75e9729296883cbbdc3822f1e267c6368"]
+      .clone();
+    let mut raw = Vec::new();
+    payload.encode(&mut raw);
+    // The version, type and ProTx hash come before the NetInfo.
+    let start = 2 + 2 + 32;
+    let mut rest = &raw[start..];
+    assert_eq!(
+      NetInfoV2::decode(&mut rest).map(NetInfo::Extended),
+      Ok(payload.net_info.clone())
+    );
+    let end = raw.len() - rest.len();
+    raw.splice(start..end, [version]);
+    payload.net_info = NetInfo::Extended(NetInfoV2::new(version, Vec::new()));
+
+    let mut data = raw.as_slice();
+    assert_eq!(ProUpServTx::decode(&mut data), Ok(payload.clone()));
+    assert!(data.is_empty());
+    let mut written = Vec::new();
+    payload.encode(&mut written);
+    assert_eq!(written, raw);
+  }
 
   #[rstest]
   fn corpus_proupservtx() {
