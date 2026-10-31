@@ -24,7 +24,7 @@ use getset::{CopyGetters, Getters};
 use core::fmt;
 
 impl_new! {
-/// ProUpSharedRegTx -- update the keys of a shared masternode (type 12).
+/// ProUpSharedRegTx: update the keys of a shared masternode (type 12).
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]

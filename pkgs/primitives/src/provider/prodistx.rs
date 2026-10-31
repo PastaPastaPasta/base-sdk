@@ -21,7 +21,7 @@ use getset::{CopyGetters, Getters};
 use core::fmt;
 
 impl_new! {
-/// ProDisTx -- dissolve a shared masternode (type 10).
+/// ProDisTx: dissolve a shared masternode (type 10).
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]

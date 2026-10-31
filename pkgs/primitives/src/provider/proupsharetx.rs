@@ -21,7 +21,7 @@ use getset::{CopyGetters, Getters};
 use core::fmt;
 
 codec_payload! {
-/// ProUpShareTx -- update the reward script of a share (type 11).
+/// ProUpShareTx: update the reward script of a share (type 11).
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
