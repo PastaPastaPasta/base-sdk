@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
@@ -36,7 +36,7 @@ jobs:
           large-packages: false
 
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v22
+        uses: DeterminateSystems/nix-installer-action@v23
 
       - name: Cache Nix
         id: niks3
@@ -91,7 +91,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
@@ -105,7 +105,7 @@ jobs:
           large-packages: false
 
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v22
+        uses: DeterminateSystems/nix-installer-action@v23
 
       - name: Cache Nix
         uses: Mic92/niks3-action@v1
