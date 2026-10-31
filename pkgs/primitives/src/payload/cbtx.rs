@@ -209,7 +209,7 @@ mod tests {
   use crate::prelude::*;
 
   use dash_dev::{assert_serde_rt, check_sptx, Corpus};
-  use rstest::rstest;
+  use rstest::{fixture, rstest};
 
   #[rstest]
   fn corpus_cbtx() {
@@ -218,14 +218,19 @@ mod tests {
     assert_serde_rt("cbtx", &items);
   }
 
-  /// The testnet payload at the v24 activation height, encoded as `version`
-  /// with the fields of that version and the asset unlock root if `root`.
-  fn encode_as(version: u16, root: bool) -> Vec<u8> {
+  /// The testnet payload at the v24 activation height.
+  #[fixture]
+  fn activation() -> CoinbaseCommitment {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "cbtx");
     let mut entries = corpus.entries::<CoinbaseCommitment>("cbtx", |_, _, _| {});
-    let cbtx = entries
+    entries
       .remove("ab22dcb7082a94cbf8c11091dc3f4ac3aea5aee150177137791da2b33108bacc")
-      .unwrap();
+      .unwrap()
+  }
+
+  /// `cbtx` encoded as `version` with the fields of that version and the
+  /// asset unlock root if `root`.
+  fn encode_as(cbtx: CoinbaseCommitment, version: u16, root: bool) -> Vec<u8> {
     let mut buf = Vec::new();
     CoinbaseCommitment {
       version: CbCommitmentVersion::from_base(version),
@@ -248,8 +253,8 @@ mod tests {
   #[case::v3(3, None)]
   #[case::v4(4, None)]
   #[case::v5(5, Some(CbTxInvalid::BadVersion { version: 5 }))]
-  fn version_sets_fields(#[case] version: u16, #[case] expected: Option<CbTxInvalid>) {
-    let raw = encode_as(version, version >= 4);
+  fn version_sets_fields(activation: CoinbaseCommitment, #[case] version: u16, #[case] expected: Option<CbTxInvalid>) {
+    let raw = encode_as(activation, version, version >= 4);
     let mut cursor = &raw[..];
     let cbtx = CoinbaseCommitment::decode(&mut cursor).unwrap();
     assert!(cursor.is_empty());
@@ -263,8 +268,8 @@ mod tests {
   #[case::v3_root(3, true)]
   #[case::v4_no_root(4, false)]
   #[case::v5_no_root(5, false)]
-  fn root_follows_version(#[case] version: u16, #[case] root: bool) {
-    let raw = encode_as(version, root);
+  fn root_follows_version(activation: CoinbaseCommitment, #[case] version: u16, #[case] root: bool) {
+    let raw = encode_as(activation, version, root);
     let mut cursor = &raw[..];
     assert!(CoinbaseCommitment::decode(&mut cursor).is_err() || !cursor.is_empty());
   }
