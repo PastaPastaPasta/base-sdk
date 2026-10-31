@@ -79,16 +79,34 @@ fn decode_tx(raw: &[u8]) -> Transaction {
 
 /// Check function for special-transaction payload corpus entries.
 ///
-/// Verifies the txid, decodes the full transaction, then decodes
-/// the payload from `extra_payload`, compares with `details`, and
-/// re-encodes both payload and full transaction.
+/// Runs [`check_sptx_raw`] and compares the payload with `details`.
 ///
 /// # Panics
 ///
-/// Panics on decode failure, mismatch, or txid mismatch.
+/// Panics as [`check_sptx_raw`] does, or if the payload differs from
+/// `details`.
 pub fn check_sptx<T>(raw: &[u8], details: &T, label: &str)
 where
   T: BaseCodec + Checkable + PartialEq + Debug,
+  T::Error: Display,
+{
+  assert_eq!(check_sptx_raw::<T>(raw, label), *details, "{label}");
+}
+
+/// Check function for special-transaction vectors that record no details,
+/// such as vectors written out in a test.
+///
+/// Verifies the txid, decodes the full transaction, then decodes the
+/// payload from `extra_payload`, checks it, re-encodes both payload and
+/// full transaction, and returns the payload.
+///
+/// # Panics
+///
+/// Panics on decode failure, check failure, encode mismatch, or txid
+/// mismatch.
+pub fn check_sptx_raw<T>(raw: &[u8], label: &str) -> T
+where
+  T: BaseCodec + Checkable,
   T::Error: Display,
 {
   assert_txid(raw, label);
@@ -97,9 +115,9 @@ where
   if let Some(e) = decoded.check() {
     panic!("{label}: payload check: {e}");
   }
-  assert_eq!(decoded, *details, "{label}");
   let mut buf = Vec::new();
   decoded.encode(&mut buf);
   assert_eq!(&buf, tx.extra_payload(), "{label}: payload encode");
   assert_eq!(encode_to_vec(&tx), raw, "{label}: tx encode");
+  decoded
 }

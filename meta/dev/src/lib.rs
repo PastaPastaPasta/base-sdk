@@ -19,7 +19,7 @@ mod lambda;
 mod prelude;
 
 pub use encode::{arr_from_hex, vec_from_hex};
-pub use lambda::{check_sptx, check_tx, check_wire};
+pub use lambda::{check_sptx, check_sptx_raw, check_tx, check_wire};
 
 cfg_if::cfg_if! {
   if #[cfg(all(feature = "std", feature = "serde"))] {
