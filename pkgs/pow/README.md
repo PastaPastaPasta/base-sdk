@@ -31,8 +31,8 @@ cargo build --package dash-pow --all-features
 This crate is `#![no_std]` + `alloc` by default.
 
 | Feature | Default | Description |
-| ------- | ------- | ----------- |
-| `full` |  | Enables all features and `std` support. |
+| --- | --- | --- |
+| `full` | | Enables all features and `std` support. |
 | `portable` | ✅ | Allows builds without the target features listed below, using software AES. |
 
 ## System Requirements
