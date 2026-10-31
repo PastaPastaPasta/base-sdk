@@ -19,6 +19,8 @@ hash_impl!(ProtocolVersion);
 impl ProtocolVersion {
   /// Current protocol version.
   pub const CURRENT: Self = Self(70240);
+  /// Version assumed until the handshake agrees on one.
+  pub const INIT: Self = Self(209);
   /// Minimum acceptable peer version.
   pub const MIN_PEER: Self = Self(70221);
   /// Minimum version for BIP324 v2 transport.
@@ -35,6 +37,8 @@ impl ProtocolVersion {
   pub const MNLISTDIFF_CHAINLOCKS: Self = Self(70230);
   /// Raised [`Headers2::MAX_COUNT`](crate::Headers2::MAX_COUNT) boundary.
   pub const INCREASE_MAX_HEADERS2: Self = Self(70235);
+  /// V2 short ID of `platformban` boundary.
+  pub const PLATFORMBAN_V2_SHORT_ID: Self = Self(70240);
 }
 
 #[cfg(test)]

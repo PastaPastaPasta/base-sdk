@@ -22,6 +22,7 @@ mod version;
 use crate::command::CommandString;
 use crate::prelude::*;
 use crate::short_id::ShortId;
+use crate::version::ProtocolVersion;
 
 use bitcoin_consensus_encoding as encoding;
 use dash_primitives::{GovObject, GovVote};
@@ -32,7 +33,7 @@ pub use blocks::{GetBlocks, SendCmpct};
 pub use coinjoin::SendDsq;
 pub use gov::{GovSync, GovSyncStatusCount};
 pub use headers::{GetHeaders, Headers};
-pub use headers2::{CompressionState, GetHeaders2, Headers2};
+pub use headers2::{CompressedHeader, GetHeaders2, Headers2};
 pub use inv::{GetData, Inv, InvType, Inventory, NotFound};
 pub use mn_list::{DeletedQuorum, GetMnListDiff, MnListDiff, MnListDiffPayload, QuorumClSig, SimplifiedMnListEntry};
 pub use ping::{Ping, Pong};

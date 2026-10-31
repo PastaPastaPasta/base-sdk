@@ -7,6 +7,7 @@
 //! V2 short ID mapping for BIP324 message framing.
 
 use crate::command::CommandString;
+use crate::version::ProtocolVersion;
 
 use dash_primitives::hash_impl;
 use dash_types::make_num;
@@ -55,6 +56,20 @@ impl ShortId {
   /// Resolves the short ID to a `CommandString`, if known.
   pub fn to_command(self) -> Option<CommandString> {
     self.to_command_str().map(CommandString::from_static)
+  }
+
+  /// Looks up the short ID to send `cmd` by, given `common`, the version both
+  /// peers share.
+  ///
+  /// `None` means the long format. A peer older than the version that
+  /// assigned the short ID would not know it, so it gets the long format too.
+  pub fn for_send(cmd: &CommandString, common: ProtocolVersion) -> Option<Self> {
+    let assigned = if *cmd == CommandString::PLATFORMBAN {
+      ProtocolVersion::PLATFORMBAN_V2_SHORT_ID
+    } else {
+      ProtocolVersion::BIP324_BASELINE
+    };
+    Self::from_command(cmd).filter(|_| common >= assigned)
   }
 }
 

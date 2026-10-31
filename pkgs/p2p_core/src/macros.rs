@@ -128,8 +128,8 @@ macro_rules! define_p2p {
 
       /// Looks up the short ID for a command, if one is assigned.
       ///
-      /// `None` means the message has no short ID and must be sent in
-      /// the long format.
+      /// `None` means the message has no short ID. Whether a peer knows the
+      /// one assigned is for [`ShortId::for_send`] to tell.
       pub fn from_command(cmd: &CommandString) -> Option<Self> {
         match *cmd {
           $( $( CommandString::$p_cmd => Some(Self::new($p_sid)), )? )*
@@ -162,9 +162,10 @@ macro_rules! define_p2p {
         }
       }
 
-      /// Returns the V2 short ID for this message, if one exists.
-      pub fn short_id(&self) -> Option<ShortId> {
-        ShortId::from_command(&self.command())
+      /// Returns the V2 short ID to send this message by, given `common`, the
+      /// version both peers share.
+      pub fn short_id(&self, common: ProtocolVersion) -> Option<ShortId> {
+        ShortId::for_send(&self.command(), common)
       }
 
       /// Returns `true` when the message is recognised but not decoded.
