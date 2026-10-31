@@ -46,11 +46,15 @@ This crate is `#![no_std]` + `alloc` by default.
 | `full` | | Enables all features and `std` support. |
 | `serde` | | Enables support for encoding and decoding types using [`serde`](https://github.com/serde-rs/serde). |
 
+<!-- [start:omit] -->
+
 ## Documentation
 
 <!-- pyml disable-next-line no-bare-urls -->
 Documentation for the most recent release of `dash-types` is available at https://dashpay.github.io/base-sdk/types and
 changes between versions are recorded in the [changelog](https://dashpay.github.io/base-sdk/types/changelog).
+
+<!-- [end:omit] -->
 
 ## License
 
