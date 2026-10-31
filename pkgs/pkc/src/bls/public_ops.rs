@@ -199,15 +199,19 @@ impl BlsPkBytes {
   /// # Errors
   ///
   /// Returns `InvalidPublicKey` when the bytes are not a valid point under `S`.
+  /// That includes legacy encodings of an `x` with no point on the curve,
+  /// which [`is_canonical`](Self::is_canonical) accepts; there is no point to
+  /// return for them.
   pub fn to<S: BlsScheme>(&self) -> Result<BlsPublicKey<S>, BlsError> {
     BlsPublicKey::try_from(self)
   }
 
-  /// Whether `S` decodes the bytes to a key that re-encodes to them.
+  /// Whether `S` reads the bytes as a key that re-encodes to them, or under
+  /// the legacy scheme as an `x` with no point on the curve.
   ///
   /// Null bytes pass, so pair with [`is_null`](Self::is_null) to require a key.
   pub fn is_canonical<S: BlsScheme>(&self) -> bool {
-    self.is_null() || self.to::<S>().is_ok_and(|pk| pk.to_bytes() == *self.as_bytes())
+    self.is_null() || S::is_canonical_pk(self.as_bytes())
   }
 }
 
@@ -224,8 +228,8 @@ type_cvrt!(for[S: BlsScheme] TryFrom<G1> for BlsPublicKey<S>, BlsError, |point| 
 mod tests {
   use super::*;
   use crate::bls::tests::{
-    ietf_g1_encoding, ser_pairs, SerType, G1_OFF_SUBGROUP_CHIA, G1_OFF_SUBGROUP_IETF, G1_X_EQ_PRIME_CHIA,
-    G1_X_GE_PRIME_CHIA, G1_X_MAX_CHIA, MSG_8BADFOOD, RSEED,
+    chia_pk_off_curve, ietf_g1_encoding, ser_pairs, SerType, G1_OFF_SUBGROUP_CHIA, G1_OFF_SUBGROUP_IETF,
+    G1_X_EQ_PRIME_CHIA, G1_X_GE_PRIME_CHIA, G1_X_MAX_CHIA, MSG_8BADFOOD, RSEED,
   };
   use crate::bls::{BlsScChia, BlsScIetf, BlsSecretKey, BlsSignature};
 
@@ -559,6 +563,21 @@ mod tests {
     let bytes = BlsPkBytes::from_bytes(encoded);
     assert!(bytes.to::<BlsScChia>().is_err());
     assert!(!bytes.is_canonical::<BlsScChia>());
+  }
+
+  /// The reference implementation accepts a legacy encoding of an `x` with no
+  /// point on the curve, so `is_canonical` does too, while `to` has no point
+  /// to return.
+  #[rstest]
+  fn chia_off_curve_x_is_canonical_but_not_a_key() {
+    // p - 1, with no point on the curve.
+    let mut encoded = G1_X_EQ_PRIME_CHIA;
+    encoded[47] -= 1;
+    assert!(chia_pk_off_curve(&encoded));
+
+    let bytes = BlsPkBytes::from_bytes(encoded);
+    assert!(bytes.is_canonical::<BlsScChia>());
+    assert!(bytes.to::<BlsScChia>().is_err());
   }
 
   /// The same G1 point encodes differently under the two schemes, and each

@@ -115,16 +115,21 @@ impl BlsSigBytes {
   /// # Errors
   ///
   /// Returns `InvalidSignature` when the bytes are not a valid point under `S`.
+  /// That includes legacy encodings of an `x` with no point on the curve,
+  /// which [`is_canonical`](Self::is_canonical) accepts; there is no point to
+  /// return for them.
   pub fn to<S: BlsScheme>(&self) -> Result<BlsSignature<S>, BlsError> {
     BlsSignature::try_from(self)
   }
 
-  /// Whether `S` decodes the bytes to a signature that re-encodes to them.
+  /// Whether `S` reads the bytes as a signature that re-encodes to them, or
+  /// under the legacy scheme as an `x` with no point on the curve and the sign
+  /// bit clear.
   ///
   /// Null bytes pass, so pair with [`is_null`](Self::is_null) to require a
   /// signature.
   pub fn is_canonical<S: BlsScheme>(&self) -> bool {
-    self.is_null() || self.to::<S>().is_ok_and(|sig| sig.to_bytes() == *self.as_bytes())
+    self.is_null() || S::is_canonical_sig(self.as_bytes())
   }
 }
 
@@ -248,6 +253,32 @@ mod tests {
   #[case::ietf(assert_sig_bytes_canonical::<BlsScIetf>)]
   fn sig_bytes_canonical_signatures_and_null(#[case] assertion: fn()) {
     assertion();
+  }
+
+  /// A legacy encoding of an `x` with no point on the curve is canonical, while
+  /// `to` has no point to return. With the sign bit set or a flag bit on `x.c1`
+  /// the same `x` is not canonical.
+  #[rstest]
+  fn chia_off_curve_x_is_canonical_but_not_a_signature() {
+    let encoded: [u8; 96] = arr_from_hex(concat!(
+      "0097926406fa8040c0069d1b53b861b1df87e8e4c38b9b9418dd80a2fb113fdf1878624f7f624d512d56cd267360453e",
+      "0e6992f1207908245f455d4d0bd6fcf0d7bb962c5f1913d4c18b8deb8c4670d233493576e8ad4ddc308fea94f8a109d7"
+    ));
+    let bytes = BlsSigBytes::from_bytes(encoded);
+    assert!(bytes.is_canonical::<BlsScChia>());
+    assert!(bytes.to::<BlsScChia>().is_err());
+
+    let mut signed = encoded;
+    signed[0] |= 0x80;
+    assert!(!BlsSigBytes::from_bytes(signed).is_canonical::<BlsScChia>());
+    for flag in [0x20, 0x40, 0x80] {
+      let mut flagged = encoded;
+      flagged[48] |= flag;
+      assert!(
+        !BlsSigBytes::from_bytes(flagged).is_canonical::<BlsScChia>(),
+        "{flag:#x}"
+      );
+    }
   }
 
   fn assert_sig_roundtrip<S: BlsScheme>() {
