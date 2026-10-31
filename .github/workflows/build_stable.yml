@@ -73,6 +73,11 @@ jobs:
           "${NIKS3}" push --server-url "${NIKS3_SERVER_URL}" --auth-token-script "${NIKS3_TOKEN_SCRIPT}" \
             "$(readlink -f "${RUNNER_TEMP}/devshell")"
 
+      - name: Verify the action lockfile
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: just gha::setup gha::verify
+
       - name: Restore cargo registry
         uses: $/.github/actions/gha_cache
         with:
