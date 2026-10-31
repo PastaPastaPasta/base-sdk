@@ -224,6 +224,7 @@ fn hash_payload(data: &Vec<u8>) -> Hash256 {
 
 Consistent conversion names tell the reader the cost and ownership semantics of an operation at a glance.
 
+<!-- pyml disable-num-lines 5 table-column-style -->
 | Prefix  | Cost                  | Ownership      | Example                   |
 | ------- | --------------------- | -------------- | ------------------------- |
 | `as_`   | Free                  | `&T` to `&U`   | `KeyId::as_bytes()`       |
