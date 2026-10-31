@@ -64,7 +64,7 @@ jobs:
 
       - name: Check cache write access
         id: cache_write
-        uses: ./.github/actions/cache_write
+        uses: $/.github/actions/cache_write
 
       # LLVM alone unpacks to 11 GB on a Linux host.
       - name: Free disk space
@@ -79,7 +79,7 @@ jobs:
           tool: just
 
       - name: Configure the remote cache
-        uses: ./.github/actions/bazel_remote
+        uses: $/.github/actions/bazel_remote
         with:
           url: ${{ vars.CACHE_BZL_URL }}
           auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_BZL_AUTH || '' }}

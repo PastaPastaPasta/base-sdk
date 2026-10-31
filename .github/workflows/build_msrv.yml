@@ -79,7 +79,7 @@ jobs:
 
       - name: Check cache write access
         id: cache_write
-        uses: ./.github/actions/cache_write
+        uses: $/.github/actions/cache_write
 
       - name: Run pull request checks
         if: github.event_name == 'pull_request'
@@ -108,7 +108,7 @@ jobs:
           skip-push: ${{ steps.cache_write.outputs.allowed != 'true' }}
 
       - name: Restore cargo registry
-        uses: ./.github/actions/gha_cache
+        uses: $/.github/actions/gha_cache
         with:
           path: |
             ~/.cargo/registry
@@ -123,7 +123,7 @@ jobs:
           auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_GHA_AUTH || '' }}
 
       - name: Manage build artifacts
-        uses: ./.github/actions/gha_cache
+        uses: $/.github/actions/gha_cache
         with:
           path: |
             target

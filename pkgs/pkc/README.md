@@ -58,11 +58,15 @@ This crate is `#![no_std]` + `alloc` by default.
 | `portable` | | Disables optimizations that constrain CPU support for the target architecture. |
 | `serde` | | Enables support for encoding and decoding types using [`serde`](https://github.com/serde-rs/serde). Types serialized as their wire image also need `codec`. |
 
+<!-- [start:omit] -->
+
 ## Documentation
 
 <!-- pyml disable-next-line no-bare-urls -->
 Documentation for the most recent release of `dash-pkc` is available at https://dashpay.github.io/base-sdk/pkc and
 changes between versions are recorded in the [changelog](https://dashpay.github.io/base-sdk/pkc/changelog).
+
+<!-- [end:omit] -->
 
 ## License
 

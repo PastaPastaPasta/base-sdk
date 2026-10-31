@@ -52,14 +52,18 @@ Using non-`portable` builds on hosts that do not meet the above requirements wil
 due to illegal instructions (`SIGILL`).
 <!-- [end:sysinfo] -->
 
+<!-- [start:omit] -->
+
 ## Documentation
 
 <!-- pyml disable-next-line no-bare-urls -->
 Documentation for the most recent release of `dash-pow` is available at https://dashpay.github.io/base-sdk/pow and
 changes between versions are recorded in the [changelog](https://dashpay.github.io/base-sdk/pow/changelog).
 
+<!-- [end:omit] -->
+
 ## License
 
 <!-- pyml disable-next-line no-bare-urls -->
-`dash-pkc` is released under the terms of the MIT license. Copyright &copy; 2026-present, The Dash Core developers.
+`dash-pow` is released under the terms of the MIT license. Copyright &copy; 2026-present, The Dash Core developers.
 To read a copy of the license terms, visit https://opensource.org/license/MIT.

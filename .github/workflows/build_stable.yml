@@ -32,7 +32,7 @@ jobs:
 
       - name: Check cache write access
         id: cache_write
-        uses: ./.github/actions/cache_write
+        uses: $/.github/actions/cache_write
 
       - name: Run pull request checks
         if: github.event_name == 'pull_request'
@@ -73,8 +73,13 @@ jobs:
           "${NIKS3}" push --server-url "${NIKS3_SERVER_URL}" --auth-token-script "${NIKS3_TOKEN_SCRIPT}" \
             "$(readlink -f "${RUNNER_TEMP}/devshell")"
 
+      - name: Verify the action lockfile
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: just gha::setup gha::verify
+
       - name: Restore cargo registry
-        uses: ./.github/actions/gha_cache
+        uses: $/.github/actions/gha_cache
         with:
           path: |
             ~/.cargo/registry
@@ -89,7 +94,7 @@ jobs:
           auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_GHA_AUTH || '' }}
 
       - name: Manage build artifacts
-        uses: ./.github/actions/gha_cache
+        uses: $/.github/actions/gha_cache
         with:
           path: target
           key: cargo-build-lint-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
@@ -102,7 +107,7 @@ jobs:
           auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_GHA_AUTH || '' }}
 
       - name: Manage CodeQL packs
-        uses: ./.github/actions/gha_cache
+        uses: $/.github/actions/gha_cache
         with:
           path: ~/.codeql
           key: codeql-packs-${{ hashFiles('maint/codeql/*/codeql-pack.lock.yml') }}
@@ -113,7 +118,7 @@ jobs:
           auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_GHA_AUTH || '' }}
 
       - name: Configure the remote cache
-        uses: ./.github/actions/bazel_remote
+        uses: $/.github/actions/bazel_remote
         with:
           url: ${{ vars.CACHE_BZL_URL }}
           auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_BZL_AUTH || '' }}
@@ -125,13 +130,13 @@ jobs:
         run: cargo hack --workspace --exclude-features default --feature-powerset clippy --all-targets -- -D warnings
 
       - name: Check PR title
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]'
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: python3 maint/lint/lint_commit.py -m "${PR_TITLE}"
 
       - name: Check PR commit messages
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]'
         run: >
           python3 maint/lint/lint_commit.py
           -r "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
@@ -159,7 +164,7 @@ jobs:
 
       - name: Check cache write access
         id: cache_write
-        uses: ./.github/actions/cache_write
+        uses: $/.github/actions/cache_write
 
       - name: Run pull request checks
         if: github.event_name == 'pull_request'
@@ -187,7 +192,7 @@ jobs:
           tool: cargo-hack
 
       - name: Manage cargo registry
-        uses: ./.github/actions/gha_cache
+        uses: $/.github/actions/gha_cache
         with:
           path: |
             ~/.cargo/registry
@@ -202,7 +207,7 @@ jobs:
           auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_GHA_AUTH || '' }}
 
       - name: Manage build artifacts
-        uses: ./.github/actions/gha_cache
+        uses: $/.github/actions/gha_cache
         with:
           path: target
           key: cargo-build-stable-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
