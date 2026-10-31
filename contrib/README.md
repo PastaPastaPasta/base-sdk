@@ -1,7 +1,6 @@
-<!-- pyml disable-num-lines 3 no-bare-urls -->
 `base-sdk` uses a family of tools and scripts to maintain correctness and code quality. These scripts are written in
 Python 3.x and thus, assume a host capable of running Python. For guidance on installing Python on your host, visit
-https://www.python.org/downloads/
+<https://www.python.org/downloads/>
 
 <!-- [start:setup] -->
 

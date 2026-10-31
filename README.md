@@ -38,8 +38,7 @@ See [`dash-pow`](./pkgs/pow/README.md) for more information.
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/dashpay/base-sdk)
 
-<!-- pyml disable-next-line no-bare-urls -->
-Documentation is hosted at https://dashpay.github.io/base-sdk. To render it locally or learn its syntax, visit the
+Documentation is hosted at <https://dashpay.github.io/base-sdk>. To render it locally or learn its syntax, visit the
 [getting started](https://dashpay.github.io/base-sdk/dev/about_docs) guide. Release notes for published crates are
 listed below.
 
@@ -51,5 +50,4 @@ listed below.
 ## Licensing
 
 Copyright &copy; 2026-present, The Dash Core developers. See the accompanying file [LICENSE](./LICENSE) or
-<!-- pyml disable-next-line no-bare-urls -->
-https://opensource.org/license/MIT
+<https://opensource.org/license/MIT>

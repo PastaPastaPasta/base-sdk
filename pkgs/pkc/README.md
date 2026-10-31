@@ -62,14 +62,12 @@ This crate is `#![no_std]` + `alloc` by default.
 
 ## Documentation
 
-<!-- pyml disable-next-line no-bare-urls -->
-Documentation for the most recent release of `dash-pkc` is available at https://dashpay.github.io/base-sdk/pkc and
+Documentation for the most recent release of `dash-pkc` is available at <https://dashpay.github.io/base-sdk/pkc> and
 changes between versions are recorded in the [changelog](https://dashpay.github.io/base-sdk/pkc/changelog).
 
 <!-- [end:omit] -->
 
 ## License
 
-<!-- pyml disable-next-line no-bare-urls -->
 `dash-pkc` is released under the terms of the MIT license. Copyright &copy; 2026-present, The Dash Core developers.
-To read a copy of the license terms, visit https://opensource.org/license/MIT.
+To read a copy of the license terms, visit <https://opensource.org/license/MIT>.
