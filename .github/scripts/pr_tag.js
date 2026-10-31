@@ -6,12 +6,13 @@
 
 // @ts-check
 
-const { getPullDetail, listOpenPulls } = require("./util");
+const { BASE_BRANCH, getPullDetail, listOpenPulls } = require("./util");
 
 const STALE_DAYS = 60;
 
 /** @enum {string} */
 const Labels = {
+  BEHIND: "status:behind",
   NEEDS_REBASE: "status:needs-rebase",
   STALE: "status:stale",
 };
@@ -53,6 +54,20 @@ module.exports = async ({ github, context }) => {
       continue;
     }
 
-    await sync(Labels.NEEDS_REBASE, detail.mergeable_state === "dirty");
+    const hasConflicts = detail.mergeable_state === "dirty";
+    await sync(Labels.NEEDS_REBASE, hasConflicts);
+
+    // Only a clean pull request is compared, as a conflict needs a rebase.
+    let isBehind = false;
+    if (!hasConflicts) {
+      const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
+        owner,
+        repo,
+        basehead: `${BASE_BRANCH}...${pr.head.sha}`,
+        per_page: 1,
+      });
+      isBehind = comparison.behind_by > 0;
+    }
+    await sync(Labels.BEHIND, isBehind);
   }
 };

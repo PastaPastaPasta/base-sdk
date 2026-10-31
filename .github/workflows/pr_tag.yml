@@ -1,6 +1,8 @@
 name: Tag PRs
 
 on:
+  push:
+    branches: [develop]
   pull_request_target:
     types: [synchronize, opened, reopened, closed, labeled, unlabeled]
   schedule:
@@ -30,7 +32,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Tag conflicting and stale PRs
+      - name: Tag conflicting, outdated and stale PRs
         uses: actions/github-script@v8
         with:
           script: |
