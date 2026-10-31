@@ -73,6 +73,16 @@ impl BlsScheme for BlsScIetf {
     pk.compress()
   }
 
+  /// Compress the G1 point to 48 bytes.
+  fn g1_bytes(point: &G1Affine) -> [u8; 48] {
+    point.compress()
+  }
+
+  /// The bytes are already in the IETF compressed form.
+  fn pk_ietf_bytes(b: &[u8; 48]) -> [u8; 48] {
+    *b
+  }
+
   /// Lift the blst public key into a projective G1 point.
   fn pk_to_g1(pk: &Self::InnerPk) -> Result<G1, BlsError> {
     let aff = G1Affine::deserialize(&pk.serialize()).map_err(|_| BlsError::InvalidPublicKey)?;
@@ -81,7 +91,7 @@ impl BlsScheme for BlsScIetf {
 
   /// Re-encode the projective point and parse it back through `validate`.
   fn g1_to_pk(point: G1) -> Result<Self::InnerPk, BlsError> {
-    Self::pk_from_bytes(&point.to_affine().compress())
+    Self::pk_from_bytes(&Self::g1_bytes(&point.to_affine()))
   }
 
   /// Uncompress the standard encoding without re-running `validate`.

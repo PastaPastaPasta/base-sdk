@@ -533,6 +533,34 @@ mod tests {
     assertion(encoded);
   }
 
+  /// `x = 0` with the sign bit set, (0, -2), reads under the legacy scheme as
+  /// a key that encodes back to the same bytes, as in the reference
+  /// implementation.
+  #[rstest]
+  fn chia_reads_x_zero_with_sign_bit() {
+    let mut encoded = [0u8; 48];
+    encoded[0] = 0x80;
+
+    let pk = BlsPublicKey::<BlsScChia>::from_bytes(&encoded).unwrap();
+    assert_eq!(pk.to_bytes(), encoded);
+    assert!(BlsPkBytes::from_bytes(encoded).is_canonical::<BlsScChia>());
+  }
+
+  /// With `x = 0` and the sign bit clear, stray bits 5-6 mask down to the null
+  /// encoding, so the bytes are neither a key nor canonical.
+  #[rstest]
+  #[case::bit_five(0x20)]
+  #[case::bit_six(0x40)]
+  #[case::bits_five_six(0x60)]
+  fn chia_x_zero_with_stray_bits_is_not_a_key(#[case] byte0: u8) {
+    let mut encoded = [0u8; 48];
+    encoded[0] = byte0;
+
+    let bytes = BlsPkBytes::from_bytes(encoded);
+    assert!(bytes.to::<BlsScChia>().is_err());
+    assert!(!bytes.is_canonical::<BlsScChia>());
+  }
+
   /// The same G1 point encodes differently under the two schemes, and each
   /// encoding must round-trip through the wrapper of its own scheme.
   #[rstest]
