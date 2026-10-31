@@ -89,7 +89,8 @@ pub(crate) fn verify_operator(
 
 /// Whether an operator key is not null and, under the basic scheme, decodes
 /// as a public key that encodes back to the same bytes. Legacy-scheme keys
-/// keep the null check.
+/// keep the null check until `dash-pkc` gains the reference implementation's
+/// legacy reader.
 pub(crate) fn is_valid_operator_key(version: ProTxVersion, key: &BlsPkBytes) -> bool {
   !key.is_null() && (version == ProTxVersion::LegacyBls || key.is_canonical::<BlsScIetf>())
 }
@@ -267,15 +268,23 @@ pub(crate) mod tests {
   use rstest::rstest;
 
   /// An edit of an operator key for the payload checks.
+  ///
+  /// The off-curve and off-subgroup keys come from the BLS wrapper corpus of
+  /// the PastaPastaPasta/base-sdk fork (`pkgs/pkc/corpus/bls_wrapper.json5`
+  /// at commit 3b1d38f5).
+  /// A seeded generator samples its inputs per class, and a probe linked
+  /// against reference implementation builds of v24.0.0-rc.3 and v23.1.8,
+  /// which agree, gives the outcomes.
   #[derive(Clone, Copy, Debug)]
   pub(crate) enum KeyEdit {
     /// The key as read.
     Kept,
     /// All zero bytes.
     Null,
-    /// An x coordinate with no point on the curve.
+    /// An x coordinate with no point on the curve: class `off_100`.
     OffCurve,
-    /// A point on the curve outside the prime-order subgroup.
+    /// A point on the curve outside the prime-order subgroup: class
+    /// `nonsub_100`.
     OffSubgroup,
     /// The point at infinity, which the reference implementation refuses as
     /// a null key.
