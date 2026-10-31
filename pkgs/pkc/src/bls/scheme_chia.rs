@@ -17,7 +17,7 @@ use super::schemes::BlsScChia;
 use crate::prelude::*;
 use crate::sealed::Sealed;
 
-use blst::min_pk;
+use blst::{min_pk, BLST_ERROR};
 use sha2::{Digest, Sha256};
 use zeroize::{Zeroize, Zeroizing};
 
@@ -125,6 +125,25 @@ impl BlsScheme for BlsScChia {
     ietf
   }
 
+  /// Decode `b` and require it to encode back to the same bytes, or accept an
+  /// `x` with no point on the curve, below the field prime and with bits 5-6
+  /// clear, under either sign.
+  ///
+  /// [`pk_from_bytes`](Self::pk_from_bytes) has no point to return for these
+  /// encodings.
+  fn is_canonical_pk(b: &[u8; 48]) -> bool {
+    match Self::pk_from_bytes(b) {
+      Ok(pk) => Self::pk_to_bytes(&pk) == *b,
+      Err(_) => {
+        b[0] & 0x60 == 0
+          && matches!(
+            G1Affine::uncompress(&Self::pk_ietf_bytes(b)),
+            Err(BLST_ERROR::BLST_POINT_NOT_ON_CURVE)
+          )
+      }
+    }
+  }
+
   /// The legacy public key is already an affine G1 point.
   fn pk_to_g1(pk: &Self::InnerPk) -> Result<G1, BlsError> {
     Ok(pk.to_projective())
@@ -161,21 +180,8 @@ impl BlsScheme for BlsScChia {
       return Err(BlsError::InvalidSignature);
     }
 
-    let mut x_c0 = [0u8; 48];
-    x_c0.copy_from_slice(&b[..48]);
-    // Clear only the sign bit: stray bits 5-6 make `x.c0 >= p`, rejected by
-    // the decompression range check like any out-of-range coordinate.
-    x_c0[0] &= 0x7f;
-    let x_c1 = &b[48..96];
-
-    let mut ietf = [0u8; 96];
-    ietf[..48].copy_from_slice(x_c1);
-    ietf[48..96].copy_from_slice(&x_c0);
-
-    ietf[0] |= 0x80; // compression
-
     // Decompress with sign=0, then negate y if needed.
-    let out = G2Affine::uncompress(&ietf).map_err(|_| BlsError::InvalidSignature)?;
+    let out = G2Affine::uncompress(&Self::sig_ietf_x_bytes(b)).map_err(|_| BlsError::InvalidSignature)?;
 
     let decompressed_sign = y_c1_is_larger(&out.y().c1_bendian());
     if (sign == 1) != decompressed_sign {
@@ -186,21 +192,27 @@ impl BlsScheme for BlsScChia {
   }
 
   /// Encode a G2 point in the legacy 96-byte format.
-  ///
-  /// Uses the uncompressed 192-byte intermediate to sidestep sign-bit
-  /// convention differences: blst lays out `[x.c1, x.c0, y.c1, y.c0]`,
-  /// legacy `[x.c0, x.c1]` with the sign at byte\[0\] bit 7.
   fn sig_to_bytes(sig: &Self::InnerSig) -> [u8; 96] {
-    // Take blst's own infinity flag rather than testing the buffer: its
+    Self::g2_bytes(sig)
+  }
+
+  /// Encode a G2 point in the legacy 96-byte layout, `[x.c0, x.c1]` with the
+  /// sign at bit 7 of byte 0, set when `y.c1 > (p-1)/2`, or `0xc0` and zeros
+  /// for infinity.
+  ///
+  /// The encoding reads the uncompressed 192-byte form, which blst lays out
+  /// as `[x.c1, x.c0, y.c1, y.c0]`.
+  fn g2_bytes(point: &G2Affine) -> [u8; 96] {
+    // Take blst's own infinity flag rather than testing the buffer. Its
     // uncompressed form sets bit 6 of byte 0 and zeroes the rest, so an
     // all-zero test never fires and the swizzle would relocate that flag.
-    if sig.is_inf() {
+    if point.is_inf() {
       let mut out = [0u8; 96];
       out[0] = 0xc0;
       return out;
     }
 
-    let uncomp = sig.serialize();
+    let uncomp = point.serialize();
     let x_c1 = &uncomp[0..48];
     let x_c0 = &uncomp[48..96];
     let y_c1 = &uncomp[96..144];
@@ -214,6 +226,40 @@ impl BlsScheme for BlsScChia {
       legacy[0] |= 0x80;
     }
     legacy
+  }
+
+  /// The `x` of a legacy G2 encoding of a point other than infinity, in the
+  /// IETF compressed layout with the sign bit clear.
+  fn sig_ietf_x_bytes(b: &[u8; 96]) -> [u8; 96] {
+    let mut ietf = [0u8; 96];
+    ietf[..48].copy_from_slice(&b[48..96]);
+    ietf[48..96].copy_from_slice(&b[..48]);
+    // Clear only the sign bit. Stray bits 5-6 make `x.c0 >= p`, which the
+    // decompression range check rejects like any out-of-range coordinate.
+    ietf[48] &= 0x7f;
+    ietf[0] |= 0x80; // compression
+    ietf
+  }
+
+  /// Decode `b` and require it to encode back to the same bytes, or accept an
+  /// `x` with no point on the curve, both halves below the field prime, when
+  /// the sign bit and the top three bits of `x.c1` are clear.
+  ///
+  /// [`sig_from_bytes`](Self::sig_from_bytes) has no point to return for these
+  /// encodings.
+  fn is_canonical_sig(b: &[u8; 96]) -> bool {
+    match Self::sig_from_bytes(b) {
+      Ok(sig) => Self::sig_to_bytes(&sig) == *b,
+      Err(_) => {
+        b.iter().any(|&byte| byte != 0)
+          && b[0] & 0x80 == 0
+          && b[48] & 0xe0 == 0
+          && matches!(
+            G2Affine::uncompress(&Self::sig_ietf_x_bytes(b)),
+            Err(BLST_ERROR::BLST_POINT_NOT_ON_CURVE)
+          )
+      }
+    }
   }
 
   /// The legacy signature is already an affine G2 point.
