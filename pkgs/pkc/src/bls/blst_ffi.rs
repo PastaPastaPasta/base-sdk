@@ -424,6 +424,25 @@ impl G1Affine {
     Ok(Self(aff))
   }
 
+  /// Uncompress a 48-byte G1 point as [`uncompress`](Self::uncompress) does,
+  /// adding only `x = 0` with the sign bit set, (0, -2), which blst writes out
+  /// and then reports as an error.
+  ///
+  /// # Errors
+  ///
+  /// Returns the blst error code when the bytes are not a compressed point
+  /// blst accepts, other than (0, -2).
+  pub(crate) fn uncompress_on_curve(bytes: &[u8; 48]) -> Result<Self, BLST_ERROR> {
+    let mut aff = blst_p1_affine::default();
+    let rc = unsafe { blst_p1_uncompress(&mut aff, bytes.as_ptr()) };
+    let x_is_zero = bytes[0] & 0x1f == 0 && bytes[1..].iter().all(|&b| b == 0);
+    match rc {
+      BLST_ERROR::BLST_SUCCESS => Ok(Self(aff)),
+      BLST_ERROR::BLST_POINT_NOT_IN_GROUP if x_is_zero && bytes[0] & 0x20 != 0 => Ok(Self(aff)),
+      rc => Err(rc),
+    }
+  }
+
   /// Deserialize a 96-byte uncompressed G1 point.
   ///
   /// # Errors

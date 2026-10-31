@@ -8,7 +8,7 @@
 
 use super::blst_ffi;
 use super::error::BlsError;
-use super::group::{Point, G1, G2};
+use super::group::{G1Affine, Point, G1, G2};
 use super::scalar::{Fr, FR_BITS};
 use super::schemes::BlsSchemeId;
 use super::{BlsDhBytes, BlsShareId};
@@ -83,6 +83,13 @@ pub trait BlsScheme: BlsSchemeId + Sealed + Sized {
 
   /// Serialize a public key to its 48-byte encoding.
   fn pk_to_bytes(pk: &Self::InnerPk) -> [u8; 48];
+
+  /// Encode a G1 point in the scheme's 48-byte layout.
+  fn g1_bytes(point: &G1Affine) -> [u8; 48];
+
+  /// The IETF compressed form of `b`, a G1 encoding of a point other than
+  /// infinity in the scheme's layout, with the same `x` and sign.
+  fn pk_ietf_bytes(b: &[u8; 48]) -> [u8; 48];
 
   /// Lift a public key to a projective G1 point.
   ///
