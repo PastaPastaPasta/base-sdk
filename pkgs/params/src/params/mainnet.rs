@@ -76,8 +76,8 @@ pub static PARAMS: ChainParams = ChainParams {
       },
       v24: Bip9Deployment {
         bit: 13,
-        start_time: Bip9Deployment::NEVER_ACTIVE,
-        timeout: Bip9Deployment::NO_TIMEOUT,
+        start_time: 1_794_182_400, // 9 November 2026, midnight UTC
+        timeout: 1_857_340_800,    // 9 November 2028, midnight UTC
         min_activation_height: BlockHeight::from_u32(0),
         window_size: 4032,
         threshold_start: 3226, // 80% of 4032
@@ -87,8 +87,8 @@ pub static PARAMS: ChainParams = ChainParams {
       },
       evo_shares: Bip9Deployment {
         bit: 14,
-        start_time: Bip9Deployment::NEVER_ACTIVE,
-        timeout: Bip9Deployment::NO_TIMEOUT,
+        start_time: 1_794_182_400, // 9 November 2026, midnight UTC
+        timeout: 1_857_340_800,    // 9 November 2028, midnight UTC
         min_activation_height: BlockHeight::from_u32(0),
         window_size: 4032,
         threshold_start: 3226, // 80% of 4032
