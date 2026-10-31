@@ -12,8 +12,8 @@ const STALE_DAYS = 60;
 
 /** @enum {string} */
 const Labels = {
-  STALE: "tag:stale",
-  NEEDS_REBASE: "tag:needs-rebase",
+  NEEDS_REBASE: "status:needs-rebase",
+  STALE: "status:stale",
 };
 
 /**
