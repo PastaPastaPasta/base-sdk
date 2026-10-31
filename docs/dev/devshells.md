@@ -2,6 +2,7 @@
 
 <!-- [include:contrib/nix/README.md:header] -->
 
+<!-- pyml disable-num-lines 4 link-fragments -->
 > [!TIP]
 > Should you wish to utilize devshells without installing Nix on your host, the environment is also available wrapped in
 > a Docker [container](#docker); though it is still recommended to set up Nix for long-term development due to the cost
