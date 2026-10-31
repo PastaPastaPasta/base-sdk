@@ -208,7 +208,7 @@ mod tests {
   use super::*;
   use crate::prelude::*;
 
-  use dash_dev::{assert_serde_rt, check_sptx, Corpus};
+  use dash_dev::{assert_json_rt, assert_serde_rt, check_sptx, check_sptx_raw, vec_from_hex, Corpus};
   use rstest::{fixture, rstest};
 
   #[rstest]
@@ -216,6 +216,21 @@ mod tests {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "cbtx");
     let items = corpus.entries::<CoinbaseCommitment>("cbtx", check_sptx);
     assert_serde_rt("cbtx", &items);
+  }
+
+  /// Regtest transactions as txid and raw bytes, from functional tests of the
+  /// reference implementation at v24.0.0-rc.4.
+  /// `dash-cli -regtest decoderawtransaction <raw>` decodes each one.
+  const REGTEST: [(&str, &str); 1] = [
+    // feature_asset_locks.py line 1118
+    ("76faabf33cadbe42fbe6ac5b876babddd83b9e307c079edf148c2b8ea192dca8", "03000500010000000000000000000000000000000000000000000000000000000000000000ffffffff016affffffff030ef9c604000000001976a914d1e414e99c4cf3160d099aeb70438a3ca92dad1a88ac478b5f0500000000016ae25ff508000000001976a91456908bca5913585daa9bad834f6a20d4ee792e4488ac00000000cf0400c9030000932cbd03b309d2d8c018844e23f3fbffd6d43de89380abe080220714ba4790197dca3f6655eede191c16618307a5d0234aed1aaba580ac03e1cb26670541ca1400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000696046c679000000b6ef079a8505a849326d910f14586af59339c996f366c9d6848b9cee7e436146"),
+  ];
+
+  #[rstest]
+  #[case::asset_locks_1118(REGTEST[0])]
+  fn regtest_vectors(#[case] vector: (&str, &str)) {
+    let (txid, raw) = vector;
+    assert_json_rt(&check_sptx_raw::<CoinbaseCommitment>(&vec_from_hex(raw), txid));
   }
 
   /// The testnet payload at the v24 activation height.
