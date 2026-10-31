@@ -112,17 +112,11 @@ mod magic {
 
   use dash_params::{ChainParams, MessageStart, Network};
 
-  const KNOWN_NETWORKS: &[&ChainParams] = &[
-    Network::Main.chain(),
-    Network::Testnet3.chain(),
-    Network::Regtest.chain(),
-  ];
-
   fn detect(magic: MessageStart) -> Result<&'static ChainParams, BootstrapError> {
-    KNOWN_NETWORKS
-      .iter()
+    Network::ALL
+      .into_iter()
+      .map(Network::chain)
       .find(|p| p.message_start == magic)
-      .copied()
       .ok_or(BootstrapError::UnknownMagic { magic })
   }
 

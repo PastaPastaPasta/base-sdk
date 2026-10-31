@@ -13,11 +13,13 @@ use crate::{
 
 use bitcoin_units::{Amount, BlockHeight};
 use dash_num::{Arith256, Hash256};
+use dash_types::Numeric;
 use hex_conservative::hex;
 
 pub static PARAMS: ChainParams = ChainParams {
   consensus: ConsensusParams {
     hash_genesis_block: Hash256::from_bendian(hex!("00000ffd590b1485b3caadc19b22e6379c733355108f107a430458cdf3407ab6")),
+    hash_devnet_genesis_block: Hash256::ZERO,
     subsidy_halving_interval: 210_240,
     masternode_payments_start_block: BlockHeight::from_u32(100_000),
     masternode_payments_increase_block: BlockHeight::from_u32(158_000),
@@ -110,6 +112,9 @@ pub static PARAMS: ChainParams = ChainParams {
     default_assume_valid: Hash256::from_bendian(hex!(
       "000000000000000346a1804da4832b0b69dd9a7f96b14c7cb54585a9ac6ae98f"
     )),
+    minimum_difficulty_blocks: 0,
+    high_subsidy_blocks: 0,
+    high_subsidy_factor: 1,
     llmqs: &[
       LlmqType::Llmq50_60,
       LlmqType::Llmq60_75,

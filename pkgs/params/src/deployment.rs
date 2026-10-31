@@ -10,6 +10,36 @@ use bitcoin_units::BlockHeight;
 #[cfg(feature = "codec")]
 use dash_types::type_id::Unencodable;
 
+/// Position of a version-bits deployment in the reference implementation's
+/// deployment array.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
+pub enum DeploymentPos {
+  /// `testdummy`, used only for testing.
+  TestDummy = 0,
+  /// `v24`, the v24 upgrade.
+  V24 = 1,
+  /// `evo_shares`, EvoNode shared collateral (v24 release only).
+  EvoShares = 2,
+}
+
+impl DeploymentPos {
+  /// The deployment's name, as the `-vbparams` option and RPC spell it.
+  pub const fn name(self) -> &'static str {
+    match self {
+      Self::TestDummy => "testdummy",
+      Self::V24 => "v24",
+      Self::EvoShares => "evo_shares",
+    }
+  }
+
+  /// Whether `getblocktemplate` clients may safely ignore the deployment's
+  /// rule in simplified usage; true for every deployment.
+  pub const fn gbt_force(self) -> bool {
+    true
+  }
+}
+
 /// Version bits deployment for a consensus rule change (BIP9).
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "codec", derive(Unencodable))]
@@ -53,4 +83,15 @@ pub struct Bip9Deployments {
   pub v24: Bip9Deployment,
   /// Deployment enabling EvoNode shared collateral and multiple owner payouts.
   pub evo_shares: Bip9Deployment,
+}
+
+impl Bip9Deployments {
+  /// The deployment at `pos`.
+  pub(crate) const fn at(&self, pos: DeploymentPos) -> &Bip9Deployment {
+    match pos {
+      DeploymentPos::TestDummy => &self.test_dummy,
+      DeploymentPos::V24 => &self.v24,
+      DeploymentPos::EvoShares => &self.evo_shares,
+    }
+  }
 }
