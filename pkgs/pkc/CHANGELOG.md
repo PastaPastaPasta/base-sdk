@@ -7,6 +7,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `BlsScheme::is_canonical_pk` and `BlsScheme::is_canonical_sig`, each scheme's rule for `is_canonical::<S>()`.
+- `BlsScheme::g1_bytes` and `BlsScheme::g2_bytes`, each scheme's byte layout of a point; `BlsScheme::pk_ietf_bytes`,
+  the IETF compressed form of a G1 encoding in that layout, and `BlsScheme::sig_ietf_x_bytes`, the `x` of a G2
+  encoding in the IETF compressed layout with the sign bit clear.
+
+### Changed
+
+- `BlsPkBytes::to::<BlsScChia>()` and `BlsPublicKey::<BlsScChia>::from_bytes` read `x = 0` with the sign bit set,
+  (0, -2), as the reference implementation does.
+- `is_canonical::<BlsScChia>()` on `BlsPkBytes` and `BlsSigBytes` accepts legacy encodings of an `x` with no point on
+  the curve, as the reference implementation does; for signatures, only with the sign bit clear. `to::<BlsScChia>()`
+  still refuses them, having no point to return.
+
 ## [0.2.0-beta] - 2026-10-20
 
 ### Added
