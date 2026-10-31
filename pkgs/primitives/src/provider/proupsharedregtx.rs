@@ -7,7 +7,8 @@
 //! ProUpSharedRegTx shared registrar update payload (type 12).
 
 use super::share::MAX_SHARES;
-use super::SharedRegistrarSig;
+use super::sig::is_valid_operator_key;
+use super::{ProTxVersion, SharedRegistrarSig};
 use crate::codec::{decode_list, encode_list, impl_payload};
 use crate::prelude::*;
 use crate::sptx::{InputsHash, ProTxInvalid};
@@ -83,7 +84,8 @@ impl Checkable for ProUpSharedRegTx {
     if self.version != VERSION {
       return Some(ProTxInvalid::BadSharedRegistrarVersion { version: self.version });
     }
-    if self.pub_key_operator.is_null() || self.key_id_voting.is_null() {
+    // The operator key is a basic-scheme key.
+    if !is_valid_operator_key(ProTxVersion::BasicBls, &self.pub_key_operator) || self.key_id_voting.is_null() {
       return Some(ProTxInvalid::NullKey);
     }
     if self.sigs.is_empty() || self.sigs.len() > MAX_SHARES {
@@ -105,6 +107,7 @@ impl fmt::Display for ProUpSharedRegTx {
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
+  use crate::provider::sig::tests::KeyEdit;
   use crate::Transaction;
 
   use dash_dev::{assert_serde_rt, check_sptx, Corpus};
@@ -118,6 +121,29 @@ mod tests {
       assert_eq!(Transaction::decode(&mut &raw[..]).unwrap().check(), None, "{label}");
     });
     assert_serde_rt("proupsharedregtx", &items);
+  }
+
+  /// The regtest update `29196a97`, with two signatures.
+  fn update() -> ProUpSharedRegTx {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "proupsharedregtx");
+    let mut entries = corpus.entries::<ProUpSharedRegTx>("proupsharedregtx", |_, _, _| {});
+    entries
+      .remove("29196a972de7740f436463bc9fae319921bfacb296868c2a429c99796228c261")
+      .unwrap()
+  }
+
+  /// The operator key must be a valid basic-scheme key.
+  #[rstest]
+  #[case::valid(KeyEdit::Kept, None)]
+  #[case::null(KeyEdit::Null, Some(ProTxInvalid::NullKey))]
+  #[case::off_curve(KeyEdit::OffCurve, Some(ProTxInvalid::NullKey))]
+  #[case::off_subgroup(KeyEdit::OffSubgroup, Some(ProTxInvalid::NullKey))]
+  #[case::infinity(KeyEdit::Infinity, Some(ProTxInvalid::NullKey))]
+  #[case::uncompressed(KeyEdit::Uncompressed, Some(ProTxInvalid::NullKey))]
+  fn operator_key(#[case] edit: KeyEdit, #[case] expected: Option<ProTxInvalid>) {
+    let mut ptx = update();
+    ptx.pub_key_operator = edit.apply(ptx.pub_key_operator);
+    assert_eq!(ptx.check(), expected);
   }
 
   fn null_operator(ptx: &mut ProUpSharedRegTx) {
@@ -162,11 +188,7 @@ mod tests {
     Some(ProTxInvalid::BadSharedRegistrarVersion { version: 2 })
   )]
   fn check(#[case] edit: fn(&mut ProUpSharedRegTx), #[case] expected: Option<ProTxInvalid>) {
-    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "proupsharedregtx");
-    let mut entries = corpus.entries::<ProUpSharedRegTx>("proupsharedregtx", |_, _, _| {});
-    let mut ptx = entries
-      .remove("29196a972de7740f436463bc9fae319921bfacb296868c2a429c99796228c261")
-      .unwrap();
+    let mut ptx = update();
     assert_eq!(ptx.sigs.len(), 2);
     edit(&mut ptx);
     assert_eq!(ptx.check(), expected);
