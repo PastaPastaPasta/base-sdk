@@ -10,11 +10,9 @@
 <!-- [include:contrib/nix/README.md:body] -->
 
 <!-- pyml disable-next-line heading-increment -->
-
 ### Quirks
 
 <!-- pyml disable-num-lines 27 no-emphasis-as-heading -->
-
 * **The Python environment is read-only**
 
   Development shells (devshells) are immutable, this extends to packages sourced from PyPI. `uv` will neither sync nor
@@ -47,11 +45,9 @@
 <!-- [include:contrib/docker/README.md] -->
 
 <!-- pyml disable-next-line heading-increment,no-duplicate-heading -->
-
 ### Quirks
 
 <!-- pyml disable-num-lines 27 no-emphasis-as-heading -->
-
 * **`nix_shell` doesn't work standalone**
 
   `nix_shell` intentionally does not host the daemon, instead, delegating that to a dedicated `nix_daemon` container.
