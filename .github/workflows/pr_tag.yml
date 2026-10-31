@@ -24,7 +24,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -34,14 +34,14 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Tag conflicting, outdated and stale PRs
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const { tag } = require("./.github/scripts/pr_tag.js");
             await tag({ github, context });
 
       - name: Sync labels with the project board
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
         with:
@@ -60,13 +60,13 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
           persist-credentials: false
 
       - name: Cancel unfinished runs
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const { halt } = require("./.github/scripts/pr_tag.js");

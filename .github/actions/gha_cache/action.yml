@@ -72,7 +72,7 @@ runs:
 
     - name: Restore and save on GitHub
       if: (inputs.url == '' || inputs.bucket == '' || inputs.auth == '') && inputs.restore-only != 'true'
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ${{ inputs.path }}
         key: ${{ inputs.key }}
@@ -80,7 +80,7 @@ runs:
 
     - name: Restore from GitHub
       if: (inputs.url == '' || inputs.bucket == '' || inputs.auth == '') && inputs.restore-only == 'true'
-      uses: actions/cache/restore@v5
+      uses: actions/cache/restore@v6
       with:
         path: ${{ inputs.path }}
         key: ${{ inputs.key }}
