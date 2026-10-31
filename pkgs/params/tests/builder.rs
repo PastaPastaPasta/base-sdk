@@ -524,7 +524,7 @@ fn quirk_46_llmq_overrides_outside_u16(#[values(Release::V23_1, Release::V24_0)]
   &[(ChainOption::LlmqTestPlatformParams, "3:70000"), (ChainOption::LlmqTestParams, "-1:2")],
   "LLMQ_TEST size (-1) or threshold (2) outside 0 to 65535"
 )]
-fn quirk_46_cores_errors_come_first(
+fn llmq_out_of_range_after_cores_errors(
   #[case] network: Network,
   #[case] args: &[(ChainOption, &str)],
   #[case] error: &str,
@@ -540,7 +540,7 @@ fn quirk_46_cores_errors_come_first(
 
 /// Quirk 46 on networks where Core ignores the option: nothing is refused.
 #[rstest]
-fn quirk_46_ignored_options_start(#[values(Release::V23_1, Release::V24_0)] release: Release) {
+fn llmq_out_of_range_ignored_options_start(#[values(Release::V23_1, Release::V24_0)] release: Release) {
   for (option, _, _, reads) in LLMQ_SIZE_OPTIONS {
     for network in Network::ALL.into_iter().filter(|n| *n != reads) {
       let plain = build(ChainParamsBuilder::new(network, release));
