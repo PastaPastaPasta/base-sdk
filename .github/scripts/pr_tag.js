@@ -13,14 +13,23 @@ const STALE_DAYS = 60;
 /** @enum {string} */
 const Labels = {
   BEHIND: "status:behind",
+  HALT_CI: "tag:halt-ci",
   NEEDS_REBASE: "status:needs-rebase",
   STALE: "status:stale",
 };
 
+// Repository roles allowed to halt a pull request's runs.
+const MAINTAINER_ROLES = ["admin", "maintain"];
+
+// A pull request owns runs from these events, never manual or scheduled ones.
+const PR_EVENTS = ["pull_request", "push"];
+
 /**
+ * Syncs the status labels of every open pull request into `develop`.
+ *
  * @param {{ github: import("@actions/github").getOctokit, context: import("@actions/github").context }} params
  */
-module.exports = async ({ github, context }) => {
+async function tag({ github, context }) {
   const { owner, repo } = context.repo;
   const pulls = await listOpenPulls({ github, owner, repo });
   const now = new Date();
@@ -70,4 +79,76 @@ module.exports = async ({ github, context }) => {
     }
     await sync(Labels.BEHIND, isBehind);
   }
-};
+}
+
+/**
+ * Cancels the unfinished runs of a pull request's head commit once a
+ * maintainer applies the halt label.
+ *
+ * @param {{ github: any, context: import("@actions/github").context, core: any }} params
+ */
+async function halt({ github, context, core }) {
+  const { owner, repo } = context.repo;
+  const { pull_request: pr, sender } = context.payload;
+
+  // Clearing the label lets a maintainer apply it again to halt later pushes.
+  await github.rest.issues
+    .removeLabel({ owner, repo, issue_number: pr.number, name: Labels.HALT_CI })
+    .catch((error) => {
+      if (error.status !== 404) {
+        throw error;
+      }
+    });
+
+  const { data: level } = await github.rest.repos.getCollaboratorPermissionLevel({
+    owner,
+    repo,
+    username: sender.login,
+  });
+  if (!MAINTAINER_ROLES.includes(level.role_name)) {
+    core.notice(`${sender.login} is not a maintainer, so ${Labels.HALT_CI} is ignored`);
+    return;
+  }
+
+  // A deleted fork leaves no repository to match the runs against.
+  const headRepo = pr.head.repo?.full_name;
+  if (!headRepo) {
+    core.notice(`PR #${pr.number} has no head repository, so no runs are cancelled`);
+    return;
+  }
+
+  // A protected branch's pushes belong to the branch, not to its pull requests.
+  let events = PR_EVENTS;
+  if (headRepo === `${owner}/${repo}`) {
+    const { data: branch } = await github.rest.repos.getBranch({ owner, repo, branch: pr.head.ref });
+    if (branch.protected) {
+      events = ["pull_request"];
+    }
+  }
+
+  const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+    owner,
+    repo,
+    branch: pr.head.ref,
+    head_sha: pr.head.sha,
+    per_page: 100,
+  });
+  for (const run of runs) {
+    // Another pull request can share the commit, so match the repository.
+    const owned = events.includes(run.event) && run.head_repository?.full_name === headRepo;
+    if (run.status === "completed" || !owned) {
+      continue;
+    }
+    try {
+      await github.rest.actions.cancelWorkflowRun({ owner, repo, run_id: run.id });
+      core.info(`PR #${pr.number}: cancelled ${run.name} (run ${run.id})`);
+    } catch (error) {
+      // A run that finished after it was listed refuses cancellation.
+      if (error.status !== 409) {
+        throw error;
+      }
+    }
+  }
+}
+
+module.exports = { tag, halt };

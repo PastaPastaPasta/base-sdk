@@ -8,19 +8,20 @@ on:
   schedule:
     - cron: "0 6 * * 1"
 
-concurrency:
-  group: ${{ github.workflow }}
-  cancel-in-progress: true
-
-permissions:
-  contents: read
-  issues: write
-  pull-requests: write
+permissions: {}
 
 jobs:
   tag:
     name: Tag pull requests
     runs-on: ubuntu-slim
+    # Each run rescans every pull request, so a newer run supersedes an older one.
+    concurrency:
+      group: ${{ github.workflow }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -36,8 +37,8 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
-            const script = require("./.github/scripts/pr_tag.js");
-            await script({ github, context });
+            const { tag } = require("./.github/scripts/pr_tag.js");
+            await tag({ github, context });
 
       - name: Sync labels with the project board
         uses: actions/github-script@v8
@@ -47,3 +48,26 @@ jobs:
           script: |
             const script = require("./.github/scripts/pr_board.js");
             await script({ github, context, core });
+
+  halt:
+    name: Cancel the pull request's runs
+    # The halt job stays out of the tag job's concurrency group, so a newer tag run cannot cancel it.
+    if: github.event.action == 'labeled' && github.event.label.name == 'tag:halt-ci'
+    runs-on: ubuntu-slim
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Cancel unfinished runs
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { halt } = require("./.github/scripts/pr_tag.js");
+            await halt({ github, context, core });
