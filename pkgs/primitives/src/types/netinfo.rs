@@ -306,7 +306,7 @@ pub trait NITrait: fmt::Display {
   /// Returns entries, optionally filtered by purpose.
   fn entries(&self, purpose: Option<NIPurpose>) -> impl Iterator<Item = NIEntry> + '_;
 
-  /// Returns the primary service if available.
+  /// Returns the first core P2P entry when it is a service.
   fn primary(&self) -> Option<ServiceV2>;
 
   /// Returns `true` for the unset legacy service, or an extended value of the
@@ -516,16 +516,11 @@ impl NITrait for NetInfoV2 {
   }
 
   fn primary(&self) -> Option<ServiceV2> {
-    self
-      .groups
-      .iter()
-      .find(|(p, e)| *p == NIPurpose::CoreP2p && !e.is_empty())
-      .and_then(|(_, entries)| {
-        entries.iter().find_map(|e| match e {
-          NIEntry::Service(svc) => Some(svc.clone()),
-          _ => None,
-        })
-      })
+    let (_, entries) = self.groups.iter().find(|(p, _)| *p == NIPurpose::CoreP2p)?;
+    match entries.first()? {
+      NIEntry::Service(svc) => Some(svc.clone()),
+      _ => None,
+    }
   }
 
   fn is_empty(&self) -> bool {
@@ -1060,6 +1055,17 @@ mod tests {
     let v2 = NetInfoV2::decode(&mut &[version][..]).unwrap();
     assert!(!v2.is_empty());
     assert_eq!(v2.check(), Some(NIError::Malformed));
+  }
+
+  #[rstest]
+  #[case::service("0101000101010401020304270f", Some("1.2.3.4:9999"))]
+  #[case::invalid_first("010100020001010401020304270f", None)]
+  #[case::domain_first("01010002020b6578616d706c652e636f6d01bb01010401020304270f", None)]
+  #[case::empty_group("01010000", None)]
+  #[case::no_core_group("0101010101010401020304270f", None)]
+  fn primary_v2_first_core_entry(#[case] raw: &str, #[case] expected: Option<&str>) {
+    let v2 = NetInfoV2::decode(&mut vec_from_hex(raw).as_slice()).unwrap();
+    assert_eq!(v2.primary().map(|svc| svc.to_string()).as_deref(), expected);
   }
 
   #[rstest]
