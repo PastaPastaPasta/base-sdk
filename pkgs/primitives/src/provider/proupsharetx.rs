@@ -20,9 +20,6 @@ use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
-/// The payload version `check` accepts.
-const VERSION: u16 = 1;
-
 codec_payload! {
 /// ProUpShareTx -- update the reward script of a share (type 11).
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
@@ -55,7 +52,7 @@ impl Checkable for ProUpShareTx {
   type Error = ProTxInvalid;
 
   fn check(&self) -> Option<Self::Error> {
-    if self.version != VERSION {
+    if self.version != Self::CURRENT_VERSION {
       return Some(ProTxInvalid::BadShareUpdateVersion { version: self.version });
     }
     if self.sig.len() != ECDSA_REC_SIG_LEN {
@@ -66,6 +63,11 @@ impl Checkable for ProUpShareTx {
     }
     None
   }
+}
+
+impl ProUpShareTx {
+  /// The payload version `check` accepts.
+  const CURRENT_VERSION: u16 = 1;
 }
 
 impl fmt::Display for ProUpShareTx {

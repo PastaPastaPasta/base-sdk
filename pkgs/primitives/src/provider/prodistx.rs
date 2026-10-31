@@ -20,9 +20,6 @@ use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
-/// The payload version `check` accepts.
-const VERSION: u16 = 1;
-
 impl_new! {
 /// ProDisTx -- dissolve a shared masternode (type 10).
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
@@ -69,7 +66,7 @@ impl Checkable for ProDisTx {
   type Error = ProTxInvalid;
 
   fn check(&self) -> Option<Self::Error> {
-    if self.version != VERSION {
+    if self.version != Self::CURRENT_VERSION {
       return Some(ProTxInvalid::BadDissolveVersion { version: self.version });
     }
     if self.sigs.is_empty() || self.sigs.len() > MAX_SHARES {
@@ -80,6 +77,11 @@ impl Checkable for ProDisTx {
 }
 
 hash_impl!(ProDisTx);
+
+impl ProDisTx {
+  /// The payload version `check` accepts.
+  const CURRENT_VERSION: u16 = 1;
+}
 
 impl fmt::Display for ProDisTx {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
