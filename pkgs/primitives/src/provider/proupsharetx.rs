@@ -83,19 +83,32 @@ mod tests {
   use crate::provider::share::tests::script;
   use crate::Transaction;
 
-  use dash_dev::{assert_serde_rt, check_sptx, Corpus};
+  use dash_dev::{assert_json_rt, check_sptx_raw, vec_from_hex};
   use dash_script::{Recipient, ScriptHash};
   use dash_types::codec::BaseCodec;
   use rstest::rstest;
 
+  /// Regtest transactions as txid and raw bytes, from functional tests of the
+  /// reference implementation at v24.0.0-rc.4.
+  /// `dash-cli -regtest decoderawtransaction <raw>` decodes each one.
+  const REGTEST: [(&str, &str); 1] = [
+    // feature_masternode_shares.py line 907
+    ("5b99ff072732404b4cb5efe2531da72fbcc40bb21cdf417897caddcebc0f3f18", "03000b00013b6bf3d14faa5379838988a345b883f6eb526c00250f674d7eb43a7df868d308000000006a4730440220610f8c15ff9d3941817933f235e928bf7b6de2494765e7a569c03e6bd024b58202204e64c68ae952594abb906e1029263888221d2772d350c7b7ede858602f9e9e380121022fdeed17400e297b607ba82b0610a8cbccecc896ad0b50bc91833535bf181037feffffff0196dff505000000001976a914955e1d83565ab3ddf810c8a09beecaa87c4377d288ac00000000a001009c5ba0130c6200a5c7c357ebf13f7c008f75e718fdfd3a7a0a51f47347cc0bbe00001976a914912c2ba7ce5eb1d7fb53c73c4a8beadf3d8ff7f388aca942a537ab3c1c4ed201b85ef6eb1ec235415b6eacab685624998b7c6b7db48a411fdd2d8c1942c5e7486c5db28c9f8eb6593e207a0fac1d9dc1a4036092f780bf076ebcc4da5e331520bf9174e3e861c59f81c52d7a48296aa0e314dbc6c9cde0e0"),
+  ];
+
+  /// The payload of regtest transaction `txid`.
+  fn regtest(txid: &str) -> ProUpShareTx {
+    let (txid, raw) = REGTEST.into_iter().find(|(t, _)| *t == txid).unwrap();
+    check_sptx_raw(&vec_from_hex(raw), txid)
+  }
+
   #[rstest]
-  fn corpus_proupsharetx() {
-    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "proupsharetx");
-    let items = corpus.entries::<ProUpShareTx>("proupsharetx", |raw, details, label| {
-      check_sptx(raw, details, label);
-      assert_eq!(Transaction::decode(&mut &raw[..]).unwrap().check(), None, "{label}");
-    });
-    assert_serde_rt("proupsharetx", &items);
+  #[case::masternode_shares_907(REGTEST[0])]
+  fn regtest_vectors(#[case] vector: (&str, &str)) {
+    let (txid, raw) = vector;
+    let raw = vec_from_hex(raw);
+    assert_json_rt(&check_sptx_raw::<ProUpShareTx>(&raw, txid));
+    assert_eq!(Transaction::decode(&mut &raw[..]).unwrap().check(), None, "{txid}");
   }
 
   #[rstest]
@@ -134,12 +147,7 @@ mod tests {
     Some(ProTxInvalid::BadShareUpdateVersion { version: 2 })
   )]
   fn check(#[case] edit: fn(&mut ProUpShareTx), #[case] expected: Option<ProTxInvalid>) {
-    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "proupsharetx");
-    let mut ptx = corpus
-      .entries::<ProUpShareTx>("proupsharetx", |_, _, _| {})
-      .into_values()
-      .next()
-      .unwrap();
+    let mut ptx = regtest("5b99ff072732404b4cb5efe2531da72fbcc40bb21cdf417897caddcebc0f3f18");
     assert_eq!(ptx.check(), None);
     edit(&mut ptx);
     assert_eq!(ptx.check(), expected);
