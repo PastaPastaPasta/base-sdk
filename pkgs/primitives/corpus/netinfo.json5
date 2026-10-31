@@ -38,6 +38,10 @@ BOOST_AUTO_TEST_CASE(netinfo_entry_reads)
              "01" "01" "04" "00000000" "270f",
              "01" "07" "04" "01020304" "270f",
              "01" "02" "10" "fd87d87eeb43" "0102030405060708090a" "270f",
+             "01" "01" "05" "0102030405" "270f",
+             "01" "07" "fd0102",
+             "01" "01" "04" "010203",
+             "01" "01" "04" "01020304" "27",
              "02" "0b" "4578616d706c652e636f6d" "01bb",
              "02" "0b" "6578616d706c652e636f6d" "0000",
          }) {
@@ -102,6 +106,16 @@ BOOST_AUTO_TEST_CASE(netinfo_entry_reads)
     { "raw": "01070401020304270f", "read": 9, "written": "ff", "addr_port": "[invalid entry]" },
     // A service at an IPv6 address with the TORv2 prefix is invalid.
     { "raw": "010210fd87d87eeb430102030405060708090a270f", "read": 21, "written": "ff", "addr_port": "[invalid entry]" },
+    // A service that fails to read is an invalid entry.
+    // https://github.com/dashpay/dash/blob/v24.0.0-rc.4/src/evo/netinfo.h#L247-L252
+    // An IPv4 address size of 5 stops the read after the size.
+    { "raw": "0101050102030405270f", "read": 3, "written": "ff", "addr_port": "[invalid entry]" },
+    // An oversized address on an unknown network stops the read after its size.
+    { "raw": "0107fd0102", "read": 5, "written": "ff", "addr_port": "[invalid entry]" },
+    // An IPv4 address cut short stops the read after its size.
+    { "raw": "010104010203", "read": 3, "written": "ff", "addr_port": "[invalid entry]" },
+    // A short port stops the read before the port.
+    { "raw": "0101040102030427", "read": 7, "written": "ff", "addr_port": "[invalid entry]" },
     // A domain with an uppercase letter is invalid.
     { "raw": "020b4578616d706c652e636f6d01bb", "read": 15, "written": "ff", "addr_port": "[invalid entry]" },
     // A domain on port 0 is invalid.
@@ -203,6 +217,11 @@ BOOST_AUTO_TEST_CASE(netinfo_extended_reads)
              "01" "01" "00" "01" "02" "14" "61616161616161616161",
              "01" "01" "00" "01" "02" "0b" "6578616d706c652e636f6d" "01",
              "01" "01" "00" "02" "02" "04" "612e2e62" "01bb" "01" "01" "04" "01020304" "270f",
+             "01" "01" "00" "02" "01" "01" "03" "01" "01" "04" "01020304" "270f",
+             "01" "01" "00" "02" "01" "01" "03" "ff",
+             "01" "01" "00" "02" "01" "07" "fd0102" "01" "01" "04" "01020304" "270f",
+             "01" "01" "00" "02" "01" "01" "04" "ff",
+             "01" "01" "00" "01" "01" "01" "04" "01020304" "27",
          }) {
         const auto raw{ParseHex(hex)};
         CDataStream ds(raw, SER_NETWORK, CLIENT_VERSION);
@@ -293,5 +312,17 @@ BOOST_AUTO_TEST_CASE(netinfo_extended_reads)
     // https://github.com/dashpay/dash/blob/v24.0.0-rc.4/src/evo/netinfo.cpp#L105-L107
     // https://github.com/dashpay/dash/blob/v24.0.0-rc.4/src/evo/netinfo.h#L261
     { "raw": "010100020204612e2e6201bb01010401020304270f", "read": 21, "written": "01010002ff01010401020304270f", "entries": ["[invalid entry]", "1.2.3.4:9999"], "empty": false },
+    // After a service that fails to read, the next entry is read from where the service read stopped.
+    // https://github.com/dashpay/dash/blob/v24.0.0-rc.4/src/evo/netinfo.h#L247-L252
+    // An IPv4 address size of 3.
+    { "raw": "0101000201010301010401020304270f", "read": 16, "written": "01010002ff01010401020304270f", "entries": ["[invalid entry]", "1.2.3.4:9999"], "empty": false },
+    // An IPv4 address size of 3, whose next byte is read as the next entry.
+    { "raw": "01010002010103ff", "read": 8, "written": "01010002ffff", "entries": ["[invalid entry]", "[invalid entry]"], "empty": false },
+    // An oversized address on an unknown network.
+    { "raw": "010100020107fd010201010401020304270f", "read": 18, "written": "01010002ff01010401020304270f", "entries": ["[invalid entry]", "1.2.3.4:9999"], "empty": false },
+    // An IPv4 address cut short, whose one remaining byte is read as the next entry.
+    { "raw": "01010002010104ff", "read": 8, "written": "01010002ffff", "entries": ["[invalid entry]", "[invalid entry]"], "empty": false },
+    // A short port, in the last entry.
+    { "raw": "010100010101040102030427", "read": 11, "written": "01010001ff", "entries": ["[invalid entry]"], "empty": false },
   ],
 }
