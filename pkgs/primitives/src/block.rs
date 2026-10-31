@@ -308,29 +308,47 @@ mod tests {
   use crate::sptx::{QuorumHash, TxType};
   use crate::transaction::{OutPoint, TxIn, TxOut};
 
+  use bitcoin_consensus_encoding::decode_from_slice;
   use bitcoin_primitives::script::{ScriptPubKeyBuf, ScriptSigBuf};
   use bitcoin_units::{BlockHeight, SignedAmount};
-  use dash_dev::{assert_serde_rt, check_wire, Corpus};
+  use dash_dev::{assert_json_rt, assert_serde_rt, check_wire, vec_from_hex, Corpus};
   use dash_pkc::bls::BlsSigBytes;
   use dash_script::Opcode;
   use rstest::rstest;
   use serde::Deserialize;
 
+  /// Checks `raw` as block `label` (its hash) decoded as `details`.
+  fn check_block(raw: &[u8], details: &Block, label: &str) {
+    check_wire(raw, details, label);
+    if let Some(e) = details.check() {
+      panic!("{label}: check: {e}");
+    }
+    let expected = crate::BlockHash::from_hex(label).unwrap();
+    assert_eq!(details.header.hash(), expected, "{label}: pow hash");
+    let (root, mutated) = details.merkle();
+    assert_eq!(root, details.header.merkle_root, "{label}: merkle root");
+    assert!(!mutated, "{label}: merkle mutated");
+  }
+
   #[rstest]
   fn corpus_block() {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "blocks");
-    let items = corpus.entries::<Block>("blocks", |raw, details, label| {
-      check_wire(raw, details, label);
-      if let Some(e) = details.check() {
-        panic!("{label}: check: {e}");
-      }
-      let expected = crate::BlockHash::from_hex(label).unwrap();
-      assert_eq!(details.header.hash(), expected, "{label}: pow hash");
-      let (root, mutated) = details.merkle();
-      assert_eq!(root, details.header.merkle_root, "{label}: merkle root");
-      assert!(!mutated, "{label}: merkle mutated");
-    });
+    let items = corpus.entries::<Block>("blocks", check_block);
     assert_serde_rt("blocks", &items);
+  }
+
+  /// A regtest block with a version 2 asset unlock, as hash and raw bytes,
+  /// from the reference implementation's functional test
+  /// feature_asset_locks.py line 1118 at v24.0.0-rc.4.
+  const REGTEST_BLOCK: (&str, &str) = ("64b2baa9cf5b20e65ca4690520e8db3d0b9ba6e7c5d048c8d256198f8a1a6c96", "000000204f28d50a1befa68a1fcb0be21af2cf31f68a901420c8cdd173c91660ad416d737555ddaeb1a9e83f5568838cbf8b291ce5b42b21eb1d1dd8ac6b23c550bbfdea9cbe8054ffff7f20000000000203000500010000000000000000000000000000000000000000000000000000000000000000ffffffff016affffffff030ef9c604000000001976a914d1e414e99c4cf3160d099aeb70438a3ca92dad1a88ac478b5f0500000000016ae25ff508000000001976a91456908bca5913585daa9bad834f6a20d4ee792e4488ac00000000cf0400c9030000932cbd03b309d2d8c018844e23f3fbffd6d43de89380abe080220714ba4790197dca3f6655eede191c16618307a5d0234aed1aaba580ac03e1cb26670541ca1400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000696046c679000000b6ef079a8505a849326d910f14586af59339c996f366c9d6848b9cee7e43614603000900000190cff40500000000232102472c66bc4fd71f30167ac9b8888944ca749dcb0a130329ab95380be0a43c25b0ac000000009102210300000000000070110100c80300002a3631100ae30009d1bf863e5db641069985121ad4ab37dfda0800a65cc1116088250d04fb32aef4219a552f35627d46a9f448a742564cb9e7c4b107325e1f875f64a0c90d517b137cb44d359e401dce015a077ec33ba4c078e4b74f252181943daa2cc30eb90b693e3aee521016f22ddecc52b0e4c79781b76c8def1c66db46");
+
+  #[rstest]
+  fn regtest_block() {
+    let (hash, raw) = REGTEST_BLOCK;
+    let raw = vec_from_hex(raw);
+    let block: Block = decode_from_slice(&raw).unwrap();
+    check_block(&raw, &block, hash);
+    assert_json_rt(&block);
   }
 
   #[derive(Deserialize)]
