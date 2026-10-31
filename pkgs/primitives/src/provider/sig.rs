@@ -87,6 +87,13 @@ pub(crate) fn verify_operator(
   }
 }
 
+/// Whether an operator key is not null and, under the basic scheme, decodes
+/// as a public key that encodes back to the same bytes. Legacy-scheme keys
+/// keep the null check.
+pub(crate) fn is_valid_operator_key(version: ProTxVersion, key: &BlsPkBytes) -> bool {
+  !key.is_null() && (version == ProTxVersion::LegacyBls || key.is_canonical::<BlsScIetf>())
+}
+
 /// Collateral owner signature, empty when the collateral is spent.
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(
@@ -252,11 +259,56 @@ rec_sig! {
 
 #[cfg(test)]
 #[expect(clippy::unwrap_used, reason = "test code")]
-mod tests {
+pub(crate) mod tests {
   use super::*;
   use crate::sign::tests::bls_sign;
 
+  use dash_dev::arr_from_hex;
   use rstest::rstest;
+
+  /// An edit of an operator key for the payload checks.
+  #[derive(Clone, Copy, Debug)]
+  pub(crate) enum KeyEdit {
+    /// The key as read.
+    Kept,
+    /// All zero bytes.
+    Null,
+    /// An x coordinate with no point on the curve.
+    OffCurve,
+    /// A point on the curve outside the prime-order subgroup.
+    OffSubgroup,
+    /// The point at infinity, which the reference implementation refuses as
+    /// a null key.
+    Infinity,
+    /// The key without its compression flag.
+    Uncompressed,
+  }
+
+  impl KeyEdit {
+    /// `key` after the edit.
+    pub(crate) fn apply(self, key: BlsPkBytes) -> BlsPkBytes {
+      match self {
+        Self::Kept => key,
+        Self::Null => BlsPkBytes::default(),
+        Self::OffCurve => BlsPkBytes::from_bytes(arr_from_hex(
+          "83c444d48c33647b9b7621e45aa649a86a98936a47066c6e1a9e26a6970d4cdf3f6f815e6ccda4773362ad045ce45849",
+        )),
+        Self::OffSubgroup => BlsPkBytes::from_bytes(arr_from_hex(
+          "81da98896a3b9167e9163d140ac33463352b5efa191410f015bfe3f636d9605f56c6862ac48c3e6d407e8797391cd88b",
+        )),
+        Self::Infinity => {
+          let mut bytes = [0; 48];
+          bytes[0] = 0xc0;
+          BlsPkBytes::from_bytes(bytes)
+        }
+        Self::Uncompressed => {
+          let mut bytes = *key.as_bytes();
+          bytes[0] &= 0x7f;
+          BlsPkBytes::from_bytes(bytes)
+        }
+      }
+    }
+  }
 
   /// Any header byte survives a decode and encode round trip.
   #[rstest]

@@ -7,6 +7,7 @@
 //! ProRegTx registration payload (type 1).
 
 use super::share::{check_payout_version, check_payouts, check_shares, EVO_COLLATERAL, MAX_REWARD, REGULAR_COLLATERAL};
+use super::sig::is_valid_operator_key;
 use super::{CollateralShare, CollateralSig, JoinSig, PayoutShare, ProTxVersion};
 use crate::codec::{decode_items, decode_list, encode_items, encode_list, impl_payload};
 use crate::prelude::*;
@@ -342,7 +343,7 @@ impl Checkable for ProRegTx {
         return Some(ProTxInvalid::NullKey);
       }
     }
-    if self.pub_key_operator.is_null() || self.key_id_voting.is_null() {
+    if !is_valid_operator_key(self.version, &self.pub_key_operator) || self.key_id_voting.is_null() {
       return Some(ProTxInvalid::NullKey);
     }
 
@@ -481,6 +482,7 @@ impl fmt::Display for ProRegTx {
 mod tests {
   use super::*;
   use crate::provider::share::tests::script;
+  use crate::provider::sig::tests::KeyEdit;
 
   use dash_dev::{arr_from_hex, assert_serde_rt, check_sptx, Corpus};
   use dash_params::Network;
@@ -510,6 +512,40 @@ mod tests {
   /// A regtest registration with two shares.
   fn shared() -> ProRegTx {
     entry("be0bcc4773f4510a7a3afdfd18e7758f007c3ff1eb57c3c7a500620c13a05b9c")
+  }
+
+  /// A version 2 registration from the chain.
+  fn basic_bls() -> ProRegTx {
+    entry("a3d16d7b7f53adf5403b2082b1ddeae9ad52163d29d5c84cb5eea2e0bc1a486c")
+  }
+
+  /// From version 2 the operator key must be a valid basic-scheme key.
+  #[rstest]
+  #[case::valid(KeyEdit::Kept, None)]
+  #[case::null(KeyEdit::Null, Some(ProTxInvalid::NullKey))]
+  #[case::off_curve(KeyEdit::OffCurve, Some(ProTxInvalid::NullKey))]
+  #[case::off_subgroup(KeyEdit::OffSubgroup, Some(ProTxInvalid::NullKey))]
+  #[case::infinity(KeyEdit::Infinity, Some(ProTxInvalid::NullKey))]
+  #[case::uncompressed(KeyEdit::Uncompressed, Some(ProTxInvalid::NullKey))]
+  fn operator_key(
+    #[values(basic_bls(), registration(), shared())] mut ptx: ProRegTx,
+    #[case] edit: KeyEdit,
+    #[case] expected: Option<ProTxInvalid>,
+  ) {
+    ptx.pub_key_operator = edit.apply(ptx.pub_key_operator);
+    assert_eq!(ptx.check(), expected);
+  }
+
+  /// Legacy-scheme keys keep the null check.
+  #[rstest]
+  #[case::non_null(KeyEdit::Kept, None)]
+  #[case::null(KeyEdit::Null, Some(ProTxInvalid::NullKey))]
+  #[case::uncompressed(KeyEdit::Uncompressed, None)]
+  fn operator_key_legacy(#[case] edit: KeyEdit, #[case] expected: Option<ProTxInvalid>) {
+    let mut ptx = basic_bls();
+    ptx.version = ProTxVersion::LegacyBls;
+    ptx.pub_key_operator = edit.apply(ptx.pub_key_operator);
+    assert_eq!(ptx.check(), expected);
   }
 
   /// `share` with its refund script paying `key`.
