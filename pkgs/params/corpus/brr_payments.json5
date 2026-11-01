@@ -1,0 +1,102 @@
+// Masternode payments of the reference implementation on mainnet in the
+// classic reward era, for a block value of 1000000000 duffs, around each block
+// reward reallocation period, for dash-params' period table test.
+//
+// "realloc_start" is the first height of the first period and
+// "period_blocks" the length of each. Each row is the output of the
+// contrib/params/chainparams_dump command beside it, at the release it is
+// under, v23.1.8 (728f5055836c), v24.0.0-rc.5 (8163290aa030).
+//
+// Dump source sha256 70ab0c6408c6b65224fbfd57fbedbd8772393816880ab05373a8a6696e674052.
+// Regenerate as contrib/params/README.md describes.
+{
+  "realloc_start": 1379128,
+  "period_blocks": 49848,
+  "block_value": 1000000000,
+  "payments": {
+    "v23_1": [
+      {"height": 1379127, "payment": 500000000}, // chainparams_dump payment 1379127 1000000000
+      {"height": 1379128, "payment": 513000000}, // chainparams_dump payment 1379128 1000000000
+      {"height": 1428975, "payment": 513000000}, // chainparams_dump payment 1428975 1000000000
+      {"height": 1428976, "payment": 526000000}, // chainparams_dump payment 1428976 1000000000
+      {"height": 1478823, "payment": 526000000}, // chainparams_dump payment 1478823 1000000000
+      {"height": 1478824, "payment": 533000000}, // chainparams_dump payment 1478824 1000000000
+      {"height": 1528671, "payment": 533000000}, // chainparams_dump payment 1528671 1000000000
+      {"height": 1528672, "payment": 540000000}, // chainparams_dump payment 1528672 1000000000
+      {"height": 1578519, "payment": 540000000}, // chainparams_dump payment 1578519 1000000000
+      {"height": 1578520, "payment": 546000000}, // chainparams_dump payment 1578520 1000000000
+      {"height": 1628367, "payment": 546000000}, // chainparams_dump payment 1628367 1000000000
+      {"height": 1628368, "payment": 552000000}, // chainparams_dump payment 1628368 1000000000
+      {"height": 1678215, "payment": 552000000}, // chainparams_dump payment 1678215 1000000000
+      {"height": 1678216, "payment": 557000000}, // chainparams_dump payment 1678216 1000000000
+      {"height": 1728063, "payment": 557000000}, // chainparams_dump payment 1728063 1000000000
+      {"height": 1728064, "payment": 562000000}, // chainparams_dump payment 1728064 1000000000
+      {"height": 1777911, "payment": 562000000}, // chainparams_dump payment 1777911 1000000000
+      {"height": 1777912, "payment": 567000000}, // chainparams_dump payment 1777912 1000000000
+      {"height": 1827759, "payment": 567000000}, // chainparams_dump payment 1827759 1000000000
+      {"height": 1827760, "payment": 572000000}, // chainparams_dump payment 1827760 1000000000
+      {"height": 1877607, "payment": 572000000}, // chainparams_dump payment 1877607 1000000000
+      {"height": 1877608, "payment": 577000000}, // chainparams_dump payment 1877608 1000000000
+      {"height": 1927455, "payment": 577000000}, // chainparams_dump payment 1927455 1000000000
+      {"height": 1927456, "payment": 582000000}, // chainparams_dump payment 1927456 1000000000
+      {"height": 1977303, "payment": 582000000}, // chainparams_dump payment 1977303 1000000000
+      {"height": 1977304, "payment": 585000000}, // chainparams_dump payment 1977304 1000000000
+      {"height": 2027151, "payment": 585000000}, // chainparams_dump payment 2027151 1000000000
+      {"height": 2027152, "payment": 588000000}, // chainparams_dump payment 2027152 1000000000
+      {"height": 2076999, "payment": 588000000}, // chainparams_dump payment 2076999 1000000000
+      {"height": 2077000, "payment": 591000000}, // chainparams_dump payment 2077000 1000000000
+      {"height": 2126847, "payment": 591000000}, // chainparams_dump payment 2126847 1000000000
+      {"height": 2126848, "payment": 594000000}, // chainparams_dump payment 2126848 1000000000
+      {"height": 2176695, "payment": 594000000}, // chainparams_dump payment 2176695 1000000000
+      {"height": 2176696, "payment": 597000000}, // chainparams_dump payment 2176696 1000000000
+      {"height": 2226543, "payment": 597000000}, // chainparams_dump payment 2226543 1000000000
+      {"height": 2226544, "payment": 599000000}, // chainparams_dump payment 2226544 1000000000
+      {"height": 2276391, "payment": 599000000}, // chainparams_dump payment 2276391 1000000000
+      {"height": 2276392, "payment": 600000000}, // chainparams_dump payment 2276392 1000000000
+      {"height": 2326239, "payment": 600000000}, // chainparams_dump payment 2326239 1000000000
+      {"height": 3373048, "payment": 600000000}, // chainparams_dump payment 3373048 1000000000
+    ],
+    "v24_0": [
+      {"height": 1379127, "payment": 500000000}, // chainparams_dump payment 1379127 1000000000
+      {"height": 1379128, "payment": 513000000}, // chainparams_dump payment 1379128 1000000000
+      {"height": 1428975, "payment": 513000000}, // chainparams_dump payment 1428975 1000000000
+      {"height": 1428976, "payment": 526000000}, // chainparams_dump payment 1428976 1000000000
+      {"height": 1478823, "payment": 526000000}, // chainparams_dump payment 1478823 1000000000
+      {"height": 1478824, "payment": 533000000}, // chainparams_dump payment 1478824 1000000000
+      {"height": 1528671, "payment": 533000000}, // chainparams_dump payment 1528671 1000000000
+      {"height": 1528672, "payment": 540000000}, // chainparams_dump payment 1528672 1000000000
+      {"height": 1578519, "payment": 540000000}, // chainparams_dump payment 1578519 1000000000
+      {"height": 1578520, "payment": 546000000}, // chainparams_dump payment 1578520 1000000000
+      {"height": 1628367, "payment": 546000000}, // chainparams_dump payment 1628367 1000000000
+      {"height": 1628368, "payment": 552000000}, // chainparams_dump payment 1628368 1000000000
+      {"height": 1678215, "payment": 552000000}, // chainparams_dump payment 1678215 1000000000
+      {"height": 1678216, "payment": 557000000}, // chainparams_dump payment 1678216 1000000000
+      {"height": 1728063, "payment": 557000000}, // chainparams_dump payment 1728063 1000000000
+      {"height": 1728064, "payment": 562000000}, // chainparams_dump payment 1728064 1000000000
+      {"height": 1777911, "payment": 562000000}, // chainparams_dump payment 1777911 1000000000
+      {"height": 1777912, "payment": 567000000}, // chainparams_dump payment 1777912 1000000000
+      {"height": 1827759, "payment": 567000000}, // chainparams_dump payment 1827759 1000000000
+      {"height": 1827760, "payment": 572000000}, // chainparams_dump payment 1827760 1000000000
+      {"height": 1877607, "payment": 572000000}, // chainparams_dump payment 1877607 1000000000
+      {"height": 1877608, "payment": 577000000}, // chainparams_dump payment 1877608 1000000000
+      {"height": 1927455, "payment": 577000000}, // chainparams_dump payment 1927455 1000000000
+      {"height": 1927456, "payment": 582000000}, // chainparams_dump payment 1927456 1000000000
+      {"height": 1977303, "payment": 582000000}, // chainparams_dump payment 1977303 1000000000
+      {"height": 1977304, "payment": 585000000}, // chainparams_dump payment 1977304 1000000000
+      {"height": 2027151, "payment": 585000000}, // chainparams_dump payment 2027151 1000000000
+      {"height": 2027152, "payment": 588000000}, // chainparams_dump payment 2027152 1000000000
+      {"height": 2076999, "payment": 588000000}, // chainparams_dump payment 2076999 1000000000
+      {"height": 2077000, "payment": 591000000}, // chainparams_dump payment 2077000 1000000000
+      {"height": 2126847, "payment": 591000000}, // chainparams_dump payment 2126847 1000000000
+      {"height": 2126848, "payment": 594000000}, // chainparams_dump payment 2126848 1000000000
+      {"height": 2176695, "payment": 594000000}, // chainparams_dump payment 2176695 1000000000
+      {"height": 2176696, "payment": 597000000}, // chainparams_dump payment 2176696 1000000000
+      {"height": 2226543, "payment": 597000000}, // chainparams_dump payment 2226543 1000000000
+      {"height": 2226544, "payment": 599000000}, // chainparams_dump payment 2226544 1000000000
+      {"height": 2276391, "payment": 599000000}, // chainparams_dump payment 2276391 1000000000
+      {"height": 2276392, "payment": 600000000}, // chainparams_dump payment 2276392 1000000000
+      {"height": 2326239, "payment": 600000000}, // chainparams_dump payment 2326239 1000000000
+      {"height": 3373048, "payment": 600000000}, // chainparams_dump payment 3373048 1000000000
+    ]
+  }
+}
