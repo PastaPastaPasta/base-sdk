@@ -31,6 +31,7 @@ mod spork;
 use crate::params::devnet;
 use crate::params::{mainnet, regtest, test3};
 
+#[cfg(feature = "codec")]
 use dash_types::type_id::Unencodable;
 
 pub use addr::AddrParams;
@@ -52,7 +53,8 @@ pub use spork::SporkSigners;
 /// Dash network identifier.
 ///
 /// The discriminants are stable and equal to `FFINetwork`'s.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Unencodable)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 #[repr(u8)]
 pub enum Network {
   /// Production network.

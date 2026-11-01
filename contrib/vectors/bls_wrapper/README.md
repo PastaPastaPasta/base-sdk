@@ -5,7 +5,7 @@ under each scheme flag, `SetBytes` under the basic flag, `CBLSLazyWrapper` opera
 The inputs are generated here; every outcome comes from Dash Core.
 
 | File | Role |
-|---|---|
+| --- | --- |
 | `bls12_381.py` | Field and curve arithmetic used to build inputs (subgroup points, on-curve points outside the subgroup, off-curve coordinates, points with `y` in `Fp`) |
 | `gen.py` | Seeded input classes, the probe driver and the JSON5 writer |
 | `probe.cpp` | Reads inputs on stdin and prints Core's outcome for each, using Core's `bls/bls.h` and its bundled dashbls |

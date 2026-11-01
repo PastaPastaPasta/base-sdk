@@ -76,7 +76,7 @@ macro_rules! define_p2p {
     impl ShortId {
       /// Resolves the short ID to its command name, if one is assigned.
       pub const fn to_command_str(self) -> Option<&'static str> {
-        match self.0 {
+        match self.get() {
           $( $( $p_sid => Some($p_wire), )? )*
           $( $( $pe_sid => Some($pe_wire), )? )*
           $( $( $s_sid => Some($s_wire), )? )*
@@ -87,14 +87,14 @@ macro_rules! define_p2p {
 
       /// Looks up the short ID for a command, if one is assigned.
       ///
-      /// `None` means the message has no short ID and must be sent in
-      /// the long format.
+      /// `None` means the message has no short ID. Whether a peer knows the
+      /// one assigned is for [`ShortId::for_send`] to tell.
       pub fn from_command(cmd: &CommandString) -> Option<Self> {
         match *cmd {
-          $( $( CommandString::$p_cmd => Some(Self($p_sid)), )? )*
-          $( $( CommandString::$pe_cmd => Some(Self($pe_sid)), )? )*
-          $( $( CommandString::$s_cmd => Some(Self($s_sid)), )? )*
-          $( $( CommandString::$se_cmd => Some(Self($se_sid)), )? )*
+          $( $( CommandString::$p_cmd => Some(Self::new($p_sid)), )? )*
+          $( $( CommandString::$pe_cmd => Some(Self::new($pe_sid)), )? )*
+          $( $( CommandString::$s_cmd => Some(Self::new($s_sid)), )? )*
+          $( $( CommandString::$se_cmd => Some(Self::new($se_sid)), )? )*
           _ => None,
         }
       }
@@ -139,9 +139,10 @@ macro_rules! define_p2p {
         }
       }
 
-      /// Returns the V2 short ID for this message, if one exists.
-      pub fn short_id(&self) -> Option<ShortId> {
-        ShortId::from_command(&self.command())
+      /// Returns the V2 short ID to send this message by, given `common`, the
+      /// version both peers share.
+      pub fn short_id(&self, common: ProtocolVersion) -> Option<ShortId> {
+        ShortId::for_send(&self.command(), common)
       }
 
       /// Returns `true` when the message is recognised but not decoded.

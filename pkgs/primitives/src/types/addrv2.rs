@@ -14,7 +14,8 @@ use crate::prelude::*;
 
 use bitcoin_hashes::sha3_256;
 use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
-use dash_types::{impl_type, type_cvrt, type_id::TypeId, Checkable, CompactSize, Numeric};
+use dash_types::{impl_new, impl_type, type_cvrt, type_id::TypeId, Checkable, CompactSize, Numeric};
+use getset::{CopyGetters, Getters};
 
 use core::fmt;
 use core::net::{Ipv4Addr, Ipv6Addr};
@@ -327,14 +328,18 @@ impl FromStr for AddrV2 {
   }
 }
 
+impl_new! {
 /// BIP155 network service (address + port).
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct ServiceV2 {
   /// Typed network address.
-  pub addr: AddrV2,
+  #[getset(get = "pub")]
+  addr: AddrV2,
   /// Network port (big-endian on the wire).
-  pub port: u16,
+  #[getset(get_copy = "pub")]
+  port: u16,
+}
 }
 
 impl_type!(ServiceV2);
@@ -378,8 +383,8 @@ impl fmt::Display for ServiceV2 {
 
 type_cvrt!(From<ServiceV1> for ServiceV2, |v1| {
   Self {
-    addr: AddrV2::from(&v1.addr),
-    port: v1.port,
+    addr: AddrV2::from(&v1.addr()),
+    port: v1.port(),
   }
 });
 

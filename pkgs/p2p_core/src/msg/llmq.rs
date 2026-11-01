@@ -17,38 +17,38 @@ use dash_pkc::bls::{BlsIesBlobBytes, BlsPkBytes, BlsSigBytes};
 use dash_primitives::{hash_impl, QuorumHash, TxHash};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{enum_map, impl_num, Numeric};
+use dash_types::{enum_map, impl_new, impl_num, Numeric};
+use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
+codec_p2p! {
 /// A recovered threshold signature, the `qsigrec` payload (Core's
 /// `CRecoveredSig`).
 ///
 /// Core reads the signature lazily and hashes the message over its wire
 /// bytes.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct RecoveredSig {
   /// Type of the signing quorum.
-  pub llmq_type: LlmqType,
+  #[getset(get_copy = "pub")]
+  llmq_type: LlmqType,
   /// Hash of the signing quorum.
-  pub quorum_hash: QuorumHash,
+  #[getset(get_copy = "pub")]
+  quorum_hash: QuorumHash,
   /// Signing request identifier.
-  pub id: Hash256,
+  #[getset(get_copy = "pub")]
+  id: Hash256,
   /// Hash of the signed message.
-  pub msg_hash: Hash256,
+  #[getset(get_copy = "pub")]
+  msg_hash: Hash256,
   /// The recovered signature.
-  pub sig: BlsSigBytes,
+  #[getset(get_copy = "pub")]
+  sig: BlsSigBytes,
 }
-
-codec_p2p!(RecoveredSig {
-  llmq_type,
-  quorum_hash,
-  id,
-  msg_hash,
-  sig
-});
+}
 
 impl fmt::Display for RecoveredSig {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -63,29 +63,28 @@ pub const QUORUM_DATA_VVEC: u16 = 0x0001;
 /// contributions.
 pub const QUORUM_DATA_CONTRIBUTIONS: u16 = 0x0002;
 
+codec_p2p! {
 /// A request for quorum data, the `qgetdata` payload (Core's
 /// `CQuorumDataRequest` without its response error).
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, Copy, CopyGetters, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct QuorumDataRequest {
   /// Type of the quorum.
-  pub llmq_type: LlmqType,
+  #[getset(get_copy = "pub")]
+  llmq_type: LlmqType,
   /// Hash of the quorum.
-  pub quorum_hash: QuorumHash,
+  #[getset(get_copy = "pub")]
+  quorum_hash: QuorumHash,
   /// The data asked for, [`QUORUM_DATA_VVEC`] and
   /// [`QUORUM_DATA_CONTRIBUTIONS`] bits.
-  pub data_mask: u16,
+  #[getset(get_copy = "pub")]
+  data_mask: u16,
   /// The member whose encrypted contributions are asked for.
-  pub pro_tx_hash: TxHash,
+  #[getset(get_copy = "pub")]
+  pro_tx_hash: TxHash,
 }
-
-codec_p2p!(QuorumDataRequest {
-  llmq_type,
-  quorum_hash,
-  data_mask,
-  pro_tx_hash
-});
+}
 
 impl QuorumDataRequest {
   /// Size of the request on the wire, in bytes.
@@ -145,6 +144,7 @@ impl_num!(QuorumDataError, u8);
 
 hash_impl!(QuorumDataError);
 
+impl_new! {
 /// Quorum data, the `qdata` payload: the request it answers, the outcome and,
 /// for [`QuorumDataError::None`], the data.
 ///
@@ -152,16 +152,20 @@ hash_impl!(QuorumDataError);
 /// receiver knows, and Core reads them only after checking the request.
 /// [`QData::read_data`] reads them as Core does. For any other outcome Core
 /// ignores the bytes after the error; the decoder does too.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct QData {
   /// The request answered.
-  pub request: QuorumDataRequest,
+  #[getset(get_copy = "pub")]
+  request: QuorumDataRequest,
   /// The outcome. [`QuorumDataError::Undefined`] is not written.
-  pub error: QuorumDataError,
+  #[getset(get_copy = "pub")]
+  error: QuorumDataError,
   /// The data, written only when the outcome is [`QuorumDataError::None`].
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::hex"))]
-  pub data: Vec<u8>,
+  #[getset(get = "pub")]
+  data: Vec<u8>,
+}
 }
 
 impl_p2p!(QData);
@@ -205,17 +209,21 @@ hash_impl!(QData);
 /// A quorum's verification vector, as `qdata` carries it.
 pub type VerificationVector = Vec<BlsPkBytes>;
 
+impl_new! {
 /// The data of a `qdata` message, read as Core's handler reads it.
-#[derive(Clone, Debug, Default, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Debug, Default, Eq, Getters, Hash, PartialEq, Unencodable)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct QuorumData {
   /// The verification vector, when asked for, as read. Its scheme comes
   /// from the context, not the type's tag.
-  pub vvec: Option<VerificationVector>,
+  #[getset(get = "pub")]
+  vvec: Option<VerificationVector>,
   /// The member's encrypted contributions, when asked for, as read. The
   /// scheme of their keys comes from the context, not the type's tag.
-  pub contributions: Option<Vec<BlsIesBlobBytes>>,
+  #[getset(get = "pub")]
+  contributions: Option<Vec<BlsIesBlobBytes>>,
+}
 }
 
 impl QData {

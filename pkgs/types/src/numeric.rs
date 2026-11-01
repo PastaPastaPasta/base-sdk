@@ -198,7 +198,7 @@ macro_rules! make_num {
     $($attr)*
     #[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
     $(#[$derive])?
-    pub struct $name(pub $uint);
+    pub struct $name($uint);
   };
   (@decl $attrs:tt $name:ident, $uint:tt) => {
     $crate::cfg_codec! {
@@ -253,6 +253,11 @@ macro_rules! make_num {
       /// Constructs from the raw integer value.
       pub const fn new(v: $uint) -> Self {
         Self(v)
+      }
+
+      /// Returns the raw integer value.
+      pub const fn get(self) -> $uint {
+        self.0
       }
     }
 

@@ -6,31 +6,31 @@
 
 //! AssetLock (type 8): L1 to Platform.
 
-use crate::codec_type;
+use crate::codec::codec_payload;
 use crate::prelude::*;
 use crate::transaction::{money_range, TxOut};
 
 use dash_script::Recipient;
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::Checkable;
+use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
+codec_payload! {
 /// AssetLock: L1-to-Platform (type 8).
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct AssetLock {
   /// Payload version.
-  pub version: u8,
+  #[getset(get_copy = "pub")]
+  version: u8,
   /// Platform credit allocations.
-  pub credit_outputs: Vec<TxOut>,
+  #[getset(get = "pub")]
+  credit_outputs: Vec<TxOut>,
 }
-
-codec_type!(AssetLock {
-  version,
-  credit_outputs
-});
+}
 
 /// Asset lock validation failure.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, thiserror::Error, Unencodable)]
@@ -67,11 +67,12 @@ impl Checkable for AssetLock {
 
     let mut total: i64 = 0;
     for (i, out) in self.credit_outputs.iter().enumerate() {
-      if out.value == 0 || !money_range(out.value) || !money_range(total + out.value) {
+      let value = out.value();
+      if value == 0 || !money_range(value) || !money_range(total + value) {
         return Some(AssetLockInvalid::CreditOutOfRange { index: i });
       }
-      total += out.value;
-      let recipient = Recipient::from_script(out.script_pubkey.as_bytes());
+      total += value;
+      let recipient = Recipient::from_script(out.script_pubkey().as_bytes());
       if self.version >= 2 {
         if !matches!(recipient, Some(Recipient::PubKeyHash(_) | Recipient::ScriptHash(_))) {
           return Some(AssetLockInvalid::CreditBadScript { index: i });
@@ -122,13 +123,7 @@ mod tests {
   #[case::v3(3, "76a914000000000000000000000000000000000000000088ac", Some(AssetLockInvalid::BadVersion { version: 3 }))]
   fn credit_scripts_by_version(#[case] version: u8, #[case] script: &str, #[case] expected: Option<AssetLockInvalid>) {
     let script_pubkey = bitcoin_primitives::script::ScriptPubKeyBuf::from_bytes(dash_dev::vec_from_hex(script));
-    let lock = AssetLock {
-      version,
-      credit_outputs: vec![TxOut {
-        value: 1000,
-        script_pubkey,
-      }],
-    };
+    let lock = AssetLock::new(version, vec![TxOut::from_duffs(1000, script_pubkey)]);
     assert_eq!(lock.check(), expected);
   }
 }

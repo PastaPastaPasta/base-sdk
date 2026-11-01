@@ -27,7 +27,8 @@ use dash_params::ChainParams;
 use dash_primitives::{hash_impl, Transaction, TxHash, TxIn, TxOut};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
-use dash_types::{CompactSize, Numeric};
+use dash_types::{impl_new, CompactSize, Numeric};
+use getset::{CopyGetters, Getters};
 
 /// Core's `COINJOIN_ENTRY_MAX_SIZE`, the most inputs or outputs one
 /// participant may add.
@@ -40,6 +41,7 @@ pub fn max_pool_entries(params: &ChainParams) -> usize {
   usize::try_from(params.pool_max_participants).unwrap_or(0) * COINJOIN_ENTRY_MAX_SIZE
 }
 
+impl_new! {
 /// A request to join a mixing session, the `dsa` payload (Core's
 /// `CCoinJoinAccept`).
 ///
@@ -49,16 +51,20 @@ pub fn max_pool_entries(params: &ChainParams) -> usize {
 /// request without flags as one with flags 0. Send
 /// [`DsAccept::for_version`] of the request, as Core's versioned writer
 /// does.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct DsAccept {
   /// The denomination, as Core's denomination bits.
-  pub denom: i32,
+  #[getset(get_copy = "pub")]
+  denom: i32,
   /// The collateral transaction.
-  pub collateral: Transaction,
+  #[getset(get = "pub")]
+  collateral: Transaction,
   /// The rebalance flags, sent at [`ProtocolVersion::COINJOIN_REBALANCE`]
   /// and later only; any byte.
-  pub flags: Option<u8>,
+  #[getset(get_copy = "pub")]
+  flags: Option<u8>,
+}
 }
 
 impl_p2p!(DsAccept);
@@ -107,29 +113,28 @@ impl MsgDecode for DsAccept {
   /// `SERIALIZE_METHODS` reads it.
   fn decode_msg(data: &mut &[u8], ctx: &ProtoCtx) -> Result<Self, P2pDecodeError> {
     Ok(Self::read(data, |_| {
-      ctx.version >= ProtocolVersion::COINJOIN_REBALANCE
+      ctx.version() >= ProtocolVersion::COINJOIN_REBALANCE
     })?)
   }
 }
 
+codec_p2p! {
 /// A participant's inputs and outputs, the `dsi` payload (Core's
 /// `CCoinJoinEntry`). The collateral sits between the two lists.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct DsEntry {
   /// The inputs to mix.
-  pub inputs: Vec<TxIn>,
+  #[getset(get = "pub")]
+  inputs: Vec<TxIn>,
   /// The collateral transaction.
-  pub collateral: Transaction,
+  #[getset(get = "pub")]
+  collateral: Transaction,
   /// The mixed outputs.
-  pub outputs: Vec<TxOut>,
+  #[getset(get = "pub")]
+  outputs: Vec<TxOut>,
 }
-
-codec_p2p!(DsEntry {
-  inputs,
-  collateral,
-  outputs
-});
+}
 
 impl DsEntry {
   /// Whether Core reads both lists: each at most [`max_pool_entries`], which
@@ -143,40 +148,43 @@ impl DsEntry {
 
 impl MsgDecode for DsEntry {}
 
+codec_p2p! {
 /// The transaction to sign, the `dsf` payload.
 ///
 /// Core's client hands one stream to each of its sessions mixing on the
 /// sending masternode in turn, and each reads a message from where the
 /// last stopped (`dsf`, `dsc` and `dssu` alike): a payload holding two
 /// messages updates two sessions. The node's port reads them so.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct DsFinalTx {
   /// The session.
-  pub session_id: i32,
+  #[getset(get_copy = "pub")]
+  session_id: i32,
   /// The final transaction.
-  pub tx: Transaction,
+  #[getset(get = "pub")]
+  tx: Transaction,
 }
-
-codec_p2p!(DsFinalTx { session_id, tx });
+}
 
 impl MsgDecode for DsFinalTx {}
 
+codec_p2p! {
 /// A participant's signed inputs of the final transaction, the `dss`
 /// payload.
 ///
 /// Core compares the count with [`max_pool_entries`] before reading any
 /// input and answers a larger one (`ERR_MAXIMUM`) where it only logs a
 /// failed read: the node runs [`DsSignedInputs::check_payload`] first.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct DsSignedInputs {
   /// The inputs with their signatures.
-  pub inputs: Vec<TxIn>,
+  #[getset(get = "pub")]
+  inputs: Vec<TxIn>,
 }
-
-codec_p2p!(DsSignedInputs { inputs });
+}
 
 impl DsSignedInputs {
   /// Core's count check before the read: [`P2pDecodeError::TooManyEntries`]
@@ -198,48 +206,50 @@ impl DsSignedInputs {
 
 impl MsgDecode for DsSignedInputs {}
 
+codec_p2p! {
 /// The end of a session, the `dsc` payload; read per session as
 /// [`DsFinalTx`] is.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct DsComplete {
   /// The session.
-  pub session_id: i32,
+  #[getset(get_copy = "pub")]
+  session_id: i32,
   /// Core's `PoolMessage`, as read; its client ignores values out of range.
-  pub message: i32,
+  #[getset(get_copy = "pub")]
+  message: i32,
 }
-
-codec_p2p!(DsComplete { session_id, message });
+}
 
 impl MsgDecode for DsComplete {}
 
+codec_p2p! {
 /// A session's status, the `dssu` payload (Core's
 /// `CCoinJoinStatusUpdate`; its entry count is not sent); read per session
 /// as [`DsFinalTx`] is.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct DsStatusUpdate {
   /// The session.
-  pub session_id: i32,
+  #[getset(get_copy = "pub")]
+  session_id: i32,
   /// Core's `PoolState`, as read.
-  pub state: i32,
+  #[getset(get_copy = "pub")]
+  state: i32,
   /// Core's `PoolStatusUpdate`, as read.
-  pub status_update: i32,
+  #[getset(get_copy = "pub")]
+  status_update: i32,
   /// Core's `PoolMessage`, as read.
-  pub message_id: i32,
+  #[getset(get_copy = "pub")]
+  message_id: i32,
 }
-
-codec_p2p!(DsStatusUpdate {
-  session_id,
-  state,
-  status_update,
-  message_id
-});
+}
 
 impl MsgDecode for DsStatusUpdate {}
 
+codec_p2p! {
 /// A masternode's mixing queue, the `dsq` payload (Core's
 /// `CCoinJoinQueue`).
 ///
@@ -248,30 +258,28 @@ impl MsgDecode for DsStatusUpdate {}
 /// queue's inventory, is [`Hashable::hash`](dash_types::Hashable::hash), of
 /// the queue as written; [`DsQueue::signature_hash`] leaves out the
 /// signature.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct DsQueue {
   /// The denomination, as Core's denomination bits.
-  pub denom: i32,
+  #[getset(get_copy = "pub")]
+  denom: i32,
   /// Registration transaction hash of the masternode.
-  pub pro_tx_hash: TxHash,
+  #[getset(get_copy = "pub")]
+  pro_tx_hash: TxHash,
   /// The queue's time, in seconds.
-  pub time: i64,
+  #[getset(get_copy = "pub")]
+  time: i64,
   /// Whether the session is ready to mix.
-  pub ready: bool,
+  #[getset(get_copy = "pub")]
+  ready: bool,
   /// The masternode's BLS signature, as read.
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::hex"))]
-  pub sig: Vec<u8>,
+  #[getset(get = "pub")]
+  sig: Vec<u8>,
 }
-
-codec_p2p!(DsQueue {
-  denom,
-  pro_tx_hash,
-  time,
-  ready,
-  sig
-});
+}
 
 impl DsQueue {
   /// Core's `GetSignatureHash()`: the queue as written, without the
@@ -288,30 +296,29 @@ impl DsQueue {
 
 impl MsgDecode for DsQueue {}
 
+codec_p2p! {
 /// A masternode-signed mixed transaction, the `dstx` payload (Core's
 /// `CCoinJoinBroadcastTx`). Core keys it by the transaction's hash
 /// (`tx.hash()`), not by [`Hashable::hash`](dash_types::Hashable::hash).
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct DsTx {
   /// The mixed transaction.
-  pub tx: Transaction,
+  #[getset(get = "pub")]
+  tx: Transaction,
   /// Registration transaction hash of the masternode.
-  pub pro_tx_hash: TxHash,
+  #[getset(get_copy = "pub")]
+  pro_tx_hash: TxHash,
   /// The masternode's BLS signature, as read.
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::hex"))]
-  pub sig: Vec<u8>,
+  #[getset(get = "pub")]
+  sig: Vec<u8>,
   /// The signature's time, in seconds.
-  pub sig_time: i64,
+  #[getset(get_copy = "pub")]
+  sig_time: i64,
 }
-
-codec_p2p!(DsTx {
-  tx,
-  pro_tx_hash,
-  sig,
-  sig_time
-});
+}
 
 impl DsTx {
   /// Core's `GetSignatureHash()`: the message as written without the

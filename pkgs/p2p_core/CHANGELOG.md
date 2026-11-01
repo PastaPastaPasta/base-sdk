@@ -79,12 +79,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `govobjvote` is read as Core's network read: a signature of at most 96 bytes, then exactly 65 or 96, else
   `P2pDecodeError::InvalidValue`; any other length was read.
 - `headers2` decodes the headers Core's `Compress` builds, restoring their fields as Core's `Uncompress` does, and
-  computes a previous block hash only where Core computes it. A first header with a field left off, or a version
-  offset past the list, fails with `DecodeError::InvalidValue`, where Core's `Uncompress` leaves the fields zero.
-  `Headers2` keeps each header's wire form as a `CompressedHeader`, replacing `CompressionState`; a caller that needs
-  Core's reconstruction parses each `CompressedHeader` and restores the fields itself. The fields of both are private,
-  read through accessors (`Headers2::headers`, `CompressedHeader::flags`, `header` and `time_offset`), so a header's
-  restored fields always agree with what it encodes; deserializing a `Headers2` checks it.
+  computes a previous block hash only where Core computes it. A field Core cannot restore, in a first header or from a
+  version offset past the list, stays zero, as in Core's `Uncompress`. `Headers2` keeps each header's wire form as a
+  `CompressedHeader`, replacing `CompressionState`. The fields of both are private, read through accessors
+  (`Headers2::headers`, `CompressedHeader::flags`, `header` and `time_offset`), so a header's restored fields always
+  agree with what it encodes; deserializing a `Headers2` checks it.
 - The `headers2` encoders compress as Core's `Compress`: the previous block hash always, and a time delta only when
   the time does not step backwards.
 - `encode_v2` takes the peer's common version.
@@ -112,10 +111,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `SimplifiedMnListEntry::is_valid` and `GetQrInfo::extra_share`, like the `qrinfo` extra share flag, are a `bool` read
   as 0 or 1, the bytes Core writes; another byte, which Core reads as `true`, fails with
   `DecodeError::NonCanonicalBool`. Core serves a `getqrinfo` with such a byte.
-
-### Removed
-
-- `ProtocolVersion::CURRENT`; use `V24_0`, or a version the caller defines.
 
 ### Not provided
 

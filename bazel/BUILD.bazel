@@ -1,17 +1,42 @@
 # This package holds the module fragments `MODULE.bazel` includes, one per
 # concern, and the helpers the crates load.
 
-# Each setting selects the Rust toolchains that mirror one Cargo profile. Keyed
-# on the compilation mode, the profile's opt-level also reaches the C that build
-# scripts compile.
+load(":rust.bzl", "bool_flag")
+
+# Builds for rustc's baseline of each target, with `portable` on every crate
+# that declares it, so the artifacts run on any CPU the target admits.
+bool_flag(
+    name = "portable",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
+
+# Each profile selects the Rust toolchains that build it. Keyed on the
+# compilation mode, its opt-level also reaches the C that build scripts compile.
 config_setting(
-    name = "build_profile_debug",
+    name = "profile_debug",
+    flag_values = {":portable": "false"},
     values = {"compilation_mode": "dbg"},
     visibility = ["//visibility:public"],
 )
 
 config_setting(
-    name = "build_profile_release",
+    name = "profile_release",
+    flag_values = {":portable": "false"},
+    values = {"compilation_mode": "opt"},
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "profile_portable_debug",
+    flag_values = {":portable": "true"},
+    values = {"compilation_mode": "dbg"},
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "profile_portable_release",
+    flag_values = {":portable": "true"},
     values = {"compilation_mode": "opt"},
     visibility = ["//visibility:public"],
 )

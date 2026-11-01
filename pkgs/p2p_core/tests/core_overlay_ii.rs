@@ -167,11 +167,11 @@ fn read(c: &Case, raw: &[u8]) -> Result<Read, Stage> {
       (P2pMsg::QpCommit(m), Some(hash), Some(sign_hash))
     }
     P2pMsg::QSigSesAnn(m) => {
-      let sign_hash = m.anns.iter().flat_map(|a| le(a.sign_hash())).collect();
+      let sign_hash = m.anns().iter().flat_map(|a| le(a.sign_hash())).collect();
       (d.msg.clone(), None, Some(sign_hash))
     }
     P2pMsg::QSigShare(m) => {
-      let sign_hash = m.shares.iter().flat_map(|s| le(s.sign_hash())).collect();
+      let sign_hash = m.shares().iter().flat_map(|s| le(s.sign_hash())).collect();
       (d.msg.clone(), None, Some(sign_hash))
     }
     other => (other.clone(), None, None),

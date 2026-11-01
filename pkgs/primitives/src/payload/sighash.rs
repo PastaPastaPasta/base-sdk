@@ -55,11 +55,18 @@ pub(crate) fn destination_string(script: &[u8], addr: &AddrParams) -> String {
 /// The signature must be the last field of `payload`; Core's default
 /// signature is invalid and serializes as zeros.
 pub(crate) fn tx_bytes_unsigned(tx: &Transaction, payload: &impl BaseCodec) -> Vec<u8> {
-  let mut copy = tx.clone();
-  copy.extra_payload.clear();
-  payload.encode(&mut copy.extra_payload);
-  let len = copy.extra_payload.len();
-  copy.extra_payload[len - BLS_SIG_LEN..].fill(0);
+  let mut extra_payload = Vec::new();
+  payload.encode(&mut extra_payload);
+  let len = extra_payload.len();
+  extra_payload[len - BLS_SIG_LEN..].fill(0);
+  let copy = Transaction::new(
+    tx.version(),
+    tx.tx_type(),
+    tx.inputs().clone(),
+    tx.outputs().clone(),
+    tx.lock_time(),
+    extra_payload,
+  );
   let mut buf = Vec::new();
   copy.encode(&mut buf);
   buf
@@ -88,7 +95,7 @@ pub fn llmq_sign_hash(llmq_type: LlmqType, quorum_hash: &QuorumHash, id: &Hash25
 /// Writes the fields of `tx` that Core's shared-masternode digests take
 /// directly: the version, the type and the lock time.
 pub(crate) fn write_tx_header(tx: &Transaction, buf: &mut impl EncodeBuf) {
-  tx.version.encode(buf);
-  tx.tx_type.to_base().encode(buf);
-  tx.lock_time.encode(buf);
+  tx.version().encode(buf);
+  tx.tx_type().to_base().encode(buf);
+  tx.lock_time().encode(buf);
 }

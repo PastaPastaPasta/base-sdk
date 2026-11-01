@@ -11,8 +11,8 @@
 
 use dash_dev::{vec_from_hex, Corpus};
 use dash_p2p_core::{
-  CFCheckpt, CFHeaders, CFilter, CmpctBlock, CommandString, FilterLoad, Headers2, Magic, P2pDecodeError, P2pMsg,
-  ProtoCtx, ProtocolVersion, SendCmpct, V1FrameError, V1Header,
+  CFCheckpt, CFHeaders, CFilter, CmpctBlock, CommandString, Headers2, Magic, P2pDecodeError, P2pMsg, ProtoCtx,
+  ProtocolVersion, V1FrameError, V1Header,
 };
 use dash_pkc::bls::BlsCtx;
 use dash_primitives::{Block, BlockHash, BlockHeader};
@@ -158,7 +158,7 @@ fn replies_answer_the_request() {
       .unwrap_or_else(|| panic!("{label}: no request recorded"));
     let d = P2pMsg::decode_with_policy(&command(&m.command), &m.raw.bytes(), &ctx()).unwrap();
     match (d.msg, want) {
-      (P2pMsg::MerkleBlock(b), Expect::Block { block_hash }) => assert_eq!(b.header.hash(), *block_hash, "{label}"),
+      (P2pMsg::MerkleBlock(b), Expect::Block { block_hash }) => assert_eq!(b.header().hash(), *block_hash, "{label}"),
       (P2pMsg::CFilter(f), Expect::CFilter(w)) => assert_eq!(&f, w, "{label}"),
       (P2pMsg::CFHeaders(f), Expect::CFHeaders(w)) => assert_eq!(&f, w, "{label}"),
       (P2pMsg::CFCheckpt(f), Expect::CFCheckpt(w)) => assert_eq!(&f, w, "{label}"),
@@ -181,18 +181,18 @@ fn short_ids_are_cores() {
   for p in &pairs {
     let cmpct = CmpctBlock::decode(&mut &vec_from_hex(&p.cmpctblock)[..]).unwrap();
     let block = Block::decode(&mut &vec_from_hex(&p.block)[..]).unwrap();
-    assert_eq!(cmpct.header, block.header);
+    assert_eq!(cmpct.header(), block.header());
     // Core prefills the coinbase alone and sends a short ID for every other.
-    assert_eq!(cmpct.prefilled.len(), 1);
+    assert_eq!(cmpct.prefilled().len(), 1);
     assert_eq!(
-      (cmpct.prefilled[0].index, &cmpct.prefilled[0].tx),
-      (0, &block.transactions[0])
+      (cmpct.prefilled()[0].index(), cmpct.prefilled()[0].tx()),
+      (0, &block.transactions()[0])
     );
-    let want: Vec<_> = block.transactions[1..]
+    let want: Vec<_> = block.transactions()[1..]
       .iter()
       .map(|tx| cmpct.short_id(tx.hash().as_bytes()))
       .collect();
-    assert_eq!(cmpct.short_ids, want);
+    assert_eq!(*cmpct.short_ids(), want);
     with_short_ids += usize::from(!want.is_empty());
   }
   assert!(with_short_ids > 0, "no compact block carried a short ID");
@@ -220,7 +220,7 @@ fn check_headers2(raw: &[u8], mode: &str, label: &str) -> Headers2 {
     _ => assert!(reply || announce, "{label}: either mode"),
   }
   for (i, pair) in headers.windows(2).enumerate() {
-    assert_eq!(pair[1].prev_hash, pair[0].hash(), "{label}: header {}", i + 1);
+    assert_eq!(pair[1].prev_hash(), pair[0].hash(), "{label}: header {}", i + 1);
     assert!(
       msg.is_prev_hash_derived(i + 1),
       "{label}: Core compresses every later prev hash"
@@ -311,7 +311,7 @@ fn inventory_types_core_knows_are_requested() {
     };
     let requested = c.replies.iter().any(|r| r == "getdata");
     assert!(requested, "{}", c.name);
-    assert!(inv.inventory[0].inv_type.is_known(), "{}", c.name);
+    assert!(inv.inventory()[0].inv_type().is_known(), "{}", c.name);
     checked += 1;
   }
   assert_eq!(checked, 3);
@@ -328,24 +328,24 @@ fn handler_values_after_the_read() {
   };
   // Core reads both and then penalises the hash function count above 50.
   for (name, funcs) in [("filterload_funcs_50", 50), ("filterload_funcs_51", 51)] {
-    let P2pMsg::FilterLoad(FilterLoad { hash_funcs, .. }) = read(name) else {
+    let P2pMsg::FilterLoad(filter) = read(name) else {
       panic!("{name}")
     };
-    assert_eq!(hash_funcs, funcs);
+    assert_eq!(filter.hash_funcs(), funcs);
   }
   // A version other than 1 is read, then ignored.
-  let P2pMsg::SendCmpct(SendCmpct { version, .. }) = read("sendcmpct_v2") else {
+  let P2pMsg::SendCmpct(send) = read("sendcmpct_v2") else {
     panic!("sendcmpct")
   };
-  assert_eq!(version, 2);
+  assert_eq!(send.version(), 2);
   let P2pMsg::CmpctBlock(cmpct) = read("cmpctblock_prefilled_index_65535") else {
     panic!("cmpctblock")
   };
-  assert_eq!(cmpct.prefilled[0].index, u16::MAX);
+  assert_eq!(cmpct.prefilled()[0].index(), u16::MAX);
   let P2pMsg::CmpctBlock(cmpct) = read("cmpctblock_total_65535") else {
     panic!("cmpctblock")
   };
-  assert_eq!(cmpct.short_ids.len(), 65_535);
+  assert_eq!(cmpct.short_ids().len(), 65_535);
 }
 
 #[rstest]

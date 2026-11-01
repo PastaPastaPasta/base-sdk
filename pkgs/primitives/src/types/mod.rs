@@ -6,7 +6,9 @@
 
 //! Dash network and address types.
 
+#[expect(clippy::same_name_method, reason = "trait impl delegates to method")]
 mod addrv1;
+#[expect(clippy::same_name_method, reason = "trait impl delegates to method")]
 mod addrv2;
 mod netaddr;
 mod netinfo;

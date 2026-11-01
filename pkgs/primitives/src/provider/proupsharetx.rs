@@ -13,43 +13,44 @@ use crate::{codec_type, TxHash};
 use bitcoin_primitives::script::ScriptPubKeyBuf;
 use dash_types::codec::BaseCodec;
 use dash_types::type_id::TypeId;
+use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
+codec_type! {
 /// ProUpShareTx -- change a share's reward script (type 11, v24).
 ///
 /// Core reads every field whatever the version.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ProUpShareTx {
   /// Payload version.
-  pub version: u16,
+  #[getset(get_copy = "pub")]
+  version: u16,
   /// ProTx hash identifying the masternode.
-  pub pro_tx_hash: TxHash,
+  #[getset(get_copy = "pub")]
+  pro_tx_hash: TxHash,
   /// Index of the share to update.
-  pub share_index: u16,
+  #[getset(get_copy = "pub")]
+  share_index: u16,
   /// New reward script; the refund script resets rewards.
-  pub script_reward: ScriptPubKeyBuf,
+  #[getset(get = "pub")]
+  script_reward: ScriptPubKeyBuf,
   /// Hash of all inputs.
-  pub inputs_hash: InputsHash,
+  #[getset(get_copy = "pub")]
+  inputs_hash: InputsHash,
   /// Share owner's ECDSA signature (variable-length).
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::hex"))]
-  pub vch_sig: Vec<u8>,
+  #[cfg_attr(feature = "serde", serde(rename = "vchSig"))]
+  #[getset(get = "pub")]
+  sig: Vec<u8>,
 }
-
-codec_type!(ProUpShareTx {
-  version,
-  pro_tx_hash,
-  share_index,
-  script_reward,
-  inputs_hash,
-  vch_sig,
-});
+}
 
 impl ProUpShareTx {
   /// The payload's `SER_GETHASH` serialization, which leaves out
-  /// `vch_sig`. The share's owner key signs its SHA256d.
+  /// `sig`. The share's owner key signs its SHA256d.
   pub fn sig_hash_bytes(&self) -> Vec<u8> {
     let mut buf = Vec::new();
     self.version.encode(&mut buf);

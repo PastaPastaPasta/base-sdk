@@ -15,6 +15,7 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+#[expect(clippy::same_name_method, reason = "trait impl delegates to method")]
 mod arith256;
 mod compact;
 mod hash;

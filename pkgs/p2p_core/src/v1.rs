@@ -14,24 +14,32 @@ use crate::prelude::*;
 
 use bitcoin_hashes::sha256d;
 use dash_types::codec::BaseCodec;
+use dash_types::impl_new;
 use dash_types::type_id::Unencodable;
+use getset::CopyGetters;
 
 use core::fmt;
 
+impl_new! {
 /// The 24-byte header in front of every V1 payload.
 ///
 /// Wire format: magic, 12-byte command, `u32` payload length, then the
 /// first four bytes of the payload's SHA256d.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Copy, CopyGetters, Debug, Eq, Hash, PartialEq, Unencodable)]
 pub struct V1Header {
   /// Network magic, Core's `pchMessageStart`.
-  pub magic: Magic,
+  #[getset(get_copy = "pub")]
+  magic: Magic,
   /// The message's command.
-  pub command: CommandString,
+  #[getset(get_copy = "pub")]
+  command: CommandString,
   /// Payload length in bytes.
-  pub length: u32,
+  #[getset(get_copy = "pub")]
+  length: u32,
   /// The payload's checksum.
-  pub checksum: [u8; 4],
+  #[getset(get_copy = "pub")]
+  checksum: [u8; 4],
+}
 }
 
 /// Why Core's V1 transport refuses a message.

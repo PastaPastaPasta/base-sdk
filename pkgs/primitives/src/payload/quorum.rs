@@ -17,7 +17,8 @@ use dash_params::LlmqType;
 use dash_pkc::bls::{BlsEagerPk, BlsEagerSig, BlsSchemeKind};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{impl_type, Checkable, Numeric};
+use dash_types::{impl_new, impl_type, Checkable, Numeric};
+use getset::{CopyGetters, Getters, Setters};
 
 use core::fmt;
 
@@ -28,6 +29,7 @@ make_hash! {
 
 hash_impl!(QuorumVvecHash);
 
+impl_new! {
 /// DKG session output for one LLMQ.
 ///
 /// - v1: legacy
@@ -38,30 +40,41 @@ hash_impl!(QuorumVvecHash);
 /// The BLS fields take the version's scheme: legacy for v1 and v2, basic for
 /// any other version. Core hashes the re-serialization, which writes zeros
 /// for an invalid field.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, Setters, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(into = "CommitmentSerde", try_from = "CommitmentSerde"))]
 pub struct Commitment {
   /// 1=legacy, 2=+indexed, 3=basic, 4=basic+idx.
-  pub version: u16,
+  #[getset(get_copy = "pub", set = "pub")]
+  version: u16,
   /// LLMQ type.
-  pub llmq_type: LlmqType,
+  #[getset(get_copy = "pub")]
+  llmq_type: LlmqType,
   /// Quorum block hash.
-  pub quorum_hash: QuorumHash,
+  #[getset(get_copy = "pub")]
+  quorum_hash: QuorumHash,
   /// Present for indexed versions (2, 4).
-  pub quorum_index: Option<i16>,
+  #[getset(get_copy = "pub")]
+  quorum_index: Option<i16>,
   /// Signers bitset.
-  pub signers: DynBitset,
+  #[getset(get = "pub")]
+  signers: DynBitset,
   /// Valid members bitset.
-  pub valid_members: DynBitset,
+  #[getset(get = "pub")]
+  valid_members: DynBitset,
   /// Quorum BLS public key.
-  pub quorum_public_key: BlsEagerPk,
+  #[getset(get = "pub")]
+  quorum_public_key: BlsEagerPk,
   /// Quorum verification vector hash (32 bytes).
-  pub quorum_vvec_hash: QuorumVvecHash,
+  #[getset(get_copy = "pub")]
+  quorum_vvec_hash: QuorumVvecHash,
   /// Threshold signature over commitment.
-  pub quorum_sig: BlsEagerSig,
+  #[getset(get = "pub")]
+  quorum_sig: BlsEagerSig,
   /// Aggregated per-member signature.
-  pub members_sig: BlsEagerSig,
+  #[getset(get = "pub")]
+  members_sig: BlsEagerSig,
+}
 }
 
 impl_type!(Commitment);
@@ -217,17 +230,22 @@ impl TryFrom<CommitmentSerde> for Commitment {
   }
 }
 
+impl_new! {
 /// Tx-level wrapper for Commitment (type 6).
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct FinalCommitment {
   /// Payload version.
-  pub version: u16,
+  #[getset(get_copy = "pub")]
+  version: u16,
   /// Block height.
-  pub height: bitcoin_units::BlockHeight,
+  #[getset(get_copy = "pub")]
+  height: bitcoin_units::BlockHeight,
   /// The commitment itself.
-  pub commitment: Commitment,
+  #[getset(get = "pub")]
+  commitment: Commitment,
+}
 }
 
 impl_type!(FinalCommitment);

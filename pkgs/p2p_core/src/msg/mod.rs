@@ -30,6 +30,7 @@ use crate::codec::MsgDecode;
 use crate::command::CommandString;
 use crate::prelude::*;
 use crate::short_id::ShortId;
+use crate::version::ProtocolVersion;
 
 use dash_primitives::{Block, Commitment, GovObject, GovVote, Transaction};
 use dash_types::type_id::Unencodable;

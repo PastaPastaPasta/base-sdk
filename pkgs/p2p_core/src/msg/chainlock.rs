@@ -12,9 +12,11 @@ use crate::prelude::*;
 use dash_pkc::bls::BlsSigBytes;
 use dash_primitives::{BlockHash, OutPoint, TxHash};
 use dash_types::type_id::TypeId;
+use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
+codec_p2p! {
 /// A ChainLock signature, the `clsig` payload (Core's `ChainLockSig`).
 ///
 /// Core reads the signature eagerly under its process-wide BLS scheme; the
@@ -22,23 +24,21 @@ use core::fmt;
 /// inventory hash is over the signature as it re-serializes it, which the
 /// node-side BLS classifier gives, so the two agree once the classifier has
 /// normalized the signature.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct ClSig {
   /// Height of the locked block.
-  pub height: i32,
+  #[getset(get_copy = "pub")]
+  height: i32,
   /// Hash of the locked block.
-  pub block_hash: BlockHash,
+  #[getset(get_copy = "pub")]
+  block_hash: BlockHash,
   /// Recovered threshold signature of the signing quorum, as read. Its
   /// scheme comes from the context, not the type's tag.
-  pub sig: BlsSigBytes,
+  #[getset(get_copy = "pub")]
+  sig: BlsSigBytes,
 }
-
-codec_p2p!(ClSig {
-  height,
-  block_hash,
-  sig
-});
+}
 
 impl fmt::Display for ClSig {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -46,33 +46,32 @@ impl fmt::Display for ClSig {
   }
 }
 
+codec_p2p! {
 /// A deterministic InstantSend lock, the `isdlock` payload (Core's
 /// `InstantSendLock`).
 ///
 /// Core reads the signature lazily and hashes the lock over its wire bytes.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct IsdLock {
   /// Lock version; Core reads any value.
-  pub version: u8,
+  #[getset(get_copy = "pub")]
+  version: u8,
   /// Outpoints the locked transaction spends.
-  pub inputs: Vec<OutPoint>,
+  #[getset(get = "pub")]
+  inputs: Vec<OutPoint>,
   /// Hash of the locked transaction.
-  pub txid: TxHash,
+  #[getset(get_copy = "pub")]
+  txid: TxHash,
   /// Hash of the block that starts the signing quorum's cycle.
-  pub cycle_hash: BlockHash,
+  #[getset(get_copy = "pub")]
+  cycle_hash: BlockHash,
   /// Recovered threshold signature of the signing quorum.
-  pub sig: BlsSigBytes,
+  #[getset(get_copy = "pub")]
+  sig: BlsSigBytes,
 }
-
-codec_p2p!(IsdLock {
-  version,
-  inputs,
-  txid,
-  cycle_hash,
-  sig
-});
+}
 
 impl fmt::Display for IsdLock {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

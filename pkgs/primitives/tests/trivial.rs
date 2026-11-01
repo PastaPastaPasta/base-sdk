@@ -19,10 +19,10 @@ const DECODE_FAILURE: &[&str] = &["gettxpayload-fail", "bad-protx-payload"];
 /// The version of a provider payload Core decoded past its version.
 fn known_protx_version(payload: &SpecialPayload) -> Option<u16> {
   match payload {
-    SpecialPayload::ProviderRegister(p) => Some(p.version.to_base()),
-    SpecialPayload::ProviderUpdateService(p) => Some(p.version.to_base()),
-    SpecialPayload::ProviderUpdateRegistrar(p) => Some(p.version.to_base()),
-    SpecialPayload::ProviderUpdateRevoke(p) => Some(p.version.to_base()),
+    SpecialPayload::ProviderRegister(p) => Some(p.version().to_base()),
+    SpecialPayload::ProviderUpdateService(p) => Some(p.version().to_base()),
+    SpecialPayload::ProviderUpdateRegistrar(p) => Some(p.version().to_base()),
+    SpecialPayload::ProviderUpdateRevoke(p) => Some(p.version().to_base()),
     _ => None,
   }
 }
@@ -49,9 +49,9 @@ fn trivial_vectors_match_core() {
         let decoded = tx.decode_payload().unwrap().ok().filter(PayloadDecode::is_complete);
         assert_eq!(decoded.is_none(), decode_fails, "{label}: decode verdict");
         let Some(decoded) = decoded else { continue };
-        let reason = decoded.payload.check().map(|e| e.to_string());
+        let reason = decoded.payload().check().map(|e| e.to_string());
         // A "legacy" row runs before V19, where `GetMax` allows version 1.
-        let capped = row[2] == "legacy" && known_protx_version(&decoded.payload).is_some_and(|v| v > 1);
+        let capped = row[2] == "legacy" && known_protx_version(decoded.payload()).is_some_and(|v| v > 1);
         if capped && expected == Some("bad-protx-version") {
           assert_eq!(reason, None, "{label}");
           continue;

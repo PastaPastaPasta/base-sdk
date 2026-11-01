@@ -33,13 +33,10 @@ fn serialize(block: &Block) -> String {
 /// Core's `DevNetGenesisBlock()`: the devnet genesis block on a devnet, a
 /// null `CBlock` elsewhere.
 fn devnet_genesis(setup: &ChainSetup) -> Block {
-  setup.devnet_genesis.as_ref().map_or_else(
-    || Block {
-      header: BlockHeader::default(),
-      transactions: Vec::new(),
-    },
-    Block::from,
-  )
+  setup
+    .devnet_genesis
+    .as_ref()
+    .map_or_else(|| Block::new(BlockHeader::default(), Vec::new()), Block::from)
 }
 
 /// Core's `InterpretBool`: empty is true, else `LocaleIndependentAtoi<int>`

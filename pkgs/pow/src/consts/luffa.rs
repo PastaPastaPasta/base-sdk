@@ -6,16 +6,19 @@
 
 //! Luffa-512 constants.
 //!
-//! The initial branches come from Appendix C.1 of the submission. The round
-//! constants are generated from the Appendix B-1 seeds with the Section 4.4
-//! Galois LFSR.
+//! The initial branches and the LFSR seeds are NIST AESAVS Appendix C.1 and
+//! C.2 KeySbox ciphertexts. The round constants are generated from the seeds
+//! with the Galois LFSR of Luffa 2.0.1 Section 4.4.
+
+use crate::util::const_array;
 
 use wide::u32x4;
 
 /// Block size in bytes.
 pub(crate) const BLOCK: usize = 32;
 
-/// Initial branch states (Appendix C.1).
+/// Initial branch states, the first ten NIST AESAVS Appendix C.1 KeySbox
+/// ciphertexts taken two per branch.
 #[rustfmt::skip]
 pub(crate) static IV: [[u32; 8]; 5] = [
   [
@@ -36,7 +39,8 @@ pub(crate) static IV: [[u32; 8]; 5] = [
   ],
 ];
 
-/// Appendix B-1 seeds for the round-constant LFSR.
+/// Round-constant LFSR seeds, the low 64 bits of the first five NIST AESAVS
+/// Appendix C.2 KeySbox ciphertexts.
 static LFSR_SEEDS: [(u32, u32); 5] = [
   (0x181cca53, 0x380cde06),
   (0x5b6f0876, 0xf16f8594),
@@ -83,26 +87,12 @@ pub(crate) static RC: [[[u32; 8]; 2]; 5] = {
 };
 
 /// Packed constants for branches 0 through 3, word 0.
-pub(crate) static RC_FIRST4_LOW: [u32x4; 8] = {
-  let mut rc = [u32x4::splat(0); 8];
-  let mut round = 0;
-  while round < 8 {
-    rc[round] = u32x4::new([RC[0][0][round], RC[1][0][round], RC[2][0][round], RC[3][0][round]]);
-    round += 1;
-  }
-  rc
-};
+pub(crate) static RC_FIRST4_LOW: [u32x4; 8] =
+  const_array!(u32x4::splat(0); 8; |r| u32x4::new([RC[0][0][r], RC[1][0][r], RC[2][0][r], RC[3][0][r]]));
 
 /// Packed constants for branches 0 through 3, word 4.
-pub(crate) static RC_FIRST4_HIGH: [u32x4; 8] = {
-  let mut rc = [u32x4::splat(0); 8];
-  let mut round = 0;
-  while round < 8 {
-    rc[round] = u32x4::new([RC[0][1][round], RC[1][1][round], RC[2][1][round], RC[3][1][round]]);
-    round += 1;
-  }
-  rc
-};
+pub(crate) static RC_FIRST4_HIGH: [u32x4; 8] =
+  const_array!(u32x4::splat(0); 8; |r| u32x4::new([RC[0][1][r], RC[1][1][r], RC[2][1][r], RC[3][1][r]]));
 
 #[cfg(test)]
 mod tests {

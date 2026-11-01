@@ -13,20 +13,25 @@ use bitcoin_hashes::{sha256, siphash24};
 use dash_primitives::{hash_impl, BlockHash, BlockHeader, Transaction};
 use dash_types::codec::{take, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
-use dash_types::CompactSize;
+use dash_types::{impl_new, CompactSize};
+use getset::{CopyGetters, Getters};
 
 /// Most transactions a compact block may describe, Core's 16-bit index.
 const MAX_BLOCK_TXS: usize = u16::MAX as usize;
 
+impl_new! {
 /// Announces compact block support, the `sendcmpct` payload.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, Copy, CopyGetters, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct SendCmpct {
   /// Whether the peer wants new blocks pushed as `cmpctblock`.
-  pub high_bandwidth: bool,
+  #[getset(get_copy = "pub")]
+  high_bandwidth: bool,
   /// Compact block version; Core ignores any but `CMPCTBLOCKS_VERSION`.
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::str_u64"))]
-  pub version: u64,
+  #[getset(get_copy = "pub")]
+  version: u64,
+}
 }
 
 impl_p2p!(SendCmpct);
@@ -83,9 +88,10 @@ impl ShortTxId {
   }
 }
 
+impl_new! {
 /// A transaction sent whole in a compact block, Core's
 /// `PrefilledTransaction`.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct PrefilledTx {
   /// The transaction's index in the block less the previous prefilled
@@ -93,9 +99,12 @@ pub struct PrefilledTx {
   ///
   /// Core reads it as `COMPACTSIZE` into a `uint16_t`, so a larger value
   /// fails.
-  pub index: u16,
+  #[getset(get_copy = "pub")]
+  index: u16,
   /// The transaction.
-  pub tx: Transaction,
+  #[getset(get = "pub")]
+  tx: Transaction,
+}
 }
 
 impl_p2p!(PrefilledTx);
@@ -118,20 +127,26 @@ impl BaseCodec for PrefilledTx {
 
 hash_impl!(PrefilledTx);
 
+impl_new! {
 /// A block as its header, short IDs and prefilled transactions, Core's
 /// `CBlockHeaderAndShortTxIDs` and the `cmpctblock` payload.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct CmpctBlock {
   /// The block's header.
-  pub header: BlockHeader,
+  #[getset(get_copy = "pub")]
+  header: BlockHeader,
   /// Salt for the short IDs.
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::str_u64"))]
-  pub nonce: u64,
+  #[getset(get_copy = "pub")]
+  nonce: u64,
   /// Short IDs of the transactions not prefilled.
-  pub short_ids: Vec<ShortTxId>,
+  #[getset(get = "pub")]
+  short_ids: Vec<ShortTxId>,
   /// Transactions sent whole, the coinbase at least.
-  pub prefilled: Vec<PrefilledTx>,
+  #[getset(get = "pub")]
+  prefilled: Vec<PrefilledTx>,
+}
 }
 
 impl_p2p!(CmpctBlock);
@@ -305,18 +320,20 @@ impl From<GetBlockTxn> for GetBlockTxnFields {
   }
 }
 
+codec_p2p! {
 /// Transactions of a compact block, Core's `BlockTransactions` and the
 /// `blocktxn` payload.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct BlockTxn {
   /// The block.
-  pub block_hash: BlockHash,
+  #[getset(get_copy = "pub")]
+  block_hash: BlockHash,
   /// The requested transactions, in request order.
-  pub txs: Vec<Transaction>,
+  #[getset(get = "pub")]
+  txs: Vec<Transaction>,
 }
-
-codec_p2p!(BlockTxn { block_hash, txs });
+}
 
 #[cfg(test)]
 #[expect(clippy::unwrap_used, reason = "test code")]

@@ -21,6 +21,7 @@ use dash_script::{PubKeyHash, Recipient};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
 use dash_types::{impl_type, Checkable, Signable};
+use getset::{CopyGetters, Getters, Setters};
 
 use core::fmt;
 
@@ -31,31 +32,40 @@ use core::fmt;
 /// - v3: ExtAddr (owner payouts)
 ///
 /// `script_payout` is empty from v3 and `payouts` below it, as in Core.
-#[derive(Clone, Debug, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Getters, PartialEq, Setters, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(into = "ProUpRegTxSerde", from = "ProUpRegTxSerde"))]
 pub struct ProUpRegTx {
   /// Payload version.
-  pub version: ProTxVersion,
+  #[getset(get_copy = "pub", set = "pub")]
+  version: ProTxVersion,
   /// ProTx hash identifying the masternode.
-  pub pro_tx_hash: TxHash,
+  #[getset(get_copy = "pub")]
+  pro_tx_hash: TxHash,
   /// Reserved, always 0.
-  pub mode: u16,
+  #[getset(get_copy = "pub")]
+  mode: u16,
   /// Operator BLS public key, decoded on first use under the version's
   /// scheme (legacy for v1). It encodes as Core serializes a key in use,
   /// under the version's scheme at encoding, and as zeros when invalid,
   /// whether or not it was used before.
-  pub pub_key_operator: BlsLazyPk,
+  #[getset(get = "pub")]
+  pub_key_operator: BlsLazyPk,
   /// Voting key id (20 bytes).
-  pub key_id_voting: PubKeyHash,
+  #[getset(get_copy = "pub")]
+  key_id_voting: PubKeyHash,
   /// Payout script (below v3).
-  pub script_payout: ScriptPubKeyBuf,
+  #[getset(get = "pub")]
+  script_payout: ScriptPubKeyBuf,
   /// Owner payouts (v3).
-  pub payouts: Vec<PayoutShare>,
+  #[getset(get = "pub")]
+  payouts: Vec<PayoutShare>,
   /// Hash of all inputs.
-  pub inputs_hash: InputsHash,
+  #[getset(get_copy = "pub")]
+  inputs_hash: InputsHash,
   /// Owner ECDSA signature.
-  pub vch_sig: OwnerSig,
+  #[getset(get = "pub")]
+  sig: OwnerSig,
 }
 
 impl_type!(ProUpRegTx);
@@ -105,13 +115,13 @@ impl BaseCodec for ProUpRegTx {
       script_payout,
       payouts,
       inputs_hash: InputsHash::decode(data)?,
-      vch_sig: OwnerSig::decode(data)?,
+      sig: OwnerSig::decode(data)?,
     })
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
     self.encode_unsigned(buf);
-    self.vch_sig.encode(buf);
+    self.sig.encode(buf);
   }
 }
 
@@ -121,22 +131,22 @@ impl Signable for ProUpRegTx {
   type Error = EcdsaError;
 
   fn payload(&self, _ctx: &()) -> Vec<u8> {
-    unsigned_digest(self, &self.vch_sig).to_vec()
+    unsigned_digest(self, &self.sig).to_vec()
   }
 
   fn set_signature(&mut self, sig: &[u8], key: &PubKeyHash, _ctx: &()) -> Result<(), EcdsaError> {
     let sig = <[u8; ECDSA_REC_SIG_LEN]>::try_from(sig).map_err(|_| EcdsaError::InvalidSignature)?;
     verify_compact(&self.payload(&()), &sig, key)?;
-    self.vch_sig = OwnerSig::new(sig);
+    self.sig = OwnerSig::new(sig);
     Ok(())
   }
 
   fn reset_signature(&mut self) {
-    self.vch_sig = OwnerSig::default();
+    self.sig = OwnerSig::default();
   }
 
   fn verify(&self, key: &PubKeyHash, _ctx: &()) -> Option<EcdsaError> {
-    let sig = self.vch_sig.as_bytes().ok_or(EcdsaError::InvalidSignature);
+    let sig = self.sig.as_bytes().ok_or(EcdsaError::InvalidSignature);
     sig.and_then(|sig| verify_compact(&self.payload(&()), sig, key)).err()
   }
 }
@@ -160,7 +170,7 @@ impl Checkable for ProUpRegTx {
     }
 
     let scripts: Vec<&[u8]> = if self.version >= ProTxVersion::ExtAddr {
-      self.payouts.iter().map(|p| p.script_payout.as_bytes()).collect()
+      self.payouts.iter().map(|p| p.script_payout().as_bytes()).collect()
     } else {
       vec![self.script_payout.as_bytes()]
     };
@@ -180,15 +190,40 @@ impl Checkable for ProUpRegTx {
 hash_impl!(ProUpRegTx);
 
 impl ProUpRegTx {
+  /// Constructs an unsigned payload. The signature is set through
+  /// [`Signable::set_signature`].
+  pub fn new(
+    version: ProTxVersion,
+    pro_tx_hash: TxHash,
+    mode: u16,
+    pub_key_operator: BlsLazyPk,
+    key_id_voting: PubKeyHash,
+    script_payout: ScriptPubKeyBuf,
+    payouts: Vec<PayoutShare>,
+    inputs_hash: InputsHash,
+  ) -> Self {
+    Self {
+      version,
+      pro_tx_hash,
+      mode,
+      pub_key_operator,
+      key_id_voting,
+      script_payout,
+      payouts,
+      inputs_hash,
+      sig: OwnerSig::default(),
+    }
+  }
+
   /// The payload's `SER_GETHASH` serialization, which leaves out
-  /// `vch_sig`. The owner key signs its SHA256d.
+  /// `sig`. The owner key signs its SHA256d.
   pub fn sig_hash_bytes(&self) -> Vec<u8> {
     let mut buf = Vec::new();
     self.encode_unsigned(&mut buf);
     buf
   }
 
-  /// Every field but `vch_sig`, as [`BaseCodec::encode`] writes them.
+  /// Every field but `sig`, as [`BaseCodec::encode`] writes them.
   fn encode_unsigned(&self, buf: &mut impl EncodeBuf) {
     self.version.encode(buf);
     self.pro_tx_hash.encode(buf);
@@ -222,7 +257,7 @@ impl From<ProUpRegTx> for ProUpRegTxSerde {
       script_payout: tx.script_payout,
       payouts: tx.payouts,
       inputs_hash: tx.inputs_hash,
-      vch_sig: tx.vch_sig,
+      vch_sig: tx.sig,
     }
   }
 }
@@ -239,7 +274,7 @@ impl From<ProUpRegTxSerde> for ProUpRegTx {
       script_payout: raw.script_payout,
       payouts: raw.payouts,
       inputs_hash: raw.inputs_hash,
-      vch_sig: raw.vch_sig,
+      sig: raw.vch_sig,
     }
   }
 }

@@ -39,7 +39,7 @@ fn the_send_gate_is_cores() {
   assert_eq!(send.len(), 75, "74 commands and the empty type");
   for (name, slot) in &send {
     for v in VERSIONS {
-      let want = slot.filter(|s| v >= s.min_version).map(|s| ShortId(s.id));
+      let want = slot.filter(|s| v >= s.min_version).map(|s| ShortId::new(s.id));
       assert_eq!(
         ShortId::for_send(&command(name), ProtocolVersion::new(v)),
         want,
@@ -59,14 +59,13 @@ fn before_the_version_core_uses_the_long_form() {
 
 #[rstest]
 fn encode_v2_follows_the_gate() {
-  let msg = P2pMsg::Ping(dash_p2p_core::Ping { nonce: 7 });
+  let msg = P2pMsg::Mempool;
   let mut long = Vec::new();
   encode_v2(&msg, ProtocolVersion::new(70234), &mut long);
-  assert_eq!(&long[..13], b"\0ping\0\0\0\0\0\0\0\0");
+  assert_eq!(long, b"\0mempool\0\0\0\0\0");
   let mut short = Vec::new();
   encode_v2(&msg, ProtocolVersion::BIP324_BASELINE, &mut short);
-  assert_eq!(short[0], 18);
-  assert_eq!(&short[1..], &long[13..]);
+  assert_eq!(short, [15]);
 }
 
 #[rstest]
@@ -80,7 +79,7 @@ fn every_core_command_is_known() {
       assert_eq!(d.msg.command(), command(name));
     }
     let slot = ShortId::from_command(&command(name));
-    assert_eq!(slot, send[name].map(|s| ShortId(s.id)), "{name}");
+    assert_eq!(slot, send[name].map(|s| ShortId::new(s.id)), "{name}");
   }
 }
 

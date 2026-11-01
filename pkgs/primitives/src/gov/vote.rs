@@ -18,6 +18,7 @@ use dash_script::PubKeyHash;
 use dash_types::codec::BaseCodec;
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{enum_map, impl_num, ArrayBuf, Hashable, Numeric, Signable};
+use getset::{CopyGetters, Getters};
 
 enum_map! {
   /// Governance vote outcome.
@@ -69,23 +70,29 @@ pub enum GovVoteEcdsaSer {
 }
 
 /// A governance vote signed with a masternode's BLS operator key.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, CopyGetters, Debug, Eq, Hash, PartialEq, Unencodable)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 // TODO(kwvg): Unify common fields of GovVoteBls and GovVoteEcdsa.
 pub struct GovVoteBls {
   /// Voting masternode outpoint.
-  pub masternode_outpoint: OutPoint,
+  #[getset(get_copy = "pub")]
+  masternode_outpoint: OutPoint,
   /// Hash of the governance object being voted on.
-  pub parent_hash: TxHash,
+  #[getset(get_copy = "pub")]
+  parent_hash: TxHash,
   /// Vote outcome.
-  pub outcome: VoteOutcome,
+  #[getset(get_copy = "pub")]
+  outcome: VoteOutcome,
   /// Vote signal type.
-  pub signal: VoteSignal,
+  #[getset(get_copy = "pub")]
+  signal: VoteSignal,
   /// Vote timestamp.
-  pub time: i64,
+  #[getset(get_copy = "pub")]
+  time: i64,
   /// Signature bytes, `None` when unsigned.
-  pub sig: Option<BlsSigBytes>,
+  #[getset(get_copy = "pub")]
+  sig: Option<BlsSigBytes>,
 }
 
 impl Signable for GovVoteBls {
@@ -123,24 +130,51 @@ impl Signable for GovVoteBls {
   }
 }
 
+impl GovVoteBls {
+  /// Constructs an unsigned vote. The signature is set through
+  /// [`Signable::set_signature`].
+  pub fn new(
+    masternode_outpoint: OutPoint,
+    parent_hash: TxHash,
+    outcome: VoteOutcome,
+    signal: VoteSignal,
+    time: i64,
+  ) -> Self {
+    Self {
+      masternode_outpoint,
+      parent_hash,
+      outcome,
+      signal,
+      time,
+      sig: None,
+    }
+  }
+}
+
 /// A governance vote signed with a masternode's ECDSA voting key.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, CopyGetters, Debug, Eq, Hash, PartialEq, Unencodable)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct GovVoteEcdsa {
   /// Voting masternode outpoint.
-  pub masternode_outpoint: OutPoint,
+  #[getset(get_copy = "pub")]
+  masternode_outpoint: OutPoint,
   /// Hash of the governance object being voted on.
-  pub parent_hash: TxHash,
+  #[getset(get_copy = "pub")]
+  parent_hash: TxHash,
   /// Vote outcome.
-  pub outcome: VoteOutcome,
+  #[getset(get_copy = "pub")]
+  outcome: VoteOutcome,
   /// Vote signal type.
-  pub signal: VoteSignal,
+  #[getset(get_copy = "pub")]
+  signal: VoteSignal,
   /// Vote timestamp.
-  pub time: i64,
+  #[getset(get_copy = "pub")]
+  time: i64,
   /// Compact recoverable signature, `None` when unsigned.
   #[cfg_attr(feature = "serde", serde(with = "crate::provider::compact_hex"))]
-  pub sig: Option<[u8; ECDSA_REC_SIG_LEN]>,
+  #[getset(get_copy = "pub")]
+  sig: Option<[u8; ECDSA_REC_SIG_LEN]>,
 }
 
 impl Signable for GovVoteEcdsa {
@@ -163,8 +197,8 @@ impl Signable for GovVoteEcdsa {
       GovVoteEcdsaSer::SignatureString => {
         let msg = format!(
           "{}-{}|{}|{}|{}|{}",
-          self.masternode_outpoint.hash,
-          self.masternode_outpoint.index,
+          self.masternode_outpoint.txid(),
+          self.masternode_outpoint.index(),
           self.parent_hash,
           self.signal.to_base() as i32,
           self.outcome.to_base() as i32,
@@ -192,6 +226,28 @@ impl Signable for GovVoteEcdsa {
   }
 }
 
+impl GovVoteEcdsa {
+  /// Constructs an unsigned vote. The signature is set through
+  /// [`Signable::set_signature`].
+  pub fn new(
+    masternode_outpoint: OutPoint,
+    parent_hash: TxHash,
+    outcome: VoteOutcome,
+    signal: VoteSignal,
+    time: i64,
+  ) -> Self {
+    Self {
+      masternode_outpoint,
+      parent_hash,
+      outcome,
+      signal,
+      time,
+      sig: None,
+    }
+  }
+}
+
+codec_base! {
 /// A governance vote.
 ///
 /// ```text
@@ -199,33 +255,31 @@ impl Signable for GovVoteEcdsa {
 /// || outcome(u32) || signal(u32) || time(i64)
 /// || sig(CompactSize + bytes)
 /// ```
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct GovVote {
   /// Voting masternode outpoint.
-  pub masternode_outpoint: OutPoint,
+  #[getset(get_copy = "pub")]
+  masternode_outpoint: OutPoint,
   /// Hash of the governance object being voted on.
-  pub parent_hash: TxHash,
+  #[getset(get_copy = "pub")]
+  parent_hash: TxHash,
   /// Vote outcome.
-  pub outcome: VoteOutcome,
+  #[getset(get_copy = "pub")]
+  outcome: VoteOutcome,
   /// Vote signal type.
-  pub signal: VoteSignal,
+  #[getset(get_copy = "pub")]
+  signal: VoteSignal,
   /// Vote timestamp.
-  pub time: i64,
+  #[getset(get_copy = "pub")]
+  time: i64,
   /// Signature bytes.
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::hex"))]
-  pub sig: Vec<u8>,
+  #[getset(get = "pub")]
+  sig: Vec<u8>,
 }
-
-codec_base!(GovVote {
-  masternode_outpoint,
-  parent_hash,
-  outcome,
-  signal,
-  time,
-  sig,
-});
+}
 
 impl Hashable for GovVote {
   type Hash = Hash256;
@@ -235,8 +289,8 @@ impl Hashable for GovVote {
   fn hash(&self) -> Hash256 {
     let mut buf = ArrayBuf::<89>::new();
     // outpoint + dummy padding for legacy hash compat
-    self.masternode_outpoint.hash.encode(&mut buf);
-    self.masternode_outpoint.index.encode(&mut buf);
+    self.masternode_outpoint.txid().encode(&mut buf);
+    self.masternode_outpoint.index().encode(&mut buf);
     0u8.encode(&mut buf);
     0xFFFF_FFFFu32.encode(&mut buf);
     self.parent_hash.encode(&mut buf);
@@ -284,10 +338,7 @@ mod tests {
   #[rstest]
   fn bls_vote_signs_under_the_basic_scheme() {
     let mut vote = GovVoteBls {
-      masternode_outpoint: OutPoint {
-        hash: TxHash::from([0x11; 32]),
-        index: 3,
-      },
+      masternode_outpoint: OutPoint::new(TxHash::from([0x11; 32]), 3),
       parent_hash: TxHash::from([0x22; 32]),
       outcome: VoteOutcome::Yes,
       signal: VoteSignal::Funding,
@@ -310,10 +361,7 @@ mod tests {
   #[case::vote_hash(GovVoteEcdsaSer::VoteHash)]
   fn ecdsa_vote_signs_the_payload(#[case] ctx: GovVoteEcdsaSer) {
     let mut vote = GovVoteEcdsa {
-      masternode_outpoint: OutPoint {
-        hash: TxHash::from([0x11; 32]),
-        index: 3,
-      },
+      masternode_outpoint: OutPoint::new(TxHash::from([0x11; 32]), 3),
       parent_hash: TxHash::from([0x22; 32]),
       outcome: VoteOutcome::Yes,
       signal: VoteSignal::Funding,

@@ -8,20 +8,21 @@
 
 use super::sig::verify_operator;
 use super::{
-  check_platform_fields, read_net_info, read_platform_fields, write_net_info, write_platform_fields, OperatorSig,
-  PlatformNodeId, ProTxVersion,
+  check_platform_fields, read_platform_fields, write_net_info, write_platform_fields, OperatorSig, PlatformNodeId,
+  ProTxVersion,
 };
 use crate::payload::bls::{self, protx_bls_scheme, protx_source};
 use crate::prelude::*;
 use crate::sign::sha256d;
 use crate::sptx::{check_sptx_netinfo, InputsHash, MnType, ProTxInvalid};
-use crate::types::{NITrait, NetInfo};
+use crate::types::{NITrait, NetInfo, NetInfoV1, NetInfoV2};
 use crate::{hash_impl, TxHash};
 
 use bitcoin_primitives::script::ScriptPubKeyBuf;
 use dash_pkc::bls::{BlsEagerSig, BlsError, BlsPkBytes, BlsSigBytes, BlsValue, BLS_SIG_LEN};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::{impl_type, type_id::TypeId, Checkable, Numeric, Signable};
+use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
@@ -30,32 +31,42 @@ use core::fmt;
 /// - v1: LegacyBLS (no mn_type field)
 /// - v2: BasicBLS (adds mn_type)
 /// - v3: ExtAddr (extended network info)
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(into = "ProUpServTxSerde", try_from = "ProUpServTxSerde"))]
 pub struct ProUpServTx {
   /// Payload version.
-  pub version: ProTxVersion,
+  #[getset(get_copy = "pub")]
+  version: ProTxVersion,
   /// v2+ only; defaults to Regular for v1.
-  pub mn_type: MnType,
+  #[getset(get_copy = "pub")]
+  mn_type: MnType,
   /// ProTx hash identifying the masternode.
-  pub pro_tx_hash: TxHash,
+  #[getset(get_copy = "pub")]
+  pro_tx_hash: TxHash,
   /// Legacy ServiceV1 or extended NetInfo.
-  pub net_info: NetInfo,
+  #[getset(get = "pub")]
+  net_info: NetInfo,
   /// Operator payout script.
-  pub script_operator_payout: ScriptPubKeyBuf,
+  #[getset(get = "pub")]
+  script_operator_payout: ScriptPubKeyBuf,
   /// Hash of all inputs.
-  pub inputs_hash: InputsHash,
+  #[getset(get_copy = "pub")]
+  inputs_hash: InputsHash,
   /// Platform node id (Evo only).
-  pub platform_node_id: Option<PlatformNodeId>,
+  #[getset(get_copy = "pub")]
+  platform_node_id: Option<PlatformNodeId>,
   /// Platform P2P port (Evo + version < 3 only).
-  pub platform_p2p_port: Option<u16>,
+  #[getset(get_copy = "pub")]
+  platform_p2p_port: Option<u16>,
   /// Platform HTTP port (Evo + version < 3 only).
-  pub platform_http_port: Option<u16>,
+  #[getset(get_copy = "pub")]
+  platform_http_port: Option<u16>,
   /// Operator BLS signature under the version's scheme (legacy for v1).
   ///
   /// Core verifies it under its process-wide flag instead.
-  pub sig: BlsEagerSig,
+  #[getset(get = "pub")]
+  sig: BlsEagerSig,
 }
 
 impl_type!(ProUpServTx);
@@ -95,7 +106,11 @@ impl BaseCodec for ProUpServTx {
       MnType::Regular
     };
     let pro_tx_hash = TxHash::decode(data)?;
-    let net_info = read_net_info(data, version)?;
+    let net_info = if version >= ProTxVersion::ExtAddr {
+      NetInfo::Extended(NetInfoV2::decode(data)?)
+    } else {
+      NetInfo::Legacy(NetInfoV1::decode(data)?)
+    };
     let script_operator_payout = ScriptPubKeyBuf::decode(data)?;
     let inputs_hash = InputsHash::decode(data)?;
     let (platform_node_id, platform_p2p_port, platform_http_port) = read_platform_fields(data, mn_type, version)?;
@@ -205,6 +220,33 @@ impl Checkable for ProUpServTx {
 hash_impl!(ProUpServTx);
 
 impl ProUpServTx {
+  /// Constructs an unsigned payload, its signature invalid. The signature is
+  /// set through [`Signable::set_signature`].
+  pub fn new(
+    version: ProTxVersion,
+    mn_type: MnType,
+    pro_tx_hash: TxHash,
+    net_info: NetInfo,
+    script_operator_payout: ScriptPubKeyBuf,
+    inputs_hash: InputsHash,
+    platform_node_id: Option<PlatformNodeId>,
+    platform_p2p_port: Option<u16>,
+    platform_http_port: Option<u16>,
+  ) -> Self {
+    Self {
+      version,
+      mn_type,
+      pro_tx_hash,
+      net_info,
+      script_operator_payout,
+      inputs_hash,
+      platform_node_id,
+      platform_p2p_port,
+      platform_http_port,
+      sig: BlsEagerSig::new(BlsValue::invalid(), protx_bls_scheme(version)),
+    }
+  }
+
   /// The payload's `SER_GETHASH` serialization, which leaves out `sig`. The
   /// operator signs its SHA256d.
   pub fn sig_hash_bytes(&self) -> Vec<u8> {
@@ -289,6 +331,37 @@ mod tests {
 
   use dash_dev::{assert_serde_rt, check_sptx, Corpus};
   use rstest::rstest;
+
+  /// An Evo update with an extended NetInfo whose version is unsupported reads
+  /// the version alone, and its next fields read from the byte after it.
+  #[rstest]
+  #[case::zero(0)]
+  #[case::future(2)]
+  fn unsupported_net_info_version(#[case] version: u8) {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "proupservtx");
+    let mut payload = corpus.entries::<ProUpServTx>("proupservtx", |_, _, _| {})
+      ["369881c12aa676d0a9829cdc849df0c75e9729296883cbbdc3822f1e267c6368"]
+      .clone();
+    let mut raw = Vec::new();
+    payload.encode(&mut raw);
+    // The version, type and ProTx hash come before the NetInfo.
+    let start = 2 + 2 + 32;
+    let mut rest = &raw[start..];
+    assert_eq!(
+      NetInfoV2::decode(&mut rest).map(NetInfo::Extended),
+      Ok(payload.net_info.clone())
+    );
+    let end = raw.len() - rest.len();
+    raw.splice(start..end, [version]);
+    payload.net_info = NetInfo::Extended(NetInfoV2::new(version, Vec::new()));
+
+    let mut data = raw.as_slice();
+    assert_eq!(ProUpServTx::decode(&mut data), Ok(payload.clone()));
+    assert!(data.is_empty());
+    let mut written = Vec::new();
+    payload.encode(&mut written);
+    assert_eq!(written, raw);
+  }
 
   #[rstest]
   fn corpus_proupservtx() {

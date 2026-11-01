@@ -12,13 +12,15 @@ use crate::{Network, Release};
 
 use bitcoin_units::BlockHeight;
 use dash_num::Hash256;
+#[cfg(feature = "codec")]
 use dash_types::type_id::Unencodable;
 use dash_types::Numeric;
 use hex_conservative::hex;
 
 /// The per-network values a [`ChainSetup`](super::ChainSetup) holds besides
 /// the ones of [`ChainParams`](crate::ChainParams).
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub(super) struct Extras {
   /// Whether a masternode's external IP must be routable.
   pub(super) require_routable_external_ip: bool,

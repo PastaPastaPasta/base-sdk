@@ -7,10 +7,12 @@
 //! Version bits deployment parameters.
 
 use bitcoin_units::BlockHeight;
+#[cfg(feature = "codec")]
 use dash_types::type_id::Unencodable;
 
 /// Position of a version-bits deployment, Core's `DeploymentPos`.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Unencodable)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub enum DeploymentPos {
   /// `testdummy`, used only for testing.
   TestDummy = 0,
@@ -42,7 +44,8 @@ impl DeploymentPos {
 }
 
 /// Version bits deployment for a consensus rule change (BIP9).
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct Bip9Deployment {
   /// Bit position in the block version field.
   pub bit: i32,
@@ -74,7 +77,8 @@ impl Bip9Deployment {
 }
 
 /// Version bits deployments indexed by deployment position.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct Bip9Deployments {
   /// Reserved deployment used only for testing.
   pub test_dummy: Bip9Deployment,

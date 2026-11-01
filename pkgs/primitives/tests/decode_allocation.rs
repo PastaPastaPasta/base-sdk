@@ -126,7 +126,7 @@ fn net_info_groups_are_bound_by_the_bytes(#[case] count: fn(usize) -> usize) {
     raw.len()
   );
   if let Ok(info) = decoded {
-    assert_eq!(info.entries.len(), 1);
+    assert_eq!(info.groups().len(), 1);
   }
 }
 

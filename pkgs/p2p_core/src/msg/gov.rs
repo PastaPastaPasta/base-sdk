@@ -16,19 +16,23 @@ use dash_num::Hash256;
 use dash_primitives::{GovVote, OutPoint, TxHash, VoteOutcome, VoteSignal};
 use dash_types::codec::BaseCodec;
 use dash_types::type_id::TypeId;
+use getset::{CopyGetters, Getters};
 
+codec_p2p! {
 /// Requests governance objects and votes from a peer, the `govsync`
 /// payload.
 ///
-/// When `hash` is zero, the peer responds with all governance
+/// When `object_hash` is zero, the peer responds with all governance
 /// objects. When non-zero, it responds with votes for that
 /// specific object.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct GovSync {
   /// Object hash (zero for full sync).
-  pub hash: Hash256,
+  #[cfg_attr(feature = "serde", serde(rename = "hash"))]
+  #[getset(get_copy = "pub")]
+  object_hash: Hash256,
   /// Core's `CBloomFilter`, as `filterload` carries it (an empty one asks
   /// for no filtering).
   ///
@@ -36,10 +40,10 @@ pub struct GovSync {
   /// hash (32 bytes) is only logged, while any failure to read the filter,
   /// and one not [`FilterLoad::is_within_size_constraints`], scores the peer
   /// 100. The node tells the reads apart by the payload's length.
-  pub bloom_filter: FilterLoad,
+  #[getset(get = "pub")]
+  bloom_filter: FilterLoad,
 }
-
-codec_p2p!(GovSync { hash, bloom_filter });
+}
 
 /// Core's `COMPACT_SIG_SIZE`, an ECDSA vote signature.
 pub const VOTE_ECDSA_SIG_LEN: usize = 65;
@@ -54,15 +58,15 @@ impl MsgDecode for GovVote {
   /// either refusal as a malformed vote. Its other reads (disk, hashing)
   /// take any length, as [`BaseCodec`] does.
   fn decode_msg(data: &mut &[u8], _ctx: &ProtoCtx) -> Result<Self, P2pDecodeError> {
-    let vote = Self {
-      masternode_outpoint: OutPoint::decode(data)?,
-      parent_hash: TxHash::decode(data)?,
-      outcome: VoteOutcome::decode(data)?,
-      signal: VoteSignal::decode(data)?,
-      time: i64::decode(data)?,
-      sig: read_limited_byte_vec(data, VOTE_BLS_SIG_LEN)?,
-    };
-    if !matches!(vote.sig.len(), VOTE_ECDSA_SIG_LEN | VOTE_BLS_SIG_LEN) {
+    let vote = Self::new(
+      OutPoint::decode(data)?,
+      TxHash::decode(data)?,
+      VoteOutcome::decode(data)?,
+      VoteSignal::decode(data)?,
+      i64::decode(data)?,
+      read_limited_byte_vec(data, VOTE_BLS_SIG_LEN)?,
+    );
+    if !matches!(vote.sig().len(), VOTE_ECDSA_SIG_LEN | VOTE_BLS_SIG_LEN) {
       return Err(P2pDecodeError::InvalidValue {
         field: "governance vote signature size",
       });

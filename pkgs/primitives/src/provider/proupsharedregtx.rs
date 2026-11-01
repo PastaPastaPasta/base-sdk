@@ -15,34 +15,43 @@ use crate::{hash_impl, TxHash};
 use dash_pkc::bls::{BlsLazyPk, BlsSchemeKind, BlsSchemeSource};
 use dash_script::PubKeyHash;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
-use dash_types::impl_type;
 use dash_types::type_id::TypeId;
+use dash_types::{impl_new, impl_type};
+use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
+impl_new! {
 /// ProUpSharedRegTx -- update a shared masternode's registrar keys (type 12,
 /// v24).
 ///
 /// Core reads every field whatever the version.
-#[derive(Clone, Debug, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Getters, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ProUpSharedRegTx {
   /// Payload version.
-  pub version: u16,
+  #[getset(get_copy = "pub")]
+  version: u16,
   /// ProTx hash identifying the masternode.
-  pub pro_tx_hash: TxHash,
+  #[getset(get_copy = "pub")]
+  pro_tx_hash: TxHash,
   /// Operator BLS public key, decoded on first use, always under the basic
   /// scheme. It encodes as Core serializes a key in use, and as zeros when
   /// invalid, whether or not it was used before.
   #[cfg_attr(feature = "serde", serde(with = "crate::payload::bls::serde::lazy_always_basic"))]
-  pub pub_key_operator: BlsLazyPk,
+  #[getset(get = "pub")]
+  pub_key_operator: BlsLazyPk,
   /// Voting key id (20 bytes).
-  pub key_id_voting: PubKeyHash,
+  #[getset(get_copy = "pub")]
+  key_id_voting: PubKeyHash,
   /// Hash of all inputs.
-  pub inputs_hash: InputsHash,
+  #[getset(get_copy = "pub")]
+  inputs_hash: InputsHash,
   /// One signature per share, in share order.
-  pub sigs: Vec<CompactSig>,
+  #[getset(get = "pub")]
+  sigs: Vec<CompactSig>,
+}
 }
 
 impl_type!(ProUpSharedRegTx);

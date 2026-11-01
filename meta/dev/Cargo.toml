@@ -60,12 +60,12 @@ xxhash-rust = { version = "0.8", features = ["xxh32"] }
 [dependencies]
 bitcoin-consensus-encoding = { workspace = true, features = ["alloc"] }
 cfg-if = "1"
-dash-num = { version = "0.2.0-beta", path = "../../pkgs/num", optional = true, features = [
+dash-num = { version = "0.2.0-beta", path = "../../pkgs/num", default-features = false, optional = true, features = [
   "codec",
 ] }
-dash-params = { version = "0.0.0", path = "../../pkgs/params", optional = true }
+dash-params = { version = "0.0.0", path = "../../pkgs/params", default-features = false, optional = true }
 dash-pow = { version = "0.1.0-beta", path = "../../pkgs/pow", default-features = false, optional = true }
-dash-primitives = { version = "0.0.0", path = "../../pkgs/primitives" }
+dash-primitives = { version = "0.0.0", path = "../../pkgs/primitives", default-features = false }
 dash-types = { version = "0.2.0-beta", path = "../../pkgs/types", default-features = false, features = [
   "codec",
 ] }

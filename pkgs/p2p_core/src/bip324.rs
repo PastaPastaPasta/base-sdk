@@ -17,18 +17,22 @@ use crate::P2pDecodeError;
 
 use dash_types::type_id::Unencodable;
 
-/// Encodes a `P2pMsg` into V2 packet contents for a peer whose common
-/// version is `peer_version`, as Core's `V2Transport::SetMessageToSend` does.
+/// Encodes a `P2pMsg` into V2 contents, given `common`, the version both
+/// peers share.
 ///
-/// The short ID goes out only from the version [`ShortId::for_send`] gives;
-/// otherwise the 13-byte long format, a zero byte and the command.
-pub fn encode_v2(msg: &P2pMsg, peer_version: ProtocolVersion, buf: &mut Vec<u8>) {
-  let command = msg.command();
-  match ShortId::for_send(&command, peer_version) {
-    Some(id) => buf.push(id.0),
+/// The type is the short ID [`P2pMsg::short_id`] gives, else the long format.
+/// Until the handshake agrees on a version, pass [`ProtocolVersion::INIT`],
+/// which takes the long format for every message.
+pub fn encode_v2(msg: &P2pMsg, common: ProtocolVersion, buf: &mut Vec<u8>) {
+  match msg.short_id(common) {
+    Some(id) => {
+      buf.push(id.get());
+    }
     None => {
-      buf.push(ShortId::LONG_FORMAT.0);
-      buf.extend_from_slice(command.as_bytes());
+      // Long format: ID 0 + 12-byte command string.
+      buf.push(0);
+      let cmd = msg.command();
+      buf.extend_from_slice(cmd.as_bytes());
     }
   }
   msg.encode_payload(buf);
@@ -44,7 +48,8 @@ pub struct V2Message<'a> {
 }
 
 impl<'a> V2Message<'a> {
-  /// The message type; the empty type for a short ID Core reserves.
+  /// The message type. A short ID with no message, which Core types as the
+  /// empty command, never gets here: [`split_v2`] refuses it.
   pub const fn command(&self) -> CommandString {
     self.command
   }
@@ -118,7 +123,7 @@ pub fn split_v2(contents: &[u8]) -> Result<V2Message<'_>, P2pDecodeError> {
   let Some((&short_id, rest)) = contents.split_first() else {
     return Err(P2pDecodeError::EmptyV2Contents);
   };
-  if short_id == ShortId::LONG_FORMAT.0 {
+  if short_id == ShortId::LONG_FORMAT.get() {
     // Long format: next 12 bytes are the command string.
     let Some((bytes, payload)) = rest.split_first_chunk::<12>() else {
       return Err(P2pDecodeError::TruncatedV2Type { remaining: rest.len() });
@@ -129,7 +134,7 @@ pub fn split_v2(contents: &[u8]) -> Result<V2Message<'_>, P2pDecodeError> {
     }
     return Ok(V2Message { command, payload });
   }
-  let command = match ShortId(short_id).to_command() {
+  let command = match ShortId::new(short_id).to_command() {
     Some(command) => command,
     None => return Err(P2pDecodeError::UnknownShortId { id: short_id }),
   };
@@ -146,4 +151,45 @@ pub fn split_v2(contents: &[u8]) -> Result<V2Message<'_>, P2pDecodeError> {
 /// Returns the error of [`split_v2`] or of the payload's handler.
 pub fn decode_v2(contents: &[u8], ctx: &ProtoCtx) -> Result<DecodedMsg, P2pDecodeError> {
   split_v2(contents)?.decode(ctx)
+}
+
+#[cfg(test)]
+#[expect(clippy::unwrap_used, reason = "test code")]
+mod tests {
+  use super::*;
+
+  use dash_dev::Corpus;
+  use hex_conservative::decode_to_vec;
+  use rstest::rstest;
+  use serde::Deserialize;
+
+  #[derive(Deserialize)]
+  struct SendVector {
+    version: i32,
+    contents: BTreeMap<String, String>,
+  }
+
+  #[rstest]
+  fn encode_v2_matches_vectors() {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "transport");
+    for v in corpus.vectors::<SendVector>("v2_send") {
+      let version = ProtocolVersion::new(v.version);
+      for (name, hex) in &v.contents {
+        let cmd = CommandString::from_static(name);
+        let contents = decode_to_vec(hex).unwrap();
+        let framed = match ShortId::for_send(&cmd, version) {
+          Some(id) => vec![id.get()],
+          None => [&[0][..], cmd.as_bytes()].concat(),
+        };
+        assert_eq!(framed, contents, "{name} at {}", v.version);
+        // Only messages that take an empty payload can be built without one.
+        let ctx = ProtoCtx::new(version, dash_pkc::bls::BlsCtx::BASIC);
+        if let Ok(decoded) = P2pMsg::decode_with_policy(&cmd, &[], &ctx) {
+          let mut buf = Vec::new();
+          encode_v2(&decoded.msg, version, &mut buf);
+          assert_eq!(buf, contents, "{name} at {}", v.version);
+        }
+      }
+    }
+  }
 }

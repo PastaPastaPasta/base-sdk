@@ -13,30 +13,48 @@ rust-version.workspace = true
 bench = false
 
 [features]
-default = []
+default = ["codec"]
 std = [
-  "base58ck/std",
-  "bitcoin-consensus-encoding/std",
-  "dash-params/std",
-  "dash-pkc/std",
+  "base58ck?/std",
+  "bitcoin-consensus-encoding?/std",
+  "dash-num?/std",
+  "dash-params?/std",
+  "dash-pkc?/std",
   "dash-types/std",
 ]
-full = ["std", "serde"]
-portable = ["dash-pkc/portable"]
-serde = ["dep:serde", "dash-pkc/serde", "dash-types/serde"]
+codec = [
+  "dash-num/codec",
+  "dash-params/codec",
+  "dash-pkc/codec",
+  "dash-types/bitcoin-primitives",
+  "dash-types/codec",
+  "dep:base58ck",
+  "dep:bitcoin-consensus-encoding",
+  "dep:dash-num",
+  "dep:dash-params",
+  "dep:dash-pkc",
+]
+full = [
+  "codec",
+  "serde",
+  "std",
+]
+portable = ["dash-pkc?/portable"]
+serde = [
+  "dash-pkc?/serde",
+  "dash-types/serde",
+  "dep:serde",
+]
 
 [dependencies]
-base58ck = { workspace = true, features = ["alloc"] }
-bitcoin-consensus-encoding = { workspace = true, features = ["alloc"] }
-dash-num = { version = "0.2.0-beta", path = "../num", default-features = false }
-dash-params = { version = "0.0.0", path = "../params" }
-dash-pkc = { version = "0.2.0-beta", path = "../pkc", default-features = false, features = [
-  "codec",
+base58ck = { workspace = true, optional = true, features = ["alloc"] }
+bitcoin-consensus-encoding = { workspace = true, optional = true, features = [
+  "alloc",
 ] }
-dash-types = { version = "0.2.0-beta", path = "../types", default-features = false, features = [
-  "bitcoin-primitives",
-  "codec",
-] }
+dash-num = { version = "0.2.0-beta", path = "../num", optional = true, default-features = false }
+dash-params = { version = "0.0.0", path = "../params", optional = true, default-features = false }
+dash-pkc = { version = "0.2.0-beta", path = "../pkc", optional = true, default-features = false }
+dash-types = { version = "0.2.0-beta", path = "../types", default-features = false }
 serde = { workspace = true, features = [
   "derive",
   "alloc",

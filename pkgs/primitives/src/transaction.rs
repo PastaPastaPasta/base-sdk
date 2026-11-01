@@ -18,7 +18,8 @@ use bitcoin_units::Amount;
 use dash_num::make_hash;
 use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{impl_type, Checkable, CompactSize, Hashable, Numeric};
+use dash_types::{impl_new, impl_type, Checkable, CompactSize, Hashable, Numeric};
+use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
@@ -47,50 +48,52 @@ make_hash! {
 
 hash_impl!(TxHash);
 
+codec_type! {
 /// A reference to a previous transaction output.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, TypeId)]
+#[derive(Debug, Clone, Copy, CopyGetters, PartialEq, Eq, Hash, PartialOrd, Ord, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct OutPoint {
   /// Transaction hash of the referenced output.
-  pub hash: TxHash,
+  #[cfg_attr(feature = "serde", serde(rename = "hash"))]
+  #[getset(get_copy = "pub")]
+  txid: TxHash,
   /// Index of the referenced output within the transaction.
-  pub index: u32,
+  #[getset(get_copy = "pub")]
+  index: u32,
 }
-
-codec_type!(OutPoint { hash, index });
+}
 
 impl OutPoint {
   /// Returns `true` for the null outpoint (all-zero hash, index `u32::MAX`).
   pub fn is_null(&self) -> bool {
-    self.hash.is_null() && self.index == u32::MAX
+    self.txid.is_null() && self.index == u32::MAX
   }
 }
 
 impl fmt::Display for OutPoint {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "{}:{}", self.hash, self.index)
+    write!(f, "{}:{}", self.txid, self.index)
   }
 }
 
+codec_type! {
 /// A transaction input.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct TxIn {
   /// The outpoint being spent.
-  pub prevout: OutPoint,
+  #[getset(get_copy = "pub")]
+  prevout: OutPoint,
   /// Unlocking script.
-  pub script_sig: ScriptSigBuf,
+  #[getset(get = "pub")]
+  script_sig: ScriptSigBuf,
   /// Sequence number.
-  pub sequence: u32,
+  #[getset(get_copy = "pub")]
+  sequence: u32,
 }
-
-codec_type!(TxIn {
-  prevout,
-  script_sig,
-  sequence
-});
+}
 
 impl fmt::Display for TxIn {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -103,19 +106,21 @@ impl fmt::Display for TxIn {
 /// `value` is Core's signed `CAmount`. Any 8 bytes decode, as in Core, which
 /// rejects negative and oversized values in `CheckTransaction` rather than
 /// while deserializing.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct TxOut {
   /// Output value in duffs, unchecked.
   #[cfg_attr(feature = "serde", serde(with = "crate::serialize::duffs"))]
-  pub value: i64,
+  #[getset(get_copy = "pub")]
+  value: i64,
   /// Locking script.
   #[cfg_attr(feature = "serde", serde(rename = "scriptPubKey"))]
-  pub script_pubkey: ScriptPubKeyBuf,
+  #[getset(get = "pub")]
+  script_pubkey: ScriptPubKeyBuf,
 }
 
-codec_type!(TxOut { value, script_pubkey });
+codec_type!(TxOut, dash_types::MAX_SER_SIZE, { value, script_pubkey });
 
 impl TxOut {
   /// Builds an output paying `amount`.
@@ -124,6 +129,12 @@ impl TxOut {
       value: amount.to_signed().to_sat(),
       script_pubkey,
     }
+  }
+
+  /// Builds an output from Core's raw `CAmount`, which may lie outside
+  /// `0..=MAX_MONEY`.
+  pub fn from_duffs(value: i64, script_pubkey: ScriptPubKeyBuf) -> Self {
+    Self { value, script_pubkey }
   }
 
   /// Returns the value as an [`Amount`] when it lies in `0..=MAX_MONEY`.
@@ -187,6 +198,7 @@ pub enum TxInvalid {
   PayloadCheck(PayloadInvalid),
 }
 
+impl_new! {
 /// A Dash transaction.
 ///
 /// The wire format packs `version` (i16) and `tx_type` (u16) into a single
@@ -194,23 +206,30 @@ pub enum TxInvalid {
 ///
 /// Special transactions (type != Spend, version >= 3) carry an `extra_payload`
 /// decoded separately by payload-specific decoders.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Transaction {
   /// Transaction version (lower 16 bits of the wire i32).
-  pub version: i16,
+  #[getset(get_copy = "pub")]
+  version: i16,
   /// Transaction type (upper 16 bits of the wire i32).
-  pub tx_type: TxType,
+  #[getset(get_copy = "pub")]
+  tx_type: TxType,
   /// Transaction inputs.
-  pub inputs: Vec<TxIn>,
+  #[getset(get = "pub")]
+  inputs: Vec<TxIn>,
   /// Transaction outputs.
-  pub outputs: Vec<TxOut>,
+  #[getset(get = "pub")]
+  outputs: Vec<TxOut>,
   /// Lock time.
-  pub lock_time: u32,
+  #[getset(get_copy = "pub")]
+  lock_time: u32,
   /// Extra payload for special transactions.
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::hex"))]
-  pub extra_payload: Vec<u8>,
+  #[getset(get = "pub")]
+  extra_payload: Vec<u8>,
+}
 }
 
 impl_type!(Transaction);
@@ -327,16 +346,16 @@ impl Checkable for Transaction {
     if let Some(result) = self.decode_payload() {
       match result {
         Ok(decoded) if !decoded.is_complete() => {
-          return Some(TxInvalid::PayloadDecode(PayloadError {
-            tx_type: self.tx_type,
-            message: format!("trailing bytes: {} remaining", decoded.trailing()),
-          }));
+          return Some(TxInvalid::PayloadDecode(PayloadError::new(
+            self.tx_type,
+            format!("trailing bytes: {} remaining", decoded.trailing()),
+          )));
         }
-        Ok(decoded) if decoded.payload.is_unknown() => {
+        Ok(decoded) if decoded.payload().is_unknown() => {
           return Some(TxInvalid::PayloadCheck(PayloadInvalid::UnknownType(self.tx_type)));
         }
         Ok(decoded) => {
-          if let Some(e) = decoded.payload.check() {
+          if let Some(e) = decoded.payload().check() {
             return Some(TxInvalid::PayloadCheck(e));
           }
         }
@@ -420,10 +439,12 @@ impl Transaction {
     }
     let mut cursor = &self.extra_payload[..];
     let result = SpecialPayload::decode(self.tx_type, &mut cursor);
-    Some(result.map(|payload| PayloadDecode {
-      payload,
-      consumed: self.extra_payload.len() - cursor.len(),
-      len: self.extra_payload.len(),
+    Some(result.map(|payload| {
+      PayloadDecode::new(
+        payload,
+        self.extra_payload.len() - cursor.len(),
+        self.extra_payload.len(),
+      )
     }))
   }
 
@@ -549,9 +570,9 @@ pub(crate) mod tests {
 
       tx.extra_payload.resize(len + v.trailing, 0);
       let padded = tx.decode_payload().unwrap().unwrap();
-      assert_eq!((padded.consumed, padded.len), (len, len + v.trailing), "{}", v.txid);
+      assert_eq!((padded.consumed(), padded.len()), (len, len + v.trailing), "{}", v.txid);
       assert!(!padded.is_complete(), "{}", v.txid);
-      assert_eq!(padded.payload, exact.payload, "{}", v.txid);
+      assert_eq!(padded.payload(), exact.payload(), "{}", v.txid);
       assert!(matches!(tx.check(), Some(TxInvalid::PayloadDecode(_))), "{}", v.txid);
     }
   }
@@ -577,15 +598,15 @@ pub(crate) mod tests {
         .ok()
         .filter(PayloadDecode::is_complete)
         .map(|decoded| {
-          let SpecialPayload::ProviderUpdateService(pro) = decoded.payload else {
+          let SpecialPayload::ProviderUpdateService(pro) = decoded.payload() else {
             panic!("not a ProUpServTx");
           };
-          let NetInfo::Extended(info) = pro.net_info else {
+          let NetInfo::Extended(info) = pro.net_info() else {
             panic!("not an extended NetInfo");
           };
           let names = ["core_p2p", "platform_p2p", "platform_https"];
           info
-            .entries
+            .groups()
             .iter()
             .map(|(purpose, group)| {
               let name = names[usize::from(purpose.to_base())].to_string();
@@ -637,7 +658,7 @@ pub(crate) mod tests {
     fn build(&self) -> Transaction {
       let inputs = self.inputs.iter().enumerate().map(|(i, &seed)| TxIn {
         prevout: OutPoint {
-          hash: TxHash::from_lendian([seed; 32]),
+          txid: TxHash::from_lendian([seed; 32]),
           index: if seed == 0 { u32::MAX } else { 0 },
         },
         script_sig: ScriptSigBuf::from_bytes(vec![0; if i == 0 { self.script_sig } else { 0 }]),

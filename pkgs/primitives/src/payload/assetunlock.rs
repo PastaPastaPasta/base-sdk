@@ -16,7 +16,8 @@ use dash_num::Hash256;
 use dash_pkc::bls::BlsGlobalSig;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{impl_type, Checkable};
+use dash_types::{impl_new, impl_type, Checkable};
+use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
@@ -24,28 +25,36 @@ use core::fmt;
 /// `ASSET_UNLOCK_REQUESTID_PREFIX`.
 const ASSET_UNLOCK_REQUESTID_PREFIX: &str = "plwdtx";
 
+impl_new! {
 /// AssetUnlock: Platform-to-L1 (type 9).
 ///
 /// Versions 1 and 2 share a layout; version 2 (v24) changes the txid only.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct AssetUnlock {
   /// Payload version.
-  pub version: u8,
+  #[getset(get_copy = "pub")]
+  version: u8,
   /// Monotonic withdrawal sequence number.
-  pub index: u64,
+  #[getset(get_copy = "pub")]
+  index: u64,
   /// Duffs deducted from withdrawal.
-  pub fee: u32,
+  #[getset(get_copy = "pub")]
+  fee: u32,
   /// Requested block height.
-  pub requested_height: u32,
+  #[getset(get_copy = "pub")]
+  requested_height: u32,
   /// Quorum hash.
-  pub quorum_hash: QuorumHash,
+  #[getset(get_copy = "pub")]
+  quorum_hash: QuorumHash,
   /// Quorum BLS authorization signature, as its wire bytes. Its scheme is
   /// Core's process-wide flag where the signature is used, given to
   /// [`get`](dash_pkc::bls::BlsGlobal::get).
   #[cfg_attr(feature = "serde", serde(with = "super::bls::serde::global"))]
-  pub quorum_sig: BlsGlobalSig,
+  #[getset(get = "pub")]
+  quorum_sig: BlsGlobalSig,
+}
 }
 
 impl_type!(AssetUnlock);

@@ -23,6 +23,7 @@ use dash_primitives::{DynBitset, QuorumHash, QuorumVvecHash, TxHash};
 use dash_types::codec::BaseCodec;
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::{CompactSize, Numeric};
+use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
@@ -250,35 +251,34 @@ fn hash_without_sig(obj: &impl BaseCodec) -> Hash256 {
   dsha256(&buf)
 }
 
+codec_p2p! {
 /// A member's DKG contribution, the `qcontrib` payload (Core's
 /// `CDKGContribution`): its verification vector and its secret key shares,
 /// each encrypted to the member it is for.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct DkgContribution {
   /// Type of the quorum.
-  pub llmq_type: LlmqType,
+  #[getset(get_copy = "pub")]
+  llmq_type: LlmqType,
   /// Hash of the quorum's base block.
-  pub quorum_hash: QuorumHash,
+  #[getset(get_copy = "pub")]
+  quorum_hash: QuorumHash,
   /// Registration transaction hash of the contributing member.
-  pub pro_tx_hash: TxHash,
+  #[getset(get_copy = "pub")]
+  pro_tx_hash: TxHash,
   /// The member's verification vector, as read.
-  pub vvec: Vec<BlsPkBytes>,
+  #[getset(get = "pub")]
+  vvec: Vec<BlsPkBytes>,
   /// The secret key shares, one blob per member.
-  pub contributions: BlsIesMultiBytes,
+  #[getset(get = "pub")]
+  contributions: BlsIesMultiBytes,
   /// The member's signature, as read.
-  pub sig: BlsSigBytes,
+  #[getset(get_copy = "pub")]
+  sig: BlsSigBytes,
 }
-
-codec_p2p!(DkgContribution {
-  llmq_type,
-  quorum_hash,
-  pro_tx_hash,
-  vvec,
-  contributions,
-  sig
-});
+}
 
 impl DkgContribution {
   /// Core's `GetSignHash()`: the message's hash with the signature zeroed,
@@ -345,34 +345,33 @@ impl DkgMessage for DkgContribution {
   }
 }
 
+codec_p2p! {
 /// A member's complaints, the `qcomplaint` payload (Core's `CDKGComplaint`):
 /// the members it found bad and those whose contribution it complains of.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct DkgComplaint {
   /// Type of the quorum.
-  pub llmq_type: LlmqType,
+  #[getset(get_copy = "pub")]
+  llmq_type: LlmqType,
   /// Hash of the quorum's base block.
-  pub quorum_hash: QuorumHash,
+  #[getset(get_copy = "pub")]
+  quorum_hash: QuorumHash,
   /// Registration transaction hash of the complaining member.
-  pub pro_tx_hash: TxHash,
+  #[getset(get_copy = "pub")]
+  pro_tx_hash: TxHash,
   /// Members found bad, by index.
-  pub bad_members: DynBitset,
+  #[getset(get = "pub")]
+  bad_members: DynBitset,
   /// Members whose contribution is complained of, by index.
-  pub complain_for_members: DynBitset,
+  #[getset(get = "pub")]
+  complain_for_members: DynBitset,
   /// The member's signature, as read.
-  pub sig: BlsSigBytes,
+  #[getset(get_copy = "pub")]
+  sig: BlsSigBytes,
 }
-
-codec_p2p!(DkgComplaint {
-  llmq_type,
-  quorum_hash,
-  pro_tx_hash,
-  bad_members,
-  complain_for_members,
-  sig
-});
+}
 
 impl DkgComplaint {
   /// Core's `GetSignHash()`: the message's hash with the signature zeroed,
@@ -411,48 +410,49 @@ impl DkgMessage for DkgComplaint {
   }
 }
 
+codec_p2p! {
 /// A secret key share a justification reveals, Core's
 /// `CDKGJustification::Contribution`.
 ///
 /// The share is public once sent, so it is plain bytes rather than a
 /// [`dash_pkc::bls::BlsSkBytes`], which never leaves memory unwiped.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct DkgRevealedShare {
   /// Index of the member the share is for.
-  pub index: u32,
+  #[getset(get_copy = "pub")]
+  index: u32,
   /// The share's scalar, as read; Core reads it eagerly.
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::hex"))]
-  pub key: [u8; BLS_SK_LEN],
+  #[getset(get_copy = "pub")]
+  key: [u8; BLS_SK_LEN],
+}
 }
 
-codec_p2p!(DkgRevealedShare { index, key });
-
+codec_p2p! {
 /// A member's justification, the `qjustify` payload (Core's
 /// `CDKGJustification`): the shares it was complained of, revealed.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct DkgJustification {
   /// Type of the quorum.
-  pub llmq_type: LlmqType,
+  #[getset(get_copy = "pub")]
+  llmq_type: LlmqType,
   /// Hash of the quorum's base block.
-  pub quorum_hash: QuorumHash,
+  #[getset(get_copy = "pub")]
+  quorum_hash: QuorumHash,
   /// Registration transaction hash of the justifying member.
-  pub pro_tx_hash: TxHash,
+  #[getset(get_copy = "pub")]
+  pro_tx_hash: TxHash,
   /// The revealed shares.
-  pub contributions: Vec<DkgRevealedShare>,
+  #[getset(get = "pub")]
+  contributions: Vec<DkgRevealedShare>,
   /// The member's signature, as read.
-  pub sig: BlsSigBytes,
+  #[getset(get_copy = "pub")]
+  sig: BlsSigBytes,
 }
-
-codec_p2p!(DkgJustification {
-  llmq_type,
-  quorum_hash,
-  pro_tx_hash,
-  contributions,
-  sig
-});
+}
 
 impl DkgJustification {
   /// Core's `GetSignHash()`: the message's hash with the signature zeroed,
@@ -501,41 +501,40 @@ impl DkgMessage for DkgJustification {
   }
 }
 
+codec_p2p! {
 /// A member's premature commitment, the `qpcommit` payload (Core's
 /// `CDKGPrematureCommitment`): the valid members it saw and the quorum key it
 /// derived, which final commitments aggregate.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct DkgPrematureCommitment {
   /// Type of the quorum.
-  pub llmq_type: LlmqType,
+  #[getset(get_copy = "pub")]
+  llmq_type: LlmqType,
   /// Hash of the quorum's base block.
-  pub quorum_hash: QuorumHash,
+  #[getset(get_copy = "pub")]
+  quorum_hash: QuorumHash,
   /// Registration transaction hash of the committing member.
-  pub pro_tx_hash: TxHash,
+  #[getset(get_copy = "pub")]
+  pro_tx_hash: TxHash,
   /// Members the committing member counts valid, by index.
-  pub valid_members: DynBitset,
+  #[getset(get = "pub")]
+  valid_members: DynBitset,
   /// The quorum public key, as read.
-  pub quorum_public_key: BlsPkBytes,
+  #[getset(get_copy = "pub")]
+  quorum_public_key: BlsPkBytes,
   /// Hash of the quorum's verification vector.
-  pub quorum_vvec_hash: QuorumVvecHash,
+  #[getset(get_copy = "pub")]
+  quorum_vvec_hash: QuorumVvecHash,
   /// The member's threshold signature share of the commitment, as read.
-  pub quorum_sig: BlsSigBytes,
+  #[getset(get_copy = "pub")]
+  quorum_sig: BlsSigBytes,
   /// The member's own signature of the commitment, as read.
-  pub sig: BlsSigBytes,
+  #[getset(get_copy = "pub")]
+  sig: BlsSigBytes,
 }
-
-codec_p2p!(DkgPrematureCommitment {
-  llmq_type,
-  quorum_hash,
-  pro_tx_hash,
-  valid_members,
-  quorum_public_key,
-  quorum_vvec_hash,
-  quorum_sig,
-  sig
-});
+}
 
 impl DkgPrematureCommitment {
   /// Core's `GetSignHash()`, `BuildCommitmentHash`: the hash both

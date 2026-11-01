@@ -285,10 +285,14 @@ fn dkg_sign_hashes_zero_the_signature() {
   let Ok(P2pMsg::QComplaint(signed)) = decode("qcomplaint", &payload) else {
     panic!()
   };
-  let unsigned = DkgComplaint {
-    sig: BlsSigBytes::from_bytes([0; 96]),
-    ..signed.clone()
-  };
+  let unsigned = DkgComplaint::new(
+    signed.llmq_type(),
+    signed.quorum_hash(),
+    signed.pro_tx_hash(),
+    signed.bad_members().clone(),
+    signed.complain_for_members().clone(),
+    BlsSigBytes::from_bytes([0; 96]),
+  );
   use dash_types::Hashable;
   assert_eq!(signed.sign_hash(), unsigned.hash());
   assert_ne!(signed.sign_hash(), signed.hash());
@@ -305,13 +309,13 @@ fn dkg_sign_hashes_zero_the_signature() {
 #[case(0x8012_3456, "86ffc7e756")]
 #[case(0xffff_ffff, "8efefefe7f")]
 fn varints_are_cores(#[case] session_id: u32, #[case] hex: &str) {
-  let ann = SigSesAnn {
+  let ann = SigSesAnn::new(
     session_id,
-    llmq_type: LlmqType::LlmqTest,
-    quorum_hash: Default::default(),
-    id: Default::default(),
-    msg_hash: Default::default(),
-  };
+    LlmqType::LlmqTest,
+    Default::default(),
+    Default::default(),
+    Default::default(),
+  );
   let bytes = wire(&ann);
   let digits = hex.len() / 2;
   assert_eq!(hex_conservative::DisplayHex::to_lower_hex_string(&bytes[..digits]), hex);
@@ -342,7 +346,7 @@ fn autobitsets_read_either_form_and_write_the_shorter() {
   let a = inv(&fixed).unwrap();
   let b = inv(&varint).unwrap();
   assert_eq!(a, b);
-  assert_eq!(a.inv.iter_set_bits().collect::<Vec<_>>(), [0, 9]);
+  assert_eq!(a.inv().iter_set_bits().collect::<Vec<_>>(), [0, 9]);
   // Fixed: 2 bytes, varints: 3 bytes.
   assert_eq!(wire(&b), fixed);
   // 8 bits, bit 2 set: fixed 1 byte, varints 2 bytes.
@@ -367,28 +371,22 @@ fn autobitsets_refuse_what_core_refuses(#[case] raw: &[u8]) {
 #[rstest]
 fn autobitset_size_is_at_most_the_largest_quorum() {
   let max = [&[0][..], &count(MAX_BATCHED_SIGS), &[1, 0]].concat();
-  assert_eq!(inv(&max).unwrap().inv.num_bits, MAX_BATCHED_SIGS as u64);
+  assert_eq!(inv(&max).unwrap().inv().num_bits(), MAX_BATCHED_SIGS as u64);
 }
 
 fn share(member: u16) -> BatchedSigShare {
-  BatchedSigShare {
-    quorum_member: member,
-    sig_share: BlsSigBytes::from_bytes([0x66; 96]),
-  }
+  BatchedSigShare::new(member, BlsSigBytes::from_bytes([0x66; 96]))
 }
 
 fn batch(n: usize) -> BatchedSigShares {
-  BatchedSigShares {
-    session_id: 1,
-    sig_shares: (0..n as u16).map(share).collect(),
-  }
+  BatchedSigShares::new(1, (0..n as u16).map(share).collect())
 }
 
 /// `qbsigs` holds at most 400 batches and 400 shares in all; Core counts the
 /// shares after each batch.
 #[rstest]
 fn qbsigs_bounds_its_shares_in_all() {
-  let msg = |batches| wire(&BatchedSigSharesMsg { batches });
+  let msg = |batches| wire(&BatchedSigSharesMsg::new(batches));
   assert!(decode("qbsigs", &msg(vec![batch(400)])).is_ok());
   assert!(decode("qbsigs", &msg(vec![batch(200), batch(200)])).is_ok());
   assert!(matches!(
@@ -420,25 +418,20 @@ fn sig_share_vectors_are_bounded(#[case] cmd: &'static str, #[case] max: usize, 
 
 #[rstest]
 fn sig_share_messages_round_trip() {
-  let ann = SigSesAnnMsg {
-    anns: vec![SigSesAnn {
-      session_id: 300,
-      llmq_type: LlmqType::Llmq50_60,
-      quorum_hash: Default::default(),
-      id: Default::default(),
-      msg_hash: Default::default(),
-    }],
-  };
+  let ann = SigSesAnnMsg::new(vec![SigSesAnn::new(
+    300,
+    LlmqType::Llmq50_60,
+    Default::default(),
+    Default::default(),
+    Default::default(),
+  )]);
   let bytes = wire(&ann);
   assert_eq!(decode("qsigsesann", &bytes).unwrap(), P2pMsg::QSigSesAnn(ann));
-  let inv = DynBitset {
-    num_bits: 10,
-    data: vec![0x01, 0x02],
-  };
+  let inv = DynBitset::new(10, vec![0x01, 0x02]).unwrap();
   let msg = [count(1), vec![0x05], count(10), vec![0, 0x01, 0x02]].concat();
   let Ok(P2pMsg::QGetSigs(m)) = decode("qgetsigs", &msg) else {
     panic!()
   };
-  assert_eq!(m.invs[0].inv, inv);
-  assert_eq!(m.invs[0].session_id, 5);
+  assert_eq!(*m.invs()[0].inv(), inv);
+  assert_eq!(m.invs()[0].session_id(), 5);
 }

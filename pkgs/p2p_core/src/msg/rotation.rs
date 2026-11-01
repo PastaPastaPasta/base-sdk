@@ -16,7 +16,8 @@ use dash_primitives::{hash_impl, BlockHash, Commitment, DynBitset};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::CompactSize;
-use dash_types::{enum_map, impl_num};
+use dash_types::{enum_map, impl_new, impl_num};
+use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
@@ -44,42 +45,46 @@ impl_num!(SnapshotSkipMode, i32);
 
 hash_impl!(SnapshotSkipMode);
 
+codec_p2p! {
 /// A quorum snapshot (Core's `CQuorumSnapshot`).
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct QuorumSnapshot {
   /// How `skip_list` is read; Core reads any value.
-  pub skip_list_mode: SnapshotSkipMode,
+  #[getset(get_copy = "pub")]
+  skip_list_mode: SnapshotSkipMode,
   /// Which of the cycle's members were active.
-  pub active_quorum_members: DynBitset,
+  #[getset(get = "pub")]
+  active_quorum_members: DynBitset,
   /// Skipped, or not skipped, member indexes.
-  pub skip_list: Vec<i32>,
+  #[getset(get = "pub")]
+  skip_list: Vec<i32>,
+}
 }
 
-codec_p2p!(QuorumSnapshot {
-  skip_list_mode,
-  active_quorum_members,
-  skip_list
-});
-
+impl_new! {
 /// Requests quorum rotation info, the `getqrinfo` payload (Core's
 /// `CGetQuorumRotationInfo`).
 ///
 /// Core refuses to read more than [`MAX_QRINFO_BASE_HASHES`] base hashes but
 /// writes any number, as does the encoder.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct GetQrInfo {
   /// Blocks the requester has masternode lists for.
-  pub base_block_hashes: Vec<BlockHash>,
+  #[getset(get = "pub")]
+  base_block_hashes: Vec<BlockHash>,
   /// Block the rotation info is asked for.
-  pub block_request_hash: BlockHash,
+  #[getset(get_copy = "pub")]
+  block_request_hash: BlockHash,
   /// Whether the cycle at H-4C is asked for too, read as 0 or 1: Core reads
   /// any other byte as `true` and serves the request, which here is
   /// `DecodeError::NonCanonicalBool`.
-  pub extra_share: bool,
+  #[getset(get_copy = "pub")]
+  extra_share: bool,
+}
 }
 
 impl_p2p!(GetQrInfo);
@@ -115,52 +120,70 @@ impl fmt::Display for GetQrInfo {
   }
 }
 
+impl_new! {
 /// The snapshot and list diff of one rotation cycle.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Debug, Eq, Getters, Hash, PartialEq, Unencodable)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct CycleInfo {
   /// Quorum snapshot at the cycle.
-  pub snapshot: QuorumSnapshot,
+  #[getset(get = "pub")]
+  snapshot: QuorumSnapshot,
   /// Masternode list diff to the cycle's work block.
-  pub diff: MnListDiff,
+  #[getset(get = "pub")]
+  diff: MnListDiff,
+}
 }
 
+impl_new! {
 /// Quorum rotation info, the `qrinfo` payload (Core's
 /// `CQuorumRotationInfo`).
 ///
 /// Its diffs are in the layout of the negotiated protocol version; the codec
 /// reads the current layout, [`MsgDecode`] the negotiated one, and each diff
 /// is written in its own, so a peer reads them back only when they share one.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct QrInfo {
   /// Snapshot at H-C.
-  pub snapshot_h_c: QuorumSnapshot,
+  #[getset(get = "pub")]
+  snapshot_h_c: QuorumSnapshot,
   /// Snapshot at H-2C.
-  pub snapshot_h_2c: QuorumSnapshot,
+  #[getset(get = "pub")]
+  snapshot_h_2c: QuorumSnapshot,
   /// Snapshot at H-3C.
-  pub snapshot_h_3c: QuorumSnapshot,
+  #[getset(get = "pub")]
+  snapshot_h_3c: QuorumSnapshot,
   /// Diff to the chain tip.
-  pub diff_tip: MnListDiff,
+  #[getset(get = "pub")]
+  diff_tip: MnListDiff,
   /// Diff to the requested block.
-  pub diff_h: MnListDiff,
+  #[getset(get = "pub")]
+  diff_h: MnListDiff,
   /// Diff to H-C.
-  pub diff_h_c: MnListDiff,
+  #[getset(get = "pub")]
+  diff_h_c: MnListDiff,
   /// Diff to H-2C.
-  pub diff_h_2c: MnListDiff,
+  #[getset(get = "pub")]
+  diff_h_2c: MnListDiff,
   /// Diff to H-3C.
-  pub diff_h_3c: MnListDiff,
+  #[getset(get = "pub")]
+  diff_h_3c: MnListDiff,
   /// The cycle at H-4C, present when the extra share flag is set. The flag
   /// is read as 0 or 1: Core reads any other byte as `true`, which here is
   /// `DecodeError::NonCanonicalBool`.
-  pub cycle_h_4c: Option<CycleInfo>,
+  #[getset(get = "pub")]
+  cycle_h_4c: Option<CycleInfo>,
   /// Last commitment of each quorum index.
-  pub last_commitment_per_index: Vec<Commitment>,
+  #[getset(get = "pub")]
+  last_commitment_per_index: Vec<Commitment>,
   /// Snapshots for the requester's base blocks.
-  pub quorum_snapshot_list: Vec<QuorumSnapshot>,
+  #[getset(get = "pub")]
+  quorum_snapshot_list: Vec<QuorumSnapshot>,
   /// Diffs for the requester's base blocks.
-  pub mn_list_diff_list: Vec<MnListDiff>,
+  #[getset(get = "pub")]
+  mn_list_diff_list: Vec<MnListDiff>,
+}
 }
 
 impl_p2p!(QrInfo);
@@ -246,12 +269,12 @@ impl MsgDecode for QrInfo {
   /// `qrinfo` and stops. A node that follows Core decides from the command,
   /// before decoding, and decodes only the replies to its own requests.
   fn decode_msg(data: &mut &[u8], ctx: &ProtoCtx) -> Result<Self, P2pDecodeError> {
-    Ok(Self::decode_as(data, MnListFormat::for_version(ctx.version))?)
+    Ok(Self::decode_as(data, MnListFormat::for_version(ctx.version()))?)
   }
 }
 
 impl fmt::Display for QrInfo {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "qrinfo({})", self.diff_h.block_hash)
+    write!(f, "qrinfo({})", self.diff_h.block_hash())
   }
 }

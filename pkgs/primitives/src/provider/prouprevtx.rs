@@ -19,6 +19,7 @@ use dash_pkc::bls::{BlsEagerSig, BlsError, BlsPkBytes, BlsSigBytes, BlsValue, BL
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
 use dash_types::{impl_type, Checkable, Signable};
+use getset::{CopyGetters, Getters, Setters};
 
 use core::fmt;
 
@@ -27,22 +28,27 @@ use core::fmt;
 /// - v1: LegacyBLS
 /// - v2: BasicBLS
 /// - v3: ExtAddr (same fields)
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, Setters, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(into = "ProUpRevTxSerde", try_from = "ProUpRevTxSerde"))]
 pub struct ProUpRevTx {
   /// Payload version.
-  pub version: ProTxVersion,
+  #[getset(get_copy = "pub", set = "pub")]
+  version: ProTxVersion,
   /// ProTx hash identifying the masternode.
-  pub pro_tx_hash: TxHash,
+  #[getset(get_copy = "pub")]
+  pro_tx_hash: TxHash,
   /// Revocation reason.
-  pub reason: RevocationReason,
+  #[getset(get_copy = "pub")]
+  reason: RevocationReason,
   /// Hash of all inputs.
-  pub inputs_hash: InputsHash,
+  #[getset(get_copy = "pub")]
+  inputs_hash: InputsHash,
   /// Operator BLS signature under the version's scheme (legacy for v1).
   ///
   /// Core verifies it under its process-wide flag instead.
-  pub sig: BlsEagerSig,
+  #[getset(get = "pub")]
+  sig: BlsEagerSig,
 }
 
 impl_type!(ProUpRevTx);
@@ -134,6 +140,18 @@ impl Checkable for ProUpRevTx {
 hash_impl!(ProUpRevTx);
 
 impl ProUpRevTx {
+  /// Constructs an unsigned payload, its signature invalid. The signature is
+  /// set through [`Signable::set_signature`].
+  pub fn new(version: ProTxVersion, pro_tx_hash: TxHash, reason: RevocationReason, inputs_hash: InputsHash) -> Self {
+    Self {
+      version,
+      pro_tx_hash,
+      reason,
+      inputs_hash,
+      sig: BlsEagerSig::new(BlsValue::invalid(), protx_bls_scheme(version)),
+    }
+  }
+
   /// The payload's `SER_GETHASH` serialization, which leaves out `sig`. The
   /// operator signs its SHA256d.
   pub fn sig_hash_bytes(&self) -> Vec<u8> {

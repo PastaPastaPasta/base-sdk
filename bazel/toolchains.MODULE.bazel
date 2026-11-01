@@ -1,0 +1,6 @@
+# The workspace's Rust toolchains, and the host tools `crate_universe` resolves
+# the crate graph with.
+rust_toolchains = use_extension("//bazel:toolchains.bzl", "rust_toolchains")
+use_repo(rust_toolchains, "dash_rust_toolchains", "rust_host_tools_pinned")
+
+register_toolchains("@dash_rust_toolchains//:all")

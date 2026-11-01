@@ -10,7 +10,7 @@ of each file; `pkgs/pkc/tests/bls_oracle.rs` checks every file against `dash_pkc
 fails when a file and `PROVENANCE.md` disagree.
 
 | File | Role |
-|---|---|
+| --- | --- |
 | `probe.c` | Reads scripts on stdin and prints `oracle_bls_exec`'s status and records |
 | `build.sh` | Links `probe.c` against an oracle archive (`libdash_oracle_<pin>.a`) |
 | `oracle.py` | The script encoding (`Script`), the record reader and the probe driver (`Probe`) |

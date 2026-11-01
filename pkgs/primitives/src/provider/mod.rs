@@ -20,7 +20,7 @@ mod version;
 #[cfg(feature = "serde")]
 pub(crate) use self::sig::compact_hex;
 use crate::sptx::{MnType, ProTxInvalid};
-use crate::types::{NetInfo, NetInfoV1, NetInfoV2};
+use crate::types::NetInfo;
 
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 
@@ -100,16 +100,7 @@ pub(super) fn write_platform_fields(
   }
 }
 
-/// Reads the network info a version carries, extended from v3.
-pub(super) fn read_net_info(data: &mut &[u8], version: ProTxVersion) -> Result<NetInfo, DecodeError> {
-  if version >= ProTxVersion::ExtAddr {
-    Ok(NetInfo::Extended(NetInfoV2::decode(data)?))
-  } else {
-    Ok(NetInfo::Legacy(NetInfoV1::decode(data)?))
-  }
-}
-
-/// Writes the network info as [`read_net_info`] reads it. Validation
+/// Writes the network info the payload version selects. Validation
 /// guarantees the variant matches the version.
 pub(super) fn write_net_info(buf: &mut impl EncodeBuf, net_info: &NetInfo, version: ProTxVersion) {
   if version >= ProTxVersion::ExtAddr {

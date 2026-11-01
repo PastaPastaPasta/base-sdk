@@ -4,7 +4,7 @@ Two corpora in `pkgs/primitives/corpus/` record what Dash Core makes of special-
 both, and every outcome in them comes from Core. `pkgs/primitives/tests/payload_core.rs` runs them.
 
 | Corpus | Inputs | Outcomes |
-|---|---|---|
+| --- | --- | --- |
 | `payload_core.json5` | Crafted payloads: BLS fields of each scheme source with samples from `pkgs/pkc/corpus/bls_wrapper.json5`, NetInfo entries, CbTx v4 with and without the asset-unlock root, and version-3 ProRegTx in the v23.1 layout | `decoderawtransaction` on regtest dashds of v23.1.8 and v24.0.0-rc.3, each under the basic and the legacy BLS flag |
 | `v24.json5` | Special transactions from `getblock 2` fixtures of Core-built v24 chains (rust-dashcore `conformance/tests/data`) | The payload objects Core printed for them |
 

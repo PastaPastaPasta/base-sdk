@@ -30,11 +30,11 @@ fn enrich_tx(tx: &Transaction, val: &mut Value) -> Option<String> {
   match tx.decode_payload() {
     Some(Ok(decoded)) if !decoded.is_complete() => Some(format!(
       "{} payload: trailing bytes: {} remaining",
-      tx.tx_type,
+      tx.tx_type(),
       decoded.trailing()
     )),
     Some(Ok(decoded)) => {
-      if let Ok(v) = serde_json::to_value(&decoded.payload) {
+      if let Ok(v) = serde_json::to_value(&decoded.payload()) {
         obj.insert("extra_payload".into(), v);
       }
       None
@@ -51,7 +51,7 @@ fn enrich_block(block: &Block, val: &mut Value) -> Vec<String> {
     Some(a) => a,
     None => return warnings,
   };
-  for (i, (tx, json_tx)) in block.transactions.iter().zip(txs.iter_mut()).enumerate() {
+  for (i, (tx, json_tx)) in block.transactions().iter().zip(txs.iter_mut()).enumerate() {
     if let Some(msg) = enrich_tx(tx, json_tx) {
       warnings.push(format!("tx {i}: {msg}"));
     }

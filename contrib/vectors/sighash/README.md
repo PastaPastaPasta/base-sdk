@@ -5,7 +5,7 @@
 `sig_hash_bytes` is right when Core's own signature verifies over its SHA256d.
 
 | Section | Inputs | Checked |
-|---|---|---|
+| --- | --- | --- |
 | `sighash` | Special transactions from `getblock 2` of dashd v24.0.0-rc.3 on replicas of the regtest chains Core's functional tests build, and on a mainnet node, with the signer's keys at the block before: the operator key and owner address from `protx info` (regtest) or `protx listdiff` (mainnet), the quorum key from `quorum info` of the LLMQ type Core's regtest parameters select, and the collateral script of an external collateral | Core's BLS signature verifies under the key (ProUpServTx, ProUpRevTx, quorum commitments, MnHF signals, asset unlocks); Core's compact ECDSA signatures recover keys whose ids the signer owns (ProRegTx, ProUpRegTx, ProDisTx, ProUpShareTx, ProUpSharedRegTx) |
 | `stable_txid` | The asset unlocks of rust-dashcore `dash/tests/data/core_v24_regtest.json`, with dashd's `txid` and, for a version-2 unlock, the `instanceHash` Core prints only then | `Transaction::hash` is the txid, `instance_hash` the instance hash, and `has_stable_txid` holds exactly where Core printed one |
 

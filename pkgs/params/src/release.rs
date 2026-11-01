@@ -10,6 +10,7 @@
 use crate::{Bip9Deployment, ChainParams, ChainTxData, Checkpoint, DeploymentPos, Network};
 
 use dash_num::{Arith256, Hash256};
+#[cfg(feature = "codec")]
 use dash_types::type_id::Unencodable;
 use hex_conservative::hex;
 
@@ -20,7 +21,8 @@ use hex_conservative::hex;
 /// differs in the version-bits deployments, the spork signer model, the
 /// Platform address HRP, two policy fields, the sync anchors, the fixed
 /// seeds and the pruning values.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Unencodable)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub enum Release {
   /// The v23.1 line (v23.1.8).
   V23_1,

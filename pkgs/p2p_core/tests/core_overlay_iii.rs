@@ -123,9 +123,9 @@ fn read(c: &Case, raw: &[u8], params: &ChainParams) -> Result<Read, Refusal> {
   })?;
   let (hash, sign_hash) = match &d.msg {
     P2pMsg::Dsi(m) if !m.fits_pool(params) => return Err(Refusal::Read),
-    P2pMsg::GovSync(m) if !m.bloom_filter.is_within_size_constraints() => return Err(Refusal::Score),
+    P2pMsg::GovSync(m) if !m.bloom_filter().is_within_size_constraints() => return Err(Refusal::Score),
     P2pMsg::Dsq(m) => (le(m.hash()), le(m.signature_hash())),
-    P2pMsg::Dstx(m) => (le(m.tx.hash()), le(m.signature_hash())),
+    P2pMsg::Dstx(m) => (le(m.tx().hash()), le(m.signature_hash())),
     P2pMsg::GovObj(m) => (le(m.hash()), le(m.signature_hash())),
     P2pMsg::GovObjVote(m) => (le(m.hash()), le(m.signature_hash())),
     _ => (None, None),

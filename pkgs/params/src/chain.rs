@@ -8,13 +8,15 @@
 
 use crate::{AddrParams, Checkpoint, ConsensusParams, GenesisParams};
 
+#[cfg(feature = "codec")]
 use dash_types::type_id::Unencodable;
 
 /// P2P network message start bytes (magic).
 pub type MessageStart = [u8; 4];
 
 /// Transaction statistics for chain sync progress estimation.
-#[derive(Clone, Copy, Debug, PartialEq, Unencodable)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct ChainTxData {
   /// Unix timestamp of the last known block.
   pub timestamp: i64,
@@ -25,7 +27,8 @@ pub struct ChainTxData {
 }
 
 /// Complete chain parameters for a network.
-#[derive(Clone, Copy, Debug, PartialEq, Unencodable)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct ChainParams {
   /// Consensus rules for this chain.
   pub consensus: ConsensusParams,

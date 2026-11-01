@@ -3,6 +3,7 @@ name: "dash-pow"
 on:
   workflow_dispatch:
   push:
+    branches: [develop]
   pull_request:
 
 concurrency:
@@ -15,14 +16,13 @@ permissions:
 
 jobs:
   msrv:
-    uses: ./.github/workflows/build_msrv.yml
+    permissions:
+      contents: read
+      pull-requests: read
+      id-token: write
+    uses: $/.github/workflows/build_msrv.yml
     with:
       package: dash-pow
       package_dir: pow
       fuzz_package_dir: pow
     secrets: inherit
-
-  bazel:
-    uses: ./.github/workflows/build_bazel.yml
-    with:
-      package_dir: pow

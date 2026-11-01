@@ -13,7 +13,7 @@ use super::backend::{self, Lane};
 use crate::consts::shavite::{BLOCK, IV};
 use crate::util::buffer::{Buffer, Compress};
 use crate::util::impl_digest;
-use crate::util::memops::{digest_from_u32_le, load_u32_le};
+use crate::util::memops::{digest_from_u32_le, load_u32s_le};
 
 use digest::{FixedOutput, Output, Update};
 
@@ -103,14 +103,7 @@ fn mix_round(state: &mut [Lane; 4], window: &[Lane; 8]) {
 // share one copy.
 #[inline(never)]
 fn compress_block(chaining_value: &mut State, msg: &[u8; BLOCK], counter: u128) {
-  let mut window: [Lane; 8] = core::array::from_fn(|slot| {
-    Lane::new([
-      load_u32_le(msg, slot * 4),
-      load_u32_le(msg, slot * 4 + 1),
-      load_u32_le(msg, slot * 4 + 2),
-      load_u32_le(msg, slot * 4 + 3),
-    ])
-  });
+  let mut window: [Lane; 8] = core::array::from_fn(|slot| Lane::new(load_u32s_le(&msg[16 * slot..])));
   let mut state: [Lane; 4] = core::array::from_fn(|column| {
     Lane::new([
       chaining_value[column * 4],

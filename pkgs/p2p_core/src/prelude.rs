@@ -8,6 +8,7 @@
 
 pub(crate) use alloc::borrow::Cow;
 pub(crate) use alloc::boxed::Box;
+pub(crate) use alloc::collections::BTreeMap;
 pub(crate) use alloc::collections::BTreeSet;
 pub(crate) use alloc::format;
 pub(crate) use alloc::string::String;

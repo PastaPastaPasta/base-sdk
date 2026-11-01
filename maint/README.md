@@ -13,7 +13,7 @@ arguments of their own, for more information, run an individual lint script with
 use [`lint_all.py`](./lint_all.py).
 
 | Name | Purpose | Verbs | Depends on |
-| ---- | ------- | ---------- | ---------- |
+| --- | --- | --- | --- |
 | [`lint_commit.py`](./lint/lint_commit.py) | Lint commit names against [`commit.toml`](./commit.toml) | `run` | `git` |
 | [`lint_bazel.py`](./lint/lint_bazel.py) | Lint Starlark files with `buildifier`, hold the rustc flags and edition Bazel builds with to cargo's, and the crates Bazel builds to cargo's graph | `check`, `apply`, `apply-all`, `graph` | `buildifier`, `bazel` and `cargo` (`graph`) |
 | [`lint_cargo.py`](./lint/lint_cargo.py) | Deny dependencies per [`deny.toml`](../.cargo/deny.toml), check/format TOML files against [`taplo.toml`](./taplo.toml) | `check` , `apply`, `apply-all` | `cargo-deny` (deny dependencies), `taplo` (TOML formatting) |

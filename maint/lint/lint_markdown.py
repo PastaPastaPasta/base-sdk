@@ -30,7 +30,7 @@ from common import (
 if TYPE_CHECKING:
   from pathlib import Path
 
-DISABLED_RULES = "md025,md033,md041"
+DISABLED_RULES = "md025,md033,md041,md059"
 
 
 class _LinkCollector(HTMLParser):

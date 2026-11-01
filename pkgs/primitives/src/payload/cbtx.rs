@@ -12,41 +12,52 @@ use crate::{hash_impl, MerkleRoot};
 use dash_pkc::bls::BlsGlobalSig;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{impl_type, Checkable, CompactSize, Numeric};
+use dash_types::{impl_new, impl_type, Checkable, CompactSize, Numeric};
+use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
+impl_new! {
 /// CoinbaseCommitment -- coinbase commitment payload.
 ///
 /// - v1: base fields (version, height, merkle_root_mn_list)
 /// - v2: adds merkle_root_quorums
 /// - v3: adds ChainLock proof and credit pool balance
 /// - v4: adds the asset-unlock merkle root (v24)
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct CoinbaseCommitment {
   /// Payload version (1 to 4).
-  pub version: u16,
+  #[getset(get_copy = "pub")]
+  version: u16,
   /// Block height (Core's `int32_t`).
-  pub height: i32,
+  #[getset(get_copy = "pub")]
+  height: i32,
   /// Merkle root of the masternode list.
-  pub merkle_root_mn_list: MerkleRoot,
+  #[getset(get_copy = "pub")]
+  merkle_root_mn_list: MerkleRoot,
   /// Merkle root of quorum commitments (v2+).
-  pub merkle_root_quorums: Option<MerkleRoot>,
+  #[getset(get_copy = "pub")]
+  merkle_root_quorums: Option<MerkleRoot>,
   /// Best ChainLock height difference (v3+, CompactSize).
-  pub best_cl_height_diff: Option<u64>,
+  #[getset(get_copy = "pub")]
+  best_cl_height_diff: Option<u64>,
   /// Best ChainLock BLS signature (v3+), as its wire bytes. Its scheme is
   /// Core's process-wide flag where the signature is used, given to
   /// [`get`](dash_pkc::bls::BlsGlobal::get).
   #[cfg_attr(feature = "serde", serde(with = "super::bls::serde::opt_global"))]
-  pub best_cl_signature: Option<BlsGlobalSig>,
+  #[getset(get = "pub")]
+  best_cl_signature: Option<BlsGlobalSig>,
   /// Credit pool balance in duffs (v3+).
-  pub credit_pool_balance: Option<i64>,
+  #[getset(get_copy = "pub")]
+  credit_pool_balance: Option<i64>,
   /// Merkle root over the instance hashes of the block's v2+ asset unlocks,
   /// in block order (v4+).
   #[cfg_attr(feature = "serde", serde(default, skip_serializing_if = "Option::is_none"))]
-  pub merkle_root_asset_unlocks: Option<MerkleRoot>,
+  #[getset(get_copy = "pub")]
+  merkle_root_asset_unlocks: Option<MerkleRoot>,
+}
 }
 
 impl_type!(CoinbaseCommitment);
@@ -187,7 +198,8 @@ mod tests {
       .as_str()
       .map(vec_from_hex)
       .unwrap();
-    let payload = Transaction::decode(&mut &raw[..]).unwrap().extra_payload;
+    let tx = Transaction::decode(&mut &raw[..]).unwrap();
+    let payload = tx.extra_payload();
     // version, height and the two merkle roots, then a 1-byte diff.
     assert_eq!(payload[70], 0x01);
     let edited = [&payload[..70], size, &payload[71..]].concat();

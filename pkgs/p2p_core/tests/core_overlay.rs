@@ -116,12 +116,12 @@ fn wire<T: BaseCodec>(value: &T) -> Vec<u8> {
 /// `qdata` as Core reads it: the request, the error byte when there is one,
 /// then the data the mask asks for when the error is `None`.
 fn read_qdata(q: &QData, raw_len: usize, max: [usize; 2]) -> Result<Read, P2pDecodeError> {
-  let mut reenc = wire(&q.request);
-  if q.error != QuorumDataError::Undefined {
-    reenc.push(q.error.to_base());
+  let mut reenc = wire(&q.request());
+  if q.error() != QuorumDataError::Undefined {
+    reenc.push(q.error().to_base());
   }
-  let error_code = Some(q.error.to_base());
-  if q.error != QuorumDataError::None {
+  let error_code = Some(q.error().to_base());
+  if q.error() != QuorumDataError::None {
     return Ok(Read {
       error_code,
       ..Read::plain(raw_len.min(QuorumDataRequest::SIZE + 1), reenc)
@@ -129,11 +129,11 @@ fn read_qdata(q: &QData, raw_len: usize, max: [usize; 2]) -> Result<Read, P2pDec
   }
   let data = q.read_data(max[0], max[1])?;
   let mut vvec_size = None;
-  if let Some(vvec) = &data.vvec {
+  if let Some(vvec) = &data.vvec() {
     vvec_size = Some(vvec.len()).filter(|&n| n != max[0]);
     vvec.encode(&mut reenc);
   }
-  if let Some(contributions) = &data.contributions {
+  if let Some(contributions) = &data.contributions() {
     contributions.encode(&mut reenc);
   }
   // Every data field has one width: the bytes read are the bytes written.

@@ -13,12 +13,14 @@ use bitcoin_units::Amount;
 use dash_num::{Arith256, CompactTarget, Hash256};
 use dash_pow::__deps::digest::Digest;
 use dash_pow::X11;
+#[cfg(feature = "codec")]
 use dash_types::type_id::Unencodable;
 use dash_types::Numeric;
 use hex_conservative::hex;
 
 /// Fields that define a genesis block with a single coinbase transaction.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct GenesisParams {
   /// Block version.
   pub version: i32,
@@ -55,7 +57,8 @@ impl GenesisParams {
 
 /// Fields that define a devnet genesis block: the block at height 1 that
 /// names its devnet in a single coinbase transaction.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct DevnetGenesisParams {
   /// Core's devnet name (`devnet` or `devnet-<name>`), which the coinbase
   /// input script pushes.

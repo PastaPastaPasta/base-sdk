@@ -4,7 +4,6 @@ dash_rust_library(
     name = "dash-num",
     crate_features = [
         "codec",
-        "default",
         "full",
         "serde",
         "std",

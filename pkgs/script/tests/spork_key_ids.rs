@@ -7,6 +7,7 @@
 //! `dash-params` decodes `-sporkaddr` with its own Base58Check reader; it
 //! must read P2PKH addresses as [`Recipient::from_base58c`] does.
 
+#![cfg(feature = "codec")]
 #![expect(clippy::unwrap_used, reason = "test code")]
 
 use dash_params::{ChainOption, ChainParamsBuilder, ChainSetup, Network, ParamsError, Release};

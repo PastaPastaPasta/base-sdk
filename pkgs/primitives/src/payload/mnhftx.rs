@@ -16,7 +16,8 @@ use dash_num::Hash256;
 use dash_pkc::bls::{BlsEagerSig, BlsSchemeKind, BlsSchemeSource};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{impl_type, Checkable};
+use dash_types::{impl_new, impl_type, Checkable};
+use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
@@ -26,20 +27,26 @@ pub const VERSIONBITS_NUM_BITS: u8 = 29;
 /// Prefix of an MnHF signal's request id, Core's `MNEHF_REQUESTID_PREFIX`.
 const MNHF_REQUESTID_PREFIX: &str = "mnhf";
 
+impl_new! {
 /// MnHardFork -- hard-fork signal (type 7).
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct MnHardFork {
   /// Payload version.
-  pub version: u8,
+  #[getset(get_copy = "pub")]
+  version: u8,
   /// Feature bit being activated.
-  pub version_bit: u8,
+  #[getset(get_copy = "pub")]
+  version_bit: u8,
   /// Quorum hash.
-  pub quorum_hash: QuorumHash,
+  #[getset(get_copy = "pub")]
+  quorum_hash: QuorumHash,
   /// Quorum BLS signature, always under the basic scheme.
   #[cfg_attr(feature = "serde", serde(with = "super::bls::serde::always_basic"))]
-  pub sig: BlsEagerSig,
+  #[getset(get = "pub")]
+  sig: BlsEagerSig,
+}
 }
 
 impl_type!(MnHardFork);

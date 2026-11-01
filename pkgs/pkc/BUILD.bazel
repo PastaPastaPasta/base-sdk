@@ -5,13 +5,13 @@ dash_rust_library(
     crate_features = [
         "bls",
         "codec",
-        "default",
         "ecdsa",
         "eddsa",
         "full",
         "serde",
         "std",
     ],
+    portable = True,
     deps = [
         "//pkgs/num:dash-num",
         "//pkgs/types:dash-types",

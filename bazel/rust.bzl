@@ -15,16 +15,30 @@ RUSTC_LINTS = [
     "-Dunused_must_use",
 ]
 
-def dash_rust_library(name, crate_features, deps = [], proc_macro_deps = []):
+def _bool_flag_impl(_ctx):
+    return []
+
+bool_flag = rule(
+    implementation = _bool_flag_impl,
+    build_setting = config.bool(flag = True),
+    doc = "A boolean command-line flag, read through `config_setting`.",
+)
+
+def dash_rust_library(name, crate_features, deps = [], proc_macro_deps = [], portable = False):
     """A workspace crate, built with the workspace lints.
 
     `crate_features`, `deps` and `proc_macro_deps` restate what the anchor
-    resolves for the crate; the graph check holds them to it.
+    resolves for the crate; the graph check holds them to it. A crate with a
+    `portable` feature sets `portable`, which the portable profiles enable.
     """
     rust_library(
         name = name,
         srcs = native.glob(["src/**/*.rs"]),
-        crate_features = crate_features,
+        crate_features = crate_features + (select({
+            "//bazel:profile_portable_debug": ["portable"],
+            "//bazel:profile_portable_release": ["portable"],
+            "//conditions:default": [],
+        }) if portable else []),
         crate_name = name.replace("-", "_"),
         proc_macro_deps = all_crate_deps(proc_macro = True) + proc_macro_deps,
         rustc_flags = RUSTC_LINTS,

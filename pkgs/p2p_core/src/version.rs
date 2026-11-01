@@ -19,11 +19,14 @@ hash_impl!(ProtocolVersion);
 /// Core's `version.h` values, the same at v23.1.8 and v24.0.0-rc.3 unless a
 /// constant names a release.
 impl ProtocolVersion {
+  /// Current protocol version: upstream's value, `PROTOCOL_VERSION` of Dash
+  /// Core v23.1.8. A v24 node uses [`Self::V24_0`].
+  pub const CURRENT: Self = Self(70240);
   /// `PROTOCOL_VERSION` of Dash Core v23.1.8.
   pub const V23_1: Self = Self(70240);
   /// `PROTOCOL_VERSION` of Dash Core v24.0.
   pub const V24_0: Self = Self(70242);
-  /// Version a connection uses until the peer's `version` arrives.
+  /// Version assumed until the handshake agrees on one.
   pub const INIT: Self = Self(209);
   /// Minimum acceptable peer version.
   pub const MIN_PEER: Self = Self(70221);
@@ -46,9 +49,9 @@ impl ProtocolVersion {
   pub const NO_LEGACY_ISLOCK: Self = Self(70231);
   /// `dsq` announced by inventory.
   pub const DSQ_INV: Self = Self(70234);
-  /// Compressed `headers2` limit raised to 8000 boundary.
+  /// Raised [`Headers2::MAX_COUNT`](crate::Headers2::MAX_COUNT) boundary.
   pub const INCREASE_MAX_HEADERS2: Self = Self(70235);
-  /// Minimum version for BIP324 v2 transport and its short IDs.
+  /// Minimum version for BIP324 v2 transport.
   pub const BIP324_BASELINE: Self = Self(70235);
   /// Efficient `qrinfo`.
   pub const EFFICIENT_QRINFO: Self = Self(70236);
@@ -58,7 +61,7 @@ impl ProtocolVersion {
   pub const PLATFORM_BAN: Self = Self(70238);
   /// Stale `qfcommit` re-propagation is penalised.
   pub const QFCOMMIT_STALE_REPROP_BAN: Self = Self(70239);
-  /// V2 short ID for `platformban`.
+  /// V2 short ID of `platformban` boundary.
   pub const PLATFORMBAN_V2_SHORT_ID: Self = Self(70240);
   /// CoinJoin rebalance sessions and the `dsa` flags field (v24.0).
   pub const COINJOIN_REBALANCE: Self = Self(70241);

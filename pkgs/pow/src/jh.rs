@@ -70,44 +70,11 @@ fn apply_linear_layer(y: &mut [Row; 8]) {
   y[3] ^= y[4];
 }
 
-/// Swaps every adjacent bit pair: `(b0, b1) -> (b1, b0)`.
+/// Swaps neighbouring bit groups of `WIDTH` bits, where `LOW` masks the
+/// lower group of every pair.
 #[inline]
-fn swap_adjacent_bits(x: Row) -> Row {
-  const LO: Row = Row::splat(0x5555_5555);
-  const HI: Row = Row::splat(0xaaaa_aaaa);
-  ((x & LO) << 1u32) | ((x & HI) >> 1u32)
-}
-
-/// Swaps 2-bit groups inside each 4-bit chunk.
-#[inline]
-fn swap_bit_pairs(x: Row) -> Row {
-  const LO: Row = Row::splat(0x3333_3333);
-  const HI: Row = Row::splat(0xcccc_cccc);
-  ((x & LO) << 2u32) | ((x & HI) >> 2u32)
-}
-
-/// Swaps the low and high nibble inside each byte.
-#[inline]
-fn swap_nibbles(x: Row) -> Row {
-  const LO: Row = Row::splat(0x0f0f_0f0f);
-  const HI: Row = Row::splat(0xf0f0_f0f0);
-  ((x & LO) << 4u32) | ((x & HI) >> 4u32)
-}
-
-/// Swaps the low and high byte inside each 16-bit chunk.
-#[inline]
-fn swap_bytes_in_half_words(x: Row) -> Row {
-  const LO: Row = Row::splat(0x00ff_00ff);
-  const HI: Row = Row::splat(0xff00_ff00);
-  ((x & LO) << 8u32) | ((x & HI) >> 8u32)
-}
-
-/// Swaps the low and high 16-bit halves inside each 32-bit word.
-#[inline]
-fn swap_half_words(x: Row) -> Row {
-  const LO: Row = Row::splat(0x0000_ffff);
-  const HI: Row = Row::splat(0xffff_0000);
-  ((x & LO) << 16u32) | ((x & HI) >> 16u32)
+fn swap_bit_groups<const LOW: u32, const WIDTH: u32>(x: Row) -> Row {
+  ((x & const { Row::splat(LOW) }) << WIDTH) | ((x & const { Row::splat(!LOW) }) >> WIDTH)
 }
 
 /// Applies the S-box and linear layer to all eight rows.
@@ -152,11 +119,7 @@ fn apply_round_core(state: &mut State, constants: [u64; 4]) {
   state[7] = words[7];
 }
 
-/// Applies a compile-time-known swap pattern to odd rows.
-///
-/// The const generic `OP` (0-6) selects the bit-group shuffle, so the compiler
-/// dead-code-eliminates the other six `match` arms and the runtime `round % 7`
-/// dispatch disappears entirely.
+/// Swaps the bit groups of width `2^OP` in the odd rows.
 #[cfg_attr(not(debug_assertions), inline(always))]
 fn apply_swap<const OP: usize>(state: &mut State) {
   const SWAP_WORDS: Row = Row::new([1, 0, 3, 2]);
@@ -164,11 +127,11 @@ fn apply_swap<const OP: usize>(state: &mut State) {
   let mut row = 1;
   while row < 8 {
     match OP {
-      0 => state[row] = swap_adjacent_bits(state[row]),
-      1 => state[row] = swap_bit_pairs(state[row]),
-      2 => state[row] = swap_nibbles(state[row]),
-      3 => state[row] = swap_bytes_in_half_words(state[row]),
-      4 => state[row] = swap_half_words(state[row]),
+      0 => state[row] = swap_bit_groups::<0x5555_5555, 1>(state[row]),
+      1 => state[row] = swap_bit_groups::<0x3333_3333, 2>(state[row]),
+      2 => state[row] = swap_bit_groups::<0x0f0f_0f0f, 4>(state[row]),
+      3 => state[row] = swap_bit_groups::<0x00ff_00ff, 8>(state[row]),
+      4 => state[row] = swap_bit_groups::<0x0000_ffff, 16>(state[row]),
       5 => state[row] = state[row].shuffle(SWAP_WORDS),
       6 => state[row] = state[row].shuffle(SWAP_DWORDS),
       _ => {}
@@ -177,11 +140,10 @@ fn apply_swap<const OP: usize>(state: &mut State) {
   }
 }
 
-/// Applies the full 42-round E8 permutation.
+/// Applies the 42-round E8 permutation.
 ///
-/// Unrolled by 7: since 42 / 7 = 6, the swap pattern cycles exactly once per
-/// group.  This eliminates the runtime `round % 7` dispatch (mul + shift
-/// division trick + compare/branch tree ~ 15 insns/round).
+/// The swap pattern has period 7, so unrolling seven rounds keeps every swap
+/// width a constant.
 #[cfg_attr(not(debug_assertions), inline(always))]
 fn apply_e8(state: &mut State) {
   let mut group = 0;

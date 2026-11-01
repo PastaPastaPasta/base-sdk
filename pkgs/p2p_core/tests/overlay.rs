@@ -120,19 +120,19 @@ fn mnlistdiff_reads_and_writes_in_the_peers_band(#[case] version: i32, #[case] f
   let P2pMsg::MnListDiff(diff) = &msg else {
     panic!("{msg:?}")
   };
-  assert_eq!(diff.format, format);
-  assert_eq!(diff.mn_list.len(), 2);
+  assert_eq!(diff.format(), format);
+  assert_eq!(diff.mn_list().len(), 2);
   assert_eq!(encode(&msg), raw);
   // Unversioned entries read as version 1 and carry no type.
-  let evo = &diff.mn_list[1];
+  let evo = &diff.mn_list()[1];
   if versioned {
     assert_eq!(
-      (evo.version, evo.mn_type, evo.platform_http_port),
+      (evo.version(), evo.mn_type(), evo.platform_http_port()),
       (2, MnType::Evo, Some(26657))
     );
   } else {
     assert_eq!(
-      (evo.version, evo.mn_type, evo.platform_http_port),
+      (evo.version(), evo.mn_type(), evo.platform_http_port()),
       (1, MnType::Regular, None)
     );
   }
@@ -146,7 +146,7 @@ fn an_older_band_leaves_the_cl_sigs_unread() {
   let mut data = &raw[..];
   let old = MnListDiff::decode_as(&mut data, MnListFormat::VersionFirst).unwrap();
   assert_eq!(data, [0]);
-  assert!(old.quorum_cl_sigs.is_empty());
+  assert!(old.quorum_cl_sigs().is_empty());
 }
 
 #[rstest]
@@ -187,7 +187,7 @@ fn cl_sigs_are_kept_in_wire_order() {
 #[rstest]
 fn cl_sig_index_sets_are_sorted_and_unique() {
   let sig = cl_sig(7, &[5, 1, 5, 3]);
-  assert_eq!(sig.index_set.iter().copied().collect::<Vec<_>>(), [1, 3, 5]);
+  assert_eq!(sig.index_set().iter().copied().collect::<Vec<_>>(), [1, 3, 5]);
   assert_eq!(wire(&sig), wire(&cl_sig(7, &[1, 3, 5])));
 }
 
@@ -229,7 +229,7 @@ fn qdata_reads_the_error_as_core_does(#[case] tail: &[u8], #[case] error: Quorum
   raw.extend(tail);
   let msg = decode("qdata", &raw, 70242).unwrap();
   let P2pMsg::QData(q) = &msg else { panic!("{msg:?}") };
-  assert_eq!(q.error, error);
+  assert_eq!(q.error(), error);
   let mut expected = qgetdata();
   expected.extend(written);
   assert_eq!(encode(&msg), expected);
@@ -244,8 +244,8 @@ fn qdata_vectors_are_bounded_before_they_are_read() {
   raw.extend(count(0));
   let q = QData::decode(&mut &raw[..]).unwrap();
   let data = q.read_data(2, 0).unwrap();
-  assert_eq!(data.vvec.unwrap().len(), 2);
-  assert_eq!(data.contributions.unwrap().len(), 0);
+  assert_eq!(data.vvec().as_ref().unwrap().len(), 2);
+  assert_eq!(data.contributions().as_ref().unwrap().len(), 0);
   assert!(matches!(
     q.read_data(1, 0),
     Err(P2pDecodeError::TooManyEntries { count: 2, max: 1, .. })
@@ -282,12 +282,7 @@ fn spork_signatures_are_limited_on_read_only() {
     payload.extend(vec![0x30; len]);
     assert_eq!(decode("spork", &payload, 70242).is_ok(), ok, "{len}");
   }
-  let long = Spork {
-    spork_id: 10001,
-    value: 0,
-    time_signed: 0,
-    sig: vec![0; 70],
-  };
+  let long = Spork::new(10001, 0, 0, vec![0; 70]);
   assert_eq!(wire(&long).len(), 20 + 1 + 70);
 }
 
@@ -399,8 +394,8 @@ fn snapshot_skip_mode_reads_any_value(#[case] mode: i32, #[case] expected: Snaps
   raw.extend(1i32.to_le_bytes());
   raw.extend((-1i32).to_le_bytes());
   let snap = QuorumSnapshot::decode(&mut &raw[..]).unwrap();
-  assert_eq!(snap.skip_list_mode, expected);
-  assert_eq!(snap.skip_list, [1, -1]);
+  assert_eq!(snap.skip_list_mode(), expected);
+  assert_eq!(*snap.skip_list(), [1, -1]);
   assert_eq!(wire(&snap), raw);
 }
 

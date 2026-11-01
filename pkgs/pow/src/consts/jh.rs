@@ -6,11 +6,13 @@
 
 //! JH-512 constants.
 //!
-//! Round constants per Section 4.6: seed from sqrt2, iterated through R_6.
-//! Bitslice form per Section 7.2.7.
+//! The round constants come from iterating R_6 on the sqrt 2 seed (Section
+//! 4.6) and are stored in bitslice form (Section 7.2.7). Sections refer to the
+//! September 2009 JH specification; the final edition has no Section 7.2.4.
 
+use crate::util::const_array;
 use crate::util::math::gf4_mul2;
-use crate::util::memops::{pack_nibbles, unpack_nibbles};
+use crate::util::memops::{load_u64_le, pack_nibbles, unpack_nibbles};
 
 /// Block size in bytes.
 pub(crate) const BLOCK: usize = 64;
@@ -18,74 +20,37 @@ pub(crate) const BLOCK: usize = 64;
 static S0: [u8; 16] = [9, 0, 4, 11, 13, 12, 3, 15, 1, 10, 2, 6, 7, 5, 8, 14];
 static S1: [u8; 16] = [3, 12, 6, 13, 5, 7, 1, 9, 15, 2, 0, 4, 11, 10, 14, 8];
 
-/// S-box layer: S0 or S1 per round-constant bit.
-const fn sbox_layer(s: &[u8; 64], rc: &[u8; 64]) -> [u8; 64] {
-  let mut out = [0u8; 64];
-  let mut i = 0;
-  while i < 64 {
-    out[i] = if rc[i] == 0 {
-      S0[s[i] as usize]
-    } else {
-      S1[s[i] as usize]
-    };
-    i += 1;
-  }
-  out
+/// S-box layer applying S0 or S1 per round-constant bit.
+const fn sbox_layer<const N: usize>(s: &[u8; N], rc: &[u8; N]) -> [u8; N] {
+  const_array!(0; N; |i| if rc[i] == 0 { S0[s[i] as usize] } else { S1[s[i] as usize] })
 }
 
 /// L-transform on consecutive nibble pairs (Section 4.2).
-const fn l_layer(s: &[u8; 64]) -> [u8; 64] {
-  let mut out = *s;
-  let mut i = 0;
-  while i < 64 {
-    let (a, b) = (s[i], s[i + 1]);
+const fn l_layer<const N: usize>(s: &[u8; N]) -> [u8; N] {
+  const_array!(0; N; |i| {
+    let (a, b) = (s[i & !1], s[i | 1]);
     let two_a = gf4_mul2(a);
-    out[i] = (gf4_mul2(two_a) ^ a ^ gf4_mul2(b)) & 0xF;
-    out[i + 1] = (two_a ^ b) & 0xF;
-    i += 2;
-  }
-  out
+    (if i % 2 == 0 { gf4_mul2(two_a) ^ a ^ gf4_mul2(b) } else { two_a ^ b }) & 0xF
+  })
 }
 
-/// P_6 = phi_6 o P'_6 o pi_6 (Section 4.3.4).
-const fn p6_perm(a: &[u8; 64]) -> [u8; 64] {
-  // pi_6: swap elements 2<->3 in each group of 4.
-  let mut pi = [0u8; 64];
-  let mut i = 0;
-  while i < 16 {
-    pi[4 * i] = a[4 * i];
-    pi[4 * i + 1] = a[4 * i + 1];
-    pi[4 * i + 2] = a[4 * i + 3];
-    pi[4 * i + 3] = a[4 * i + 2];
-    i += 1;
-  }
-  // P'_6: deinterleave evens/odds into halves.
-  let mut pp = [0u8; 64];
-  i = 0;
-  while i < 32 {
-    pp[i] = pi[2 * i];
-    pp[32 + i] = pi[2 * i + 1];
-    i += 1;
-  }
-  // phi_6: swap adjacent pairs in second quarter.
-  let mut ph = pp;
-  i = 16;
-  while i < 32 {
-    ph[2 * i] = pp[2 * i + 1];
-    ph[2 * i + 1] = pp[2 * i];
-    i += 1;
-  }
-  ph
+/// P_d = phi_d o P'_d o pi_d on `N = 2^d` elements (Section 4.3).
+const fn permute<T: Copy, const N: usize>(a: &[T; N]) -> [T; N] {
+  // pi_d swaps elements 2 and 3 in each group of 4.
+  let pi: [T; N] = const_array!(a[0]; N; |i| a[if i % 4 >= 2 { i ^ 1 } else { i }]);
+  // P'_d deinterleaves the even and odd elements into halves.
+  let pp: [T; N] = const_array!(a[0]; N; |i| pi[2 * (i % (N / 2)) + i / (N / 2)]);
+  // phi_d swaps adjacent pairs in the second half.
+  const_array!(a[0]; N; |i| pp[if i >= N / 2 { i ^ 1 } else { i }])
 }
 
-// R_6: round function on 2^6 = 64 nibbles (Section 4.4)
-const fn r6(state: &[u8; 64], rc: &[u8; 64]) -> [u8; 64] {
-  p6_perm(&l_layer(&sbox_layer(state, rc)))
+/// R_d, the round function on `N = 2^d` nibbles (Section 4.4).
+const fn round<const N: usize>(state: &[u8; N], rc: &[u8; N]) -> [u8; N] {
+  permute(&l_layer(&sbox_layer(state, rc)))
 }
 
-// Hardware constant generation (Section 4.6)
-
-/// floor((sqrt2 - 1) x 2^256): first 256 fractional bits of sqrt2.
+/// The first 256 fractional bits of sqrt 2, the seed of the hardware
+/// constants (Section 4.6).
 #[rustfmt::skip]
 static SEED: [u8; 32] = [
   0x6a, 0x09, 0xe6, 0x67, 0xf3, 0xbc, 0xc9, 0x08,
@@ -94,115 +59,65 @@ static SEED: [u8; 32] = [
   0xda, 0x2f, 0x59, 0x0b, 0x06, 0x67, 0x32, 0x2a,
 ];
 
-static ZERO_RC: [u8; 64] = [0; 64];
-
-/// 42 hardware-form constants via R_6 iteration from sqrt2 seed.
+/// The 42 hardware-form constants, R_6 iterated from the seed.
 static HW_CONSTANTS: [[u8; 32]; 42] = {
   let mut c = [[0u8; 32]; 42];
   c[0] = SEED;
   let mut r = 1;
   while r < 42 {
-    let prev = unpack_nibbles(&c[r - 1]);
-    c[r] = pack_nibbles(&r6(&prev, &ZERO_RC));
+    c[r] = pack_nibbles(&round(&unpack_nibbles(&c[r - 1]), &[0; 64]));
     r += 1;
   }
   c
 };
 
-// Hardware -> bitslice conversion (Section 7.2.7)
-//
-// Each hardware constant C_r gets transformed to bitslice
-// form via: lambda_8^r (apply IP_8 r times to bits), then
-// eta_8^r (iterative sigma permutation), then even/odd bit split.
-
-/// IP_8: inverse of P_8 on 256 bit positions.
-#[rustfmt::skip]
-static IP8: [u16; 256] = [
-    0,129,128,  1,  2,131,130,  3,  4,133,132,  5,  6,135,134,  7,
-    8,137,136,  9, 10,139,138, 11, 12,141,140, 13, 14,143,142, 15,
-   16,145,144, 17, 18,147,146, 19, 20,149,148, 21, 22,151,150, 23,
-   24,153,152, 25, 26,155,154, 27, 28,157,156, 29, 30,159,158, 31,
-   32,161,160, 33, 34,163,162, 35, 36,165,164, 37, 38,167,166, 39,
-   40,169,168, 41, 42,171,170, 43, 44,173,172, 45, 46,175,174, 47,
-   48,177,176, 49, 50,179,178, 51, 52,181,180, 53, 54,183,182, 55,
-   56,185,184, 57, 58,187,186, 59, 60,189,188, 61, 62,191,190, 63,
-   64,193,192, 65, 66,195,194, 67, 68,197,196, 69, 70,199,198, 71,
-   72,201,200, 73, 74,203,202, 75, 76,205,204, 77, 78,207,206, 79,
-   80,209,208, 81, 82,211,210, 83, 84,213,212, 85, 86,215,214, 87,
-   88,217,216, 89, 90,219,218, 91, 92,221,220, 93, 94,223,222, 95,
-   96,225,224, 97, 98,227,226, 99,100,229,228,101,102,231,230,103,
-  104,233,232,105,106,235,234,107,108,237,236,109,110,239,238,111,
-  112,241,240,113,114,243,242,115,116,245,244,117,118,247,246,119,
-  120,249,248,121,122,251,250,123,124,253,252,125,126,255,254,127,
-];
-
-/// Unpacks 32 bytes to 256 individual bits (MSB first).
-const fn unpack_bits(bytes: &[u8; 32]) -> [u8; 256] {
-  let mut out = [0u8; 256];
+/// IP_8, the inverse of P_8 on 256 bit positions.
+static IP8: [u16; 256] = {
+  let source = permute(&const_array!(0u16; 256; |i| i as u16));
+  let mut inverse = [0u16; 256];
   let mut i = 0;
-  while i < 32 {
-    let mut j = 0;
-    while j < 8 {
-      out[i * 8 + j] = (bytes[i] >> (7 - j)) & 1;
-      j += 1;
-    }
+  while i < 256 {
+    inverse[source[i] as usize] = i as u16;
     i += 1;
   }
-  out
+  inverse
+};
+
+/// Unpacks 32 bytes to 256 individual bits, most significant bit first.
+const fn unpack_bits(bytes: &[u8; 32]) -> [u8; 256] {
+  const_array!(0; 256; |i| (bytes[i / 8] >> (7 - i % 8)) & 1)
 }
 
-/// lambda_8^r: apply IP_8 r times to a 256-bit array.
+/// lambda_8^r, which applies IP_8 `r` times.
 const fn lambda(bits: &[u8; 256], r: usize) -> [u8; 256] {
   let mut v = *bits;
   let mut i = 0;
   while i < r {
     let prev = v;
-    let mut k = 0;
-    while k < 256 {
-      v[k] = prev[IP8[k] as usize];
-      k += 1;
-    }
+    v = const_array!(0; 256; |k| prev[IP8[k] as usize]);
     i += 1;
   }
   v
 }
 
-/// omega_bar: swap blocks of size n within pairs of 2n (Section 7.2.3).
+/// omega_bar, which swaps the two halves of every `2n` block (Section 7.2.3).
+///
+/// Callers pass a power of two for `n`, so flipping bit `n` of an index moves
+/// it to the matching slot in the other half.
 const fn omega_bar(a: &[u8; 128], n: usize) -> [u8; 128] {
-  let mut b = *a;
-  let pairs = 128 / (2 * n);
-  let mut i = 0;
-  while i < pairs {
-    let mut j = 0;
-    while j < n {
-      b[2 * i * n + j] = a[2 * i * n + n + j];
-      b[2 * i * n + n + j] = a[2 * i * n + j];
-      j += 1;
-    }
-    i += 1;
-  }
-  b
+  const_array!(0; 128; |i| a[i ^ n])
 }
 
-/// sigma_8: even bits unchanged, odd bits permuted (Section 7.2.6).
+/// sigma_8, which leaves the even bits and permutes the odd bits (Section
+/// 7.2.6).
 const fn sigma(bits: &[u8; 256], n: usize) -> [u8; 256] {
-  let mut odds = [0u8; 128];
-  let mut i = 0;
-  while i < 128 {
-    odds[i] = bits[2 * i + 1];
-    i += 1;
-  }
+  let odds: [u8; 128] = const_array!(0; 128; |i| bits[2 * i + 1]);
   let perm = omega_bar(&odds, n);
-  let mut out = *bits;
-  i = 0;
-  while i < 128 {
-    out[2 * i + 1] = perm[i];
-    i += 1;
-  }
-  out
+  const_array!(0; 256; |i| if i % 2 == 0 { bits[i] } else { perm[i / 2] })
 }
 
-/// eta_8^r: iterative sigma with block size 2^(i mod 7).
+/// eta_8^r, which applies sigma with block sizes `2^(i mod 7)` for `i` in
+/// `0..r`.
 const fn eta(bits: &[u8; 256], r: usize) -> [u8; 256] {
   let mut v = *bits;
   let mut i = 0;
@@ -237,37 +152,58 @@ const fn to_bitslice(hw: &[u8; 32], r: usize) -> [u64; 4] {
 }
 
 /// 42 round constants, grouped as `[even_hi, even_lo, odd_hi, odd_lo]`.
-pub(crate) static ROUND_CONSTS: [[u64; 4]; 42] = {
-  let mut out = [[0u64; 4]; 42];
+pub(crate) static ROUND_CONSTS: [[u64; 4]; 42] = const_array!([0; 4]; 42; |r| to_bitslice(&HW_CONSTANTS[r], r));
+
+/// Bit `j` of a 1024-bit block, counting from the top bit of byte 0.
+const fn block_bit(h: &[u8; 128], j: usize) -> u8 {
+  (h[j / 8] >> (7 - j % 8)) & 1
+}
+
+/// Groups a 1024-bit block into 256 nibbles (Section 4.5).
+const fn group(h: &[u8; 128]) -> [u8; 256] {
+  const_array!(0; 256; |n| {
+    let j = n / 2 + 128 * (n % 2);
+    (block_bit(h, j) << 3) | (block_bit(h, j + 256) << 2) | (block_bit(h, j + 512) << 1) | block_bit(h, j + 768)
+  })
+}
+
+/// Degroups 256 nibbles back into a 1024-bit block (Section 4.5).
+const fn degroup(q: &[u8; 256]) -> [u8; 128] {
+  let mut h = [0u8; 128];
+  let mut n = 0;
+  while n < 256 {
+    let j = n / 2 + 128 * (n % 2);
+    let mut k = 0;
+    while k < 4 {
+      let bit = j + 256 * k;
+      h[bit / 8] |= ((q[n] >> (3 - k)) & 1) << (7 - bit % 8);
+      k += 1;
+    }
+    n += 1;
+  }
+  h
+}
+
+/// IV, which is E_8 of the configuration block holding the digest size 512
+/// in its first two bytes (Section 6.3).
+pub(crate) static IV: [[u64; 2]; 8] = {
+  let mut config = [0u8; 128];
+  config[0] = 0x02;
+  let mut q = group(&config);
   let mut r = 0;
   while r < 42 {
-    out[r] = to_bitslice(&HW_CONSTANTS[r], r);
+    q = round(&q, &unpack_bits(&HW_CONSTANTS[r]));
     r += 1;
   }
-  out
+  let h = degroup(&q);
+  const_array!([0; 2]; 8; |i| [load_u64_le(&h, 2 * i), load_u64_le(&h, 2 * i + 1)])
 };
-
-/// JH-512 IV derived per Section 6.3: E_8([0x00,0x02,0..]).
-///
-/// The config block has digest size (512 = 0x0200) in the first two bytes. With zero message, F_8 simplifies to E_8.
-#[rustfmt::skip]
-/// JH-512 IV derived from the config block.
-pub(crate) static IV: [[u64; 2]; 8] = [
-  [0x17aa003e964bd16f, 0x43d5157a052e6a63],
-  [0x0bef970c8d5e228a, 0x61c3b3f2591234e9],
-  [0x1e806f53c1a01d89, 0x806d2bea6b05a92a],
-  [0xa6ba7520dbcc8e58, 0xf73bf8ba763a0fa9],
-  [0x694ae34105e66901, 0x5ae66f2e8e8ab546],
-  [0x243c84c1d0a74710, 0x99c15a2db1716e3b],
-  [0x56f8b19decf657cf, 0x56b116577c8806a7],
-  [0xfb1785e6dffcc2e3, 0x4bdd8ccc78465a54],
-];
 
 #[cfg(test)]
 mod tests {
   use super::*;
 
-  /// Appendix A.1: C01 starts with 0xBB, ends with 0x31.
+  /// Appendix A.1 lists C01, which starts with 0xBB and ends with 0x31.
   #[test]
   fn spec_check_hw_c01() {
     assert_eq!(HW_CONSTANTS[1][0], 0xBB);
@@ -280,5 +216,22 @@ mod tests {
     assert_eq!(ROUND_CONSTS[0][0], 0x67f815dfa2ded572);
     assert_eq!(ROUND_CONSTS[1][0], 0x9cfa455ce03a98ea);
     assert_eq!(ROUND_CONSTS[41][3], 0xe26f4791bf9d75f6);
+  }
+
+  /// Known-good values taken from sphlib
+  #[test]
+  fn spot_check_iv() {
+    #[rustfmt::skip]
+    let expected: [[u64; 2]; 8] = [
+      [0x17aa003e964bd16f, 0x43d5157a052e6a63],
+      [0x0bef970c8d5e228a, 0x61c3b3f2591234e9],
+      [0x1e806f53c1a01d89, 0x806d2bea6b05a92a],
+      [0xa6ba7520dbcc8e58, 0xf73bf8ba763a0fa9],
+      [0x694ae34105e66901, 0x5ae66f2e8e8ab546],
+      [0x243c84c1d0a74710, 0x99c15a2db1716e3b],
+      [0x56f8b19decf657cf, 0x56b116577c8806a7],
+      [0xfb1785e6dffcc2e3, 0x4bdd8ccc78465a54],
+    ];
+    assert_eq!(IV, expected);
   }
 }

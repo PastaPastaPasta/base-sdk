@@ -46,6 +46,7 @@ cfg_if::cfg_if! {
     mod wrap_lazy;
     mod wrap_value;
     #[expect(unsafe_code, reason = "blst C FFI")]
+    #[expect(clippy::same_name_method, reason = "trait impl delegates to method")]
     pub(crate) mod blst_ffi;
     pub(crate) mod chia_h2c;
     pub(crate) mod group;

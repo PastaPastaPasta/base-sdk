@@ -20,7 +20,8 @@ use crate::types::{NIError, NIPurpose, NITrait, NetInfoV2};
 use dash_num::make_hash;
 use dash_types::codec::{BaseCodec, DecodeError};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{enum_map, impl_num, Checkable};
+use dash_types::{enum_map, impl_new, impl_num, Checkable};
+use getset::{CopyGetters, Getters};
 
 /// Maximum operator reward in basis points.
 pub(crate) const MAX_OPERATOR_REWARD: u16 = 10_000;
@@ -221,18 +222,23 @@ pub enum SpecialPayload {
   },
 }
 
+impl_new! {
 /// A special payload decoded from the front of a transaction's extra payload.
 ///
 /// Core's `GetTxPayload` rejects a payload its decoder does not read to the
 /// end. That rule is the caller's, applied by comparing `consumed` with `len`.
-#[derive(Clone, Debug, PartialEq, Unencodable)]
+#[derive(Clone, CopyGetters, Debug, Getters, PartialEq, Unencodable)]
 pub struct PayloadDecode {
   /// The decoded payload.
-  pub payload: SpecialPayload,
+  #[getset(get = "pub")]
+  payload: SpecialPayload,
   /// Bytes the payload's decoder read.
-  pub consumed: usize,
+  #[getset(get_copy = "pub")]
+  consumed: usize,
   /// Bytes in the extra payload.
-  pub len: usize,
+  #[getset(get_copy = "pub")]
+  len: usize,
+}
 }
 
 impl PayloadDecode {
@@ -242,20 +248,34 @@ impl PayloadDecode {
     self.consumed == self.len
   }
 
+  /// Returns `true` when the extra payload holds no bytes.
+  pub fn is_empty(&self) -> bool {
+    self.len == 0
+  }
+
   /// Returns the bytes after the ones the decoder read.
   pub fn trailing(&self) -> usize {
     self.len.saturating_sub(self.consumed)
   }
+
+  /// Returns the decoded payload, dropping the read counts.
+  pub fn into_payload(self) -> SpecialPayload {
+    self.payload
+  }
 }
 
+impl_new! {
 /// Error decoding a special payload.
-#[derive(Clone, Debug, Eq, PartialEq, Hash, thiserror::Error, Unencodable)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, PartialEq, Hash, thiserror::Error, Unencodable)]
 #[error("{tx_type} payload: {message}")]
 pub struct PayloadError {
   /// Which transaction type was being decoded.
-  pub tx_type: TxType,
+  #[getset(get_copy = "pub")]
+  tx_type: TxType,
   /// Human-readable description.
-  pub message: String,
+  #[getset(get = "pub")]
+  message: String,
+}
 }
 
 /// Structural check failure for a special payload.

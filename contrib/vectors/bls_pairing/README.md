@@ -6,7 +6,7 @@ verification reaches, and coordinates at the field's edge values. The inputs are
 every result comes from the reference implementation's relic.
 
 | File | Role |
-|---|---|
+| --- | --- |
 | `probe.c` | `fe` mode: compares relic's final exponentiation with blst's on random `Fp12` elements. `pairs` mode: prints pairing vectors as JSON5 |
 | `build.sh` | Links `probe.c` against a reference build's `librelic.a` and its generated relic headers, and blst's C sources |
 

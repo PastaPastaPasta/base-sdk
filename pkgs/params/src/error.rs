@@ -9,12 +9,14 @@
 use crate::builder::ChainOption;
 use crate::prelude::*;
 
+#[cfg(feature = "codec")]
 use dash_types::type_id::Unencodable;
 
 use core::fmt;
 
 /// A version-bits field `-vbparams` failed to parse.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub enum VbField {
   /// `<start>`.
   StartTime,
@@ -56,7 +58,8 @@ impl VbField {
 /// own refusals; their `Display` is Core's exception text, byte for byte, at
 /// both pinned releases. The rest are inputs Core accepts or asserts on that
 /// this crate refuses.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub enum ParamsError {
   /// A `-testactivationheight` value without `@`.
   ActivationHeightFormat(String),

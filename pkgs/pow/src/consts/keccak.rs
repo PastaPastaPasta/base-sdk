@@ -17,15 +17,14 @@ const fn rc(t: usize) -> bool {
   if t == 0 {
     return true;
   }
-  // R is an 8-bit register, MSB-first: R[0] is bit 7 of the byte.
-  // Initial value: R = 10000000_2 = 0x80.
+  // R is an 8-bit register, most significant bit first, so R[0] is bit 7.
   let mut r: u8 = 0x80;
   let mut i = 0;
   while i < t {
-    // Step a: prepend a 0 bit (shift right), capturing the overflow.
+    // Step a prepends a 0 bit by shifting right and captures the overflow.
     let overflow = r & 1; // R[8] = old R[7]
     r >>= 1;
-    // Steps b-e: XOR R[0], R[4], R[5], R[6] with the overflow bit.
+    // Steps b to e xor R[0], R[4], R[5] and R[6] with the overflow bit.
     // R[0]=bit7, R[4]=bit3, R[5]=bit2, R[6]=bit1 -> mask 0x8E.
     r ^= overflow.wrapping_mul(0x8E);
     i += 1;

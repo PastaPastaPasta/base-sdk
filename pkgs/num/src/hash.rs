@@ -91,6 +91,7 @@ impl<const N: usize> HashBlob<N> {
   /// given a block hash or other consensus hex value. Internally the bytes
   /// are stored little-endian, so this reverses the input.
   #[inline]
+  #[expect(clippy::same_name_method, reason = "trait impl delegates to method")]
   pub const fn from_bendian(be: [u8; N]) -> Self {
     let mut le = [0u8; N];
     let mut i = 0;

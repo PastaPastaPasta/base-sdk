@@ -13,6 +13,7 @@ use crate::spork::spork_key_id;
 use crate::{BuriedDeployment, ChainSetup, DeploymentPos, LlmqType, Network, Release, SporkSigners, MAX_LLMQ_SIZE};
 
 use bitcoin_units::BlockHeight;
+#[cfg(feature = "codec")]
 use dash_types::type_id::Unencodable;
 
 /// A Core command-line option that changes chain parameters.
@@ -20,7 +21,8 @@ use dash_types::type_id::Unencodable;
 /// These are the options `SetupChainParamsOptions` registers, plus three
 /// `init.cpp` registers: `-fastprune`, which regtest's prune height reads,
 /// and the spork signer options, which startup reads after the chain params.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Unencodable)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub enum ChainOption {
   /// `-budgetparams=<masternode>:<budget>:<superblock>` (regtest).
   BudgetParams,
@@ -135,7 +137,8 @@ impl ChainOption {
 }
 
 /// Which rotation an LLMQ role option requires of the type it names.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 enum Rotation {
   Any,
   Required,
@@ -167,7 +170,8 @@ enum Rotation {
 /// [`build`](Self::build) applies the options of the chain's kind in Core's
 /// order and ignores the others, as Core does, so an error Core reports is
 /// reported first.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct ChainParamsBuilder {
   network: Network,
   release: Release,

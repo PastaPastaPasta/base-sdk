@@ -13,24 +13,32 @@ use crate::prelude::*;
 use dash_num::Hash256;
 use dash_primitives::{hash_impl, BlockHeader};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
+use dash_types::impl_new;
 use dash_types::type_id::TypeId;
+use getset::{CopyGetters, Getters};
 
+impl_new! {
 /// A bloom filter, Core's `CBloomFilter` and the `filterload` payload.
 ///
 /// Core reads the data as `LIMITED_VECTOR(36000)`, so a longer filter fails
 /// before its bytes are read. The other limits are the handler's.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct FilterLoad {
   /// The filter bits.
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::hex"))]
-  pub data: Vec<u8>,
+  #[getset(get = "pub")]
+  data: Vec<u8>,
   /// Hash functions; Core penalises more than `MAX_HASH_FUNCS`.
-  pub hash_funcs: u32,
+  #[getset(get_copy = "pub")]
+  hash_funcs: u32,
   /// Seed for the hash functions.
-  pub tweak: u32,
+  #[getset(get_copy = "pub")]
+  tweak: u32,
   /// Update mode, `BLOOM_UPDATE_*`, any byte.
-  pub flags: u8,
+  #[getset(get_copy = "pub")]
+  flags: u8,
+}
 }
 
 impl_p2p!(FilterLoad);
@@ -64,15 +72,18 @@ impl FilterLoad {
   }
 }
 
+impl_new! {
 /// Data to add to the peer's bloom filter, the `filteradd` payload.
 ///
 /// Core reads it as `LIMITED_VECTOR(520)`, the script element limit.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct FilterAdd {
   /// The element to add.
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::hex"))]
-  pub data: Vec<u8>,
+  #[getset(get = "pub")]
+  data: Vec<u8>,
+}
 }
 
 impl_p2p!(FilterAdd);
@@ -91,36 +102,37 @@ impl BaseCodec for FilterAdd {
 
 hash_impl!(FilterAdd);
 
+codec_p2p! {
 /// A partial merkle tree, Core's `CPartialMerkleTree`.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct PartialMerkleTree {
   /// Transactions in the block.
-  pub transactions: u32,
+  #[getset(get_copy = "pub")]
+  transactions: u32,
   /// Transaction ids and inner node hashes, in depth-first order.
-  pub hashes: Vec<Hash256>,
+  #[getset(get = "pub")]
+  hashes: Vec<Hash256>,
   /// Traversal flag bits, packed eight to a byte, least significant first.
   #[cfg_attr(feature = "serde", serde(with = "dash_types::serialize::hex"))]
-  pub flag_bytes: Vec<u8>,
+  #[getset(get = "pub")]
+  flag_bytes: Vec<u8>,
+}
 }
 
-codec_p2p!(PartialMerkleTree {
-  transactions,
-  hashes,
-  flag_bytes
-});
-
+codec_p2p! {
 /// A block header with the matches of the peer's filter, Core's
 /// `CMerkleBlock` and the `merkleblock` payload.
 ///
 /// Core sends it for a filtered block request and has no handler for it.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct MerkleBlock {
   /// The block's header.
-  pub header: BlockHeader,
+  #[getset(get_copy = "pub")]
+  header: BlockHeader,
   /// The matched transactions and the hashes that prove them.
-  pub txn: PartialMerkleTree,
+  #[getset(get = "pub")]
+  txn: PartialMerkleTree,
 }
-
-codec_p2p!(MerkleBlock { header, txn });
+}

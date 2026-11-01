@@ -17,6 +17,7 @@ use crate::{
 
 use bitcoin_units::BlockHeight;
 use dash_num::Hash256;
+#[cfg(feature = "codec")]
 use dash_types::type_id::Unencodable;
 
 use core::ops::{Deref, DerefMut};
@@ -30,7 +31,8 @@ use core::ops::{Deref, DerefMut};
 /// [`checkpoints`](Self::checkpoints) shadow the [`ChainParams`] ones, which
 /// cannot hold an LLMQ override, the release's deployments or a named
 /// devnet's devnet genesis checkpoint.
-#[derive(Clone, Debug, PartialEq, Unencodable)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct ChainSetup {
   /// The network.
   pub network: Network,
@@ -201,7 +203,8 @@ impl DerefMut for ChainSetup {
 /// [`deployments`](Self::deployments), which this type shadows.
 /// [`llmq`](Self::llmq) is Core's `GetLLMQ` and sees the overrides, where
 /// [`ConsensusParams::llmq`] reads the static table.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct ConsensusSetup {
   /// The parameters with every override [`ConsensusParams`] can hold.
   base: ConsensusParams,
@@ -267,7 +270,8 @@ impl DerefMut for ConsensusSetup {
 /// The version-bits deployments of a [`Release`], Core's `vDeployments`.
 ///
 /// `evo_shares` exists from v24 only, so it is read by position.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct ReleaseDeployments {
   /// Reserved deployment used only for testing.
   pub test_dummy: Bip9Deployment,
@@ -338,7 +342,8 @@ impl ReleaseDeployments {
 
 /// Address encoding parameters, without the Platform HRP, which
 /// [`ChainSetup::platform_hrp`] holds by release.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct AddrSetup {
   /// P2PKH address version byte.
   pub pubkey_addr: u8,
@@ -368,7 +373,8 @@ impl From<AddrParams> for AddrSetup {
 }
 
 /// An assumeutxo snapshot Core trusts (`AssumeutxoData`).
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct AssumeutxoData {
   /// Height of the snapshot base block.
   pub height: BlockHeight,
@@ -391,7 +397,8 @@ pub struct AssumeutxoData {
 /// are the mainnet `nPrevHeight <= 4500` subsidy branch, the devnet subsidy
 /// path and the `LLMQ_50_60` testnet and devnet branch of
 /// `IsQuorumTypeEnabled`.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct HardCodedPins {
   /// Last height whose header nBits only needs to be within 50% of DGW's
   /// (`bad-diffbits`); Core applies it on mainnet only.

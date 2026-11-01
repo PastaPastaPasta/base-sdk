@@ -23,7 +23,7 @@ use dash_pkc::bls::{
   BlsSchemeSource, BlsSigBytes, BlsSigId, BlsSignature,
 };
 use dash_pkc::ecdsa::{EcdsaPkBytes, EcdsaPublicKey, EcdsaRecSigBytes, EcdsaRecSignature};
-use dash_primitives::{llmq_sign_hash, CompactSig, PayloadDecode, QuorumHash, SpecialPayload, Transaction};
+use dash_primitives::{llmq_sign_hash, CompactSig, QuorumHash, SpecialPayload, Transaction};
 use dash_types::codec::BaseCodec;
 use dash_types::{Hashable, Numeric};
 use hex_conservative::DisplayHex;
@@ -115,7 +115,7 @@ fn owners_signed<'a>(owners: &BTreeSet<String>, sigs: impl IntoIterator<Item = &
 /// commitment's for a quorum commitment, the payload's otherwise.
 fn check_signed(txid: &str, entry: &Value) -> (u16, u16) {
   let tx = decode_tx(entry["raw"].as_str().unwrap());
-  let PayloadDecode { payload, .. } = tx.decode_payload().unwrap().unwrap();
+  let payload = tx.decode_payload().unwrap().unwrap().into_payload();
   let signer = &entry["signer"];
   let addr = match entry["network"].as_str().unwrap() {
     "mainnet" => Network::Main.addr(),
@@ -137,78 +137,87 @@ fn check_signed(txid: &str, entry: &Value) -> (u16, u16) {
   let (version, signed) = match &payload {
     SpecialPayload::ProviderRegister(p) if signer["shares"].as_bool() == Some(true) => {
       let owners = p
-        .shares
+        .shares()
         .iter()
-        .map(|s| s.key_id_owner.as_bytes().to_lower_hex_string())
+        .map(|s| s.key_id_owner().as_bytes().to_lower_hex_string())
         .collect();
       let hash = hash(&p.shared_consent_bytes(&tx));
       (
-        p.version.to_base(),
-        owners_signed(&owners, p.join_sigs.iter().map(compact), &hash),
+        p.version().to_base(),
+        owners_signed(&owners, p.join_sigs().iter().map(compact), &hash),
       )
     }
     SpecialPayload::ProviderRegister(p) => {
       let hash = hash(&p.sign_message_bytes(addr));
       (
-        p.version.to_base(),
-        owners_signed(&key_ids, [ecdsa(p.vch_sig.as_bytes())], &hash),
+        p.version().to_base(),
+        owners_signed(&key_ids, [ecdsa(p.sig().as_bytes())], &hash),
       )
     }
     SpecialPayload::ProviderUpdateService(p) => (
-      p.version.to_base(),
-      bls_verifies_any(&operator(), &p.sig, &hash(&p.sig_hash_bytes())),
+      p.version().to_base(),
+      bls_verifies_any(&operator(), p.sig(), &hash(&p.sig_hash_bytes())),
     ),
     SpecialPayload::ProviderUpdateRegistrar(p) => (
-      p.version.to_base(),
-      owners_signed(&key_ids, [ecdsa(p.vch_sig.as_bytes())], &hash(&p.sig_hash_bytes())),
+      p.version().to_base(),
+      owners_signed(&key_ids, [ecdsa(p.sig().as_bytes())], &hash(&p.sig_hash_bytes())),
     ),
     SpecialPayload::ProviderUpdateRevoke(p) => (
-      p.version.to_base(),
-      bls_verifies_any(&operator(), &p.sig, &hash(&p.sig_hash_bytes())),
+      p.version().to_base(),
+      bls_verifies_any(&operator(), p.sig(), &hash(&p.sig_hash_bytes())),
     ),
     SpecialPayload::QuorumCommitment(p) => {
       // The key enters the hash under the flag the signature verifies under.
-      let c = &p.commitment;
+      let c = &p.commitment();
       let signed = [BlsSchemeKind::Legacy, BlsSchemeKind::Basic].into_iter().any(|scheme| {
         bls_verifies(
           scheme,
-          &c.quorum_public_key,
-          &c.quorum_sig,
+          c.quorum_public_key(),
+          c.quorum_sig(),
           &hash(&p.sig_hash_bytes(scheme)),
         )
       });
-      (c.version, signed)
+      (c.version(), signed)
     }
     SpecialPayload::MnhfSignal(p) => {
       let msg = hash(&p.sig_hash_bytes(&tx));
       (
-        p.version.into(),
-        quorum_signed(signer, &p.quorum_hash, &p.request_id(), &msg, &p.sig),
+        p.version().into(),
+        quorum_signed(signer, &p.quorum_hash(), &p.request_id(), &msg, p.sig()),
       )
     }
     SpecialPayload::AssetUnlock(p) => {
       let msg = hash(&p.sig_hash_bytes(&tx));
-      let signed = [BlsCtx::LEGACY, BlsCtx::BASIC]
-        .into_iter()
-        .any(|ctx| quorum_signed(signer, &p.quorum_hash, &p.request_id(), &msg, &p.quorum_sig.get(ctx)));
-      (p.version.into(), signed)
+      let signed = [BlsCtx::LEGACY, BlsCtx::BASIC].into_iter().any(|ctx| {
+        quorum_signed(
+          signer,
+          &p.quorum_hash(),
+          &p.request_id(),
+          &msg,
+          &p.quorum_sig().get(ctx),
+        )
+      });
+      (p.version().into(), signed)
     }
     SpecialPayload::ProviderDissolve(p) => {
-      let hash = hash(&p.sig_hash_bytes(&tx, u8::try_from(p.sigs.len()).unwrap()));
-      (p.version, owners_signed(&key_ids, p.sigs.iter().map(compact), &hash))
+      let hash = hash(&p.sig_hash_bytes(&tx, u8::try_from(p.sigs().len()).unwrap()));
+      (
+        p.version(),
+        owners_signed(&key_ids, p.sigs().iter().map(compact), &hash),
+      )
     }
     SpecialPayload::ProviderUpdateShare(p) => (
-      p.version,
-      owners_signed(&key_ids, [&p.vch_sig[..]], &hash(&p.sig_hash_bytes())),
+      p.version(),
+      owners_signed(&key_ids, [&p.sig()[..]], &hash(&p.sig_hash_bytes())),
     ),
     SpecialPayload::ProviderUpdateSharedRegistrar(p) => (
-      p.version,
-      owners_signed(&key_ids, p.sigs.iter().map(compact), &hash(&p.sig_hash_bytes())),
+      p.version(),
+      owners_signed(&key_ids, p.sigs().iter().map(compact), &hash(&p.sig_hash_bytes())),
     ),
     other => panic!("{txid}: unexpected payload {other:?}"),
   };
   assert!(signed, "{txid} ({}): Core's signature does not verify", entry["source"]);
-  (tx.tx_type.to_base(), version)
+  (tx.tx_type().to_base(), version)
 }
 
 /// Core's signatures verify over the sign hash of every signed payload

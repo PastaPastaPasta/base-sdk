@@ -407,6 +407,49 @@ macro_rules! type_cvrt {
   };
 }
 
+/// Declares a struct with named fields and a `new` taking every field in
+/// declaration order.
+///
+/// Attributes and field visibility pass through, so derives and `getset`
+/// getters still apply. A type whose constructor validates or computes writes
+/// `new` by hand instead.
+///
+/// ```
+/// use dash_types::impl_new;
+///
+/// impl_new! {
+/// /// Keepalive request.
+/// #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+/// pub struct Ping {
+///   /// Random nonce.
+///   nonce: u64,
+/// }
+/// }
+///
+/// let ping = Ping::new(7);
+/// ```
+#[macro_export]
+macro_rules! impl_new {
+  (
+    $(#[$attr:meta])*
+    $vis:vis struct $name:ident {
+      $($(#[$fattr:meta])* $fvis:vis $field:ident: $fty:ty),+ $(,)?
+    }
+  ) => {
+    $(#[$attr])*
+    $vis struct $name {
+      $($(#[$fattr])* $fvis $field: $fty),+
+    }
+
+    impl $name {
+      /// Constructs from the field values.
+      pub fn new($($field: $fty),+) -> Self {
+        Self { $($field),+ }
+      }
+    }
+  };
+}
+
 #[cfg(test)]
 mod tests {
   use super::qtypestr;

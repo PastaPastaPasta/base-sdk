@@ -9,20 +9,23 @@
 use crate::command::CommandString;
 use crate::version::ProtocolVersion;
 
-use dash_types::type_id::Unencodable;
+use dash_primitives::hash_impl;
+use dash_types::make_num;
 
-/// A resolved V2 short ID.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
-#[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
-pub struct ShortId(pub u8);
+make_num! {
+  /// A resolved V2 short ID.
+  ShortId, u8, 1
+}
+
+hash_impl!(ShortId);
 
 impl ShortId {
   /// Long-format sentinel (a 12-byte command follows).
-  pub const LONG_FORMAT: Self = Self(0);
+  pub const LONG_FORMAT: Self = Self::new(0);
 
   /// The first slot Core reserves without a message, which its V2 transport
   /// map assigns to the empty type (`V2MessageMap`).
-  const EMPTY_TYPE: Self = Self(5);
+  const EMPTY_TYPE: Self = Self::new(5);
 
   /// Returns `true` if this ID maps to a known command.
   pub const fn is_valid(self) -> bool {
@@ -46,14 +49,13 @@ impl ShortId {
     }
   }
 
-  /// The short ID Core's V2 transport sends `cmd` by to a peer whose common
-  /// version is `peer_version`, its `SetMessageToSend`.
+  /// Looks up the short ID to send `cmd` by, given `common`, the version both
+  /// peers share.
   ///
-  /// `None` means the long format. Before the peer's `version` arrives Core
-  /// uses [`ProtocolVersion::INIT`], so every message goes in the long format.
-  pub fn for_send(cmd: &CommandString, peer_version: ProtocolVersion) -> Option<Self> {
-    let id = Self::send_slot(cmd)?;
-    (peer_version >= Self::min_version(cmd)).then_some(id)
+  /// `None` means the long format. A peer older than the version that
+  /// assigned the short ID would not know it, so it gets the long format too.
+  pub fn for_send(cmd: &CommandString, common: ProtocolVersion) -> Option<Self> {
+    Self::send_slot(cmd).filter(|_| common >= Self::min_version(cmd))
   }
 
   /// Core's `V2MessageMap`: the ID of every assigned slot, and the first

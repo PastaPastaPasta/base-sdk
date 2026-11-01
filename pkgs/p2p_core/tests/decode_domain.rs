@@ -11,8 +11,8 @@
 
 use dash_dev::{vec_from_hex, Corpus};
 use dash_p2p_core::{
-  decode_v2, split_v2, CommandString, DecodedMsg, Headers, Headers2, P2pDecodeError, P2pMsg, Ping, Pong, ProtoCtx,
-  ProtocolVersion, QSendRecSigs, SendDsq, Version,
+  decode_v2, split_v2, CommandString, DecodedMsg, Headers, Headers2, P2pDecodeError, P2pMsg, ProtoCtx, ProtocolVersion,
+  QSendRecSigs, SendDsq, Version,
 };
 use dash_pkc::bls::BlsCtx;
 use dash_types::codec::{BaseCodec, DecodeError};
@@ -78,12 +78,12 @@ const VERSION_HEAD_LEN: usize = 46;
 /// Counts the optional `version` field groups present after `addr_recv`.
 fn groups(v: &Version) -> usize {
   [
-    v.addr_send.is_some() && v.nonce.is_some(),
-    v.user_agent.is_some(),
-    v.start_height.is_some(),
-    v.relay.is_some(),
-    v.mnauth_challenge.is_some(),
-    v.mn_connection.is_some(),
+    v.addr_send().is_some() && v.nonce().is_some(),
+    v.user_agent().is_some(),
+    v.start_height().is_some(),
+    v.relay().is_some(),
+    v.mnauth_challenge().is_some(),
+    v.mn_connection().is_some(),
   ]
   .iter()
   .take_while(|present| **present)
@@ -118,7 +118,7 @@ fn version_reads_optional_fields_as_core() {
           Err(P2pDecodeError::VersionTail { head, .. }) => *head,
           other => panic!("{}: {other:?}", v.name),
         };
-        assert!(head.protocol_version < ProtocolVersion::MIN_PEER, "{}", v.name);
+        assert!(head.protocol_version() < ProtocolVersion::MIN_PEER, "{}", v.name);
       }
       core => {
         let DecodedMsg {
@@ -129,16 +129,25 @@ fn version_reads_optional_fields_as_core() {
           panic!("{}: not a version", v.name);
         };
         if core == "disconnect: inbound masternode" {
-          assert_eq!(version.mn_connection, Some(true), "{}", v.name);
+          assert_eq!(version.mn_connection(), Some(true), "{}", v.name);
         }
         if let Some(expected) = v.groups {
           assert_eq!(groups(&version), expected, "{}", v.name);
           // Core's defaults for absent fields: no subver, height -1, relay.
-          let relay = version.relay.unwrap_or(true);
+          let relay = version.relay().unwrap_or(true);
           assert_eq!(Some(relay), v.relaytxes, "{}", v.name);
-          let subver = version.user_agent.as_ref().and_then(|u| u.as_str()).unwrap_or_default();
+          let subver = version
+            .user_agent()
+            .as_ref()
+            .and_then(|u| u.as_str())
+            .unwrap_or_default();
           assert_eq!(Some(subver), v.subver.as_deref(), "{}", v.name);
-          assert_eq!(Some(version.start_height.unwrap_or(-1)), v.startingheight, "{}", v.name);
+          assert_eq!(
+            Some(version.start_height().unwrap_or(-1)),
+            v.startingheight,
+            "{}",
+            v.name
+          );
         }
         // Core ignores bytes after fMasternode; re-encoding writes the fields read.
         let mut buf = Vec::new();
@@ -160,7 +169,7 @@ fn headers_limits_follow_core() {
       "accept" => {
         let msg = decoded.unwrap_or_else(|e| panic!("{}: {e}", v.name)).msg;
         assert!(
-          matches!(msg, P2pMsg::Headers(ref h) if h.headers.len() == 1),
+          matches!(msg, P2pMsg::Headers(ref h) if h.headers().len() == 1),
           "{}: {msg:?}",
           v.name
         );
@@ -213,8 +222,8 @@ fn control_messages_read_a_core_bool() {
     }
     let flag = raw[0] != 0;
     let expected = match v.command.as_str() {
-      "senddsq" => P2pMsg::SendDsq(SendDsq { send_dsq: flag }),
-      _ => P2pMsg::QSendRecSigs(QSendRecSigs { send_rec_sigs: flag }),
+      "senddsq" => P2pMsg::SendDsq(SendDsq::new(flag)),
+      _ => P2pMsg::QSendRecSigs(QSendRecSigs::new(flag)),
     };
     assert_eq!(decoded.map(|d| d.msg), Ok(expected), "{}", v.name);
   }
@@ -227,7 +236,7 @@ fn unknown_command_round_trips() {
   let decoded = P2pMsg::decode_with_policy(&cmd, &[0, 1, 2], &ctx(70240)).unwrap();
   assert_eq!(decoded.consumed, 3);
   assert_eq!(decoded.msg.command(), cmd);
-  assert!(decoded.msg.short_id().is_none());
+  assert!(decoded.msg.short_id(ProtocolVersion::V24_0).is_none());
   let mut buf = Vec::new();
   decoded.msg.encode_payload(&mut buf);
   assert_eq!(buf, [0, 1, 2]);
@@ -278,13 +287,12 @@ fn v2_contents_are_bound_as_core() {
     let decoded = decode_v2(&contents, &ctx(70240));
     let label = format!("{} {}", v.form, v.payload_len);
     match v.core.as_str() {
-      "accept" => assert_eq!(
-        decoded,
-        Ok(DecodedMsg {
-          msg: P2pMsg::Ping(Ping { nonce: NONCE }),
-          consumed: 8,
-        }),
-        "{label}"
+      "accept" => assert!(
+        matches!(
+          &decoded,
+          Ok(DecodedMsg { msg: P2pMsg::Ping(ping), consumed: 8 }) if ping.nonce() == NONCE
+        ),
+        "{label}: {decoded:?}"
       ),
       "disconnect: packet too large" => assert!(
         matches!(decoded, Err(P2pDecodeError::ContentsTooLarge { .. })),
@@ -378,12 +386,13 @@ fn pong_reads_its_nonce_as_core() {
     let raw = vec_from_hex(&v.raw);
     let decoded = P2pMsg::decode_with_policy(&CommandString::PONG, &raw, &ctx(70240));
     let DecodedMsg {
-      msg: P2pMsg::Pong(Pong { nonce }),
+      msg: P2pMsg::Pong(pong),
       consumed,
     } = decoded.unwrap_or_else(|e| panic!("{}: {e}", v.name))
     else {
       panic!("{}: not a pong", v.name);
     };
+    let nonce = pong.nonce();
     let expected = raw.first_chunk::<8>().map(|b| u64::from_le_bytes(*b));
     assert_eq!(nonce, expected, "{}", v.name);
     assert_eq!(consumed, if nonce.is_some() { 8 } else { 0 }, "{}", v.name);
@@ -399,19 +408,29 @@ fn pong_reads_its_nonce_as_core() {
 fn header_counts_are_bound_by_the_payload() {
   let mut payload = vec![0xfe, 0xf8, 0xff, 0x2f, 0x00];
   payload.resize(3 * 1024 * 1024, 0);
-  let left = payload.len() - 5;
   assert_eq!(
     Headers::decode(&mut &payload[..]),
     Err(DecodeError::CompactSizeExceedsLimit {
-      limit: left / 81,
+      limit: Headers::MAX_COUNT,
       value: 3_145_720,
     })
   );
   assert_eq!(
     Headers2::decode(&mut &payload[..]),
     Err(DecodeError::CompactSizeExceedsLimit {
-      limit: left / 39,
+      limit: Headers2::MAX_COUNT,
       value: 3_145_720,
     })
   );
+  // A count within the limit that the bytes cannot hold fails at the count.
+  let payload = [0xfd, 0xd0, 0x07, 0x00];
+  assert!(matches!(
+    Headers::decode(&mut &payload[..]),
+    Err(DecodeError::Eof { remaining: 1, .. })
+  ));
+  let payload = [0xfd, 0x40, 0x1f, 0x00];
+  assert!(matches!(
+    Headers2::decode(&mut &payload[..]),
+    Err(DecodeError::Eof { remaining: 1, .. })
+  ));
 }

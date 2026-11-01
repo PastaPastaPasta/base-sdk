@@ -13,38 +13,46 @@ use crate::prelude::*;
 use dash_primitives::{hash_impl, AddrV2, ServiceV1};
 use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
-use dash_types::{CompactSize, Numeric};
+use dash_types::{impl_new, CompactSize, Numeric};
+use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
+codec_p2p! {
 /// V1 address announcement carrying timestamped addresses.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct Addr {
   /// Timestamped v1 address entries.
-  pub addrs: Vec<TimestampedAddr>,
+  #[getset(get = "pub")]
+  addrs: Vec<TimestampedAddr>,
+}
 }
 
-codec_p2p!(Addr { addrs });
-
+impl_new! {
 /// BIP155 timestamped v2 address entry used in `addrv2` messages.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct AddrV2Entry {
   /// Seconds since Unix epoch.
-  pub time: u32,
+  #[getset(get_copy = "pub")]
+  time: u32,
   /// Advertised services.
-  pub services: ServiceFlags,
+  #[getset(get_copy = "pub")]
+  services: ServiceFlags,
   /// Network address.
-  pub addr: AddrV2,
+  #[getset(get = "pub")]
+  addr: AddrV2,
   /// Port number.
-  pub port: u16,
+  #[getset(get_copy = "pub")]
+  port: u16,
+}
 }
 
 impl BaseCodec for AddrV2Entry {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let time = u32::decode(data)?;
-    let services = ServiceFlags(CompactSize::decode_unbounded(data)?.to_base());
+    let services = ServiceFlags::new(CompactSize::decode_unbounded(data)?.to_base());
     let addr = AddrV2::decode(data)?;
     let port = codec::read_u16_be(data)?;
     Ok(Self {
@@ -57,7 +65,7 @@ impl BaseCodec for AddrV2Entry {
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
     self.time.encode(buf);
-    CompactSize::from(self.services.0).encode(buf);
+    CompactSize::from(self.services.get()).encode(buf);
     self.addr.encode(buf);
     buf.extend_from_slice(&self.port.to_be_bytes());
   }
@@ -73,26 +81,30 @@ impl fmt::Display for AddrV2Entry {
   }
 }
 
+codec_p2p! {
 /// BIP155 v2 address announcement.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct AddrV2Msg {
   /// BIP155 address entries.
-  pub addrs: Vec<AddrV2Entry>,
+  #[getset(get = "pub")]
+  addrs: Vec<AddrV2Entry>,
+}
 }
 
-codec_p2p!(AddrV2Msg { addrs });
-
+codec_p2p! {
 /// Timestamped v1 address entry used in `addr` messages.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct TimestampedAddr {
   /// Seconds since Unix epoch.
-  pub time: u32,
+  #[getset(get_copy = "pub")]
+  time: u32,
   /// Advertised services.
-  pub services: ServiceFlags,
+  #[getset(get_copy = "pub")]
+  services: ServiceFlags,
   /// Network address.
-  pub addr: ServiceV1,
+  #[getset(get = "pub")]
+  addr: ServiceV1,
 }
-
-codec_p2p!(TimestampedAddr { time, services, addr });
+}

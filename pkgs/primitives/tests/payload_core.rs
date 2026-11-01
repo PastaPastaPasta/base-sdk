@@ -79,7 +79,9 @@ fn crafted_tx(name: &str) -> Transaction {
 
 /// The payload a crafted case decodes to.
 fn crafted(name: &str) -> SpecialPayload {
-  accepted(&crafted_tx(name)).unwrap_or_else(|| panic!("{name}")).payload
+  accepted(&crafted_tx(name))
+    .unwrap_or_else(|| panic!("{name}"))
+    .into_payload()
 }
 
 /// Core's address list (`GetNetInfoWithLegacyFields`), `[invalid entry]` for
@@ -97,7 +99,7 @@ fn render_net_info(net: &NetInfo, mn_type: MnType, platform: (Option<u16>, Optio
       })
       .unwrap_or_default(),
     NetInfo::Extended(v2) => v2
-      .entries
+      .groups()
       .iter()
       .map(|(purpose, group)| {
         let entries: Vec<Value> = group.iter().map(|e| Value::from(render_entry(e))).collect();
@@ -106,7 +108,7 @@ fn render_net_info(net: &NetInfo, mn_type: MnType, platform: (Option<u16>, Optio
       .collect(),
   };
   if let (NetInfo::Legacy(v1), MnType::Evo, Some(primary)) = (net, mn_type, net.primary()) {
-    let at = |port: Option<u16>| Value::from(vec![Value::from(format!("{}:{}", primary.addr, port.unwrap_or(0)))]);
+    let at = |port: Option<u16>| Value::from(vec![Value::from(format!("{}:{}", primary.addr(), port.unwrap_or(0)))]);
     debug_assert!(!v1.is_empty());
     groups.push((String::from("platform_p2p"), at(platform.0)));
     groups.push((String::from("platform_https"), at(platform.1)));
@@ -242,120 +244,120 @@ fn compare(label: &str, payload: &SpecialPayload, core: &Value, bls: BlsCtx) {
   let mut f = Fields::new(label, core);
   match payload {
     SpecialPayload::ProviderRegister(p) => {
-      f.eq("version", p.version.to_base());
-      f.eq("type", p.mn_type.to_base());
-      f.eq("collateralHash", p.collateral_hash.to_string());
-      f.eq("collateralIndex", p.collateral_index);
-      let platform = (p.platform_p2p_port, p.platform_http_port);
-      f.eq("addresses", render_net_info(&p.net_info, p.mn_type, platform));
-      f.eq("pubKeyOperator", lazy_hex(&p.pub_key_operator));
+      f.eq("version", p.version().to_base());
+      f.eq("type", p.mn_type().to_base());
+      f.eq("collateralHash", p.collateral_hash().to_string());
+      f.eq("collateralIndex", p.collateral_index());
+      let platform = (p.platform_p2p_port(), p.platform_http_port());
+      f.eq("addresses", render_net_info(p.net_info(), p.mn_type(), platform));
+      f.eq("pubKeyOperator", lazy_hex(p.pub_key_operator()));
       // Core prints the reward in percent.
-      f.eq("operatorReward", f64::from(p.operator_reward) / 100.0);
-      f.eq("inputsHash", p.inputs_hash.to_string());
-      for (i, payout) in p.payouts.iter().enumerate() {
-        f.eq(&format!("payouts[{i}].script"), hex(payout.script_payout.as_bytes()));
-        f.eq(&format!("payouts[{i}].reward"), payout.reward);
+      f.eq("operatorReward", f64::from(p.operator_reward()) / 100.0);
+      f.eq("inputsHash", p.inputs_hash().to_string());
+      for (i, payout) in p.payouts().iter().enumerate() {
+        f.eq(&format!("payouts[{i}].script"), hex(payout.script_payout().as_bytes()));
+        f.eq(&format!("payouts[{i}].reward"), payout.reward());
       }
-      for (i, share) in p.shares.iter().enumerate() {
-        f.eq(&format!("shares[{i}].amount"), share.amount);
+      for (i, share) in p.shares().iter().enumerate() {
+        f.eq(&format!("shares[{i}].amount"), share.amount());
         f.eq(
           &format!("shares[{i}].refundScript"),
-          hex(share.script_refund.as_bytes()),
+          hex(share.script_refund().as_bytes()),
         );
         f.eq(&format!("shares[{i}].rewardScript"), hex(reward_script(share)));
       }
-      if !p.shares.is_empty() {
-        f.eq("earlyPeriodBlocks", p.early_period_blocks);
-        f.eq("earlyPenalty", p.early_penalty);
+      if !p.shares().is_empty() {
+        f.eq("earlyPeriodBlocks", p.early_period_blocks());
+        f.eq("earlyPenalty", p.early_penalty());
       }
-      if let Some(node_id) = &p.platform_node_id {
+      if let Some(node_id) = &p.platform_node_id() {
         f.eq("platformNodeID", node_id.to_string());
       }
     }
     SpecialPayload::ProviderUpdateService(p) => {
-      f.eq("version", p.version.to_base());
+      f.eq("version", p.version().to_base());
       // Core prints its default type for v1, which carries none.
-      f.eq("type", p.mn_type.to_base());
-      f.eq("proTxHash", p.pro_tx_hash.to_string());
-      let platform = (p.platform_p2p_port, p.platform_http_port);
-      f.eq("addresses", render_net_info(&p.net_info, p.mn_type, platform));
-      f.eq("inputsHash", p.inputs_hash.to_string());
+      f.eq("type", p.mn_type().to_base());
+      f.eq("proTxHash", p.pro_tx_hash().to_string());
+      let platform = (p.platform_p2p_port(), p.platform_http_port());
+      f.eq("addresses", render_net_info(p.net_info(), p.mn_type(), platform));
+      f.eq("inputsHash", p.inputs_hash().to_string());
     }
     SpecialPayload::ProviderUpdateRegistrar(p) => {
-      f.eq("version", p.version.to_base());
-      f.eq("proTxHash", p.pro_tx_hash.to_string());
-      f.eq("pubKeyOperator", lazy_hex(&p.pub_key_operator));
-      for (i, payout) in p.payouts.iter().enumerate() {
-        f.eq(&format!("payouts[{i}].script"), hex(payout.script_payout.as_bytes()));
-        f.eq(&format!("payouts[{i}].reward"), payout.reward);
+      f.eq("version", p.version().to_base());
+      f.eq("proTxHash", p.pro_tx_hash().to_string());
+      f.eq("pubKeyOperator", lazy_hex(p.pub_key_operator()));
+      for (i, payout) in p.payouts().iter().enumerate() {
+        f.eq(&format!("payouts[{i}].script"), hex(payout.script_payout().as_bytes()));
+        f.eq(&format!("payouts[{i}].reward"), payout.reward());
       }
-      f.eq("inputsHash", p.inputs_hash.to_string());
+      f.eq("inputsHash", p.inputs_hash().to_string());
     }
     SpecialPayload::ProviderUpdateRevoke(p) => {
-      f.eq("version", p.version.to_base());
-      f.eq("proTxHash", p.pro_tx_hash.to_string());
-      f.eq("reason", p.reason.to_base());
-      f.eq("inputsHash", p.inputs_hash.to_string());
+      f.eq("version", p.version().to_base());
+      f.eq("proTxHash", p.pro_tx_hash().to_string());
+      f.eq("reason", p.reason().to_base());
+      f.eq("inputsHash", p.inputs_hash().to_string());
     }
     SpecialPayload::CoinbaseCommitment(p) => compare_cbtx(&mut f, p, bls),
     SpecialPayload::QuorumCommitment(p) => {
-      let qc = &p.commitment;
-      f.eq("version", p.version);
-      f.eq("height", p.height.to_u32());
-      f.eq("commitment.version", qc.version);
-      f.eq("commitment.llmqType", qc.llmq_type.to_base());
-      f.eq("commitment.quorumHash", qc.quorum_hash.to_string());
-      f.eq("commitment.quorumIndex", qc.quorum_index.unwrap_or(0));
-      f.eq("commitment.signersCount", qc.signers.count_ones());
-      f.eq("commitment.validMembersCount", qc.valid_members.count_ones());
-      f.eq("commitment.quorumPublicKey", eager_hex(&qc.quorum_public_key));
-      f.eq("commitment.quorumVvecHash", qc.quorum_vvec_hash.to_string());
-      f.eq("commitment.quorumSig", eager_hex(&qc.quorum_sig));
-      f.eq("commitment.membersSig", eager_hex(&qc.members_sig));
+      let qc = &p.commitment();
+      f.eq("version", p.version());
+      f.eq("height", p.height().to_u32());
+      f.eq("commitment.version", qc.version());
+      f.eq("commitment.llmqType", qc.llmq_type().to_base());
+      f.eq("commitment.quorumHash", qc.quorum_hash().to_string());
+      f.eq("commitment.quorumIndex", qc.quorum_index().unwrap_or(0));
+      f.eq("commitment.signersCount", qc.signers().count_ones());
+      f.eq("commitment.validMembersCount", qc.valid_members().count_ones());
+      f.eq("commitment.quorumPublicKey", eager_hex(qc.quorum_public_key()));
+      f.eq("commitment.quorumVvecHash", qc.quorum_vvec_hash().to_string());
+      f.eq("commitment.quorumSig", eager_hex(qc.quorum_sig()));
+      f.eq("commitment.membersSig", eager_hex(qc.members_sig()));
     }
     SpecialPayload::MnhfSignal(p) => {
-      f.eq("version", p.version);
-      f.eq("signal.versionBit", p.version_bit);
-      f.eq("signal.quorumHash", p.quorum_hash.to_string());
+      f.eq("version", p.version());
+      f.eq("signal.versionBit", p.version_bit());
+      f.eq("signal.quorumHash", p.quorum_hash().to_string());
       // Decoded under the basic scheme, printed under the flag.
-      f.eq("signal.sig", hex(&p.sig.to_bytes(bls.scheme())));
+      f.eq("signal.sig", hex(&p.sig().to_bytes(bls.scheme())));
     }
     SpecialPayload::AssetLock(p) => {
-      f.eq("version", p.version);
-      for (i, out) in p.credit_outputs.iter().enumerate() {
-        f.eq(&format!("creditOutputs[{i}].valueSat"), out.value);
+      f.eq("version", p.version());
+      for (i, out) in p.credit_outputs().iter().enumerate() {
+        f.eq(&format!("creditOutputs[{i}].valueSat"), out.value());
         f.eq(
           &format!("creditOutputs[{i}].scriptPubKey.hex"),
-          hex(out.script_pubkey.as_bytes()),
+          hex(out.script_pubkey().as_bytes()),
         );
       }
     }
     SpecialPayload::AssetUnlock(p) => {
-      f.eq("version", p.version);
-      f.eq("index", p.index);
-      f.eq("fee", p.fee);
-      f.eq("requestedHeight", p.requested_height);
-      f.eq("quorumHash", p.quorum_hash.to_string());
-      f.eq("quorumSig", hex(&p.quorum_sig.get(bls).to_bytes(bls.scheme())));
+      f.eq("version", p.version());
+      f.eq("index", p.index());
+      f.eq("fee", p.fee());
+      f.eq("requestedHeight", p.requested_height());
+      f.eq("quorumHash", p.quorum_hash().to_string());
+      f.eq("quorumSig", hex(&p.quorum_sig().get(bls).to_bytes(bls.scheme())));
     }
     SpecialPayload::ProviderDissolve(p) => {
-      f.eq("version", p.version);
-      f.eq("proTxHash", p.pro_tx_hash.to_string());
-      f.eq("actorIndex", p.actor_index);
-      f.eq("sigCount", p.sigs.len());
+      f.eq("version", p.version());
+      f.eq("proTxHash", p.pro_tx_hash().to_string());
+      f.eq("actorIndex", p.actor_index());
+      f.eq("sigCount", p.sigs().len());
     }
     SpecialPayload::ProviderUpdateShare(p) => {
-      f.eq("version", p.version);
-      f.eq("proTxHash", p.pro_tx_hash.to_string());
-      f.eq("shareIndex", p.share_index);
-      f.eq("inputsHash", p.inputs_hash.to_string());
+      f.eq("version", p.version());
+      f.eq("proTxHash", p.pro_tx_hash().to_string());
+      f.eq("shareIndex", p.share_index());
+      f.eq("inputsHash", p.inputs_hash().to_string());
     }
     SpecialPayload::ProviderUpdateSharedRegistrar(p) => {
-      f.eq("version", p.version.to_base());
-      f.eq("proTxHash", p.pro_tx_hash.to_string());
-      f.eq("pubKeyOperator", lazy_hex(&p.pub_key_operator));
-      f.eq("inputsHash", p.inputs_hash.to_string());
-      f.eq("sigCount", p.sigs.len());
+      f.eq("version", p.version().to_base());
+      f.eq("proTxHash", p.pro_tx_hash().to_string());
+      f.eq("pubKeyOperator", lazy_hex(p.pub_key_operator()));
+      f.eq("inputsHash", p.inputs_hash().to_string());
+      f.eq("sigCount", p.sigs().len());
     }
     SpecialPayload::UnknownProTxVersion { version, .. } => {
       // Core read the version alone and prints its defaults for the rest.
@@ -376,19 +378,21 @@ fn compare(label: &str, payload: &SpecialPayload, core: &Value, bls: BlsCtx) {
 }
 
 fn compare_cbtx(f: &mut Fields<'_>, p: &CoinbaseCommitment, bls: BlsCtx) {
-  f.eq("version", p.version);
-  f.eq("height", p.height);
-  f.eq("merkleRootMNList", p.merkle_root_mn_list.to_string());
-  if let Some(root) = p.merkle_root_quorums {
+  f.eq("version", p.version());
+  f.eq("height", p.height());
+  f.eq("merkleRootMNList", p.merkle_root_mn_list().to_string());
+  if let Some(root) = p.merkle_root_quorums() {
     f.eq("merkleRootQuorums", root.to_string());
   }
-  if let (Some(diff), Some(sig), Some(balance)) = (p.best_cl_height_diff, &p.best_cl_signature, p.credit_pool_balance) {
+  if let (Some(diff), Some(sig), Some(balance)) =
+    (p.best_cl_height_diff(), &p.best_cl_signature(), p.credit_pool_balance())
+  {
     f.eq("bestCLHeightDiff", diff);
     f.eq("bestCLSignature", hex(&sig.get(bls).to_bytes(bls.scheme())));
     assert_eq!(duffs(&f.core["creditPoolBalance"]), balance, "{}", f.label);
     f.seen.insert("creditPoolBalance".into());
   }
-  if let Some(root) = p.merkle_root_asset_unlocks {
+  if let Some(root) = p.merkle_root_asset_unlocks() {
     f.eq("merkleRootAssetUnlocks", root.to_string());
   }
 }
@@ -405,10 +409,10 @@ fn eager_hex<K: BlsWire<N>, const N: usize>(field: &BlsEager<K, N>) -> String {
 
 /// Core's `RewardScript`: the refund script when the reward script is empty.
 fn reward_script(share: &dash_primitives::CollateralShare) -> &[u8] {
-  if share.script_reward.is_empty() {
-    share.script_refund.as_bytes()
+  if share.script_reward().is_empty() {
+    share.script_refund().as_bytes()
   } else {
-    share.script_reward.as_bytes()
+    share.script_reward().as_bytes()
   }
 }
 
@@ -428,7 +432,7 @@ fn crafted_payloads_match_core() {
       let core = core_object(case, V24, flag);
       assert_eq!(ours.is_some(), core.is_some(), "{label}: decode verdict");
       if let (Some(ours), Some(core)) = (&ours, core) {
-        compare(&label, &ours.payload, core, bls);
+        compare(&label, ours.payload(), core, bls);
       }
       if core_object(case, V23, flag).is_some() != core.is_some() {
         pin_dependent.insert(name.as_str());
@@ -451,11 +455,11 @@ fn v24_payloads_match_core() {
     let tx = decode_tx(entry["raw"].as_str().unwrap());
     let decoded = accepted(&tx).unwrap_or_else(|| panic!("{txid}: payload"));
     let core = entry["core"].as_object().unwrap().values().next().unwrap();
-    compare(txid, &decoded.payload, core, BlsCtx::BASIC);
+    compare(txid, decoded.payload(), core, BlsCtx::BASIC);
     // Core mined these, so base-sdk's partial checks must pass them.
-    assert_eq!(decoded.payload.check(), None, "{txid}: check");
-    types.insert(tx.tx_type.to_base());
-    assert_eq!(reencode(&decoded.payload), tx.extra_payload, "{txid}: re-encode");
+    assert_eq!(decoded.payload().check(), None, "{txid}: check");
+    types.insert(tx.tx_type().to_base());
+    assert_eq!(&reencode(decoded.payload()), tx.extra_payload(), "{txid}: re-encode");
   }
   assert_eq!(types, (1..=12).filter(|t| *t != 4 && *t != 7).collect());
 }
@@ -496,22 +500,22 @@ fn bls_fields_take_their_scheme_source() {
       let SpecialPayload::ProviderUpdateService(p) = crafted(&name) else {
         panic!("{name}")
       };
-      assert_eq!((p.sig.scheme(), p.sig.is_valid()), (scheme, valid), "{name}");
+      assert_eq!((p.sig().scheme(), p.sig().is_valid()), (scheme, valid), "{name}");
       let name = format!("prouprevtx_v{version}_sig_{sample}");
       let SpecialPayload::ProviderUpdateRevoke(p) = crafted(&name) else {
         panic!("{name}")
       };
-      assert_eq!((p.sig.scheme(), p.sig.is_valid()), (scheme, valid), "{name}");
+      assert_eq!((p.sig().scheme(), p.sig().is_valid()), (scheme, valid), "{name}");
       let name = format!("proregtx_v{version}_pk_{sample}");
       let SpecialPayload::ProviderRegister(p) = crafted(&name) else {
         panic!("{name}")
       };
-      assert_eq!(p.pub_key_operator.scheme(), scheme, "{name}");
+      assert_eq!(p.pub_key_operator().scheme(), scheme, "{name}");
       let name = format!("proupregtx_v{version}_pk_{sample}");
       let SpecialPayload::ProviderUpdateRegistrar(p) = crafted(&name) else {
         panic!("{name}")
       };
-      assert_eq!(p.pub_key_operator.scheme(), scheme, "{name}");
+      assert_eq!(p.pub_key_operator().scheme(), scheme, "{name}");
     }
   }
   for (version, scheme) in [(1, Legacy), (2, Legacy), (3, Basic), (4, Basic)] {
@@ -519,11 +523,11 @@ fn bls_fields_take_their_scheme_source() {
     let SpecialPayload::QuorumCommitment(p) = crafted(&name) else {
       panic!("{name}")
     };
-    let qc = &p.commitment;
+    let qc = &p.commitment();
     let schemes = [
-      qc.quorum_public_key.scheme(),
-      qc.quorum_sig.scheme(),
-      qc.members_sig.scheme(),
+      qc.quorum_public_key().scheme(),
+      qc.quorum_sig().scheme(),
+      qc.members_sig().scheme(),
     ];
     assert_eq!(schemes, [scheme; 3], "{name}");
   }
@@ -535,17 +539,17 @@ fn bls_fields_take_their_scheme_source() {
   };
   // Basic-scheme samples: valid where the flag is basic, invalid where legacy.
   for (bls, valid) in [(BlsCtx::BASIC, true), (BlsCtx::LEGACY, false)] {
-    assert_eq!(cbtx.best_cl_signature.as_ref().unwrap().get(bls).is_valid(), valid);
-    assert_eq!(unlock.quorum_sig.get(bls).is_valid(), valid);
+    assert_eq!(cbtx.best_cl_signature().as_ref().unwrap().get(bls).is_valid(), valid);
+    assert_eq!(unlock.quorum_sig().get(bls).is_valid(), valid);
   }
   let SpecialPayload::MnhfSignal(p) = crafted("mnhf_sig_basic") else {
     panic!()
   };
-  assert_eq!((p.sig.scheme(), p.sig.is_valid()), (Basic, true));
+  assert_eq!((p.sig().scheme(), p.sig().is_valid()), (Basic, true));
   let SpecialPayload::ProviderUpdateSharedRegistrar(p) = crafted("proupsharedregtx_pk_legacy") else {
     panic!()
   };
-  assert_eq!(p.pub_key_operator.scheme(), Basic);
+  assert_eq!(p.pub_key_operator().scheme(), Basic);
 }
 
 /// `payload`'s encoding.
@@ -569,44 +573,44 @@ fn version_sourced_fields_encode_under_the_version_at_encoding() {
   let SpecialPayload::ProviderUpdateRevoke(mut rev) = crafted("prouprevtx_v1_sig_legacy") else {
     panic!()
   };
-  assert!(rev.sig.is_valid());
-  rev.version = ProTxVersion::BasicBls;
+  assert!(rev.sig().is_valid());
+  rev.set_version(ProTxVersion::BasicBls);
   let written = redecode(&rev);
   assert_eq!(
-    (written.sig.scheme(), written.sig.is_valid()),
+    (written.sig().scheme(), written.sig().is_valid()),
     (BlsSchemeKind::Basic, true)
   );
-  assert_eq!(written.sig, rev.sig, "same object");
+  assert_eq!(written.sig(), rev.sig(), "same object");
 
   let SpecialPayload::ProviderUpdateRegistrar(mut reg) = crafted("proupregtx_v1_pk_legacy") else {
     panic!()
   };
-  let key = reg.pub_key_operator.get();
+  let key = reg.pub_key_operator().get();
   assert!(key.is_valid());
-  reg.version = ProTxVersion::BasicBls;
+  reg.set_version(ProTxVersion::BasicBls);
   let written = redecode(&reg);
-  assert_eq!(written.pub_key_operator.scheme(), BlsSchemeKind::Basic);
-  assert_eq!(written.pub_key_operator.get(), key, "same object");
+  assert_eq!(written.pub_key_operator().scheme(), BlsSchemeKind::Basic);
+  assert_eq!(written.pub_key_operator().get(), key, "same object");
 
   let SpecialPayload::QuorumCommitment(qc) = crafted("qctx_v1_legacy") else {
     panic!()
   };
-  let mut commitment = qc.commitment;
+  let mut commitment = qc.commitment().clone();
   let valid = |c: &Commitment| {
     [
-      c.quorum_public_key.is_valid(),
-      c.quorum_sig.is_valid(),
-      c.members_sig.is_valid(),
+      c.quorum_public_key().is_valid(),
+      c.quorum_sig().is_valid(),
+      c.members_sig().is_valid(),
     ]
   };
   assert_eq!(valid(&commitment), [true; 3]);
   // Version 3 keeps version 1's layout, without a quorum index.
-  commitment.version = 3;
+  commitment.set_version(3);
   let written = redecode(&commitment);
   assert_eq!(valid(&written), [true; 3]);
-  assert_eq!(written.quorum_public_key, commitment.quorum_public_key);
-  assert_eq!(written.quorum_sig, commitment.quorum_sig);
-  assert_eq!(written.members_sig, commitment.members_sig);
+  assert_eq!(written.quorum_public_key(), commitment.quorum_public_key());
+  assert_eq!(written.quorum_sig(), commitment.quorum_sig());
+  assert_eq!(written.members_sig(), commitment.members_sig());
 }
 
 /// Checks that `p`'s operator `key` encodes and serializes alike before and
@@ -622,9 +626,9 @@ where
   assert_eq!(key.get().is_valid(), valid, "{name}");
   assert_eq!(encoded(p), bytes, "{name}: encoding");
   assert_eq!(dash_dev::to_json(p), json, "{name}: JSON");
-  let at = tx.extra_payload.windows(wire_key.len()).position(|w| w == wire_key);
+  let at = tx.extra_payload().windows(wire_key.len()).position(|w| w == wire_key);
   let at = at.unwrap_or_else(|| panic!("{name}: key"));
-  let mut expected = tx.extra_payload.clone();
+  let mut expected = tx.extra_payload().clone();
   if !valid {
     expected[at..at + wire_key.len()].fill(0);
   }
@@ -636,20 +640,20 @@ where
 fn lazy_keys_encode_alike_before_and_after_use() {
   for (name, valid) in [("proregtx_v2_pk_basic", true), ("proregtx_v2_pk_legacy", false)] {
     let tx = crafted_tx(name);
-    let SpecialPayload::ProviderRegister(p) = accepted(&tx).unwrap().payload else {
+    let SpecialPayload::ProviderRegister(p) = accepted(&tx).unwrap().into_payload() else {
       panic!("{name}")
     };
-    assert_lazy_key_alike(name, &tx, &p, &p.pub_key_operator, valid);
+    assert_lazy_key_alike(name, &tx, &p, p.pub_key_operator(), valid);
   }
   for (name, valid) in [
     ("proupsharedregtx_pk_basic", true),
     ("proupsharedregtx_pk_legacy", false),
   ] {
     let tx = crafted_tx(name);
-    let SpecialPayload::ProviderUpdateSharedRegistrar(p) = accepted(&tx).unwrap().payload else {
+    let SpecialPayload::ProviderUpdateSharedRegistrar(p) = accepted(&tx).unwrap().into_payload() else {
       panic!("{name}")
     };
-    assert_lazy_key_alike(name, &tx, &p, &p.pub_key_operator, valid);
+    assert_lazy_key_alike(name, &tx, &p, p.pub_key_operator(), valid);
   }
 }
 
@@ -673,15 +677,19 @@ fn payloads_encode_as_core_serializes_them() {
   ];
   for name in names {
     let tx = crafted_tx(name);
-    assert_eq!(reencode(&accepted(&tx).unwrap().payload), tx.extra_payload, "{name}");
+    assert_eq!(
+      &reencode(accepted(&tx).unwrap().payload()),
+      tx.extra_payload(),
+      "{name}"
+    );
   }
   // Both fields follow 34 bytes: MnHF's version, version bit and quorum hash;
   // the shared registrar's version and ProTx hash.
   for (name, len) in [("mnhf_sig_legacy", 96), ("proupsharedregtx_pk_legacy", 48)] {
     let tx = crafted_tx(name);
-    let mut expected = tx.extra_payload.clone();
+    let mut expected = tx.extra_payload().clone();
     expected[34..34 + len].fill(0);
-    assert_eq!(reencode(&accepted(&tx).unwrap().payload), expected, "{name}");
+    assert_eq!(reencode(accepted(&tx).unwrap().payload()), expected, "{name}");
   }
 }
 
@@ -699,9 +707,9 @@ fn null_commitment_ignores_fields_of_the_other_scheme() {
     let at = raw.windows(32).position(|w| w == [6u8; 32]).unwrap();
     raw[at..at + 32].fill(0);
     let tx = Transaction::decode(&mut &raw[..]).unwrap();
-    let SpecialPayload::QuorumCommitment(p) = accepted(&tx).unwrap().payload else {
+    let SpecialPayload::QuorumCommitment(p) = accepted(&tx).unwrap().into_payload() else {
       panic!("{name}")
     };
-    assert_eq!(p.commitment.is_null(), null, "{name}");
+    assert_eq!(p.commitment().is_null(), null, "{name}");
   }
 }

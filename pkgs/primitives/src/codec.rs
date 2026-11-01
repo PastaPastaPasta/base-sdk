@@ -38,12 +38,27 @@ macro_rules! hash_impl {
   )* };
 }
 
-/// Generates `BaseCodec` + `Encode` + `Decode` for flat structs
-/// without `Hashable`.
+/// Declares a flat struct with `new` and generates `BaseCodec` + `Encode` +
+/// `Decode` over its fields, without `Hashable`.
+///
+/// The `$ty, $max, { fields }` form generates the codec alone, for
+/// `codec_type!` and `codec_payload!` to build on.
 #[macro_export]
 macro_rules! codec_base {
-  ($ty:ty { $($field:ident),+ $(,)? }) => {
-    $crate::codec_base!($ty, $crate::__private::dash_types::MAX_SER_SIZE, { $($field),+ });
+  (
+    $(#[$attr:meta])*
+    $vis:vis struct $name:ident {
+      $($(#[$fattr:meta])* $fvis:vis $field:ident: $fty:ty),+ $(,)?
+    }
+  ) => {
+    $crate::__private::dash_types::impl_new! {
+      $(#[$attr])*
+      $vis struct $name {
+        $($(#[$fattr])* $fvis $field: $fty),+
+      }
+    }
+
+    $crate::codec_base!($name, $crate::__private::dash_types::MAX_SER_SIZE, { $($field),+ });
   };
   ($ty:ty, $max:expr, { $($field:ident),+ $(,)? }) => {
     impl $crate::__private::dash_types::codec::BaseCodec for $ty {
@@ -62,16 +77,74 @@ macro_rules! codec_base {
   };
 }
 
-/// Generates `BaseCodec` + `Encode` + `Decode` + `Hashable` for
-/// flat structs.
+/// Declares a flat struct with `new` and generates `BaseCodec` + `Encode` +
+/// `Decode` + `Hashable` over its fields.
+///
+/// The `$ty, $max, { fields }` form generates the codec alone, for callers
+/// that declare the struct themselves.
 #[macro_export]
 macro_rules! codec_type {
-  ($ty:ty { $($field:ident),+ $(,)? }) => {
-    $crate::codec_base!($ty { $($field),+ });
-    $crate::hash_impl!($ty);
+  (
+    $(#[$attr:meta])*
+    $vis:vis struct $name:ident {
+      $($(#[$fattr:meta])* $fvis:vis $field:ident: $fty:ty),+ $(,)?
+    }
+  ) => {
+    $crate::codec_base! {
+      $(#[$attr])*
+      $vis struct $name {
+        $($(#[$fattr])* $fvis $field: $fty),+
+      }
+    }
+
+    $crate::hash_impl!($name);
   };
   ($ty:ty, $max:expr, { $($field:ident),+ $(,)? }) => {
     $crate::codec_base!($ty, $max, { $($field),+ });
     $crate::hash_impl!($ty);
   };
 }
+
+/// Declares a flat struct with `new` and generates `BaseCodec` + `Encode` +
+/// `Decode` + `Hashable` over its fields, for a special payload.
+///
+/// Payloads are bounded by `MAX_SER_SIZE` like any other type: Core reads
+/// `vExtraPayload` as a plain vector and enforces the payload size limits in
+/// `CheckTransaction`, not in the read.
+///
+/// A leading `@no_new` leaves `new` out, for a payload whose signature is set
+/// only through `Signable::set_signature`.
+macro_rules! codec_payload {
+  (
+    @no_new
+    $(#[$attr:meta])*
+    $vis:vis struct $name:ident {
+      $($(#[$fattr:meta])* $fvis:vis $field:ident: $fty:ty),+ $(,)?
+    }
+  ) => {
+    $(#[$attr])*
+    $vis struct $name {
+      $($(#[$fattr])* $fvis $field: $fty),+
+    }
+
+    $crate::codec_base!($name, $crate::__private::dash_types::MAX_SER_SIZE, { $($field),+ });
+    $crate::hash_impl!($name);
+  };
+  (
+    $(#[$attr:meta])*
+    $vis:vis struct $name:ident {
+      $($(#[$fattr:meta])* $fvis:vis $field:ident: $fty:ty),+ $(,)?
+    }
+  ) => {
+    $crate::__private::dash_types::impl_new! {
+      $(#[$attr])*
+      $vis struct $name {
+        $($(#[$fattr])* $fvis $field: $fty),+
+      }
+    }
+
+    $crate::codec_base!($name, $crate::__private::dash_types::MAX_SER_SIZE, { $($field),+ });
+    $crate::hash_impl!($name);
+  };
+}
+pub(crate) use codec_payload;

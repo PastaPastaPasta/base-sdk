@@ -12,26 +12,33 @@ use crate::prelude::*;
 use crate::{hash_impl, Transaction, TxHash};
 
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
-use dash_types::impl_type;
 use dash_types::type_id::TypeId;
+use dash_types::{impl_new, impl_type};
+use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
+impl_new! {
 /// ProDisTx -- dissolve a shared masternode (type 10, v24).
 ///
 /// Core reads every field whatever the version.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ProDisTx {
   /// Payload version.
-  pub version: u16,
+  #[getset(get_copy = "pub")]
+  version: u16,
   /// ProTx hash identifying the masternode.
-  pub pro_tx_hash: TxHash,
+  #[getset(get_copy = "pub")]
+  pro_tx_hash: TxHash,
   /// Index of the share that acts.
-  pub actor_index: u16,
+  #[getset(get_copy = "pub")]
+  actor_index: u16,
   /// One signature (unilateral) or one per share (unanimous).
-  pub sigs: Vec<CompactSig>,
+  #[getset(get = "pub")]
+  sigs: Vec<CompactSig>,
+}
 }
 
 impl_type!(ProDisTx);
@@ -69,13 +76,13 @@ impl ProDisTx {
     String::from("DashSharedMNDissolve").encode(&mut buf);
     self.version.encode(&mut buf);
     write_tx_header(tx, &mut buf);
-    for input in &tx.inputs {
-      input.prevout.encode(&mut buf);
+    for input in tx.inputs() {
+      input.prevout().encode(&mut buf);
     }
-    for input in &tx.inputs {
-      input.sequence.encode(&mut buf);
+    for input in tx.inputs() {
+      input.sequence().encode(&mut buf);
     }
-    for output in &tx.outputs {
+    for output in tx.outputs() {
       output.encode(&mut buf);
     }
     self.pro_tx_hash.encode(&mut buf);

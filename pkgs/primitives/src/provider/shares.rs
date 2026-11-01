@@ -16,6 +16,7 @@ use dash_script::PubKeyHash;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::make_bytes;
 use dash_types::type_id::TypeId;
+use getset::{CopyGetters, Getters};
 
 /// Length of a compact recoverable ECDSA signature.
 pub const COMPACT_SIG_LEN: usize = 65;
@@ -28,42 +29,43 @@ make_bytes! {
 
 hash_impl!(CompactSig);
 
+codec_type! {
 /// An owner payout of a version-3 provider payload, Core's
 /// `MasternodePayoutShare`.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct PayoutShare {
   /// Payout script.
-  pub script_payout: ScriptPubKeyBuf,
+  #[getset(get = "pub")]
+  script_payout: ScriptPubKeyBuf,
   /// Share of the owner reward in basis points.
-  pub reward: u16,
+  #[getset(get_copy = "pub")]
+  reward: u16,
+}
 }
 
-codec_type!(PayoutShare { script_payout, reward });
-
+codec_type! {
 /// One participant of a shared collateral, Core's `CCollateralShare`.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct CollateralShare {
   /// Collateral contributed, in duffs (Core's `CAmount`, any value decodes).
   #[cfg_attr(feature = "serde", serde(with = "crate::serialize::duffs"))]
-  pub amount: i64,
+  #[getset(get_copy = "pub")]
+  amount: i64,
   /// Script the contribution is refunded to.
-  pub script_refund: ScriptPubKeyBuf,
+  #[getset(get = "pub")]
+  script_refund: ScriptPubKeyBuf,
   /// Script owner rewards are paid to; empty means the refund script.
-  pub script_reward: ScriptPubKeyBuf,
+  #[getset(get = "pub")]
+  script_reward: ScriptPubKeyBuf,
   /// Owner key id of this participant.
-  pub key_id_owner: PubKeyHash,
+  #[getset(get_copy = "pub")]
+  key_id_owner: PubKeyHash,
 }
-
-codec_type!(CollateralShare {
-  amount,
-  script_refund,
-  script_reward,
-  key_id_owner,
-});
+}
 
 /// Reads `count` items, as Core resizes its vector to a one-byte count read
 /// before.

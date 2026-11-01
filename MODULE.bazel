@@ -12,6 +12,7 @@ include("//bazel:darwin.MODULE.bazel")
 include("//bazel:linux.MODULE.bazel")
 include("//bazel:llvm.MODULE.bazel")
 include("//bazel:rust.MODULE.bazel")
+include("//bazel:toolchains.MODULE.bazel")
 
 # The workspace manifest brings in `dash-meta-bazel`, whose `full` features
 # decide the third-party graph `crate_universe` resolves. An unlisted triple
@@ -30,14 +31,6 @@ crate.from_cargo(
         "x86_64-apple-darwin",
         "x86_64-unknown-linux-gnu",
     ],
-)
-
-# rules_rust hides the target flags from build scripts, so `blst` would probe
-# the builder's CPU for ADX. The x86_64 floor includes ADX, and other targets
-# ignore the feature.
-crate.annotation(
-    crate = "blst",
-    crate_features = ["force-adx"],
 )
 use_repo(crate, "crates")
 

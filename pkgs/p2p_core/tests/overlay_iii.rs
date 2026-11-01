@@ -14,7 +14,7 @@
 use bitcoin_hashes::sha256d;
 use dash_num::Hash256;
 use dash_p2p_core::{
-  max_pool_entries, CommandString, DsAccept, DsSignedInputs, GovSync, P2pDecodeError, P2pMsg, ProtoCtx, ProtocolVersion,
+  max_pool_entries, CommandString, DsAccept, DsSignedInputs, P2pDecodeError, P2pMsg, ProtoCtx, ProtocolVersion,
 };
 use dash_params::{ChainParamsBuilder, Network, Release};
 use dash_pkc::bls::BlsCtx;
@@ -72,18 +72,14 @@ fn dsa_reads_the_flags_from_the_rebalance_version() {
   // At 70241 and later the flags byte follows the collateral.
   let with = [&body[..], &[0x03]].concat();
   let (msg, consumed) = decode_at("dsa", &with, 70241).unwrap();
-  let P2pMsg::Dsa(DsAccept { flags, .. }) = &msg else {
-    panic!("{msg:?}")
-  };
-  assert_eq!((*flags, consumed), (Some(3), with.len()));
+  let P2pMsg::Dsa(accept) = &msg else { panic!("{msg:?}") };
+  assert_eq!((accept.flags(), consumed), (Some(3), with.len()));
   assert_eq!(encode(&msg), with);
   assert!(decode_at("dsa", &body, 70241).is_err(), "the flags byte is read");
   // Before it, there is none: a byte after the collateral is not read.
   let (msg, consumed) = decode_at("dsa", &with, 70240).unwrap();
-  let P2pMsg::Dsa(DsAccept { flags, .. }) = &msg else {
-    panic!("{msg:?}")
-  };
-  assert_eq!((*flags, consumed), (None, body.len()));
+  let P2pMsg::Dsa(accept) = &msg else { panic!("{msg:?}") };
+  assert_eq!((accept.flags(), consumed), (None, body.len()));
   assert_eq!(encode(&msg), body);
 }
 
@@ -97,7 +93,7 @@ fn dsa_is_written_for_the_peer_version() {
   assert_eq!(encode(&old), body);
   let new = P2pMsg::Dsa(request.for_version(ProtocolVersion::from_base(70241)));
   assert_eq!(encode(&new), [&body[..], &[0x01]].concat());
-  let unset = DsAccept { flags: None, ..request };
+  let unset = DsAccept::new(request.denom(), request.collateral().clone(), None);
   let new = P2pMsg::Dsa(unset.for_version(ProtocolVersion::from_base(70242)));
   assert_eq!(encode(&new), [&body[..], &[0x00]].concat());
 }
@@ -124,7 +120,7 @@ fn dsi_and_dss_counts_are_the_pools() {
   };
   assert!(!over.fits_pool(params));
   // The collateral sits between the lists.
-  assert_eq!((at.inputs.len(), at.outputs.len()), (max, 0));
+  assert_eq!((at.inputs().len(), at.outputs().len()), (max, 0));
 
   // dss: the count, before any input is read (Core answers ERR_MAXIMUM).
   assert!(DsSignedInputs::check_payload(&list(max, &txin()), params).is_ok());
@@ -165,7 +161,7 @@ fn dsq_hashes_its_ready_flag_as_core_writes_it() {
   let P2pMsg::Dsq(q) = decode("dsq", &dsq(2)).unwrap() else {
     panic!("dsq")
   };
-  assert!(q.ready);
+  assert!(q.ready());
   // Core writes any non-zero byte back as 0x01 and hashes that.
   assert_eq!(encode(&P2pMsg::Dsq(q.clone())), canonical);
   assert_eq!(q.hash(), dsha256(&canonical));
@@ -274,11 +270,10 @@ fn govsync_reads_the_whole_bloom_filter() {
   let filter = [&list(3, &[0x01])[..], &[5, 0, 0, 0], &[7, 0, 0, 0], &[1]].concat();
   let raw = [&[0u8; 32][..], &filter].concat();
   let (msg, consumed) = decode_at("govsync", &raw, 70242).unwrap();
-  let P2pMsg::GovSync(GovSync { bloom_filter, .. }) = &msg else {
-    panic!("{msg:?}")
-  };
+  let P2pMsg::GovSync(sync) = &msg else { panic!("{msg:?}") };
+  let bloom_filter = sync.bloom_filter();
   assert_eq!(
-    (bloom_filter.hash_funcs, bloom_filter.tweak, bloom_filter.flags),
+    (bloom_filter.hash_funcs(), bloom_filter.tweak(), bloom_filter.flags()),
     (5, 7, 1)
   );
   assert_eq!((consumed, encode(&msg)), (raw.len(), raw.clone()));

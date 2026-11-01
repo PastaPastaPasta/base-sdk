@@ -10,13 +10,15 @@ use crate::prelude::*;
 
 use base58ck::decode_check;
 use dash_num::Hash160;
+#[cfg(feature = "codec")]
 use dash_types::type_id::Unencodable;
 use dash_types::Numeric;
 
 /// The spork signers Core's `CSporkManager` holds after applying
 /// `-sporkaddr` and `-minsporkkeys` to the chain's default address.
 /// Verifying sporks is not this crate's job.
-#[derive(Clone, Debug, Default, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 #[non_exhaustive]
 pub struct SporkSigners {
   /// Signer key IDs; v23 holds a set (ascending, distinct), v24 one key.

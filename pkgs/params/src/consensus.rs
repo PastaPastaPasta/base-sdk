@@ -10,6 +10,7 @@ use crate::{Bip9Deployments, LlmqParams, LlmqType};
 
 use bitcoin_units::BlockHeight;
 use dash_num::{Arith256, Hash256};
+#[cfg(feature = "codec")]
 use dash_types::type_id::Unencodable;
 
 /// Block height paired with its block hash.
@@ -27,7 +28,8 @@ pub const BRR_PERIODS_PERMILLE: [u16; 19] = [
 ];
 
 /// Buried deployment positions with hardcoded activation heights.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub enum BuriedDeployment {
   /// BIP34 (height in coinbase).
   HeightInCoinbase,
@@ -124,7 +126,8 @@ impl BuriedDeployment {
 }
 
 /// Parameters that influence chain consensus.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct ConsensusParams {
   /// Hash of the genesis block.
   pub hash_genesis_block: Hash256,

@@ -10,18 +10,21 @@ use crate::version::ProtocolVersion;
 
 use dash_pkc::bls::BlsCtx;
 use dash_types::type_id::Unencodable;
+use getset::CopyGetters;
 
 /// The state Core consults while it reads a message from a peer.
 ///
 /// Some payloads decode differently by the version negotiated with the peer
 /// or by the BLS scheme in force when the message is processed.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Unencodable)]
+#[derive(Clone, Copy, CopyGetters, Debug, Eq, Hash, PartialEq, Unencodable)]
 #[non_exhaustive]
 pub struct ProtoCtx {
   /// The negotiated version, Core's `GetCommonVersion()`.
-  pub version: ProtocolVersion,
+  #[getset(get_copy = "pub")]
+  version: ProtocolVersion,
   /// The BLS scheme in force while the message is processed.
-  pub bls: BlsCtx,
+  #[getset(get_copy = "pub")]
+  bls: BlsCtx,
 }
 
 impl ProtoCtx {

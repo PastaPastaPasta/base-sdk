@@ -23,7 +23,8 @@ use dash_primitives::{
 use dash_script::PubKeyHash;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{CompactSize, Hashable, Numeric};
+use dash_types::{impl_new, CompactSize, Hashable, Numeric};
+use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
@@ -98,34 +99,37 @@ impl MnListFormat {
   }
 }
 
+codec_p2p! {
 /// Deleted quorum identifier (type + hash).
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, Copy, CopyGetters, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct DeletedQuorum {
   /// LLMQ type.
-  pub llmq_type: LlmqType,
+  #[getset(get_copy = "pub")]
+  llmq_type: LlmqType,
   /// Quorum hash.
-  pub hash: BlockHash,
+  #[cfg_attr(feature = "serde", serde(rename = "hash"))]
+  #[getset(get_copy = "pub")]
+  quorum_hash: BlockHash,
+}
 }
 
-codec_p2p!(DeletedQuorum { llmq_type, hash });
-
+codec_p2p! {
 /// Requests a masternode list diff between two blocks.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, Copy, CopyGetters, Debug, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct GetMnListDiff {
   /// Base block hash (beginning of range).
-  pub base_block_hash: BlockHash,
+  #[getset(get_copy = "pub")]
+  base_block_hash: BlockHash,
   /// Target block hash (end of range).
-  pub block_hash: BlockHash,
+  #[getset(get_copy = "pub")]
+  block_hash: BlockHash,
+}
 }
 
-codec_p2p!(GetMnListDiff {
-  base_block_hash,
-  block_hash
-});
-
+impl_new! {
 /// A masternode list diff, the `mnlistdiff` payload (Core's
 /// `CSimplifiedMNListDiff`).
 ///
@@ -134,30 +138,40 @@ codec_p2p!(GetMnListDiff {
 /// [`MsgDecode`] the negotiated one; both write the diff in its own
 /// `format`, so a diff read in an older layout reads back only with
 /// [`MnListDiff::decode_as`] in that layout.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct MnListDiff {
   /// The layout the diff was read in and is written in.
-  pub format: MnListFormat,
+  #[getset(get_copy = "pub")]
+  format: MnListFormat,
   /// Diff version; 1 where the format carries none.
-  pub version: u16,
+  #[getset(get_copy = "pub")]
+  version: u16,
   /// Base block hash (start of the diff range).
-  pub base_block_hash: BlockHash,
+  #[getset(get_copy = "pub")]
+  base_block_hash: BlockHash,
   /// Target block hash (end of the diff range).
-  pub block_hash: BlockHash,
+  #[getset(get_copy = "pub")]
+  block_hash: BlockHash,
   /// Merkle proof of the coinbase transaction in the target block.
-  pub cb_tx_merkle_tree: PartialMerkleTree,
+  #[getset(get = "pub")]
+  cb_tx_merkle_tree: PartialMerkleTree,
   /// Coinbase transaction (carries the MN list commitment).
-  pub cb_tx: Transaction,
+  #[getset(get = "pub")]
+  cb_tx: Transaction,
   /// ProTxHashes of removed masternodes.
-  pub deleted_mns: Vec<TxHash>,
+  #[getset(get = "pub")]
+  deleted_mns: Vec<TxHash>,
   /// New or updated masternode entries.
-  pub mn_list: Vec<SimplifiedMnListEntry>,
+  #[getset(get = "pub")]
+  mn_list: Vec<SimplifiedMnListEntry>,
   /// Removed quorums.
-  pub deleted_quorums: Vec<DeletedQuorum>,
+  #[getset(get = "pub")]
+  deleted_quorums: Vec<DeletedQuorum>,
   /// New quorum final commitments.
-  pub new_quorums: Vec<Commitment>,
+  #[getset(get = "pub")]
+  new_quorums: Vec<Commitment>,
   /// ChainLock signatures of the new quorums, in wire order; empty before
   /// [`MnListFormat::ClSigs`].
   ///
@@ -166,7 +180,9 @@ pub struct MnListDiff {
   /// the map keeps the first, with its index set; it orders the keys by
   /// their double SHA-256 and Core writes them in that order. Building that
   /// map is the node-side BLS classifier's.
-  pub quorum_cl_sigs: Vec<QuorumClSig>,
+  #[getset(get = "pub")]
+  quorum_cl_sigs: Vec<QuorumClSig>,
+}
 }
 
 impl_p2p!(MnListDiff);
@@ -258,7 +274,7 @@ impl MsgDecode for MnListDiff {
   /// command, before decoding, and decodes only the replies to its own
   /// requests.
   fn decode_msg(data: &mut &[u8], ctx: &ProtoCtx) -> Result<Self, P2pDecodeError> {
-    Ok(Self::decode_as(data, MnListFormat::for_version(ctx.version))?)
+    Ok(Self::decode_as(data, MnListFormat::for_version(ctx.version()))?)
   }
 }
 
@@ -276,19 +292,23 @@ impl fmt::Display for MnListDiff {
   }
 }
 
+impl_new! {
 /// A ChainLock signature and the quorums, as indexes into `new_quorums`,
 /// whose ChainLock it is.
 ///
 /// Core reads the indexes into a set; repeated indexes are dropped.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct QuorumClSig {
   /// BLS signature, as read. Its scheme comes from the context, not the
   /// type's tag.
-  pub sig: BlsSigBytes,
+  #[getset(get_copy = "pub")]
+  sig: BlsSigBytes,
   /// Indexes into the `new_quorums` vector, ascending.
-  pub index_set: BTreeSet<u16>,
+  #[getset(get = "pub")]
+  index_set: BTreeSet<u16>,
+}
 }
 
 impl_p2p!(QuorumClSig);
@@ -315,6 +335,7 @@ impl BaseCodec for QuorumClSig {
 
 hash_impl!(QuorumClSig);
 
+impl_new! {
 /// A single entry in the simplified masternode list (Core's
 /// `CSimplifiedMNListEntry`).
 ///
@@ -323,34 +344,45 @@ hash_impl!(QuorumClSig);
 /// otherwise ([`SimplifiedMnListEntry::operator_key_scheme`]); Core reads it
 /// lazily and writes it back as read. Core writes the address list back as it
 /// reads it (an invalid address as the empty one), which [`NetInfo`] keeps.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct SimplifiedMnListEntry {
   /// Entry serialisation version.
-  pub version: u16,
+  #[getset(get_copy = "pub")]
+  version: u16,
   /// Masternode registration transaction hash.
-  pub pro_reg_tx_hash: TxHash,
+  #[getset(get_copy = "pub")]
+  pro_reg_tx_hash: TxHash,
   /// Block hash at confirmation depth.
-  pub confirmed_hash: BlockHash,
+  #[getset(get_copy = "pub")]
+  confirmed_hash: BlockHash,
   /// Network info, extended from version 3.
-  pub net_info: NetInfo,
+  #[getset(get = "pub")]
+  net_info: NetInfo,
   /// BLS operator public key, as read. Its scheme comes from
   /// [`SimplifiedMnListEntry::operator_key_scheme`], not the type's tag.
-  pub operator_key: BlsPkBytes,
+  #[getset(get_copy = "pub")]
+  operator_key: BlsPkBytes,
   /// Voting key hash (HASH160).
-  pub voting_key_id: PubKeyHash,
+  #[getset(get_copy = "pub")]
+  voting_key_id: PubKeyHash,
   /// Whether this masternode is currently valid, read as 0 or 1: Core
   /// reads any other byte as `true`, which here is
   /// `DecodeError::NonCanonicalBool`.
-  pub is_valid: bool,
+  #[getset(get_copy = "pub")]
+  is_valid: bool,
   /// Masternode type, carried from version 2.
-  pub mn_type: MnType,
+  #[getset(get_copy = "pub")]
+  mn_type: MnType,
   /// Platform HTTP port, carried by Evo entries below version 3.
   #[cfg_attr(feature = "serde", serde(rename = "platformHTTPPort"))]
-  pub platform_http_port: Option<u16>,
+  #[getset(get_copy = "pub")]
+  platform_http_port: Option<u16>,
   /// Platform node ID, carried by Evo entries.
-  pub platform_node_id: Option<PlatformNodeId>,
+  #[getset(get_copy = "pub")]
+  platform_node_id: Option<PlatformNodeId>,
+}
 }
 
 impl_p2p!(SimplifiedMnListEntry);

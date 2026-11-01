@@ -10,8 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- `serialize::opt_str_u64`: `str_u64` for an `Option<u64>` field.
 - `BaseCodec` for `Box<T>`, which reads and writes the boxed value.
+- `impl_new!`, which declares a struct with named fields and a `new` taking every field in declaration order.
+- A `get` accessor for `make_num!`-defined types, returning the inner integer.
 
 ### Changed
 
@@ -19,6 +20,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   BLS object". Exhaustive matches on `DecodeError` must add an arm.
 - `DecodeError` gains `NonCanonicalBool`, for a boolean byte other than 0 or 1, which Dash Core reads as `true`.
   Exhaustive matches on `DecodeError` must add an arm.
+- The inner integer of `make_num!`-defined types is private. Callers construct them with `new` or `From` and read them
+  with `get` or `Numeric::to_base`.
+- `serialize::str_u64` also carries an `Option<u64>` field, with `None` as null. Its `serialize` and `deserialize` are
+  generic over the sealed `serialize::str_u64::Value` trait, which `u64` and `Option<u64>` implement.
 
 ## [0.2.0-beta] - 2026-10-20
 
