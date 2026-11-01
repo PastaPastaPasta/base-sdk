@@ -1,10 +1,16 @@
 //
-// Network info read vectors. Generated with the reference implementation (dashpay/dash v24.0.0-rc.4, 0e7382df80).
+// Network info read vectors. Generated with the reference
+// implementation (dashpay/dash v24.0.0-rc.4, 0e7382df80).
 //
 // Each section comes with the program used to generate the vectors.
 //
-// To run a program, paste it at the end of the `evo_netinfo_tests` suite in `src/test/evo_netinfo_tests.cpp` at the specified revision, build it with `make -C src test/test_dash` and run `./src/test/test_dash --run_test=evo_netinfo_tests/<name>`. The output should match the section.
+// To run a program, paste it at the end of the `evo_netinfo_tests` suite in
+// `src/test/evo_netinfo_tests.cpp` at the specified revision, build it with
+// `make -C src test/test_dash` and run
+// `./src/test/test_dash --run_test=evo_netinfo_tests/<name>`. The output
+// should match the section.
 //
+
 {
 /*
 BOOST_AUTO_TEST_CASE(netinfo_entry_reads)
