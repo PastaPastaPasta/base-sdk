@@ -35,7 +35,7 @@ pub use builder::ChainParamsBuilder;
 pub use chain::{ChainParams, ChainTxData, MessageStart};
 pub use consensus::{BuriedDeployment, Checkpoint, ConsensusParams, BRR_PERIODS_PERMILLE};
 pub use deployment::{Bip9Deployment, Bip9Deployments, DeploymentPos};
-pub use genesis::GenesisParams;
+pub use genesis::{DevnetGenesisParams, GenesisParams};
 pub use llmq::{LlmqParams, LlmqType};
 pub use release::Release;
 pub use setup::{AssumeutxoData, ChainSetup, HardCodedHeights};

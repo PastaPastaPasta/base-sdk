@@ -39,7 +39,7 @@ full = [
   "serde",
   "std",
 ]
-portable = ["dash-pkc?/portable"]
+portable = ["dash-params?/portable", "dash-pkc?/portable"]
 serde = [
   "dash-pkc?/serde",
   "dash-types/serde",
