@@ -3,11 +3,18 @@
 //
 // "bases" holds the parameters of each chain with no options, as
 // contrib/params/chainparams_dump prints them. "params" holds the consensus
-// and network parameters, "ext" the chain's other parameters. Each entry is
-// the output of the command above it. dash-primitives checks the genesis
-// block bytes, dash-params every other value.
+// and network parameters, "ext" the chain's other parameters and "spork" the
+// spork signers. Each entry is the output of the command above it.
 //
-// Dump source sha256 70ab0c6408c6b65224fbfd57fbedbd8772393816880ab05373a8a6696e674052.
+// "cases" holds the option cases chainparams_cases.json5 lists, each the
+// result of the command above it. A case holds the release's error text
+// ("error"), or the values that differ from its chain's base ("delta"), keyed
+// by dotted path, where "#" is an array's length. A case whose keys differ
+// from its base's also lists the keys it adds ("extra_keys") and lacks
+// ("missing_keys"). dash-primitives checks the genesis block bytes,
+// dash-params every other value.
+//
+// Dump source sha256 258f2038d05dbce1973ecfa0da91bb6780ffe945e01bac1dbed08e07182e6cfd.
 // Regenerate as contrib/params/README.md describes.
 {
   "version": "v23.1.8",
@@ -257,6 +264,7 @@
         ],
         "fixedSeeds": "0420ba5bab3a877c7498c27006d1350849b96b17d52621cca8c173319a4476cbd777270f0420b4c38d95481f090029a5ab00a37aae2d5e30728a3d082fabba6bbfe6fa59b8aa270f04209d329c4d1e352dbd4982b9a5664f455256ac5db3e7e3393eac8122102f23260d270f04207e87e89bd53f4bb62621ff57a7bef3085e90979dacc987ec5ca6db72b9b67932270f0420627b986dc470d769116ae85b7eace8a1ed4a67d733109bf1416bda703145ecfe270f04205c0de69424577850c8c3c0a1e8913f20e02371f2f320caca11f73a820833f8b3270f04205783984d479e719412674376a5625be6a2bc89905465d404123c04b1535b21e9270f0420574c369aa062ed8658fa037d05832f355675468a049de6d7be1efaf2366f29d0270f04204c2524e1b55c2c543a236d2faac27e32db1d970fc3cb604a28c85f63853a5d67270f04204a527b624ae4f68fb629c5f112f3094c18e5938373ac607dad561283ecec47e1270f0420463d6c95fee97af210f0a404783c91bf63c84b012b2b51a4e4d015b41bcf9ec1270f042044d4098b4679554a85892aee6881aa9a6327285fb0a8da6bac87df38325f2d89270f042047fb8b8727ca95e877ae41bd72206225e5679841850e9a5d4ab10f8f46a987a4270f04203f2381376b32e603dea5bcc9e8e698a6dce06cbb075e2364eaa9fa104088fcb7270f04203e84f83123dc6043c5ddd4a643a3956e1c5be18580e44b88e72fc6f0854e8298270f0420304dab0f94b0baafdba9ddb9ecc49e8f50e2668b3262851277af2045603936b3270f04202e5decf0624cca6e90df00651cca4acb66eea2a694278d6cec154be0a486e321270f04202109f10f0d0a69f782fce559b0bbe00651fd4030359537d55bf9dd737d2a8133270f0420060f6b3d30e44db0c9619cff8226183d058042410fe6de742b3f23fba7dab15c270f0420ed7ab30c6e589039cf5061d95c281a258f3e314c627fb996d443162519900f57270f0420ef3468e6b3c6c4d0cf22dc9209d02a634f6d6afd316ad4e9717306f046cb1713270f0420e0c1c978b5cead3f7f4abde0688388a45d39712dce5847ac239fc0145fdde952270f0420dd2a24e18845d1e6f99a7f8b23613755f42200921fc8e7a36ffa5bbf711dcfb9270f0420d89d506e4d6230388c108cb29eaa2da25f632a843e94970e8de1ea8bab78eafb270f0420d063bfe7a859b68dc416b2b2d61fcb38b217417dc8e2533140bb65c9bcb1bb29270f0104d99ae714270f0104d8ee4b2e270f0104d8e6e87d270f0104d48469be270f0104d41868e1270f0104d18d24ce270f0104d057665b270f0104cff4f728270f0104ca470e4f270f0104ca051021270f0104c3625fd2270f0104c31afee4270f0104c2ee19c7270f0104c2875464270f0104c2059dd6270f0104c0af7fc6270f0104c0a90657270f0104b9f373db270f0104b9e4539c270f0104b9e45384270f0104b9d8b305270f0104b9c113d6270f0104b9b92868270f0104b9a6d99a270f0104b9a5ab75270f0104b9a4a3da270f0104b9a4a355270f0104b970f935270f0104b970f931270f0104b91c6591270f0104b86bb6c6270f0104b2fdfd05270f0104b2d7ed87270f0104b2d7ed86270f0104b2d057e2270f0104b2d057d5270f0104b29d5bb1270f0104b23f7981270f0104b15d8d56270f0104b15d8d3c270f0104b0664191270f0104acee0719270f0104acecf451270f0104ac6891a6270f0104ac565b9e270f0104ac5649a0270f0104a87757c4270f0104a8775004270f0104a768d81c270f0104a758a910270f0104a516ea87270f0104a516dd61270f0104a3ac4229270f0104a161a573270f01049f4b79a3270f01049a103f70270f010498435fb8270f010497f455db270f010497f455c3270f010497f455b2270f010497f4557b270f010495686e77270f0104932d29d2270f0104901fbc2a270f01049018eeb2270f010488f46311270f0104851261e2270f010484f3c5f0270f010484f3c5b3270f010484f3c563270f010484f3c517270f010482ff9ba3270f010482a2e9ba270f01047bc140a6270f010473bef839270f01047284acd7270f01046deb43f6270f01046ca083c0270f01046bbd034a270f01046bb3ca4a270f01046baecce8270f01046baafea0270f01046a370916270f010468eaa773270f01045d73ac27270f01045d73ac25270f01045bc795b1270f01045bc66c28270f01045bc66c27270f01045bc66c25270f01045bc66c23270f01045bb8f9d1270f010459b34960270f0104597dd1c3270f0104597dd16e270f0104597dd145270f01045975391b270f0104597503f2270f0104592e2ada270f010459238395270f010457e41840270f010455d1f1f5270f010455d1f15d270f010455d1f157270f010455d1f156270f0104559bbc8a270f010454f7b4c9270f010454f2b3cc270f010454620cc4270f010454093211270f010453ef6328270f0104539564ba270f0104539564b9270f0104539564b8270f0104539564b7270f010452cae653270f010452b492c0270f010451e3fa33270f010450f99308270f010450f084e7270f010450d0e690270f01044e531300270f01044ddf6304270f01044ddd94cc270f01044a325a71270f0104483e3a6c270f0104483c26a0270f0104453d6bd7270f010442f5c434270f010442f4f346270f010442a37171270f010442a3715b270f010442a37107270f01043eab857d270f01043e3cf4ae270f01043424665b270f0104342109ac270f0104339ebc58270f0104339ea9ed270f0104339ea71f270f01042efafe0a270f01042e2428f2270f01042e1ebdbb270f01042e04a27f270f01042d99ba64270f01042d959ac2270f01042d809c1e270f01042d4f126a270f01042d3dba79270f01042d3a384f270f01042cf063d6270f01042be54d2e270f01042ba7f46d270f01042ba7ef91270f01042b86b471270f01042b85ab65270f010426667d6c270f010426360c6f270f01042561e315270f010422f6b019270f01041f946394270f01041f0a6124270f010417a300ae270f010405a16e4f270f010405236713270f01040502493a270f0104050243be270f010402e97823270f0104023bdb36270f010401754bdc270f",
         "requireStandard": true,
+        "minSporkKeys": 1,
         "sporkAddresses": [
           "Xgtyuk76vhuFW2iT7UAiHgNdWXCf3J34wh"
         ],
@@ -305,143 +313,7 @@
           "mn_rr": 2128896,
           "withdrawals": 2201472
         },
-        "availableLlmqs": [
-          {
-            "type": 100,
-            "name": "llmq_test",
-            "useRotation": false,
-            "size": 3,
-            "minSize": 2,
-            "threshold": 2,
-            "dkgInterval": 24,
-            "dkgPhaseBlocks": 2,
-            "dkgMiningWindowStart": 10,
-            "dkgMiningWindowEnd": 18,
-            "dkgBadVotesThreshold": 2,
-            "signingActiveQuorumCount": 2,
-            "keepOldConnections": 3,
-            "keepOldKeys": 4,
-            "recoveryMembers": 3
-          },
-          {
-            "type": 104,
-            "name": "llmq_test_instantsend",
-            "useRotation": false,
-            "size": 3,
-            "minSize": 2,
-            "threshold": 2,
-            "dkgInterval": 24,
-            "dkgPhaseBlocks": 2,
-            "dkgMiningWindowStart": 10,
-            "dkgMiningWindowEnd": 18,
-            "dkgBadVotesThreshold": 2,
-            "signingActiveQuorumCount": 2,
-            "keepOldConnections": 3,
-            "keepOldKeys": 4,
-            "recoveryMembers": 3
-          },
-          {
-            "type": 102,
-            "name": "llmq_test_v17",
-            "useRotation": false,
-            "size": 3,
-            "minSize": 2,
-            "threshold": 2,
-            "dkgInterval": 24,
-            "dkgPhaseBlocks": 2,
-            "dkgMiningWindowStart": 10,
-            "dkgMiningWindowEnd": 18,
-            "dkgBadVotesThreshold": 2,
-            "signingActiveQuorumCount": 2,
-            "keepOldConnections": 3,
-            "keepOldKeys": 4,
-            "recoveryMembers": 3
-          },
-          {
-            "type": 103,
-            "name": "llmq_test_dip0024",
-            "useRotation": true,
-            "size": 4,
-            "minSize": 4,
-            "threshold": 3,
-            "dkgInterval": 24,
-            "dkgPhaseBlocks": 2,
-            "dkgMiningWindowStart": 12,
-            "dkgMiningWindowEnd": 20,
-            "dkgBadVotesThreshold": 2,
-            "signingActiveQuorumCount": 2,
-            "keepOldConnections": 4,
-            "keepOldKeys": 4,
-            "recoveryMembers": 3
-          },
-          {
-            "type": 106,
-            "name": "llmq_test_platform",
-            "useRotation": false,
-            "size": 3,
-            "minSize": 2,
-            "threshold": 2,
-            "dkgInterval": 24,
-            "dkgPhaseBlocks": 2,
-            "dkgMiningWindowStart": 10,
-            "dkgMiningWindowEnd": 18,
-            "dkgBadVotesThreshold": 2,
-            "signingActiveQuorumCount": 2,
-            "keepOldConnections": 4,
-            "keepOldKeys": 1440,
-            "recoveryMembers": 3
-          },
-          {
-            "type": 101,
-            "name": "llmq_devnet",
-            "useRotation": false,
-            "size": 12,
-            "minSize": 7,
-            "threshold": 6,
-            "dkgInterval": 24,
-            "dkgPhaseBlocks": 2,
-            "dkgMiningWindowStart": 10,
-            "dkgMiningWindowEnd": 18,
-            "dkgBadVotesThreshold": 7,
-            "signingActiveQuorumCount": 4,
-            "keepOldConnections": 5,
-            "keepOldKeys": 8,
-            "recoveryMembers": 6
-          },
-          {
-            "type": 105,
-            "name": "llmq_devnet_dip0024",
-            "useRotation": true,
-            "size": 8,
-            "minSize": 6,
-            "threshold": 4,
-            "dkgInterval": 48,
-            "dkgPhaseBlocks": 2,
-            "dkgMiningWindowStart": 12,
-            "dkgMiningWindowEnd": 20,
-            "dkgBadVotesThreshold": 7,
-            "signingActiveQuorumCount": 2,
-            "keepOldConnections": 4,
-            "keepOldKeys": 4,
-            "recoveryMembers": 4
-          },
-          {
-            "type": 107,
-            "name": "llmq_devnet_platform",
-            "useRotation": false,
-            "size": 12,
-            "minSize": 9,
-            "threshold": 8,
-            "dkgInterval": 24,
-            "dkgPhaseBlocks": 2,
-            "dkgMiningWindowStart": 10,
-            "dkgMiningWindowEnd": 18,
-            "dkgBadVotesThreshold": 7,
-            "signingActiveQuorumCount": 4,
-            "keepOldConnections": 5,
-            "keepOldKeys": 1440,
-            "recoveryMembers": 6
-          },
+        "llmqs": [
           {
             "type": 1,
             "name": "llmq_50_60",
@@ -457,7 +329,9 @@
             "signingActiveQuorumCount": 24,
             "keepOldConnections": 25,
             "keepOldKeys": 48,
-            "recoveryMembers": 25
+            "recoveryMembers": 25,
+            "max_store_depth": 1152,
+            "is_single_member": false
           },
           {
             "type": 5,
@@ -474,7 +348,9 @@
             "signingActiveQuorumCount": 32,
             "keepOldConnections": 64,
             "keepOldKeys": 64,
-            "recoveryMembers": 25
+            "recoveryMembers": 25,
+            "max_store_depth": 576,
+            "is_single_member": false
           },
           {
             "type": 2,
@@ -491,7 +367,9 @@
             "signingActiveQuorumCount": 4,
             "keepOldConnections": 5,
             "keepOldKeys": 8,
-            "recoveryMembers": 100
+            "recoveryMembers": 100,
+            "max_store_depth": 2304,
+            "is_single_member": false
           },
           {
             "type": 3,
@@ -508,7 +386,9 @@
             "signingActiveQuorumCount": 4,
             "keepOldConnections": 5,
             "keepOldKeys": 8,
-            "recoveryMembers": 100
+            "recoveryMembers": 100,
+            "max_store_depth": 4608,
+            "is_single_member": false
           },
           {
             "type": 4,
@@ -525,7 +405,258 @@
             "signingActiveQuorumCount": 24,
             "keepOldConnections": 25,
             "keepOldKeys": 1440,
-            "recoveryMembers": 50
+            "recoveryMembers": 50,
+            "max_store_depth": 34560,
+            "is_single_member": false
+          }
+        ],
+        "availableLlmqs": [
+          {
+            "type": 100,
+            "name": "llmq_test",
+            "useRotation": false,
+            "size": 3,
+            "minSize": 2,
+            "threshold": 2,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 2,
+            "signingActiveQuorumCount": 2,
+            "keepOldConnections": 3,
+            "keepOldKeys": 4,
+            "recoveryMembers": 3,
+            "max_store_depth": 96,
+            "is_single_member": false
+          },
+          {
+            "type": 104,
+            "name": "llmq_test_instantsend",
+            "useRotation": false,
+            "size": 3,
+            "minSize": 2,
+            "threshold": 2,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 2,
+            "signingActiveQuorumCount": 2,
+            "keepOldConnections": 3,
+            "keepOldKeys": 4,
+            "recoveryMembers": 3,
+            "max_store_depth": 96,
+            "is_single_member": false
+          },
+          {
+            "type": 102,
+            "name": "llmq_test_v17",
+            "useRotation": false,
+            "size": 3,
+            "minSize": 2,
+            "threshold": 2,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 2,
+            "signingActiveQuorumCount": 2,
+            "keepOldConnections": 3,
+            "keepOldKeys": 4,
+            "recoveryMembers": 3,
+            "max_store_depth": 96,
+            "is_single_member": false
+          },
+          {
+            "type": 103,
+            "name": "llmq_test_dip0024",
+            "useRotation": true,
+            "size": 4,
+            "minSize": 4,
+            "threshold": 3,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 12,
+            "dkgMiningWindowEnd": 20,
+            "dkgBadVotesThreshold": 2,
+            "signingActiveQuorumCount": 2,
+            "keepOldConnections": 4,
+            "keepOldKeys": 4,
+            "recoveryMembers": 3,
+            "max_store_depth": 48,
+            "is_single_member": false
+          },
+          {
+            "type": 106,
+            "name": "llmq_test_platform",
+            "useRotation": false,
+            "size": 3,
+            "minSize": 2,
+            "threshold": 2,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 2,
+            "signingActiveQuorumCount": 2,
+            "keepOldConnections": 4,
+            "keepOldKeys": 1440,
+            "recoveryMembers": 3,
+            "max_store_depth": 34560,
+            "is_single_member": false
+          },
+          {
+            "type": 101,
+            "name": "llmq_devnet",
+            "useRotation": false,
+            "size": 12,
+            "minSize": 7,
+            "threshold": 6,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 7,
+            "signingActiveQuorumCount": 4,
+            "keepOldConnections": 5,
+            "keepOldKeys": 8,
+            "recoveryMembers": 6,
+            "max_store_depth": 192,
+            "is_single_member": false
+          },
+          {
+            "type": 105,
+            "name": "llmq_devnet_dip0024",
+            "useRotation": true,
+            "size": 8,
+            "minSize": 6,
+            "threshold": 4,
+            "dkgInterval": 48,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 12,
+            "dkgMiningWindowEnd": 20,
+            "dkgBadVotesThreshold": 7,
+            "signingActiveQuorumCount": 2,
+            "keepOldConnections": 4,
+            "keepOldKeys": 4,
+            "recoveryMembers": 4,
+            "max_store_depth": 96,
+            "is_single_member": false
+          },
+          {
+            "type": 107,
+            "name": "llmq_devnet_platform",
+            "useRotation": false,
+            "size": 12,
+            "minSize": 9,
+            "threshold": 8,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 7,
+            "signingActiveQuorumCount": 4,
+            "keepOldConnections": 5,
+            "keepOldKeys": 1440,
+            "recoveryMembers": 6,
+            "max_store_depth": 34560,
+            "is_single_member": false
+          },
+          {
+            "type": 1,
+            "name": "llmq_50_60",
+            "useRotation": false,
+            "size": 50,
+            "minSize": 40,
+            "threshold": 30,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 40,
+            "signingActiveQuorumCount": 24,
+            "keepOldConnections": 25,
+            "keepOldKeys": 48,
+            "recoveryMembers": 25,
+            "max_store_depth": 1152,
+            "is_single_member": false
+          },
+          {
+            "type": 5,
+            "name": "llmq_60_75",
+            "useRotation": true,
+            "size": 60,
+            "minSize": 50,
+            "threshold": 45,
+            "dkgInterval": 288,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 42,
+            "dkgMiningWindowEnd": 50,
+            "dkgBadVotesThreshold": 48,
+            "signingActiveQuorumCount": 32,
+            "keepOldConnections": 64,
+            "keepOldKeys": 64,
+            "recoveryMembers": 25,
+            "max_store_depth": 576,
+            "is_single_member": false
+          },
+          {
+            "type": 2,
+            "name": "llmq_400_60",
+            "useRotation": false,
+            "size": 400,
+            "minSize": 300,
+            "threshold": 240,
+            "dkgInterval": 288,
+            "dkgPhaseBlocks": 4,
+            "dkgMiningWindowStart": 20,
+            "dkgMiningWindowEnd": 28,
+            "dkgBadVotesThreshold": 300,
+            "signingActiveQuorumCount": 4,
+            "keepOldConnections": 5,
+            "keepOldKeys": 8,
+            "recoveryMembers": 100,
+            "max_store_depth": 2304,
+            "is_single_member": false
+          },
+          {
+            "type": 3,
+            "name": "llmq_400_85",
+            "useRotation": false,
+            "size": 400,
+            "minSize": 350,
+            "threshold": 340,
+            "dkgInterval": 576,
+            "dkgPhaseBlocks": 4,
+            "dkgMiningWindowStart": 20,
+            "dkgMiningWindowEnd": 48,
+            "dkgBadVotesThreshold": 300,
+            "signingActiveQuorumCount": 4,
+            "keepOldConnections": 5,
+            "keepOldKeys": 8,
+            "recoveryMembers": 100,
+            "max_store_depth": 4608,
+            "is_single_member": false
+          },
+          {
+            "type": 4,
+            "name": "llmq_100_67",
+            "useRotation": false,
+            "size": 100,
+            "minSize": 80,
+            "threshold": 67,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 80,
+            "signingActiveQuorumCount": 24,
+            "keepOldConnections": 25,
+            "keepOldKeys": 1440,
+            "recoveryMembers": 50,
+            "max_store_depth": 34560,
+            "is_single_member": false
           },
           {
             "type": 6,
@@ -542,8 +673,16 @@
             "signingActiveQuorumCount": 24,
             "keepOldConnections": 25,
             "keepOldKeys": 1440,
-            "recoveryMembers": 12
+            "recoveryMembers": 12,
+            "max_store_depth": 34560,
+            "is_single_member": false
           }
+        ]
+      },
+      "spork": {
+        "minSporkKeys": 1,
+        "keyIDs": [
+          "441c7d2b023ccb805c02f627937206ba9fe0365a"
         ]
       }
     },
@@ -789,6 +928,7 @@
         ],
         "fixedSeeds": "0104d42f44c74e1f0104b9bba9c14e1f0104cef5a73f4e1f0104935d84094e1f010444437a484e1f010444437a2a4e1f010444437a214e1f010444437a174e1f01043e3cf4ae4e1f010436d55ed84e1f010436bf92894e1f010436bc45594e1f010434599a304e1f010423a212744e1f0104235c8f074e1f0104235bc5da4e1f0104235b86594e1f010422dc861e4e1f010422d21ac34e1f",
         "requireStandard": false,
+        "minSporkKeys": 1,
         "sporkAddresses": [
           "yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55"
         ],
@@ -837,143 +977,7 @@
           "mn_rr": 1066900,
           "withdrawals": 1148500
         },
-        "availableLlmqs": [
-          {
-            "type": 100,
-            "name": "llmq_test",
-            "useRotation": false,
-            "size": 3,
-            "minSize": 2,
-            "threshold": 2,
-            "dkgInterval": 24,
-            "dkgPhaseBlocks": 2,
-            "dkgMiningWindowStart": 10,
-            "dkgMiningWindowEnd": 18,
-            "dkgBadVotesThreshold": 2,
-            "signingActiveQuorumCount": 2,
-            "keepOldConnections": 3,
-            "keepOldKeys": 4,
-            "recoveryMembers": 3
-          },
-          {
-            "type": 104,
-            "name": "llmq_test_instantsend",
-            "useRotation": false,
-            "size": 3,
-            "minSize": 2,
-            "threshold": 2,
-            "dkgInterval": 24,
-            "dkgPhaseBlocks": 2,
-            "dkgMiningWindowStart": 10,
-            "dkgMiningWindowEnd": 18,
-            "dkgBadVotesThreshold": 2,
-            "signingActiveQuorumCount": 2,
-            "keepOldConnections": 3,
-            "keepOldKeys": 4,
-            "recoveryMembers": 3
-          },
-          {
-            "type": 102,
-            "name": "llmq_test_v17",
-            "useRotation": false,
-            "size": 3,
-            "minSize": 2,
-            "threshold": 2,
-            "dkgInterval": 24,
-            "dkgPhaseBlocks": 2,
-            "dkgMiningWindowStart": 10,
-            "dkgMiningWindowEnd": 18,
-            "dkgBadVotesThreshold": 2,
-            "signingActiveQuorumCount": 2,
-            "keepOldConnections": 3,
-            "keepOldKeys": 4,
-            "recoveryMembers": 3
-          },
-          {
-            "type": 103,
-            "name": "llmq_test_dip0024",
-            "useRotation": true,
-            "size": 4,
-            "minSize": 4,
-            "threshold": 3,
-            "dkgInterval": 24,
-            "dkgPhaseBlocks": 2,
-            "dkgMiningWindowStart": 12,
-            "dkgMiningWindowEnd": 20,
-            "dkgBadVotesThreshold": 2,
-            "signingActiveQuorumCount": 2,
-            "keepOldConnections": 4,
-            "keepOldKeys": 4,
-            "recoveryMembers": 3
-          },
-          {
-            "type": 106,
-            "name": "llmq_test_platform",
-            "useRotation": false,
-            "size": 3,
-            "minSize": 2,
-            "threshold": 2,
-            "dkgInterval": 24,
-            "dkgPhaseBlocks": 2,
-            "dkgMiningWindowStart": 10,
-            "dkgMiningWindowEnd": 18,
-            "dkgBadVotesThreshold": 2,
-            "signingActiveQuorumCount": 2,
-            "keepOldConnections": 4,
-            "keepOldKeys": 1440,
-            "recoveryMembers": 3
-          },
-          {
-            "type": 101,
-            "name": "llmq_devnet",
-            "useRotation": false,
-            "size": 12,
-            "minSize": 7,
-            "threshold": 6,
-            "dkgInterval": 24,
-            "dkgPhaseBlocks": 2,
-            "dkgMiningWindowStart": 10,
-            "dkgMiningWindowEnd": 18,
-            "dkgBadVotesThreshold": 7,
-            "signingActiveQuorumCount": 4,
-            "keepOldConnections": 5,
-            "keepOldKeys": 8,
-            "recoveryMembers": 6
-          },
-          {
-            "type": 105,
-            "name": "llmq_devnet_dip0024",
-            "useRotation": true,
-            "size": 8,
-            "minSize": 6,
-            "threshold": 4,
-            "dkgInterval": 48,
-            "dkgPhaseBlocks": 2,
-            "dkgMiningWindowStart": 12,
-            "dkgMiningWindowEnd": 20,
-            "dkgBadVotesThreshold": 7,
-            "signingActiveQuorumCount": 2,
-            "keepOldConnections": 4,
-            "keepOldKeys": 4,
-            "recoveryMembers": 4
-          },
-          {
-            "type": 107,
-            "name": "llmq_devnet_platform",
-            "useRotation": false,
-            "size": 12,
-            "minSize": 9,
-            "threshold": 8,
-            "dkgInterval": 24,
-            "dkgPhaseBlocks": 2,
-            "dkgMiningWindowStart": 10,
-            "dkgMiningWindowEnd": 18,
-            "dkgBadVotesThreshold": 7,
-            "signingActiveQuorumCount": 4,
-            "keepOldConnections": 5,
-            "keepOldKeys": 1440,
-            "recoveryMembers": 6
-          },
+        "llmqs": [
           {
             "type": 1,
             "name": "llmq_50_60",
@@ -989,7 +993,9 @@
             "signingActiveQuorumCount": 24,
             "keepOldConnections": 25,
             "keepOldKeys": 48,
-            "recoveryMembers": 25
+            "recoveryMembers": 25,
+            "max_store_depth": 1152,
+            "is_single_member": false
           },
           {
             "type": 5,
@@ -1006,7 +1012,9 @@
             "signingActiveQuorumCount": 32,
             "keepOldConnections": 64,
             "keepOldKeys": 64,
-            "recoveryMembers": 25
+            "recoveryMembers": 25,
+            "max_store_depth": 576,
+            "is_single_member": false
           },
           {
             "type": 2,
@@ -1023,7 +1031,9 @@
             "signingActiveQuorumCount": 4,
             "keepOldConnections": 5,
             "keepOldKeys": 8,
-            "recoveryMembers": 100
+            "recoveryMembers": 100,
+            "max_store_depth": 2304,
+            "is_single_member": false
           },
           {
             "type": 3,
@@ -1040,7 +1050,9 @@
             "signingActiveQuorumCount": 4,
             "keepOldConnections": 5,
             "keepOldKeys": 8,
-            "recoveryMembers": 100
+            "recoveryMembers": 100,
+            "max_store_depth": 4608,
+            "is_single_member": false
           },
           {
             "type": 4,
@@ -1057,7 +1069,9 @@
             "signingActiveQuorumCount": 24,
             "keepOldConnections": 25,
             "keepOldKeys": 1440,
-            "recoveryMembers": 50
+            "recoveryMembers": 50,
+            "max_store_depth": 34560,
+            "is_single_member": false
           },
           {
             "type": 6,
@@ -1074,8 +1088,284 @@
             "signingActiveQuorumCount": 24,
             "keepOldConnections": 25,
             "keepOldKeys": 1440,
-            "recoveryMembers": 12
+            "recoveryMembers": 12,
+            "max_store_depth": 34560,
+            "is_single_member": false
           }
+        ],
+        "availableLlmqs": [
+          {
+            "type": 100,
+            "name": "llmq_test",
+            "useRotation": false,
+            "size": 3,
+            "minSize": 2,
+            "threshold": 2,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 2,
+            "signingActiveQuorumCount": 2,
+            "keepOldConnections": 3,
+            "keepOldKeys": 4,
+            "recoveryMembers": 3,
+            "max_store_depth": 96,
+            "is_single_member": false
+          },
+          {
+            "type": 104,
+            "name": "llmq_test_instantsend",
+            "useRotation": false,
+            "size": 3,
+            "minSize": 2,
+            "threshold": 2,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 2,
+            "signingActiveQuorumCount": 2,
+            "keepOldConnections": 3,
+            "keepOldKeys": 4,
+            "recoveryMembers": 3,
+            "max_store_depth": 96,
+            "is_single_member": false
+          },
+          {
+            "type": 102,
+            "name": "llmq_test_v17",
+            "useRotation": false,
+            "size": 3,
+            "minSize": 2,
+            "threshold": 2,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 2,
+            "signingActiveQuorumCount": 2,
+            "keepOldConnections": 3,
+            "keepOldKeys": 4,
+            "recoveryMembers": 3,
+            "max_store_depth": 96,
+            "is_single_member": false
+          },
+          {
+            "type": 103,
+            "name": "llmq_test_dip0024",
+            "useRotation": true,
+            "size": 4,
+            "minSize": 4,
+            "threshold": 3,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 12,
+            "dkgMiningWindowEnd": 20,
+            "dkgBadVotesThreshold": 2,
+            "signingActiveQuorumCount": 2,
+            "keepOldConnections": 4,
+            "keepOldKeys": 4,
+            "recoveryMembers": 3,
+            "max_store_depth": 48,
+            "is_single_member": false
+          },
+          {
+            "type": 106,
+            "name": "llmq_test_platform",
+            "useRotation": false,
+            "size": 3,
+            "minSize": 2,
+            "threshold": 2,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 2,
+            "signingActiveQuorumCount": 2,
+            "keepOldConnections": 4,
+            "keepOldKeys": 1440,
+            "recoveryMembers": 3,
+            "max_store_depth": 34560,
+            "is_single_member": false
+          },
+          {
+            "type": 101,
+            "name": "llmq_devnet",
+            "useRotation": false,
+            "size": 12,
+            "minSize": 7,
+            "threshold": 6,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 7,
+            "signingActiveQuorumCount": 4,
+            "keepOldConnections": 5,
+            "keepOldKeys": 8,
+            "recoveryMembers": 6,
+            "max_store_depth": 192,
+            "is_single_member": false
+          },
+          {
+            "type": 105,
+            "name": "llmq_devnet_dip0024",
+            "useRotation": true,
+            "size": 8,
+            "minSize": 6,
+            "threshold": 4,
+            "dkgInterval": 48,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 12,
+            "dkgMiningWindowEnd": 20,
+            "dkgBadVotesThreshold": 7,
+            "signingActiveQuorumCount": 2,
+            "keepOldConnections": 4,
+            "keepOldKeys": 4,
+            "recoveryMembers": 4,
+            "max_store_depth": 96,
+            "is_single_member": false
+          },
+          {
+            "type": 107,
+            "name": "llmq_devnet_platform",
+            "useRotation": false,
+            "size": 12,
+            "minSize": 9,
+            "threshold": 8,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 7,
+            "signingActiveQuorumCount": 4,
+            "keepOldConnections": 5,
+            "keepOldKeys": 1440,
+            "recoveryMembers": 6,
+            "max_store_depth": 34560,
+            "is_single_member": false
+          },
+          {
+            "type": 1,
+            "name": "llmq_50_60",
+            "useRotation": false,
+            "size": 50,
+            "minSize": 40,
+            "threshold": 30,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 40,
+            "signingActiveQuorumCount": 24,
+            "keepOldConnections": 25,
+            "keepOldKeys": 48,
+            "recoveryMembers": 25,
+            "max_store_depth": 1152,
+            "is_single_member": false
+          },
+          {
+            "type": 5,
+            "name": "llmq_60_75",
+            "useRotation": true,
+            "size": 60,
+            "minSize": 50,
+            "threshold": 45,
+            "dkgInterval": 288,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 42,
+            "dkgMiningWindowEnd": 50,
+            "dkgBadVotesThreshold": 48,
+            "signingActiveQuorumCount": 32,
+            "keepOldConnections": 64,
+            "keepOldKeys": 64,
+            "recoveryMembers": 25,
+            "max_store_depth": 576,
+            "is_single_member": false
+          },
+          {
+            "type": 2,
+            "name": "llmq_400_60",
+            "useRotation": false,
+            "size": 400,
+            "minSize": 300,
+            "threshold": 240,
+            "dkgInterval": 288,
+            "dkgPhaseBlocks": 4,
+            "dkgMiningWindowStart": 20,
+            "dkgMiningWindowEnd": 28,
+            "dkgBadVotesThreshold": 300,
+            "signingActiveQuorumCount": 4,
+            "keepOldConnections": 5,
+            "keepOldKeys": 8,
+            "recoveryMembers": 100,
+            "max_store_depth": 2304,
+            "is_single_member": false
+          },
+          {
+            "type": 3,
+            "name": "llmq_400_85",
+            "useRotation": false,
+            "size": 400,
+            "minSize": 350,
+            "threshold": 340,
+            "dkgInterval": 576,
+            "dkgPhaseBlocks": 4,
+            "dkgMiningWindowStart": 20,
+            "dkgMiningWindowEnd": 48,
+            "dkgBadVotesThreshold": 300,
+            "signingActiveQuorumCount": 4,
+            "keepOldConnections": 5,
+            "keepOldKeys": 8,
+            "recoveryMembers": 100,
+            "max_store_depth": 4608,
+            "is_single_member": false
+          },
+          {
+            "type": 4,
+            "name": "llmq_100_67",
+            "useRotation": false,
+            "size": 100,
+            "minSize": 80,
+            "threshold": 67,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 80,
+            "signingActiveQuorumCount": 24,
+            "keepOldConnections": 25,
+            "keepOldKeys": 1440,
+            "recoveryMembers": 50,
+            "max_store_depth": 34560,
+            "is_single_member": false
+          },
+          {
+            "type": 6,
+            "name": "llmq_25_67",
+            "useRotation": false,
+            "size": 25,
+            "minSize": 22,
+            "threshold": 17,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 22,
+            "signingActiveQuorumCount": 24,
+            "keepOldConnections": 25,
+            "keepOldKeys": 1440,
+            "recoveryMembers": 12,
+            "max_store_depth": 34560,
+            "is_single_member": false
+          }
+        ]
+      },
+      "spork": {
+        "minSporkKeys": 1,
+        "keyIDs": [
+          "fd2225ace13b4fbc503071f19f9e8041c86d62dc"
         ]
       }
     },
@@ -1336,6 +1626,7 @@
         "dnsSeeds": [],
         "fixedSeeds": "",
         "requireStandard": false,
+        "minSporkKeys": 1,
         "sporkAddresses": [
           "yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55"
         ],
@@ -1384,143 +1675,7 @@
           "mn_rr": 2,
           "withdrawals": 2
         },
-        "availableLlmqs": [
-          {
-            "type": 100,
-            "name": "llmq_test",
-            "useRotation": false,
-            "size": 3,
-            "minSize": 2,
-            "threshold": 2,
-            "dkgInterval": 24,
-            "dkgPhaseBlocks": 2,
-            "dkgMiningWindowStart": 10,
-            "dkgMiningWindowEnd": 18,
-            "dkgBadVotesThreshold": 2,
-            "signingActiveQuorumCount": 2,
-            "keepOldConnections": 3,
-            "keepOldKeys": 4,
-            "recoveryMembers": 3
-          },
-          {
-            "type": 104,
-            "name": "llmq_test_instantsend",
-            "useRotation": false,
-            "size": 3,
-            "minSize": 2,
-            "threshold": 2,
-            "dkgInterval": 24,
-            "dkgPhaseBlocks": 2,
-            "dkgMiningWindowStart": 10,
-            "dkgMiningWindowEnd": 18,
-            "dkgBadVotesThreshold": 2,
-            "signingActiveQuorumCount": 2,
-            "keepOldConnections": 3,
-            "keepOldKeys": 4,
-            "recoveryMembers": 3
-          },
-          {
-            "type": 102,
-            "name": "llmq_test_v17",
-            "useRotation": false,
-            "size": 3,
-            "minSize": 2,
-            "threshold": 2,
-            "dkgInterval": 24,
-            "dkgPhaseBlocks": 2,
-            "dkgMiningWindowStart": 10,
-            "dkgMiningWindowEnd": 18,
-            "dkgBadVotesThreshold": 2,
-            "signingActiveQuorumCount": 2,
-            "keepOldConnections": 3,
-            "keepOldKeys": 4,
-            "recoveryMembers": 3
-          },
-          {
-            "type": 103,
-            "name": "llmq_test_dip0024",
-            "useRotation": true,
-            "size": 4,
-            "minSize": 4,
-            "threshold": 3,
-            "dkgInterval": 24,
-            "dkgPhaseBlocks": 2,
-            "dkgMiningWindowStart": 12,
-            "dkgMiningWindowEnd": 20,
-            "dkgBadVotesThreshold": 2,
-            "signingActiveQuorumCount": 2,
-            "keepOldConnections": 4,
-            "keepOldKeys": 4,
-            "recoveryMembers": 3
-          },
-          {
-            "type": 106,
-            "name": "llmq_test_platform",
-            "useRotation": false,
-            "size": 3,
-            "minSize": 2,
-            "threshold": 2,
-            "dkgInterval": 24,
-            "dkgPhaseBlocks": 2,
-            "dkgMiningWindowStart": 10,
-            "dkgMiningWindowEnd": 18,
-            "dkgBadVotesThreshold": 2,
-            "signingActiveQuorumCount": 2,
-            "keepOldConnections": 4,
-            "keepOldKeys": 1440,
-            "recoveryMembers": 3
-          },
-          {
-            "type": 101,
-            "name": "llmq_devnet",
-            "useRotation": false,
-            "size": 12,
-            "minSize": 7,
-            "threshold": 6,
-            "dkgInterval": 24,
-            "dkgPhaseBlocks": 2,
-            "dkgMiningWindowStart": 10,
-            "dkgMiningWindowEnd": 18,
-            "dkgBadVotesThreshold": 7,
-            "signingActiveQuorumCount": 4,
-            "keepOldConnections": 5,
-            "keepOldKeys": 8,
-            "recoveryMembers": 6
-          },
-          {
-            "type": 105,
-            "name": "llmq_devnet_dip0024",
-            "useRotation": true,
-            "size": 8,
-            "minSize": 6,
-            "threshold": 4,
-            "dkgInterval": 48,
-            "dkgPhaseBlocks": 2,
-            "dkgMiningWindowStart": 12,
-            "dkgMiningWindowEnd": 20,
-            "dkgBadVotesThreshold": 7,
-            "signingActiveQuorumCount": 2,
-            "keepOldConnections": 4,
-            "keepOldKeys": 4,
-            "recoveryMembers": 4
-          },
-          {
-            "type": 107,
-            "name": "llmq_devnet_platform",
-            "useRotation": false,
-            "size": 12,
-            "minSize": 9,
-            "threshold": 8,
-            "dkgInterval": 24,
-            "dkgPhaseBlocks": 2,
-            "dkgMiningWindowStart": 10,
-            "dkgMiningWindowEnd": 18,
-            "dkgBadVotesThreshold": 7,
-            "signingActiveQuorumCount": 4,
-            "keepOldConnections": 5,
-            "keepOldKeys": 1440,
-            "recoveryMembers": 6
-          },
+        "llmqs": [
           {
             "type": 1,
             "name": "llmq_50_60",
@@ -1536,7 +1691,9 @@
             "signingActiveQuorumCount": 24,
             "keepOldConnections": 25,
             "keepOldKeys": 48,
-            "recoveryMembers": 25
+            "recoveryMembers": 25,
+            "max_store_depth": 1152,
+            "is_single_member": false
           },
           {
             "type": 5,
@@ -1553,7 +1710,9 @@
             "signingActiveQuorumCount": 32,
             "keepOldConnections": 64,
             "keepOldKeys": 64,
-            "recoveryMembers": 25
+            "recoveryMembers": 25,
+            "max_store_depth": 576,
+            "is_single_member": false
           },
           {
             "type": 2,
@@ -1570,7 +1729,9 @@
             "signingActiveQuorumCount": 4,
             "keepOldConnections": 5,
             "keepOldKeys": 8,
-            "recoveryMembers": 100
+            "recoveryMembers": 100,
+            "max_store_depth": 2304,
+            "is_single_member": false
           },
           {
             "type": 3,
@@ -1587,7 +1748,9 @@
             "signingActiveQuorumCount": 4,
             "keepOldConnections": 5,
             "keepOldKeys": 8,
-            "recoveryMembers": 100
+            "recoveryMembers": 100,
+            "max_store_depth": 4608,
+            "is_single_member": false
           },
           {
             "type": 4,
@@ -1604,7 +1767,315 @@
             "signingActiveQuorumCount": 24,
             "keepOldConnections": 25,
             "keepOldKeys": 1440,
-            "recoveryMembers": 50
+            "recoveryMembers": 50,
+            "max_store_depth": 34560,
+            "is_single_member": false
+          },
+          {
+            "type": 101,
+            "name": "llmq_devnet",
+            "useRotation": false,
+            "size": 12,
+            "minSize": 7,
+            "threshold": 6,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 7,
+            "signingActiveQuorumCount": 4,
+            "keepOldConnections": 5,
+            "keepOldKeys": 8,
+            "recoveryMembers": 6,
+            "max_store_depth": 192,
+            "is_single_member": false
+          },
+          {
+            "type": 105,
+            "name": "llmq_devnet_dip0024",
+            "useRotation": true,
+            "size": 8,
+            "minSize": 6,
+            "threshold": 4,
+            "dkgInterval": 48,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 12,
+            "dkgMiningWindowEnd": 20,
+            "dkgBadVotesThreshold": 7,
+            "signingActiveQuorumCount": 2,
+            "keepOldConnections": 4,
+            "keepOldKeys": 4,
+            "recoveryMembers": 4,
+            "max_store_depth": 96,
+            "is_single_member": false
+          },
+          {
+            "type": 107,
+            "name": "llmq_devnet_platform",
+            "useRotation": false,
+            "size": 12,
+            "minSize": 9,
+            "threshold": 8,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 7,
+            "signingActiveQuorumCount": 4,
+            "keepOldConnections": 5,
+            "keepOldKeys": 1440,
+            "recoveryMembers": 6,
+            "max_store_depth": 34560,
+            "is_single_member": false
+          }
+        ],
+        "availableLlmqs": [
+          {
+            "type": 100,
+            "name": "llmq_test",
+            "useRotation": false,
+            "size": 3,
+            "minSize": 2,
+            "threshold": 2,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 2,
+            "signingActiveQuorumCount": 2,
+            "keepOldConnections": 3,
+            "keepOldKeys": 4,
+            "recoveryMembers": 3,
+            "max_store_depth": 96,
+            "is_single_member": false
+          },
+          {
+            "type": 104,
+            "name": "llmq_test_instantsend",
+            "useRotation": false,
+            "size": 3,
+            "minSize": 2,
+            "threshold": 2,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 2,
+            "signingActiveQuorumCount": 2,
+            "keepOldConnections": 3,
+            "keepOldKeys": 4,
+            "recoveryMembers": 3,
+            "max_store_depth": 96,
+            "is_single_member": false
+          },
+          {
+            "type": 102,
+            "name": "llmq_test_v17",
+            "useRotation": false,
+            "size": 3,
+            "minSize": 2,
+            "threshold": 2,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 2,
+            "signingActiveQuorumCount": 2,
+            "keepOldConnections": 3,
+            "keepOldKeys": 4,
+            "recoveryMembers": 3,
+            "max_store_depth": 96,
+            "is_single_member": false
+          },
+          {
+            "type": 103,
+            "name": "llmq_test_dip0024",
+            "useRotation": true,
+            "size": 4,
+            "minSize": 4,
+            "threshold": 3,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 12,
+            "dkgMiningWindowEnd": 20,
+            "dkgBadVotesThreshold": 2,
+            "signingActiveQuorumCount": 2,
+            "keepOldConnections": 4,
+            "keepOldKeys": 4,
+            "recoveryMembers": 3,
+            "max_store_depth": 48,
+            "is_single_member": false
+          },
+          {
+            "type": 106,
+            "name": "llmq_test_platform",
+            "useRotation": false,
+            "size": 3,
+            "minSize": 2,
+            "threshold": 2,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 2,
+            "signingActiveQuorumCount": 2,
+            "keepOldConnections": 4,
+            "keepOldKeys": 1440,
+            "recoveryMembers": 3,
+            "max_store_depth": 34560,
+            "is_single_member": false
+          },
+          {
+            "type": 101,
+            "name": "llmq_devnet",
+            "useRotation": false,
+            "size": 12,
+            "minSize": 7,
+            "threshold": 6,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 7,
+            "signingActiveQuorumCount": 4,
+            "keepOldConnections": 5,
+            "keepOldKeys": 8,
+            "recoveryMembers": 6,
+            "max_store_depth": 192,
+            "is_single_member": false
+          },
+          {
+            "type": 105,
+            "name": "llmq_devnet_dip0024",
+            "useRotation": true,
+            "size": 8,
+            "minSize": 6,
+            "threshold": 4,
+            "dkgInterval": 48,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 12,
+            "dkgMiningWindowEnd": 20,
+            "dkgBadVotesThreshold": 7,
+            "signingActiveQuorumCount": 2,
+            "keepOldConnections": 4,
+            "keepOldKeys": 4,
+            "recoveryMembers": 4,
+            "max_store_depth": 96,
+            "is_single_member": false
+          },
+          {
+            "type": 107,
+            "name": "llmq_devnet_platform",
+            "useRotation": false,
+            "size": 12,
+            "minSize": 9,
+            "threshold": 8,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 7,
+            "signingActiveQuorumCount": 4,
+            "keepOldConnections": 5,
+            "keepOldKeys": 1440,
+            "recoveryMembers": 6,
+            "max_store_depth": 34560,
+            "is_single_member": false
+          },
+          {
+            "type": 1,
+            "name": "llmq_50_60",
+            "useRotation": false,
+            "size": 50,
+            "minSize": 40,
+            "threshold": 30,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 40,
+            "signingActiveQuorumCount": 24,
+            "keepOldConnections": 25,
+            "keepOldKeys": 48,
+            "recoveryMembers": 25,
+            "max_store_depth": 1152,
+            "is_single_member": false
+          },
+          {
+            "type": 5,
+            "name": "llmq_60_75",
+            "useRotation": true,
+            "size": 60,
+            "minSize": 50,
+            "threshold": 45,
+            "dkgInterval": 288,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 42,
+            "dkgMiningWindowEnd": 50,
+            "dkgBadVotesThreshold": 48,
+            "signingActiveQuorumCount": 32,
+            "keepOldConnections": 64,
+            "keepOldKeys": 64,
+            "recoveryMembers": 25,
+            "max_store_depth": 576,
+            "is_single_member": false
+          },
+          {
+            "type": 2,
+            "name": "llmq_400_60",
+            "useRotation": false,
+            "size": 400,
+            "minSize": 300,
+            "threshold": 240,
+            "dkgInterval": 288,
+            "dkgPhaseBlocks": 4,
+            "dkgMiningWindowStart": 20,
+            "dkgMiningWindowEnd": 28,
+            "dkgBadVotesThreshold": 300,
+            "signingActiveQuorumCount": 4,
+            "keepOldConnections": 5,
+            "keepOldKeys": 8,
+            "recoveryMembers": 100,
+            "max_store_depth": 2304,
+            "is_single_member": false
+          },
+          {
+            "type": 3,
+            "name": "llmq_400_85",
+            "useRotation": false,
+            "size": 400,
+            "minSize": 350,
+            "threshold": 340,
+            "dkgInterval": 576,
+            "dkgPhaseBlocks": 4,
+            "dkgMiningWindowStart": 20,
+            "dkgMiningWindowEnd": 48,
+            "dkgBadVotesThreshold": 300,
+            "signingActiveQuorumCount": 4,
+            "keepOldConnections": 5,
+            "keepOldKeys": 8,
+            "recoveryMembers": 100,
+            "max_store_depth": 4608,
+            "is_single_member": false
+          },
+          {
+            "type": 4,
+            "name": "llmq_100_67",
+            "useRotation": false,
+            "size": 100,
+            "minSize": 80,
+            "threshold": 67,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 80,
+            "signingActiveQuorumCount": 24,
+            "keepOldConnections": 25,
+            "keepOldKeys": 1440,
+            "recoveryMembers": 50,
+            "max_store_depth": 34560,
+            "is_single_member": false
           },
           {
             "type": 6,
@@ -1621,8 +2092,16 @@
             "signingActiveQuorumCount": 24,
             "keepOldConnections": 25,
             "keepOldKeys": 1440,
-            "recoveryMembers": 12
+            "recoveryMembers": 12,
+            "max_store_depth": 34560,
+            "is_single_member": false
           }
+        ]
+      },
+      "spork": {
+        "minSporkKeys": 1,
+        "keyIDs": [
+          "fd2225ace13b4fbc503071f19f9e8041c86d62dc"
         ]
       }
     },
@@ -1833,6 +2312,7 @@
         ],
         "fixedSeeds": "",
         "requireStandard": true,
+        "minSporkKeys": 1,
         "sporkAddresses": [
           "yj949n1UH6fDhw6HtVE5VMj2iSTaSWBMcW"
         ],
@@ -1892,7 +2372,7 @@
           "mn_rr": 432,
           "withdrawals": 600
         },
-        "availableLlmqs": [
+        "llmqs": [
           {
             "type": 100,
             "name": "llmq_test",
@@ -1908,7 +2388,9 @@
             "signingActiveQuorumCount": 2,
             "keepOldConnections": 3,
             "keepOldKeys": 4,
-            "recoveryMembers": 3
+            "recoveryMembers": 3,
+            "max_store_depth": 96,
+            "is_single_member": false
           },
           {
             "type": 104,
@@ -1925,7 +2407,9 @@
             "signingActiveQuorumCount": 2,
             "keepOldConnections": 3,
             "keepOldKeys": 4,
-            "recoveryMembers": 3
+            "recoveryMembers": 3,
+            "max_store_depth": 96,
+            "is_single_member": false
           },
           {
             "type": 102,
@@ -1942,7 +2426,9 @@
             "signingActiveQuorumCount": 2,
             "keepOldConnections": 3,
             "keepOldKeys": 4,
-            "recoveryMembers": 3
+            "recoveryMembers": 3,
+            "max_store_depth": 96,
+            "is_single_member": false
           },
           {
             "type": 103,
@@ -1959,7 +2445,9 @@
             "signingActiveQuorumCount": 2,
             "keepOldConnections": 4,
             "keepOldKeys": 4,
-            "recoveryMembers": 3
+            "recoveryMembers": 3,
+            "max_store_depth": 48,
+            "is_single_member": false
           },
           {
             "type": 106,
@@ -1976,7 +2464,106 @@
             "signingActiveQuorumCount": 2,
             "keepOldConnections": 4,
             "keepOldKeys": 1440,
-            "recoveryMembers": 3
+            "recoveryMembers": 3,
+            "max_store_depth": 34560,
+            "is_single_member": false
+          }
+        ],
+        "availableLlmqs": [
+          {
+            "type": 100,
+            "name": "llmq_test",
+            "useRotation": false,
+            "size": 3,
+            "minSize": 2,
+            "threshold": 2,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 2,
+            "signingActiveQuorumCount": 2,
+            "keepOldConnections": 3,
+            "keepOldKeys": 4,
+            "recoveryMembers": 3,
+            "max_store_depth": 96,
+            "is_single_member": false
+          },
+          {
+            "type": 104,
+            "name": "llmq_test_instantsend",
+            "useRotation": false,
+            "size": 3,
+            "minSize": 2,
+            "threshold": 2,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 2,
+            "signingActiveQuorumCount": 2,
+            "keepOldConnections": 3,
+            "keepOldKeys": 4,
+            "recoveryMembers": 3,
+            "max_store_depth": 96,
+            "is_single_member": false
+          },
+          {
+            "type": 102,
+            "name": "llmq_test_v17",
+            "useRotation": false,
+            "size": 3,
+            "minSize": 2,
+            "threshold": 2,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 2,
+            "signingActiveQuorumCount": 2,
+            "keepOldConnections": 3,
+            "keepOldKeys": 4,
+            "recoveryMembers": 3,
+            "max_store_depth": 96,
+            "is_single_member": false
+          },
+          {
+            "type": 103,
+            "name": "llmq_test_dip0024",
+            "useRotation": true,
+            "size": 4,
+            "minSize": 4,
+            "threshold": 3,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 12,
+            "dkgMiningWindowEnd": 20,
+            "dkgBadVotesThreshold": 2,
+            "signingActiveQuorumCount": 2,
+            "keepOldConnections": 4,
+            "keepOldKeys": 4,
+            "recoveryMembers": 3,
+            "max_store_depth": 48,
+            "is_single_member": false
+          },
+          {
+            "type": 106,
+            "name": "llmq_test_platform",
+            "useRotation": false,
+            "size": 3,
+            "minSize": 2,
+            "threshold": 2,
+            "dkgInterval": 24,
+            "dkgPhaseBlocks": 2,
+            "dkgMiningWindowStart": 10,
+            "dkgMiningWindowEnd": 18,
+            "dkgBadVotesThreshold": 2,
+            "signingActiveQuorumCount": 2,
+            "keepOldConnections": 4,
+            "keepOldKeys": 1440,
+            "recoveryMembers": 3,
+            "max_store_depth": 34560,
+            "is_single_member": false
           },
           {
             "type": 101,
@@ -1993,7 +2580,9 @@
             "signingActiveQuorumCount": 4,
             "keepOldConnections": 5,
             "keepOldKeys": 8,
-            "recoveryMembers": 6
+            "recoveryMembers": 6,
+            "max_store_depth": 192,
+            "is_single_member": false
           },
           {
             "type": 105,
@@ -2010,7 +2599,9 @@
             "signingActiveQuorumCount": 2,
             "keepOldConnections": 4,
             "keepOldKeys": 4,
-            "recoveryMembers": 4
+            "recoveryMembers": 4,
+            "max_store_depth": 96,
+            "is_single_member": false
           },
           {
             "type": 107,
@@ -2027,7 +2618,9 @@
             "signingActiveQuorumCount": 4,
             "keepOldConnections": 5,
             "keepOldKeys": 1440,
-            "recoveryMembers": 6
+            "recoveryMembers": 6,
+            "max_store_depth": 34560,
+            "is_single_member": false
           },
           {
             "type": 1,
@@ -2044,7 +2637,9 @@
             "signingActiveQuorumCount": 24,
             "keepOldConnections": 25,
             "keepOldKeys": 48,
-            "recoveryMembers": 25
+            "recoveryMembers": 25,
+            "max_store_depth": 1152,
+            "is_single_member": false
           },
           {
             "type": 5,
@@ -2061,7 +2656,9 @@
             "signingActiveQuorumCount": 32,
             "keepOldConnections": 64,
             "keepOldKeys": 64,
-            "recoveryMembers": 25
+            "recoveryMembers": 25,
+            "max_store_depth": 576,
+            "is_single_member": false
           },
           {
             "type": 2,
@@ -2078,7 +2675,9 @@
             "signingActiveQuorumCount": 4,
             "keepOldConnections": 5,
             "keepOldKeys": 8,
-            "recoveryMembers": 100
+            "recoveryMembers": 100,
+            "max_store_depth": 2304,
+            "is_single_member": false
           },
           {
             "type": 3,
@@ -2095,7 +2694,9 @@
             "signingActiveQuorumCount": 4,
             "keepOldConnections": 5,
             "keepOldKeys": 8,
-            "recoveryMembers": 100
+            "recoveryMembers": 100,
+            "max_store_depth": 4608,
+            "is_single_member": false
           },
           {
             "type": 4,
@@ -2112,7 +2713,9 @@
             "signingActiveQuorumCount": 24,
             "keepOldConnections": 25,
             "keepOldKeys": 1440,
-            "recoveryMembers": 50
+            "recoveryMembers": 50,
+            "max_store_depth": 34560,
+            "is_single_member": false
           },
           {
             "type": 6,
@@ -2129,9 +2732,2207 @@
             "signingActiveQuorumCount": 24,
             "keepOldConnections": 25,
             "keepOldKeys": 1440,
-            "recoveryMembers": 12
+            "recoveryMembers": 12,
+            "max_store_depth": 34560,
+            "is_single_member": false
           }
         ]
+      },
+      "spork": {
+        "minSporkKeys": 1,
+        "keyIDs": [
+          "fa53c9728c3189b12b267be5811b54033525b08d"
+        ]
+      }
+    }
+  },
+  "cases": {
+    // chainparams_dump params main -testactivationheight=bip147@5 -testactivationheight=bip34@6 -testactivationheight=dersig@7 -testactivationheight=cltv@8 -testactivationheight=csv@9 -testactivationheight=brr@10 -testactivationheight=dip0001@11 -testactivationheight=dip0008@12 -testactivationheight=dip0024@13 -testactivationheight=v19@14 -testactivationheight=v20@1000 -testactivationheight=mn_rr@1001 -testactivationheight=bip34@+16
+    "main/testactivationheight": {
+      "chain": "main",
+      "args": [
+        "-testactivationheight=bip147@5",
+        "-testactivationheight=bip34@6",
+        "-testactivationheight=dersig@7",
+        "-testactivationheight=cltv@8",
+        "-testactivationheight=csv@9",
+        "-testactivationheight=brr@10",
+        "-testactivationheight=dip0001@11",
+        "-testactivationheight=dip0008@12",
+        "-testactivationheight=dip0024@13",
+        "-testactivationheight=v19@14",
+        "-testactivationheight=v20@1000",
+        "-testactivationheight=mn_rr@1001",
+        "-testactivationheight=bip34@+16"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params main -vbparams=testdummy:100:200
+    "main/vbparams_3": {
+      "chain": "main",
+      "args": [
+        "-vbparams=testdummy:100:200"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params main -vbparams=testdummy:1:2:3 -vbparams=v24:-1:9223372036854775807:350:10:8:6:5:0 -vbparams=testdummy:7:8:9:20:15 -vbparams=v24:-2:5:0:-1:-1:-1:-1:7
+    "main/vbparams_4_6_9": {
+      "chain": "main",
+      "args": [
+        "-vbparams=testdummy:1:2:3",
+        "-vbparams=v24:-1:9223372036854775807:350:10:8:6:5:0",
+        "-vbparams=testdummy:7:8:9:20:15",
+        "-vbparams=v24:-2:5:0:-1:-1:-1:-1:7"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params main -dip3params=105:106
+    "main/dip3params": {
+      "chain": "main",
+      "args": [
+        "-dip3params=105:106"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params main -budgetparams=10:20:30
+    "main/budgetparams": {
+      "chain": "main",
+      "args": [
+        "-budgetparams=10:20:30"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params main -llmqtestparams=5:3 -llmqtestinstantsendparams=4:3 -llmqtestplatformparams=6:4
+    "main/llmqtestparams": {
+      "chain": "main",
+      "args": [
+        "-llmqtestparams=5:3",
+        "-llmqtestinstantsendparams=4:3",
+        "-llmqtestplatformparams=6:4"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params main -llmqtestinstantsenddip0024=llmq_test_instantsend
+    "main/llmqtestinstantsenddip0024": {
+      "chain": "main",
+      "args": [
+        "-llmqtestinstantsenddip0024=llmq_test_instantsend"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params main -minimumdifficultyblocks=1000 -highsubsidyblocks=500 -highsubsidyfactor=10
+    "main/devnet_subsidy_diff": {
+      "chain": "main",
+      "args": [
+        "-minimumdifficultyblocks=1000",
+        "-highsubsidyblocks=500",
+        "-highsubsidyfactor=10"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params main -llmqchainlocks=llmq_50_60 -llmqinstantsenddip0024=llmq_60_75 -llmqplatform=llmq_100_67 -llmqmnhf=llmq_400_85
+    "main/devnet_llmq_roles": {
+      "chain": "main",
+      "args": [
+        "-llmqchainlocks=llmq_50_60",
+        "-llmqinstantsenddip0024=llmq_60_75",
+        "-llmqplatform=llmq_100_67",
+        "-llmqmnhf=llmq_400_85"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params main -llmqdevnetparams=10:6 -powtargetspacing=60
+    "main/devnet_llmq_spacing": {
+      "chain": "main",
+      "args": [
+        "-llmqdevnetparams=10:6",
+        "-powtargetspacing=60"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params main -dip3params=1:2 -dip3params=200:300 -budgetparams=1:2:3 -budgetparams=40:50:60 -highsubsidyfactor=4294967297 '-minimumdifficultyblocks= 12abc' -highsubsidyblocks=99999999999 -powtargetspacing=+90 -llmqtestparams=+7:-0 -llmqdevnetparams=400:1
+    "main/last_value_and_atoi": {
+      "chain": "main",
+      "args": [
+        "-dip3params=1:2",
+        "-dip3params=200:300",
+        "-budgetparams=1:2:3",
+        "-budgetparams=40:50:60",
+        "-highsubsidyfactor=4294967297",
+        "-minimumdifficultyblocks= 12abc",
+        "-highsubsidyblocks=99999999999",
+        "-powtargetspacing=+90",
+        "-llmqtestparams=+7:-0",
+        "-llmqdevnetparams=400:1"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params test -testactivationheight=bip147@5 -testactivationheight=bip34@6 -testactivationheight=dersig@7 -testactivationheight=cltv@8 -testactivationheight=csv@9 -testactivationheight=brr@10 -testactivationheight=dip0001@11 -testactivationheight=dip0008@12 -testactivationheight=dip0024@13 -testactivationheight=v19@14 -testactivationheight=v20@1000 -testactivationheight=mn_rr@1001 -testactivationheight=bip34@+16
+    "test/testactivationheight": {
+      "chain": "test",
+      "args": [
+        "-testactivationheight=bip147@5",
+        "-testactivationheight=bip34@6",
+        "-testactivationheight=dersig@7",
+        "-testactivationheight=cltv@8",
+        "-testactivationheight=csv@9",
+        "-testactivationheight=brr@10",
+        "-testactivationheight=dip0001@11",
+        "-testactivationheight=dip0008@12",
+        "-testactivationheight=dip0024@13",
+        "-testactivationheight=v19@14",
+        "-testactivationheight=v20@1000",
+        "-testactivationheight=mn_rr@1001",
+        "-testactivationheight=bip34@+16"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params test -vbparams=testdummy:100:200
+    "test/vbparams_3": {
+      "chain": "test",
+      "args": [
+        "-vbparams=testdummy:100:200"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params test -vbparams=testdummy:1:2:3 -vbparams=v24:-1:9223372036854775807:350:10:8:6:5:0 -vbparams=testdummy:7:8:9:20:15 -vbparams=v24:-2:5:0:-1:-1:-1:-1:7
+    "test/vbparams_4_6_9": {
+      "chain": "test",
+      "args": [
+        "-vbparams=testdummy:1:2:3",
+        "-vbparams=v24:-1:9223372036854775807:350:10:8:6:5:0",
+        "-vbparams=testdummy:7:8:9:20:15",
+        "-vbparams=v24:-2:5:0:-1:-1:-1:-1:7"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params test -dip3params=105:106
+    "test/dip3params": {
+      "chain": "test",
+      "args": [
+        "-dip3params=105:106"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params test -budgetparams=10:20:30
+    "test/budgetparams": {
+      "chain": "test",
+      "args": [
+        "-budgetparams=10:20:30"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params test -llmqtestparams=5:3 -llmqtestinstantsendparams=4:3 -llmqtestplatformparams=6:4
+    "test/llmqtestparams": {
+      "chain": "test",
+      "args": [
+        "-llmqtestparams=5:3",
+        "-llmqtestinstantsendparams=4:3",
+        "-llmqtestplatformparams=6:4"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params test -llmqtestinstantsenddip0024=llmq_test_instantsend
+    "test/llmqtestinstantsenddip0024": {
+      "chain": "test",
+      "args": [
+        "-llmqtestinstantsenddip0024=llmq_test_instantsend"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params test -minimumdifficultyblocks=1000 -highsubsidyblocks=500 -highsubsidyfactor=10
+    "test/devnet_subsidy_diff": {
+      "chain": "test",
+      "args": [
+        "-minimumdifficultyblocks=1000",
+        "-highsubsidyblocks=500",
+        "-highsubsidyfactor=10"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params test -llmqchainlocks=llmq_50_60 -llmqinstantsenddip0024=llmq_60_75 -llmqplatform=llmq_100_67 -llmqmnhf=llmq_400_85
+    "test/devnet_llmq_roles": {
+      "chain": "test",
+      "args": [
+        "-llmqchainlocks=llmq_50_60",
+        "-llmqinstantsenddip0024=llmq_60_75",
+        "-llmqplatform=llmq_100_67",
+        "-llmqmnhf=llmq_400_85"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params test -llmqdevnetparams=10:6 -powtargetspacing=60
+    "test/devnet_llmq_spacing": {
+      "chain": "test",
+      "args": [
+        "-llmqdevnetparams=10:6",
+        "-powtargetspacing=60"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params test -dip3params=1:2 -dip3params=200:300 -budgetparams=1:2:3 -budgetparams=40:50:60 -highsubsidyfactor=4294967297 '-minimumdifficultyblocks= 12abc' -highsubsidyblocks=99999999999 -powtargetspacing=+90 -llmqtestparams=+7:-0 -llmqdevnetparams=400:1
+    "test/last_value_and_atoi": {
+      "chain": "test",
+      "args": [
+        "-dip3params=1:2",
+        "-dip3params=200:300",
+        "-budgetparams=1:2:3",
+        "-budgetparams=40:50:60",
+        "-highsubsidyfactor=4294967297",
+        "-minimumdifficultyblocks= 12abc",
+        "-highsubsidyblocks=99999999999",
+        "-powtargetspacing=+90",
+        "-llmqtestparams=+7:-0",
+        "-llmqdevnetparams=400:1"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params devnet -testactivationheight=bip147@5 -testactivationheight=bip34@6 -testactivationheight=dersig@7 -testactivationheight=cltv@8 -testactivationheight=csv@9 -testactivationheight=brr@10 -testactivationheight=dip0001@11 -testactivationheight=dip0008@12 -testactivationheight=dip0024@13 -testactivationheight=v19@14 -testactivationheight=v20@1000 -testactivationheight=mn_rr@1001 -testactivationheight=bip34@+16
+    "devnet/testactivationheight": {
+      "chain": "devnet",
+      "args": [
+        "-testactivationheight=bip147@5",
+        "-testactivationheight=bip34@6",
+        "-testactivationheight=dersig@7",
+        "-testactivationheight=cltv@8",
+        "-testactivationheight=csv@9",
+        "-testactivationheight=brr@10",
+        "-testactivationheight=dip0001@11",
+        "-testactivationheight=dip0008@12",
+        "-testactivationheight=dip0024@13",
+        "-testactivationheight=v19@14",
+        "-testactivationheight=v20@1000",
+        "-testactivationheight=mn_rr@1001",
+        "-testactivationheight=bip34@+16"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params devnet -vbparams=testdummy:100:200
+    "devnet/vbparams_3": {
+      "chain": "devnet",
+      "args": [
+        "-vbparams=testdummy:100:200"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params devnet -vbparams=testdummy:1:2:3 -vbparams=v24:-1:9223372036854775807:350:10:8:6:5:0 -vbparams=testdummy:7:8:9:20:15 -vbparams=v24:-2:5:0:-1:-1:-1:-1:7
+    "devnet/vbparams_4_6_9": {
+      "chain": "devnet",
+      "args": [
+        "-vbparams=testdummy:1:2:3",
+        "-vbparams=v24:-1:9223372036854775807:350:10:8:6:5:0",
+        "-vbparams=testdummy:7:8:9:20:15",
+        "-vbparams=v24:-2:5:0:-1:-1:-1:-1:7"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params devnet -dip3params=105:106
+    "devnet/dip3params": {
+      "chain": "devnet",
+      "args": [
+        "-dip3params=105:106"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params devnet -budgetparams=10:20:30
+    "devnet/budgetparams": {
+      "chain": "devnet",
+      "args": [
+        "-budgetparams=10:20:30"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params devnet -llmqtestparams=5:3 -llmqtestinstantsendparams=4:3 -llmqtestplatformparams=6:4
+    "devnet/llmqtestparams": {
+      "chain": "devnet",
+      "args": [
+        "-llmqtestparams=5:3",
+        "-llmqtestinstantsendparams=4:3",
+        "-llmqtestplatformparams=6:4"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params devnet -llmqtestinstantsenddip0024=llmq_test_instantsend
+    "devnet/llmqtestinstantsenddip0024": {
+      "chain": "devnet",
+      "args": [
+        "-llmqtestinstantsenddip0024=llmq_test_instantsend"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params devnet -minimumdifficultyblocks=1000 -highsubsidyblocks=500 -highsubsidyfactor=10
+    "devnet/devnet_subsidy_diff": {
+      "chain": "devnet",
+      "args": [
+        "-minimumdifficultyblocks=1000",
+        "-highsubsidyblocks=500",
+        "-highsubsidyfactor=10"
+      ],
+      "delta": {
+        "params.consensus.nMinimumDifficultyBlocks": 1000,
+        "params.consensus.nHighSubsidyBlocks": 500,
+        "params.consensus.nHighSubsidyFactor": 10
+      }
+    },
+    // chainparams_dump params devnet -llmqchainlocks=llmq_50_60 -llmqinstantsenddip0024=llmq_60_75 -llmqplatform=llmq_100_67 -llmqmnhf=llmq_400_85
+    "devnet/devnet_llmq_roles": {
+      "chain": "devnet",
+      "args": [
+        "-llmqchainlocks=llmq_50_60",
+        "-llmqinstantsenddip0024=llmq_60_75",
+        "-llmqplatform=llmq_100_67",
+        "-llmqmnhf=llmq_400_85"
+      ],
+      "delta": {
+        "params.consensus.llmqTypeChainLocks": 1,
+        "params.consensus.llmqTypeDIP0024InstantSend": 5,
+        "params.consensus.llmqTypePlatform": 4,
+        "params.consensus.llmqTypeMnhf": 3
+      }
+    },
+    // chainparams_dump params devnet -llmqdevnetparams=10:6 -powtargetspacing=60
+    "devnet/devnet_llmq_spacing": {
+      "chain": "devnet",
+      "args": [
+        "-llmqdevnetparams=10:6",
+        "-powtargetspacing=60"
+      ],
+      "delta": {
+        "params.consensus.nPowTargetSpacing": 60,
+        "params.consensus.llmqs.5.size": 10,
+        "params.consensus.llmqs.5.minSize": 6,
+        "params.consensus.llmqs.5.dkgBadVotesThreshold": 6,
+        "ext.llmqs.5.size": 10,
+        "ext.llmqs.5.minSize": 6,
+        "ext.llmqs.5.dkgBadVotesThreshold": 6
+      }
+    },
+    // chainparams_dump params devnet -dip3params=1:2 -dip3params=200:300 -budgetparams=1:2:3 -budgetparams=40:50:60 -highsubsidyfactor=4294967297 '-minimumdifficultyblocks= 12abc' -highsubsidyblocks=99999999999 -powtargetspacing=+90 -llmqtestparams=+7:-0 -llmqdevnetparams=400:1
+    "devnet/last_value_and_atoi": {
+      "chain": "devnet",
+      "args": [
+        "-dip3params=1:2",
+        "-dip3params=200:300",
+        "-budgetparams=1:2:3",
+        "-budgetparams=40:50:60",
+        "-highsubsidyfactor=4294967297",
+        "-minimumdifficultyblocks= 12abc",
+        "-highsubsidyblocks=99999999999",
+        "-powtargetspacing=+90",
+        "-llmqtestparams=+7:-0",
+        "-llmqdevnetparams=400:1"
+      ],
+      "delta": {
+        "params.consensus.nPowTargetSpacing": 90,
+        "params.consensus.nMinimumDifficultyBlocks": 12,
+        "params.consensus.nHighSubsidyBlocks": 1215752191,
+        "params.consensus.llmqs.5.size": 400,
+        "params.consensus.llmqs.5.minSize": 1,
+        "params.consensus.llmqs.5.threshold": 1,
+        "params.consensus.llmqs.5.dkgBadVotesThreshold": 1,
+        "ext.llmqs.5.size": 400,
+        "ext.llmqs.5.minSize": 1,
+        "ext.llmqs.5.threshold": 1,
+        "ext.llmqs.5.dkgBadVotesThreshold": 1
+      }
+    },
+    // chainparams_dump params regtest -testactivationheight=bip147@5 -testactivationheight=bip34@6 -testactivationheight=dersig@7 -testactivationheight=cltv@8 -testactivationheight=csv@9 -testactivationheight=brr@10 -testactivationheight=dip0001@11 -testactivationheight=dip0008@12 -testactivationheight=dip0024@13 -testactivationheight=v19@14 -testactivationheight=v20@1000 -testactivationheight=mn_rr@1001 -testactivationheight=bip34@+16
+    "regtest/testactivationheight": {
+      "chain": "regtest",
+      "args": [
+        "-testactivationheight=bip147@5",
+        "-testactivationheight=bip34@6",
+        "-testactivationheight=dersig@7",
+        "-testactivationheight=cltv@8",
+        "-testactivationheight=csv@9",
+        "-testactivationheight=brr@10",
+        "-testactivationheight=dip0001@11",
+        "-testactivationheight=dip0008@12",
+        "-testactivationheight=dip0024@13",
+        "-testactivationheight=v19@14",
+        "-testactivationheight=v20@1000",
+        "-testactivationheight=mn_rr@1001",
+        "-testactivationheight=bip34@+16"
+      ],
+      "delta": {
+        "params.consensus.BIP34Height": 16,
+        "params.consensus.BIP65Height": 8,
+        "params.consensus.BIP66Height": 7,
+        "params.consensus.BIP147Height": 5,
+        "params.consensus.CSVHeight": 9,
+        "params.consensus.DIP0001Height": 11,
+        "params.consensus.DIP0008Height": 12,
+        "params.consensus.BRRHeight": 10,
+        "params.consensus.DIP0024Height": 13,
+        "params.consensus.DIP0024QuorumsHeight": 13,
+        "params.consensus.V19Height": 14,
+        "params.consensus.V20Height": 1000,
+        "params.consensus.MN_RRHeight": 1001,
+        "ext.buriedDeployments.bip34": 16,
+        "ext.buriedDeployments.bip66": 7,
+        "ext.buriedDeployments.bip65": 8,
+        "ext.buriedDeployments.bip147": 5,
+        "ext.buriedDeployments.csv": 9,
+        "ext.buriedDeployments.dip0001": 11,
+        "ext.buriedDeployments.dip0008": 12,
+        "ext.buriedDeployments.dip0024": 13,
+        "ext.buriedDeployments.realloc": 10,
+        "ext.buriedDeployments.v19": 14,
+        "ext.buriedDeployments.v20": 1000,
+        "ext.buriedDeployments.mn_rr": 1001
+      }
+    },
+    // chainparams_dump params regtest -vbparams=testdummy:100:200
+    "regtest/vbparams_3": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=testdummy:100:200"
+      ],
+      "delta": {
+        "params.consensus.vDeployments.0.nStartTime": 100,
+        "params.consensus.vDeployments.0.nTimeout": 200
+      }
+    },
+    // chainparams_dump params regtest -vbparams=testdummy:1:2:3 -vbparams=v24:-1:9223372036854775807:350:10:8:6:5:0 -vbparams=testdummy:7:8:9:20:15 -vbparams=v24:-2:5:0:-1:-1:-1:-1:7
+    "regtest/vbparams_4_6_9": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=testdummy:1:2:3",
+        "-vbparams=v24:-1:9223372036854775807:350:10:8:6:5:0",
+        "-vbparams=testdummy:7:8:9:20:15",
+        "-vbparams=v24:-2:5:0:-1:-1:-1:-1:7"
+      ],
+      "delta": {
+        "params.consensus.vDeployments.0.nStartTime": 7,
+        "params.consensus.vDeployments.0.nTimeout": 8,
+        "params.consensus.vDeployments.0.min_activation_height": 9,
+        "params.consensus.vDeployments.0.nWindowSize": 20,
+        "params.consensus.vDeployments.0.nThresholdStart": 15,
+        "params.consensus.vDeployments.1.nStartTime": -2,
+        "params.consensus.vDeployments.1.nTimeout": 5,
+        "params.consensus.vDeployments.1.nWindowSize": 10,
+        "params.consensus.vDeployments.1.nThresholdStart": 8,
+        "params.consensus.vDeployments.1.nThresholdMin": 6
+      }
+    },
+    // chainparams_dump params regtest -dip3params=105:106
+    "regtest/dip3params": {
+      "chain": "regtest",
+      "args": [
+        "-dip3params=105:106"
+      ],
+      "delta": {
+        "params.consensus.DIP0003Height": 105,
+        "params.consensus.DIP0003EnforcementHeight": 106,
+        "ext.buriedDeployments.dip0003": 105
+      }
+    },
+    // chainparams_dump params regtest -budgetparams=10:20:30
+    "regtest/budgetparams": {
+      "chain": "regtest",
+      "args": [
+        "-budgetparams=10:20:30"
+      ],
+      "delta": {
+        "params.consensus.nMasternodePaymentsStartBlock": 10,
+        "params.consensus.nBudgetPaymentsStartBlock": 20,
+        "params.consensus.nSuperblockStartBlock": 30
+      }
+    },
+    // chainparams_dump params regtest -llmqtestparams=5:3 -llmqtestinstantsendparams=4:3 -llmqtestplatformparams=6:4
+    "regtest/llmqtestparams": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestparams=5:3",
+        "-llmqtestinstantsendparams=4:3",
+        "-llmqtestplatformparams=6:4"
+      ],
+      "delta": {
+        "params.consensus.llmqs.0.size": 5,
+        "params.consensus.llmqs.0.minSize": 3,
+        "params.consensus.llmqs.0.threshold": 3,
+        "params.consensus.llmqs.0.dkgBadVotesThreshold": 3,
+        "params.consensus.llmqs.1.size": 4,
+        "params.consensus.llmqs.1.minSize": 3,
+        "params.consensus.llmqs.1.threshold": 3,
+        "params.consensus.llmqs.1.dkgBadVotesThreshold": 3,
+        "params.consensus.llmqs.4.size": 6,
+        "params.consensus.llmqs.4.minSize": 4,
+        "params.consensus.llmqs.4.threshold": 4,
+        "params.consensus.llmqs.4.dkgBadVotesThreshold": 4,
+        "ext.llmqs.0.size": 5,
+        "ext.llmqs.0.minSize": 3,
+        "ext.llmqs.0.threshold": 3,
+        "ext.llmqs.0.dkgBadVotesThreshold": 3,
+        "ext.llmqs.1.size": 4,
+        "ext.llmqs.1.minSize": 3,
+        "ext.llmqs.1.threshold": 3,
+        "ext.llmqs.1.dkgBadVotesThreshold": 3,
+        "ext.llmqs.4.size": 6,
+        "ext.llmqs.4.minSize": 4,
+        "ext.llmqs.4.threshold": 4,
+        "ext.llmqs.4.dkgBadVotesThreshold": 4
+      }
+    },
+    // chainparams_dump params regtest -llmqtestinstantsenddip0024=llmq_test_instantsend
+    "regtest/llmqtestinstantsenddip0024": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestinstantsenddip0024=llmq_test_instantsend"
+      ],
+      "delta": {
+        "params.consensus.llmqTypeDIP0024InstantSend": 104
+      }
+    },
+    // chainparams_dump params regtest -minimumdifficultyblocks=1000 -highsubsidyblocks=500 -highsubsidyfactor=10
+    "regtest/devnet_subsidy_diff": {
+      "chain": "regtest",
+      "args": [
+        "-minimumdifficultyblocks=1000",
+        "-highsubsidyblocks=500",
+        "-highsubsidyfactor=10"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params regtest -llmqchainlocks=llmq_50_60 -llmqinstantsenddip0024=llmq_60_75 -llmqplatform=llmq_100_67 -llmqmnhf=llmq_400_85
+    "regtest/devnet_llmq_roles": {
+      "chain": "regtest",
+      "args": [
+        "-llmqchainlocks=llmq_50_60",
+        "-llmqinstantsenddip0024=llmq_60_75",
+        "-llmqplatform=llmq_100_67",
+        "-llmqmnhf=llmq_400_85"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params regtest -llmqdevnetparams=10:6 -powtargetspacing=60
+    "regtest/devnet_llmq_spacing": {
+      "chain": "regtest",
+      "args": [
+        "-llmqdevnetparams=10:6",
+        "-powtargetspacing=60"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params regtest -dip3params=1:2 -dip3params=200:300 -budgetparams=1:2:3 -budgetparams=40:50:60 -highsubsidyfactor=4294967297 '-minimumdifficultyblocks= 12abc' -highsubsidyblocks=99999999999 -powtargetspacing=+90 -llmqtestparams=+7:-0 -llmqdevnetparams=400:1
+    "regtest/last_value_and_atoi": {
+      "chain": "regtest",
+      "args": [
+        "-dip3params=1:2",
+        "-dip3params=200:300",
+        "-budgetparams=1:2:3",
+        "-budgetparams=40:50:60",
+        "-highsubsidyfactor=4294967297",
+        "-minimumdifficultyblocks= 12abc",
+        "-highsubsidyblocks=99999999999",
+        "-powtargetspacing=+90",
+        "-llmqtestparams=+7:-0",
+        "-llmqdevnetparams=400:1"
+      ],
+      "delta": {
+        "params.consensus.nMasternodePaymentsStartBlock": 40,
+        "params.consensus.nBudgetPaymentsStartBlock": 50,
+        "params.consensus.nSuperblockStartBlock": 60,
+        "params.consensus.DIP0003Height": 200,
+        "params.consensus.DIP0003EnforcementHeight": 300,
+        "params.consensus.llmqs.0.size": 7,
+        "params.consensus.llmqs.0.minSize": 0,
+        "params.consensus.llmqs.0.threshold": 0,
+        "params.consensus.llmqs.0.dkgBadVotesThreshold": 0,
+        "ext.buriedDeployments.dip0003": 200,
+        "ext.llmqs.0.size": 7,
+        "ext.llmqs.0.minSize": 0,
+        "ext.llmqs.0.threshold": 0,
+        "ext.llmqs.0.dkgBadVotesThreshold": 0
+      }
+    },
+    // chainparams_dump params devnet
+    "devnet_unnamed": {
+      "chain": "devnet",
+      "args": [],
+      "delta": {}
+    },
+    // chainparams_dump params devnet -devnet=
+    "devnet_empty_name": {
+      "chain": "devnet",
+      "args": [
+        "-devnet="
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params devnet -devnet=alpha
+    "devnet_name_alpha": {
+      "chain": "devnet",
+      "args": [
+        "-devnet=alpha"
+      ],
+      "delta": {
+        "params.devnetGenesisHash": "27b6e20a8c252bdf5e9e6286fd8b57c45e2078dd7dd0a0c48d294201a1a8d145",
+        "params.checkpoints.1": "27b6e20a8c252bdf5e9e6286fd8b57c45e2078dd7dd0a0c48d294201a1a8d145",
+        "params.consensus.hashDevnetGenesisBlock": "27b6e20a8c252bdf5e9e6286fd8b57c45e2078dd7dd0a0c48d294201a1a8d145",
+        "ext.dataDir": "devnet-alpha",
+        "ext.devnetGenesisBlock": "040000002e3df23eec5cd6a86edd509539028e2c3a3dc05315eb28f2baa43218ca080000ca637cae5a1cec8033a1039cf091dfb2550092a28d6f69a128b28d52eacbf23fba968054ffff7f20000000000101000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0e510c6465766e65742d616c706861ffffffff0100f2052a01000000016a00000000"
+      }
+    },
+    // chainparams_dump params devnet -devnet=dash-node_42.local-test-network
+    "devnet_name_long": {
+      "chain": "devnet",
+      "args": [
+        "-devnet=dash-node_42.local-test-network"
+      ],
+      "delta": {
+        "params.devnetGenesisHash": "381d2353b18cbf86faffe119de47a654c4e18a9016c1ef28d6dd6a04076e5e18",
+        "params.checkpoints.1": "381d2353b18cbf86faffe119de47a654c4e18a9016c1ef28d6dd6a04076e5e18",
+        "params.consensus.hashDevnetGenesisBlock": "381d2353b18cbf86faffe119de47a654c4e18a9016c1ef28d6dd6a04076e5e18",
+        "ext.dataDir": "devnet-dash-node_42.local-test-network",
+        "ext.devnetGenesisBlock": "040000002e3df23eec5cd6a86edd509539028e2c3a3dc05315eb28f2baa43218ca08000001f1a170a87b6ba46cd467b4fdb840eb0dd3277e3d6b124dca8748897915f14aba968054ffff7f20010000000101000000010000000000000000000000000000000000000000000000000000000000000000ffffffff2851266465766e65742d646173682d6e6f64655f34322e6c6f63616c2d746573742d6e6574776f726bffffffff0100f2052a01000000016a00000000"
+      }
+    },
+    // chainparams_dump params regtest -testactivationheight=v20
+    "error/tah_format": {
+      "chain": "regtest",
+      "args": [
+        "-testactivationheight=v20"
+      ],
+      "error": "Invalid format (v20) for -testactivationheight=name@height."
+    },
+    // chainparams_dump params regtest -testactivationheight=v20@-1
+    "error/tah_height_neg": {
+      "chain": "regtest",
+      "args": [
+        "-testactivationheight=v20@-1"
+      ],
+      "error": "Invalid height value (v20@-1) for -testactivationheight=name@height."
+    },
+    // chainparams_dump params regtest -testactivationheight=v20@2147483647
+    "error/tah_height_max": {
+      "chain": "regtest",
+      "args": [
+        "-testactivationheight=v20@2147483647"
+      ],
+      "error": "Invalid height value (v20@2147483647) for -testactivationheight=name@height."
+    },
+    // chainparams_dump params regtest -testactivationheight=v20@1x
+    "error/tah_height_junk": {
+      "chain": "regtest",
+      "args": [
+        "-testactivationheight=v20@1x"
+      ],
+      "error": "Invalid height value (v20@1x) for -testactivationheight=name@height."
+    },
+    // chainparams_dump params regtest -testactivationheight=v20@
+    "error/tah_height_empty": {
+      "chain": "regtest",
+      "args": [
+        "-testactivationheight=v20@"
+      ],
+      "error": "Invalid height value (v20@) for -testactivationheight=name@height."
+    },
+    // chainparams_dump params regtest -testactivationheight=v21@5
+    "error/tah_name": {
+      "chain": "regtest",
+      "args": [
+        "-testactivationheight=v21@5"
+      ],
+      "error": "Invalid name (v21@5) for -testactivationheight=name@height."
+    },
+    // chainparams_dump params regtest -testactivationheight=V20@5
+    "error/tah_name_case": {
+      "chain": "regtest",
+      "args": [
+        "-testactivationheight=V20@5"
+      ],
+      "error": "Invalid name (V20@5) for -testactivationheight=name@height."
+    },
+    // chainparams_dump params regtest -testactivationheight=v19@5 -testactivationheight=dip0003@5
+    "error/tah_second_bad": {
+      "chain": "regtest",
+      "args": [
+        "-testactivationheight=v19@5",
+        "-testactivationheight=dip0003@5"
+      ],
+      "error": "Invalid name (dip0003@5) for -testactivationheight=name@height."
+    },
+    // chainparams_dump params regtest -vbparams=testdummy
+    "error/vb_fields_1": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=testdummy"
+      ],
+      "error": "Version bits parameters malformed, expecting <deployment>:<start>:<end> or <deployment>:<start>:<end>:<min_activation_height> or <deployment>:<start>:<end>:<min_activation_height>:<window>:<threshold> or <deployment>:<start>:<end>:<min_activation_height>:<window>:<thresholdstart>:<thresholdmin>:<falloffcoeff>:<useehf>"
+    },
+    // chainparams_dump params regtest -vbparams=testdummy:1
+    "error/vb_fields_2": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=testdummy:1"
+      ],
+      "error": "Version bits parameters malformed, expecting <deployment>:<start>:<end> or <deployment>:<start>:<end>:<min_activation_height> or <deployment>:<start>:<end>:<min_activation_height>:<window>:<threshold> or <deployment>:<start>:<end>:<min_activation_height>:<window>:<thresholdstart>:<thresholdmin>:<falloffcoeff>:<useehf>"
+    },
+    // chainparams_dump params regtest -vbparams=testdummy:1:2:3:4
+    "error/vb_fields_5": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=testdummy:1:2:3:4"
+      ],
+      "error": "Version bits parameters malformed, expecting <deployment>:<start>:<end> or <deployment>:<start>:<end>:<min_activation_height> or <deployment>:<start>:<end>:<min_activation_height>:<window>:<threshold> or <deployment>:<start>:<end>:<min_activation_height>:<window>:<thresholdstart>:<thresholdmin>:<falloffcoeff>:<useehf>"
+    },
+    // chainparams_dump params regtest -vbparams=testdummy:1:2:3:4:5:6
+    "error/vb_fields_7": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=testdummy:1:2:3:4:5:6"
+      ],
+      "error": "Version bits parameters malformed, expecting <deployment>:<start>:<end> or <deployment>:<start>:<end>:<min_activation_height> or <deployment>:<start>:<end>:<min_activation_height>:<window>:<threshold> or <deployment>:<start>:<end>:<min_activation_height>:<window>:<thresholdstart>:<thresholdmin>:<falloffcoeff>:<useehf>"
+    },
+    // chainparams_dump params regtest -vbparams=testdummy:1:2:3:4:5:6:7:8:9
+    "error/vb_fields_10": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=testdummy:1:2:3:4:5:6:7:8:9"
+      ],
+      "error": "Version bits parameters malformed, expecting <deployment>:<start>:<end> or <deployment>:<start>:<end>:<min_activation_height> or <deployment>:<start>:<end>:<min_activation_height>:<window>:<threshold> or <deployment>:<start>:<end>:<min_activation_height>:<window>:<thresholdstart>:<thresholdmin>:<falloffcoeff>:<useehf>"
+    },
+    // chainparams_dump params regtest -vbparams=testdummy:x:2
+    "error/vb_start": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=testdummy:x:2"
+      ],
+      "error": "Invalid nStartTime (x)"
+    },
+    // chainparams_dump params regtest -vbparams=testdummy:1:2.5
+    "error/vb_timeout": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=testdummy:1:2.5"
+      ],
+      "error": "Invalid nTimeout (2.5)"
+    },
+    // chainparams_dump params regtest -vbparams=testdummy:1:2:2147483648
+    "error/vb_min_height": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=testdummy:1:2:2147483648"
+      ],
+      "error": "Invalid min_activation_height (2147483648)"
+    },
+    // chainparams_dump params regtest '-vbparams=testdummy:1:2:3: 4:5'
+    "error/vb_window": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=testdummy:1:2:3: 4:5"
+      ],
+      "error": "Invalid nWindowSize ( 4)"
+    },
+    // chainparams_dump params regtest -vbparams=testdummy:1:2:3:4:
+    "error/vb_threshold_start": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=testdummy:1:2:3:4:"
+      ],
+      "error": "Invalid nThresholdStart ()"
+    },
+    // chainparams_dump params regtest -vbparams=testdummy:1:2:3:4:5:++6:7:8
+    "error/vb_threshold_min": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=testdummy:1:2:3:4:5:++6:7:8"
+      ],
+      "error": "Invalid nThresholdMin (++6)"
+    },
+    // chainparams_dump params regtest -vbparams=testdummy:1:2:3:4:5:6:0x7:8
+    "error/vb_falloff": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=testdummy:1:2:3:4:5:6:0x7:8"
+      ],
+      "error": "Invalid nFalloffCoeff (0x7)"
+    },
+    // chainparams_dump params regtest -vbparams=testdummy:1:2:3:4:5:6:7:true
+    "error/vb_use_ehf": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=testdummy:1:2:3:4:5:6:7:true"
+      ],
+      "error": "Invalid nUseEHF (true)"
+    },
+    // chainparams_dump params regtest -vbparams=testdummy:9223372036854775808:2
+    "error/vb_start_overflow": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=testdummy:9223372036854775808:2"
+      ],
+      "error": "Invalid nStartTime (9223372036854775808)"
+    },
+    // chainparams_dump params regtest -vbparams=nope:1:2
+    "error/vb_deployment": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=nope:1:2"
+      ],
+      "error": "Invalid deployment (nope)"
+    },
+    // chainparams_dump params regtest -vbparams=nope:x:2
+    "error/vb_deployment_bad_first": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=nope:x:2"
+      ],
+      "error": "Invalid nStartTime (x)"
+    },
+    // chainparams_dump params regtest -vbparams=evo_shares:1:2
+    "error/vb_evo_shares": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=evo_shares:1:2"
+      ],
+      "error": "Invalid deployment (evo_shares)"
+    },
+    // chainparams_dump params regtest -dip3params=1
+    "error/dip3_fields": {
+      "chain": "regtest",
+      "args": [
+        "-dip3params=1"
+      ],
+      "error": "DIP3 parameters malformed, expecting <activation>:<enforcement>"
+    },
+    // chainparams_dump params regtest -dip3params=
+    "error/dip3_empty": {
+      "chain": "regtest",
+      "args": [
+        "-dip3params="
+      ],
+      "error": "DIP3 parameters malformed, expecting <activation>:<enforcement>"
+    },
+    // chainparams_dump params regtest -dip3params=a:1
+    "error/dip3_activation": {
+      "chain": "regtest",
+      "args": [
+        "-dip3params=a:1"
+      ],
+      "error": "Invalid activation height (a)"
+    },
+    // chainparams_dump params regtest -dip3params=1:
+    "error/dip3_enforcement": {
+      "chain": "regtest",
+      "args": [
+        "-dip3params=1:"
+      ],
+      "error": "Invalid enforcement height ()"
+    },
+    // chainparams_dump params regtest -budgetparams=1:2
+    "error/budget_fields": {
+      "chain": "regtest",
+      "args": [
+        "-budgetparams=1:2"
+      ],
+      "error": "Budget parameters malformed, expecting <masternode>:<budget>:<superblock>"
+    },
+    // chainparams_dump params regtest -budgetparams=-:2:3
+    "error/budget_mn": {
+      "chain": "regtest",
+      "args": [
+        "-budgetparams=-:2:3"
+      ],
+      "error": "Invalid masternode start height (-)"
+    },
+    // chainparams_dump params regtest -budgetparams=1:+-2:3
+    "error/budget_budget": {
+      "chain": "regtest",
+      "args": [
+        "-budgetparams=1:+-2:3"
+      ],
+      "error": "Invalid budget start block (+-2)"
+    },
+    // chainparams_dump params regtest -budgetparams=1:2:3:
+    "error/budget_superblock": {
+      "chain": "regtest",
+      "args": [
+        "-budgetparams=1:2:3:"
+      ],
+      "error": "Budget parameters malformed, expecting <masternode>:<budget>:<superblock>"
+    },
+    // chainparams_dump params regtest -budgetparams=1:2:3x
+    "error/budget_superblock_junk": {
+      "chain": "regtest",
+      "args": [
+        "-budgetparams=1:2:3x"
+      ],
+      "error": "Invalid superblock start height (3x)"
+    },
+    // chainparams_dump params regtest -llmqtestparams=3
+    "error/llmqtest_fields": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestparams=3"
+      ],
+      "error": "LLMQ_TEST parameters malformed, expecting <size>:<threshold>"
+    },
+    // chainparams_dump params regtest -llmqtestparams=x:2
+    "error/llmqtest_size": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestparams=x:2"
+      ],
+      "error": "Invalid LLMQ_TEST size (x)"
+    },
+    // chainparams_dump params regtest -llmqtestparams=3:x
+    "error/llmqtest_threshold": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestparams=3:x"
+      ],
+      "error": "Invalid LLMQ_TEST threshold (x)"
+    },
+    // chainparams_dump params regtest -llmqtestparams=401:2
+    "error/llmqtest_size_401": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestparams=401:2"
+      ],
+      "delta": {
+        "params.consensus.llmqs.0.size": 401,
+        "ext.llmqs.0.size": 401
+      }
+    },
+    // chainparams_dump params regtest -llmqtestparams=401:x
+    "error/llmqtest_size_401_bad_threshold": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestparams=401:x"
+      ],
+      "error": "Invalid LLMQ_TEST threshold (x)"
+    },
+    // chainparams_dump params regtest -llmqtestinstantsendparams=3:2:1
+    "error/llmqtestis_fields": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestinstantsendparams=3:2:1"
+      ],
+      "error": "LLMQ_TEST_INSTANTSEND parameters malformed, expecting <size>:<threshold>"
+    },
+    // chainparams_dump params regtest -llmqtestinstantsendparams=:2
+    "error/llmqtestis_size": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestinstantsendparams=:2"
+      ],
+      "error": "Invalid LLMQ_TEST_INSTANTSEND size ()"
+    },
+    // chainparams_dump params regtest -llmqtestinstantsendparams=401:2
+    "error/llmqtestis_size_401": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestinstantsendparams=401:2"
+      ],
+      "delta": {
+        "params.consensus.llmqs.1.size": 401,
+        "ext.llmqs.1.size": 401
+      }
+    },
+    // chainparams_dump params regtest -llmqtestplatformparams=3:2b
+    "error/llmqtestplat_threshold": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestplatformparams=3:2b"
+      ],
+      "error": "Invalid LLMQ_TEST_PLATFORM threshold (2b)"
+    },
+    // chainparams_dump params regtest -llmqtestplatformparams=3
+    "error/llmqtestplat_fields": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestplatformparams=3"
+      ],
+      "error": "LLMQ_TEST_PLATFORM parameters malformed, expecting <size>:<threshold>"
+    },
+    // chainparams_dump params regtest -llmqtestplatformparams=x:2
+    "error/llmqtestplat_size": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestplatformparams=x:2"
+      ],
+      "error": "Invalid LLMQ_TEST_PLATFORM size (x)"
+    },
+    // chainparams_dump params regtest -llmqtestinstantsenddip0024=llmq_50_60
+    "error/llmqtestisdip0024_name": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestinstantsenddip0024=llmq_50_60"
+      ],
+      "error": "Invalid LLMQ type specified for -llmqtestinstantsenddip0024."
+    },
+    // chainparams_dump params regtest -llmqtestinstantsenddip0024=
+    "error/llmqtestisdip0024_empty": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestinstantsenddip0024="
+      ],
+      "error": "Invalid LLMQ type specified for -llmqtestinstantsenddip0024."
+    },
+    // chainparams_dump params devnet -llmqchainlocks=llmq_60_75
+    "error/dev_chainlocks_rotated": {
+      "chain": "devnet",
+      "args": [
+        "-llmqchainlocks=llmq_60_75"
+      ],
+      "error": "LLMQ type specified for -llmqchainlocks must NOT use rotation"
+    },
+    // chainparams_dump params devnet -llmqchainlocks=llmq_test
+    "error/dev_chainlocks_name": {
+      "chain": "devnet",
+      "args": [
+        "-llmqchainlocks=llmq_test"
+      ],
+      "error": "Invalid LLMQ type specified for -llmqchainlocks."
+    },
+    // chainparams_dump params devnet -llmqinstantsenddip0024=llmq_50_60
+    "error/dev_isdip0024_unrotated": {
+      "chain": "devnet",
+      "args": [
+        "-llmqinstantsenddip0024=llmq_50_60"
+      ],
+      "error": "LLMQ type specified for -llmqinstantsenddip0024 must use rotation"
+    },
+    // chainparams_dump params devnet -llmqinstantsenddip0024=x
+    "error/dev_isdip0024_name": {
+      "chain": "devnet",
+      "args": [
+        "-llmqinstantsenddip0024=x"
+      ],
+      "error": "Invalid LLMQ type specified for -llmqinstantsenddip0024."
+    },
+    // chainparams_dump params devnet -llmqplatform=llmq_25_67
+    "error/dev_platform_name": {
+      "chain": "devnet",
+      "args": [
+        "-llmqplatform=llmq_25_67"
+      ],
+      "error": "Invalid LLMQ type specified for -llmqplatform."
+    },
+    // chainparams_dump params devnet -llmqmnhf=
+    "error/dev_mnhf_name": {
+      "chain": "devnet",
+      "args": [
+        "-llmqmnhf="
+      ],
+      "error": "Invalid LLMQ type specified for -llmqmnhf."
+    },
+    // chainparams_dump params devnet -llmqdevnetparams=12
+    "error/dev_llmqdevnet_fields": {
+      "chain": "devnet",
+      "args": [
+        "-llmqdevnetparams=12"
+      ],
+      "error": "LLMQ_DEVNET parameters malformed, expecting <size>:<threshold>"
+    },
+    // chainparams_dump params devnet -llmqdevnetparams=a:6
+    "error/dev_llmqdevnet_size": {
+      "chain": "devnet",
+      "args": [
+        "-llmqdevnetparams=a:6"
+      ],
+      "error": "Invalid LLMQ_DEVNET size (a)"
+    },
+    // chainparams_dump params devnet -llmqdevnetparams=12:
+    "error/dev_llmqdevnet_threshold": {
+      "chain": "devnet",
+      "args": [
+        "-llmqdevnetparams=12:"
+      ],
+      "error": "Invalid LLMQ_DEVNET threshold ()"
+    },
+    // chainparams_dump params devnet -llmqdevnetparams=401:6
+    "error/dev_llmqdevnet_size_401": {
+      "chain": "devnet",
+      "args": [
+        "-llmqdevnetparams=401:6"
+      ],
+      "delta": {
+        "params.consensus.llmqs.5.size": 401,
+        "params.consensus.llmqs.5.minSize": 6,
+        "params.consensus.llmqs.5.dkgBadVotesThreshold": 6,
+        "ext.llmqs.5.size": 401,
+        "ext.llmqs.5.minSize": 6,
+        "ext.llmqs.5.dkgBadVotesThreshold": 6
+      }
+    },
+    // chainparams_dump params devnet -powtargetspacing=2.5
+    "error/dev_spacing_parse": {
+      "chain": "devnet",
+      "args": [
+        "-powtargetspacing=2.5"
+      ],
+      "error": "Invalid parsing of powTargetSpacing (2.5)"
+    },
+    // chainparams_dump params devnet -powtargetspacing=0
+    "error/dev_spacing_zero": {
+      "chain": "devnet",
+      "args": [
+        "-powtargetspacing=0"
+      ],
+      "error": "Invalid value of powTargetSpacing (0)"
+    },
+    // chainparams_dump params devnet -powtargetspacing=-60
+    "error/dev_spacing_negative": {
+      "chain": "devnet",
+      "args": [
+        "-powtargetspacing=-60"
+      ],
+      "error": "Invalid value of powTargetSpacing (-60)"
+    },
+    // chainparams_dump params regtest -llmqtestparams=-1:2 -llmqtestinstantsenddip0024=bogus
+    "error/llmq_range_then_dip0024": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestparams=-1:2",
+        "-llmqtestinstantsenddip0024=bogus"
+      ],
+      "error": "Invalid LLMQ type specified for -llmqtestinstantsenddip0024."
+    },
+    // chainparams_dump params devnet -llmqdevnetparams=-2:9 -powtargetspacing=abc
+    "error/llmq_devnet_range_then_spacing": {
+      "chain": "devnet",
+      "args": [
+        "-llmqdevnetparams=-2:9",
+        "-powtargetspacing=abc"
+      ],
+      "error": "Invalid parsing of powTargetSpacing (abc)"
+    },
+    // chainparams_dump params regtest -llmqtestparams=-1:2 -llmqtestinstantsendparams=1:2b
+    "error/llmq_range_then_is_threshold": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestparams=-1:2",
+        "-llmqtestinstantsendparams=1:2b"
+      ],
+      "error": "Invalid LLMQ_TEST_INSTANTSEND threshold (2b)"
+    },
+    // chainparams_dump params regtest -llmqtestparams=x -budgetparams=x -dip3params=x -vbparams=x -testactivationheight=x
+    "error/order_regtest": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestparams=x",
+        "-budgetparams=x",
+        "-dip3params=x",
+        "-vbparams=x",
+        "-testactivationheight=x"
+      ],
+      "error": "Invalid format (x) for -testactivationheight=name@height."
+    },
+    // chainparams_dump params regtest -llmqtestinstantsenddip0024=x -llmqtestplatformparams=x -llmqtestinstantsendparams=x -llmqtestparams=x -budgetparams=x -dip3params=x -vbparams=x
+    "error/order_regtest_after_tah": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestinstantsenddip0024=x",
+        "-llmqtestplatformparams=x",
+        "-llmqtestinstantsendparams=x",
+        "-llmqtestparams=x",
+        "-budgetparams=x",
+        "-dip3params=x",
+        "-vbparams=x"
+      ],
+      "error": "Version bits parameters malformed, expecting <deployment>:<start>:<end> or <deployment>:<start>:<end>:<min_activation_height> or <deployment>:<start>:<end>:<min_activation_height>:<window>:<threshold> or <deployment>:<start>:<end>:<min_activation_height>:<window>:<thresholdstart>:<thresholdmin>:<falloffcoeff>:<useehf>"
+    },
+    // chainparams_dump params devnet -powtargetspacing=x -llmqdevnetparams=x -llmqmnhf=x -llmqplatform=x -llmqinstantsenddip0024=x -llmqchainlocks=x
+    "error/order_devnet": {
+      "chain": "devnet",
+      "args": [
+        "-powtargetspacing=x",
+        "-llmqdevnetparams=x",
+        "-llmqmnhf=x",
+        "-llmqplatform=x",
+        "-llmqinstantsenddip0024=x",
+        "-llmqchainlocks=x"
+      ],
+      "error": "Invalid LLMQ type specified for -llmqchainlocks."
+    },
+    // chainparams_dump params devnet -powtargetspacing=x -llmqdevnetparams=x -llmqmnhf=x
+    "error/order_devnet_late": {
+      "chain": "devnet",
+      "args": [
+        "-powtargetspacing=x",
+        "-llmqdevnetparams=x",
+        "-llmqmnhf=x"
+      ],
+      "error": "Invalid LLMQ type specified for -llmqmnhf."
+    },
+    // chainparams_dump params main -dip3params=x -llmqchainlocks=x -powtargetspacing=x -testactivationheight=x
+    "error/ignored_off_chain_main": {
+      "chain": "main",
+      "args": [
+        "-dip3params=x",
+        "-llmqchainlocks=x",
+        "-powtargetspacing=x",
+        "-testactivationheight=x"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params regtest -llmqchainlocks=x -powtargetspacing=0 -llmqdevnetparams=x
+    "error/ignored_off_chain_regtest": {
+      "chain": "regtest",
+      "args": [
+        "-llmqchainlocks=x",
+        "-powtargetspacing=0",
+        "-llmqdevnetparams=x"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params devnet -dip3params=x -vbparams=x
+    "error/ignored_off_chain_devnet": {
+      "chain": "devnet",
+      "args": [
+        "-dip3params=x",
+        "-vbparams=x"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params regtest -vbparams=testdummy:1:2 -novbparams
+    "extra/neg_vbparams_after": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=testdummy:1:2",
+        "-novbparams"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params regtest -vbparams=x -novbparams -vbparams=testdummy:3:4
+    "extra/neg_vbparams_before": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=x",
+        "-novbparams",
+        "-vbparams=testdummy:3:4"
+      ],
+      "delta": {
+        "params.consensus.vDeployments.0.nStartTime": 3,
+        "params.consensus.vDeployments.0.nTimeout": 4
+      }
+    },
+    // chainparams_dump params regtest -novbparams=0
+    "extra/neg_vbparams_double": {
+      "chain": "regtest",
+      "args": [
+        "-novbparams=0"
+      ],
+      "error": "Version bits parameters malformed, expecting <deployment>:<start>:<end> or <deployment>:<start>:<end>:<min_activation_height> or <deployment>:<start>:<end>:<min_activation_height>:<window>:<threshold> or <deployment>:<start>:<end>:<min_activation_height>:<window>:<thresholdstart>:<thresholdmin>:<falloffcoeff>:<useehf>"
+    },
+    // chainparams_dump params regtest -testactivationheight=v19@5 -notestactivationheight -testactivationheight=dip0001@7
+    "extra/neg_tah": {
+      "chain": "regtest",
+      "args": [
+        "-testactivationheight=v19@5",
+        "-notestactivationheight",
+        "-testactivationheight=dip0001@7"
+      ],
+      "delta": {
+        "params.consensus.DIP0001Height": 7,
+        "ext.buriedDeployments.dip0001": 7
+      }
+    },
+    // chainparams_dump params regtest -testactivationheight=x -notestactivationheight
+    "extra/neg_tah_last": {
+      "chain": "regtest",
+      "args": [
+        "-testactivationheight=x",
+        "-notestactivationheight"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params regtest -dip3params=1:2 -nodip3params
+    "extra/neg_dip3": {
+      "chain": "regtest",
+      "args": [
+        "-dip3params=1:2",
+        "-nodip3params"
+      ],
+      "error": "DIP3 parameters malformed, expecting <activation>:<enforcement>"
+    },
+    // chainparams_dump params regtest -nodip3params=0
+    "extra/neg_dip3_double": {
+      "chain": "regtest",
+      "args": [
+        "-nodip3params=0"
+      ],
+      "error": "DIP3 parameters malformed, expecting <activation>:<enforcement>"
+    },
+    // chainparams_dump params devnet -nollmqchainlocks
+    "extra/neg_llmqchainlocks": {
+      "chain": "devnet",
+      "args": [
+        "-nollmqchainlocks"
+      ],
+      "error": "Invalid LLMQ type specified for -llmqchainlocks."
+    },
+    // chainparams_dump params devnet -nodevnet
+    "extra/neg_devnet_name": {
+      "chain": "devnet",
+      "args": [
+        "-nodevnet"
+      ],
+      "delta": {
+        "params.devnetGenesisHash": "12eb69ec7bb6e4469baae22af4c4a0c93e0b613d16f365478aa2668c8923d9d9",
+        "params.checkpoints.1": "12eb69ec7bb6e4469baae22af4c4a0c93e0b613d16f365478aa2668c8923d9d9",
+        "params.consensus.hashDevnetGenesisBlock": "12eb69ec7bb6e4469baae22af4c4a0c93e0b613d16f365478aa2668c8923d9d9",
+        "ext.dataDir": "devnet-0",
+        "ext.devnetGenesisBlock": "040000002e3df23eec5cd6a86edd509539028e2c3a3dc05315eb28f2baa43218ca080000e937332e4fe3fec63e66817cf09fb62a79ad21ee2d11b347590d468c31990c25ba968054ffff7f20000000000101000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0a51086465766e65742d30ffffffff0100f2052a01000000016a00000000"
+      }
+    },
+    // chainparams_dump params devnet -highsubsidyfactor=5 -nohighsubsidyfactor
+    "extra/neg_highsubsidyfactor": {
+      "chain": "devnet",
+      "args": [
+        "-highsubsidyfactor=5",
+        "-nohighsubsidyfactor"
+      ],
+      "delta": {
+        "params.consensus.nHighSubsidyFactor": 0
+      }
+    },
+    // chainparams_dump params devnet -devnet=nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
+    "extra/devnet_name_80": {
+      "chain": "devnet",
+      "args": [
+        "-devnet=nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn"
+      ],
+      "delta": {
+        "params.devnetGenesisHash": "3c20e310ec44c37c8ae3695c9cd4f6061b80866c33c5d2a48645a662a5517036",
+        "params.checkpoints.1": "3c20e310ec44c37c8ae3695c9cd4f6061b80866c33c5d2a48645a662a5517036",
+        "params.consensus.hashDevnetGenesisBlock": "3c20e310ec44c37c8ae3695c9cd4f6061b80866c33c5d2a48645a662a5517036",
+        "ext.dataDir": "devnet-nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+        "ext.devnetGenesisBlock": "040000002e3df23eec5cd6a86edd509539028e2c3a3dc05315eb28f2baa43218ca080000619b6fb372a1755715f775c3b55d8332bcdb3baa099750ea64d2903d10e01e52ba968054ffff7f20010000000101000000010000000000000000000000000000000000000000000000000000000000000000ffffffff5a514c576465766e65742d6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6effffffff0100f2052a01000000016a00000000"
+      }
+    },
+    // chainparams_dump params devnet -devnet=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    "extra/devnet_name_300": {
+      "chain": "devnet",
+      "args": [
+        "-devnet=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      ],
+      "delta": {
+        "params.devnetGenesisHash": "2add43593092c1e0a03688aca4e8e257dcbb56451ae8bb69cd2732c86973fa0c",
+        "params.checkpoints.1": "2add43593092c1e0a03688aca4e8e257dcbb56451ae8bb69cd2732c86973fa0c",
+        "params.consensus.hashDevnetGenesisBlock": "2add43593092c1e0a03688aca4e8e257dcbb56451ae8bb69cd2732c86973fa0c",
+        "ext.dataDir": "devnet-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "ext.devnetGenesisBlock": "040000002e3df23eec5cd6a86edd509539028e2c3a3dc05315eb28f2baa43218ca080000a6212b8c66e14d41d7e60195d926e27ab3637c0cf092eae1361e97cabe5568e6ba968054ffff7f20000000000101000000010000000000000000000000000000000000000000000000000000000000000000fffffffffd3701514d33016465766e65742d787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878ffffffff0100f2052a01000000016a00000000"
+      }
+    },
+    // chainparams_dump params regtest -llmqtestparams=400:2
+    "extra/limit_llmq_400": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestparams=400:2"
+      ],
+      "delta": {
+        "params.consensus.llmqs.0.size": 400,
+        "ext.llmqs.0.size": 400
+      }
+    },
+    // chainparams_dump params regtest -testactivationheight=v20@2147483646 -testactivationheight=mn_rr@2147483646
+    "extra/limit_tah_max": {
+      "chain": "regtest",
+      "args": [
+        "-testactivationheight=v20@2147483646",
+        "-testactivationheight=mn_rr@2147483646"
+      ],
+      "delta": {
+        "params.consensus.V20Height": 2147483646,
+        "params.consensus.MN_RRHeight": 2147483646,
+        "ext.buriedDeployments.v20": 2147483646,
+        "ext.buriedDeployments.mn_rr": 2147483646
+      }
+    },
+    // chainparams_dump params regtest -llmqtestparams=0:5
+    "extra/limit_llmq_odd": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestparams=0:5"
+      ],
+      "delta": {
+        "params.consensus.llmqs.0.size": 0,
+        "params.consensus.llmqs.0.minSize": 5,
+        "params.consensus.llmqs.0.threshold": 5,
+        "params.consensus.llmqs.0.dkgBadVotesThreshold": 5,
+        "ext.llmqs.0.size": 0,
+        "ext.llmqs.0.minSize": 5,
+        "ext.llmqs.0.threshold": 5,
+        "ext.llmqs.0.dkgBadVotesThreshold": 5
+      }
+    },
+    // chainparams_dump params devnet -highsubsidyfactor=-7 -minimumdifficultyblocks=-1
+    "extra/limit_devnet_negative": {
+      "chain": "devnet",
+      "args": [
+        "-highsubsidyfactor=-7",
+        "-minimumdifficultyblocks=-1"
+      ],
+      "delta": {
+        "params.consensus.nMinimumDifficultyBlocks": -1,
+        "params.consensus.nHighSubsidyFactor": -7
+      }
+    },
+    // chainparams_dump params main -llmqtestparams=-1:2
+    "extra/llmqtestparams_ignored_main": {
+      "chain": "main",
+      "args": [
+        "-llmqtestparams=-1:2"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params test -llmqtestparams=-1:2
+    "extra/llmqtestparams_ignored_test": {
+      "chain": "test",
+      "args": [
+        "-llmqtestparams=-1:2"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params main -llmqdevnetparams=-2:9
+    "extra/llmqdevnetparams_ignored_main": {
+      "chain": "main",
+      "args": [
+        "-llmqdevnetparams=-2:9"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params test -llmqdevnetparams=-2:9
+    "extra/llmqdevnetparams_ignored_test": {
+      "chain": "test",
+      "args": [
+        "-llmqdevnetparams=-2:9"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params regtest -llmqdevnetparams=-2:9
+    "extra/llmqdevnetparams_ignored_regtest": {
+      "chain": "regtest",
+      "args": [
+        "-llmqdevnetparams=-2:9"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params devnet -llmqtestparams=-1:2 -llmqtestinstantsendparams=-3:-4 -llmqtestplatformparams=3:70000
+    "extra/llmqtestparams_ignored_devnet": {
+      "chain": "devnet",
+      "args": [
+        "-llmqtestparams=-1:2",
+        "-llmqtestinstantsendparams=-3:-4",
+        "-llmqtestplatformparams=3:70000"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params devnet -powtargetspacing=86401
+    "extra/limit_spacing_big": {
+      "chain": "devnet",
+      "args": [
+        "-powtargetspacing=86401"
+      ],
+      "delta": {
+        "params.consensus.nPowTargetSpacing": 86401
+      }
+    },
+    // chainparams_dump params regtest -dip3params=-1:600 -budgetparams=x
+    "extra/negative_then_budget_error": {
+      "chain": "regtest",
+      "args": [
+        "-dip3params=-1:600",
+        "-budgetparams=x"
+      ],
+      "error": "Budget parameters malformed, expecting <masternode>:<budget>:<superblock>"
+    },
+    // chainparams_dump params regtest -vbparams=v24:0:9:-1 -vbparams=nope:1:2
+    "extra/negative_then_vb_error": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=v24:0:9:-1",
+        "-vbparams=nope:1:2"
+      ],
+      "error": "Invalid deployment (nope)"
+    },
+    // chainparams_dump params regtest -budgetparams=-1:2:3 -llmqtestparams=x
+    "extra/negative_then_llmq_error": {
+      "chain": "regtest",
+      "args": [
+        "-budgetparams=-1:2:3",
+        "-llmqtestparams=x"
+      ],
+      "error": "LLMQ_TEST parameters malformed, expecting <size>:<threshold>"
+    },
+    // chainparams_dump params regtest -vbparams=v24:0:9:-1 -vbparams=v24:0:9:0
+    "extra/vb_negative_overwritten": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=v24:0:9:-1",
+        "-vbparams=v24:0:9:0"
+      ],
+      "delta": {
+        "params.consensus.vDeployments.1.nTimeout": 9
+      }
+    },
+    // chainparams_dump params regtest -vbparams=v24:0:9:-1 -vbparams=v24:0:9
+    "extra/vb_negative_overwritten_3": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=v24:0:9:-1",
+        "-vbparams=v24:0:9"
+      ],
+      "delta": {
+        "params.consensus.vDeployments.1.nTimeout": 9
+      }
+    },
+    // chainparams_dump params regtest -dip3params=-1:5 -dip3params=4:5
+    "extra/dip3_negative_overwritten": {
+      "chain": "regtest",
+      "args": [
+        "-dip3params=-1:5",
+        "-dip3params=4:5"
+      ],
+      "delta": {
+        "params.consensus.DIP0003Height": 4,
+        "params.consensus.DIP0003EnforcementHeight": 5,
+        "ext.buriedDeployments.dip0003": 4
+      }
+    },
+    // chainparams_dump params regtest -novbparams=garbage
+    "extra/neg_vbparams_garbage": {
+      "chain": "regtest",
+      "args": [
+        "-novbparams=garbage"
+      ],
+      "error": "Version bits parameters malformed, expecting <deployment>:<start>:<end> or <deployment>:<start>:<end>:<min_activation_height> or <deployment>:<start>:<end>:<min_activation_height>:<window>:<threshold> or <deployment>:<start>:<end>:<min_activation_height>:<window>:<thresholdstart>:<thresholdmin>:<falloffcoeff>:<useehf>"
+    },
+    // chainparams_dump params regtest -nodip3params=0abc
+    "extra/neg_dip3_0abc": {
+      "chain": "regtest",
+      "args": [
+        "-nodip3params=0abc"
+      ],
+      "error": "DIP3 parameters malformed, expecting <activation>:<enforcement>"
+    },
+    // chainparams_dump params regtest -nodip3params=1
+    "extra/neg_dip3_true": {
+      "chain": "regtest",
+      "args": [
+        "-nodip3params=1"
+      ],
+      "error": "DIP3 parameters malformed, expecting <activation>:<enforcement>"
+    },
+    // chainparams_dump params regtest -vbparams=testdummy:0:9:-5 -vbparams=v24:0:9:-1 -vbparams=v24:0:9:0
+    "refused/vb_other_negative": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=testdummy:0:9:-5",
+        "-vbparams=v24:0:9:-1",
+        "-vbparams=v24:0:9:0"
+      ],
+      "delta": {
+        "params.consensus.vDeployments.0.nTimeout": 9,
+        "params.consensus.vDeployments.0.min_activation_height": -5,
+        "params.consensus.vDeployments.1.nTimeout": 9
+      }
+    },
+    // chainparams_dump params regtest -budgetparams=10:-1:30
+    "refused/budget_negative": {
+      "chain": "regtest",
+      "args": [
+        "-budgetparams=10:-1:30"
+      ],
+      "delta": {
+        "params.consensus.nMasternodePaymentsStartBlock": 10,
+        "params.consensus.nBudgetPaymentsStartBlock": -1,
+        "params.consensus.nSuperblockStartBlock": 30
+      }
+    },
+    // chainparams_dump params regtest -dip3params=-1:5
+    "refused/dip3_negative": {
+      "chain": "regtest",
+      "args": [
+        "-dip3params=-1:5"
+      ],
+      "delta": {
+        "params.consensus.DIP0003Height": -1,
+        "params.consensus.DIP0003EnforcementHeight": 5,
+        "ext.buriedDeployments.dip0003": -1
+      }
+    },
+    // chainparams_dump params regtest -llmqtestinstantsendparams=-3:-4
+    "refused/llmq_negative": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestinstantsendparams=-3:-4"
+      ],
+      "delta": {
+        "params.consensus.llmqs.1.size": -3,
+        "params.consensus.llmqs.1.minSize": -4,
+        "params.consensus.llmqs.1.threshold": -4,
+        "params.consensus.llmqs.1.dkgBadVotesThreshold": -4,
+        "ext.llmqs.1.size": -3,
+        "ext.llmqs.1.minSize": -4,
+        "ext.llmqs.1.threshold": -4,
+        "ext.llmqs.1.dkgBadVotesThreshold": -4
+      }
+    },
+    // chainparams_dump params devnet -llmqdevnetparams=-2:9
+    "refused/llmq_devnet_negative": {
+      "chain": "devnet",
+      "args": [
+        "-llmqdevnetparams=-2:9"
+      ],
+      "delta": {
+        "params.consensus.llmqs.5.size": -2,
+        "params.consensus.llmqs.5.minSize": 9,
+        "params.consensus.llmqs.5.threshold": 9,
+        "params.consensus.llmqs.5.dkgBadVotesThreshold": 9,
+        "ext.llmqs.5.size": -2,
+        "ext.llmqs.5.minSize": 9,
+        "ext.llmqs.5.threshold": 9,
+        "ext.llmqs.5.dkgBadVotesThreshold": 9
+      }
+    },
+    // chainparams_dump params regtest -llmqtestparams=3:70000
+    "refused/llmq_threshold_70000": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestparams=3:70000"
+      ],
+      "delta": {
+        "params.consensus.llmqs.0.minSize": 70000,
+        "params.consensus.llmqs.0.threshold": 70000,
+        "params.consensus.llmqs.0.dkgBadVotesThreshold": 70000,
+        "ext.llmqs.0.minSize": 70000,
+        "ext.llmqs.0.threshold": 70000,
+        "ext.llmqs.0.dkgBadVotesThreshold": 70000
+      }
+    },
+    // chainparams_dump params regtest -llmqtestplatformparams=3:-1
+    "refused/llmq_threshold_negative": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestplatformparams=3:-1"
+      ],
+      "delta": {
+        "params.consensus.llmqs.4.minSize": -1,
+        "params.consensus.llmqs.4.threshold": -1,
+        "params.consensus.llmqs.4.dkgBadVotesThreshold": -1,
+        "ext.llmqs.4.minSize": -1,
+        "ext.llmqs.4.threshold": -1,
+        "ext.llmqs.4.dkgBadVotesThreshold": -1
+      }
+    },
+    // chainparams_dump params main -nopowtargetspacing
+    "error/neg_powtargetspacing_main": {
+      "chain": "main",
+      "args": [
+        "-nopowtargetspacing"
+      ],
+      "error": "Negating of -powtargetspacing is meaningless and therefore forbidden"
+    },
+    // chainparams_dump params test -nopowtargetspacing
+    "error/neg_powtargetspacing_test": {
+      "chain": "test",
+      "args": [
+        "-nopowtargetspacing"
+      ],
+      "error": "Negating of -powtargetspacing is meaningless and therefore forbidden"
+    },
+    // chainparams_dump params regtest -nopowtargetspacing
+    "error/neg_powtargetspacing_regtest": {
+      "chain": "regtest",
+      "args": [
+        "-nopowtargetspacing"
+      ],
+      "error": "Negating of -powtargetspacing is meaningless and therefore forbidden"
+    },
+    // chainparams_dump params devnet -nopowtargetspacing
+    "error/neg_powtargetspacing_devnet": {
+      "chain": "devnet",
+      "args": [
+        "-nopowtargetspacing"
+      ],
+      "error": "Negating of -powtargetspacing is meaningless and therefore forbidden"
+    },
+    // chainparams_dump params devnet -nopowtargetspacing=0
+    "error/neg_powtargetspacing_double": {
+      "chain": "devnet",
+      "args": [
+        "-nopowtargetspacing=0"
+      ],
+      "error": "Negating of -powtargetspacing is meaningless and therefore forbidden"
+    },
+    // chainparams_dump params main -nopowtargetspacing=0
+    "error/neg_powtargetspacing_double_main": {
+      "chain": "main",
+      "args": [
+        "-nopowtargetspacing=0"
+      ],
+      "error": "Negating of -powtargetspacing is meaningless and therefore forbidden"
+    },
+    // chainparams_dump params devnet -powtargetspacing=60 -nopowtargetspacing
+    "error/neg_powtargetspacing_after_value": {
+      "chain": "devnet",
+      "args": [
+        "-powtargetspacing=60",
+        "-nopowtargetspacing"
+      ],
+      "error": "Negating of -powtargetspacing is meaningless and therefore forbidden"
+    },
+    // chainparams_dump params regtest -dip3params=x -llmqtestparams=-1:2 -nopowtargetspacing
+    "error/neg_powtargetspacing_after_chain_errors": {
+      "chain": "regtest",
+      "args": [
+        "-dip3params=x",
+        "-llmqtestparams=-1:2",
+        "-nopowtargetspacing"
+      ],
+      "error": "Negating of -powtargetspacing is meaningless and therefore forbidden"
+    },
+    // chainparams_dump params regtest -llmqtestparams=70000:2
+    "refused/llmq_size_70000": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestparams=70000:2"
+      ],
+      "delta": {
+        "params.consensus.llmqs.0.size": 70000,
+        "ext.llmqs.0.size": 70000
+      }
+    },
+    // chainparams_dump params regtest -llmqtestplatformparams=1000000:2
+    "refused/llmqtestplat_size_1000000": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestplatformparams=1000000:2"
+      ],
+      "delta": {
+        "params.consensus.llmqs.4.size": 1000000,
+        "ext.llmqs.4.size": 1000000
+      }
+    },
+    // chainparams_dump params regtest -fastprune
+    "regtest_fastprune": {
+      "chain": "regtest",
+      "args": [
+        "-fastprune"
+      ],
+      "delta": {
+        "params.pruneAfterHeight": 100
+      }
+    },
+    // chainparams_dump params regtest -fastprune=0
+    "regtest_fastprune_0": {
+      "chain": "regtest",
+      "args": [
+        "-fastprune=0"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params regtest -fastprune=
+    "regtest_fastprune_empty": {
+      "chain": "regtest",
+      "args": [
+        "-fastprune="
+      ],
+      "delta": {
+        "params.pruneAfterHeight": 100
+      }
+    },
+    // chainparams_dump params regtest -nofastprune
+    "regtest_fastprune_neg": {
+      "chain": "regtest",
+      "args": [
+        "-nofastprune"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params regtest '-fastprune= 2x'
+    "regtest_fastprune_atoi": {
+      "chain": "regtest",
+      "args": [
+        "-fastprune= 2x"
+      ],
+      "delta": {
+        "params.pruneAfterHeight": 100
+      }
+    },
+    // chainparams_dump params main -fastprune
+    "main_fastprune": {
+      "chain": "main",
+      "args": [
+        "-fastprune"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params regtest -nofastprune=0
+    "regtest_fastprune_double_neg": {
+      "chain": "regtest",
+      "args": [
+        "-nofastprune=0"
+      ],
+      "delta": {
+        "params.pruneAfterHeight": 100
+      }
+    },
+    // chainparams_dump params regtest -nofastprune=garbage
+    "regtest_fastprune_garbage": {
+      "chain": "regtest",
+      "args": [
+        "-nofastprune=garbage"
+      ],
+      "delta": {
+        "params.pruneAfterHeight": 100
+      }
+    },
+    // chainparams_dump params regtest -nofastprune=0x1
+    "regtest_fastprune_0x1": {
+      "chain": "regtest",
+      "args": [
+        "-nofastprune=0x1"
+      ],
+      "delta": {
+        "params.pruneAfterHeight": 100
+      }
+    },
+    // chainparams_dump params regtest -nofastprune=0abc
+    "regtest_fastprune_0abc": {
+      "chain": "regtest",
+      "args": [
+        "-nofastprune=0abc"
+      ],
+      "delta": {
+        "params.pruneAfterHeight": 100
+      }
+    },
+    // chainparams_dump params regtest -sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55
+    "spork/custom": {
+      "chain": "regtest",
+      "args": [
+        "-sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55"
+      ],
+      "delta": {
+        "spork.keyIDs.0": "fd2225ace13b4fbc503071f19f9e8041c86d62dc"
+      }
+    },
+    // chainparams_dump params main -sporkaddr=Xgtyuk76vhuFW2iT7UAiHgNdWXCf3J34wh
+    "spork/main_default_again": {
+      "chain": "main",
+      "args": [
+        "-sporkaddr=Xgtyuk76vhuFW2iT7UAiHgNdWXCf3J34wh"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params regtest -sporkaddr=invalid
+    "spork/invalid": {
+      "chain": "regtest",
+      "args": [
+        "-sporkaddr=invalid"
+      ],
+      "error": "Invalid spork address specified with -sporkaddr"
+    },
+    // chainparams_dump params regtest -sporkaddr=Xgtyuk76vhuFW2iT7UAiHgNdWXCf3J34wh
+    "spork/wrong_network": {
+      "chain": "regtest",
+      "args": [
+        "-sporkaddr=Xgtyuk76vhuFW2iT7UAiHgNdWXCf3J34wh"
+      ],
+      "error": "Invalid spork address specified with -sporkaddr"
+    },
+    // chainparams_dump params regtest -sporkaddr=8eRTi4fUVRoeYEeeTyL4DPAwxatvbjaxFV
+    "spork/script_hash": {
+      "chain": "regtest",
+      "args": [
+        "-sporkaddr=8eRTi4fUVRoeYEeeTyL4DPAwxatvbjaxFV"
+      ],
+      "error": "Invalid spork address specified with -sporkaddr"
+    },
+    // chainparams_dump params regtest $'-sporkaddr= yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55\t'
+    "spork/whitespace": {
+      "chain": "regtest",
+      "args": [
+        "-sporkaddr= yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55\t"
+      ],
+      "delta": {
+        "spork.keyIDs.0": "fd2225ace13b4fbc503071f19f9e8041c86d62dc"
+      }
+    },
+    // chainparams_dump params regtest '-sporkaddr=yjPtiKh2uwk3bDut TEA2q9mCtXyiZRWn55'
+    "spork/inner_space": {
+      "chain": "regtest",
+      "args": [
+        "-sporkaddr=yjPtiKh2uwk3bDut TEA2q9mCtXyiZRWn55"
+      ],
+      "error": "Invalid spork address specified with -sporkaddr"
+    },
+    // chainparams_dump params regtest -sporkaddr=tdash1qq
+    "spork/platform_hrp": {
+      "chain": "regtest",
+      "args": [
+        "-sporkaddr=tdash1qq"
+      ],
+      "error": "Invalid spork address specified with -sporkaddr"
+    },
+    // chainparams_dump params regtest -sporkaddr=yj949n1UH6fDhw6HtVE5VMj2iSTaSWBMcW -sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55
+    "spork/two": {
+      "chain": "regtest",
+      "args": [
+        "-sporkaddr=yj949n1UH6fDhw6HtVE5VMj2iSTaSWBMcW",
+        "-sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55"
+      ],
+      "error": "Invalid minimum number of spork signers specified with -minsporkkeys"
+    },
+    // chainparams_dump params regtest -sporkaddr=yj949n1UH6fDhw6HtVE5VMj2iSTaSWBMcW -sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55 -minsporkkeys=2
+    "spork/two_threshold_2": {
+      "chain": "regtest",
+      "args": [
+        "-sporkaddr=yj949n1UH6fDhw6HtVE5VMj2iSTaSWBMcW",
+        "-sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55",
+        "-minsporkkeys=2"
+      ],
+      "extra_keys": {
+        "spork.keyIDs.1": "fd2225ace13b4fbc503071f19f9e8041c86d62dc"
+      },
+      "missing_keys": [],
+      "delta": {
+        "spork.minSporkKeys": 2,
+        "spork.keyIDs.#": 2
+      }
+    },
+    // chainparams_dump params test -sporkaddr=yj949n1UH6fDhw6HtVE5VMj2iSTaSWBMcW -sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55 -sporkaddr=yLKU4EJxjbv8peagVRM3UykZDJoaUUrXSn -minsporkkeys=2
+    "spork/three_threshold_2": {
+      "chain": "test",
+      "args": [
+        "-sporkaddr=yj949n1UH6fDhw6HtVE5VMj2iSTaSWBMcW",
+        "-sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55",
+        "-sporkaddr=yLKU4EJxjbv8peagVRM3UykZDJoaUUrXSn",
+        "-minsporkkeys=2"
+      ],
+      "extra_keys": {
+        "spork.keyIDs.1": "fa53c9728c3189b12b267be5811b54033525b08d",
+        "spork.keyIDs.2": "fd2225ace13b4fbc503071f19f9e8041c86d62dc"
+      },
+      "missing_keys": [],
+      "delta": {
+        "spork.minSporkKeys": 2,
+        "spork.keyIDs.#": 3,
+        "spork.keyIDs.0": "000102030405060708090a0b0c0d0e0f10111213"
+      }
+    },
+    // chainparams_dump params regtest -sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55 -sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55
+    "spork/duplicate": {
+      "chain": "regtest",
+      "args": [
+        "-sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55",
+        "-sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55"
+      ],
+      "delta": {
+        "spork.keyIDs.0": "fd2225ace13b4fbc503071f19f9e8041c86d62dc"
+      }
+    },
+    // chainparams_dump params regtest -nosporkaddr
+    "spork/negated": {
+      "chain": "regtest",
+      "args": [
+        "-nosporkaddr"
+      ],
+      "error": "Invalid minimum number of spork signers specified with -minsporkkeys"
+    },
+    // chainparams_dump params regtest -sporkaddr=invalid -nosporkaddr -sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55
+    "spork/negated_then_set": {
+      "chain": "regtest",
+      "args": [
+        "-sporkaddr=invalid",
+        "-nosporkaddr",
+        "-sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55"
+      ],
+      "delta": {
+        "spork.keyIDs.0": "fd2225ace13b4fbc503071f19f9e8041c86d62dc"
+      }
+    },
+    // chainparams_dump params regtest -minsporkkeys=0
+    "spork/minkeys_0": {
+      "chain": "regtest",
+      "args": [
+        "-minsporkkeys=0"
+      ],
+      "error": "Invalid minimum number of spork signers specified with -minsporkkeys"
+    },
+    // chainparams_dump params devnet -minsporkkeys=1
+    "spork/minkeys_1": {
+      "chain": "devnet",
+      "args": [
+        "-minsporkkeys=1"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params regtest -minsporkkeys=garbage
+    "spork/minkeys_garbage": {
+      "chain": "regtest",
+      "args": [
+        "-minsporkkeys=garbage"
+      ],
+      "error": "Invalid minimum number of spork signers specified with -minsporkkeys"
+    },
+    // chainparams_dump params regtest -minsporkkeys=4294967297
+    "spork/minkeys_wrap": {
+      "chain": "regtest",
+      "args": [
+        "-minsporkkeys=4294967297"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params regtest -nominsporkkeys
+    "spork/minkeys_negated": {
+      "chain": "regtest",
+      "args": [
+        "-nominsporkkeys"
+      ],
+      "error": "Invalid minimum number of spork signers specified with -minsporkkeys"
+    },
+    // chainparams_dump params regtest -minsporkkeys=
+    "spork/minkeys_empty": {
+      "chain": "regtest",
+      "args": [
+        "-minsporkkeys="
+      ],
+      "error": "Invalid minimum number of spork signers specified with -minsporkkeys"
+    },
+    // chainparams_dump params regtest -nominsporkkeys=0
+    "spork/minkeys_negated_0": {
+      "chain": "regtest",
+      "args": [
+        "-nominsporkkeys=0"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params regtest -nominsporkkeys=1
+    "spork/minkeys_negated_1": {
+      "chain": "regtest",
+      "args": [
+        "-nominsporkkeys=1"
+      ],
+      "error": "Invalid minimum number of spork signers specified with -minsporkkeys"
+    },
+    // chainparams_dump params regtest -nominsporkkeys=x
+    "spork/minkeys_negated_x": {
+      "chain": "regtest",
+      "args": [
+        "-nominsporkkeys=x"
+      ],
+      "delta": {}
+    },
+    // chainparams_dump params regtest -sporkaddr=yj949n1UH6fDhw6HtVE5VMj2iSTaSWBMcW -sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55 -minsporkkeys=2 -nominsporkkeys=0
+    "spork/two_threshold_2_negated_0": {
+      "chain": "regtest",
+      "args": [
+        "-sporkaddr=yj949n1UH6fDhw6HtVE5VMj2iSTaSWBMcW",
+        "-sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55",
+        "-minsporkkeys=2",
+        "-nominsporkkeys=0"
+      ],
+      "error": "Invalid minimum number of spork signers specified with -minsporkkeys"
+    },
+    // chainparams_dump params regtest -sporkaddr=yj949n1UH6fDhw6HtVE5VMj2iSTaSWBMcW -sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55 -minsporkkeys=2 -nominsporkkeys=x
+    "spork/two_threshold_2_negated_x": {
+      "chain": "regtest",
+      "args": [
+        "-sporkaddr=yj949n1UH6fDhw6HtVE5VMj2iSTaSWBMcW",
+        "-sporkaddr=yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55",
+        "-minsporkkeys=2",
+        "-nominsporkkeys=x"
+      ],
+      "error": "Invalid minimum number of spork signers specified with -minsporkkeys"
+    },
+    // chainparams_dump params regtest -dip3params=-1:5 -sporkaddr=invalid
+    "spork/before_dip3_negative": {
+      "chain": "regtest",
+      "args": [
+        "-dip3params=-1:5",
+        "-sporkaddr=invalid"
+      ],
+      "error": "Invalid spork address specified with -sporkaddr"
+    },
+    // chainparams_dump params regtest -budgetparams=10:-1:30 -sporkaddr=invalid
+    "spork/before_budget_negative": {
+      "chain": "regtest",
+      "args": [
+        "-budgetparams=10:-1:30",
+        "-sporkaddr=invalid"
+      ],
+      "error": "Invalid spork address specified with -sporkaddr"
+    },
+    // chainparams_dump params regtest -vbparams=v24:0:999:-350 -sporkaddr=invalid
+    "spork/before_vb_negative": {
+      "chain": "regtest",
+      "args": [
+        "-vbparams=v24:0:999:-350",
+        "-sporkaddr=invalid"
+      ],
+      "error": "Invalid spork address specified with -sporkaddr"
+    },
+    // chainparams_dump params regtest -sporkaddr=invalid -dip3params=x
+    "spork/chain_error_first": {
+      "chain": "regtest",
+      "args": [
+        "-sporkaddr=invalid",
+        "-dip3params=x"
+      ],
+      "error": "DIP3 parameters malformed, expecting <activation>:<enforcement>"
+    },
+    // chainparams_dump params regtest -minsporkkeys=1 -dip3params=x
+    "spork/minkeys_before_chain": {
+      "chain": "regtest",
+      "args": [
+        "-minsporkkeys=1",
+        "-dip3params=x"
+      ],
+      "error": "DIP3 parameters malformed, expecting <activation>:<enforcement>"
+    },
+    // chainparams_dump params regtest -llmqtestparams=-1:2 -sporkaddr=invalid
+    "spork/llmq_range_then_invalid": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestparams=-1:2",
+        "-sporkaddr=invalid"
+      ],
+      "error": "Invalid spork address specified with -sporkaddr"
+    },
+    // chainparams_dump params regtest -llmqtestparams=-1:2 -minsporkkeys=2
+    "spork/llmq_range_then_minkeys": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestparams=-1:2",
+        "-minsporkkeys=2"
+      ],
+      "error": "Invalid minimum number of spork signers specified with -minsporkkeys"
+    },
+    // chainparams_dump params regtest -nopowtargetspacing -minsporkkeys=1
+    "spork/parse_negation_first": {
+      "chain": "regtest",
+      "args": [
+        "-nopowtargetspacing",
+        "-minsporkkeys=1"
+      ],
+      "error": "Negating of -powtargetspacing is meaningless and therefore forbidden"
+    },
+    // chainparams_dump params regtest -minsporkkeys=1 -nopowtargetspacing
+    "spork/parse_minkeys_first": {
+      "chain": "regtest",
+      "args": [
+        "-minsporkkeys=1",
+        "-nopowtargetspacing"
+      ],
+      "error": "Negating of -powtargetspacing is meaningless and therefore forbidden"
+    },
+    // chainparams_dump params regtest -llmqtestparams=-1:2 -minsporkkeys=1
+    "refused/llmq_range_then_min_spork_keys": {
+      "chain": "regtest",
+      "args": [
+        "-llmqtestparams=-1:2",
+        "-minsporkkeys=1"
+      ],
+      "delta": {
+        "params.consensus.llmqs.0.size": -1,
+        "ext.llmqs.0.size": -1
       }
     }
   }

@@ -6,16 +6,27 @@
 
 //! The genesis and devnet genesis blocks built from the chain setup equal
 //! the reference implementation's bytes in dash-params' chain-params
-//! corpora. dash-params checks every other value of those corpora itself.
+//! corpora, chain by chain and option case by option case. dash-params
+//! checks every other value of those corpora itself.
 
 #![expect(clippy::unwrap_used, reason = "test code")]
 
-use dash_dev::Corpus;
+use dash_dev::{Corpus, Value};
 use dash_params::{ChainParamsBuilder, ChainSetup, Network, Release};
 use dash_primitives::{Block, BlockHeader};
 use dash_types::codec::BaseCodec;
 use hex_conservative::DisplayHex;
 use rstest::rstest;
+
+/// Corpus keys holding block bytes.
+const GENESIS: &str = "params.genesisBlock";
+const DEVNET_GENESIS: &str = "ext.devnetGenesisBlock";
+
+/// The corpus `corpus` of dash-params.
+fn root(corpus: &str) -> Value {
+  let params_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../params");
+  Corpus::open(params_dir, corpus).into_value()
+}
 
 fn serialize(block: &Block) -> String {
   let mut buf = Vec::new();
@@ -37,8 +48,7 @@ fn chain_params_blocks_equal_the_reference(
   #[values(Network::Main, Network::Testnet3, Network::Devnet, Network::Regtest)] network: Network,
 ) {
   let (release, corpus) = corpus;
-  let params_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../params");
-  let root = Corpus::open(params_dir, corpus).into_value();
+  let root = root(corpus);
   let chain = network.network_id();
   let base = &root["bases"][chain];
   let setup = ChainParamsBuilder::new(network, release).build().unwrap();
@@ -47,4 +57,36 @@ fn chain_params_blocks_equal_the_reference(
   assert_eq!(serialize(&genesis), want, "{corpus} {chain}");
   let want = base["ext"]["devnetGenesisBlock"].as_str().unwrap();
   assert_eq!(serialize(&devnet_genesis(&setup)), want, "{corpus} {chain}");
+}
+
+/// The option cases that change a block give the reference's bytes.
+#[rstest]
+fn option_case_blocks_equal_the_reference(
+  #[values((Release::V23_1, "chainparams_v23_1"), (Release::V24_0, "chainparams_v24_0"))] corpus: (Release, &str),
+) {
+  let (release, corpus) = corpus;
+  let root = root(corpus);
+  let mut checked = 0;
+  for (name, case) in root["cases"].as_object().unwrap() {
+    let Some(delta) = case.get("delta") else {
+      continue;
+    };
+    if delta.get(GENESIS).is_none() && delta.get(DEVNET_GENESIS).is_none() {
+      continue;
+    }
+    let chain = case["chain"].as_str().unwrap();
+    let mut builder = ChainParamsBuilder::new(Network::from_network_id(chain).unwrap(), release);
+    for arg in case["args"].as_array().unwrap() {
+      builder = builder.parse_arg(arg.as_str().unwrap()).unwrap();
+    }
+    let setup = builder.build().unwrap();
+    let base = &root["bases"][chain];
+    let want = |key: &str, base: &Value| delta.get(key).unwrap_or(base).as_str().unwrap().to_owned();
+    let genesis = want(GENESIS, &base["params"]["genesisBlock"]);
+    assert_eq!(serialize(&Block::from(&setup.genesis)), genesis, "{corpus} {name}");
+    let devnet = want(DEVNET_GENESIS, &base["ext"]["devnetGenesisBlock"]);
+    assert_eq!(serialize(&devnet_genesis(&setup)), devnet, "{corpus} {name}");
+    checked += 1;
+  }
+  assert!(checked > 0, "{corpus}: no case changes a block");
 }

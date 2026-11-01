@@ -5,7 +5,7 @@
 //
 
 //! Built chain parameters equal the reference implementation's dumps, chain
-//! by chain, at each release.
+//! by chain and option case by option case, at each release.
 //!
 //! dash-primitives checks the genesis block bytes, since it builds blocks.
 
@@ -13,7 +13,9 @@
 
 use dash_dev::{Corpus, Value};
 use dash_num::Hash256;
-use dash_params::{BuriedDeployment, ChainParamsBuilder, ChainSetup, LlmqParams, LlmqType, Network, Release};
+use dash_params::{
+  BuriedDeployment, ChainParamsBuilder, ChainSetup, LlmqParams, LlmqType, Network, Release, MAX_LLMQ_SIZE,
+};
 use dash_pow::__deps::digest::Digest;
 use dash_pow::X11;
 use dash_types::Numeric;
@@ -25,8 +27,41 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Corpus keys holding block bytes, which dash-primitives checks.
 const BLOCK_KEYS: [&str; 2] = ["params.genesisBlock", "ext.devnetGenesisBlock"];
 
-/// Corpus key of the static LLMQ table, which [`available_llmqs`] checks.
-const AVAILABLE: &str = "ext.availableLlmqs";
+/// Option cases the reference accepts and this crate refuses, with the
+/// refusal. Heights are unsigned here, and LLMQ sizes and thresholds `u16`.
+const REFUSED: [(&str, &str); 10] = [
+  ("refused/vb_other_negative", "negative height -5 in -vbparams"),
+  ("refused/budget_negative", "negative height -1 in -budgetparams"),
+  ("refused/dip3_negative", "negative height -1 in -dip3params"),
+  (
+    "refused/llmq_negative",
+    "LLMQ_TEST_INSTANTSEND size (-3) or threshold (-4) outside 0 to 65535",
+  ),
+  (
+    "refused/llmq_devnet_negative",
+    "LLMQ_DEVNET size (-2) or threshold (9) outside 0 to 65535",
+  ),
+  (
+    "refused/llmq_threshold_70000",
+    "LLMQ_TEST size (3) or threshold (70000) outside 0 to 65535",
+  ),
+  (
+    "refused/llmq_threshold_negative",
+    "LLMQ_TEST_PLATFORM size (3) or threshold (-1) outside 0 to 65535",
+  ),
+  (
+    "refused/llmq_size_70000",
+    "LLMQ_TEST size (70000) or threshold (2) outside 0 to 65535",
+  ),
+  (
+    "refused/llmqtestplat_size_1000000",
+    "LLMQ_TEST_PLATFORM size (1000000) or threshold (2) outside 0 to 65535",
+  ),
+  (
+    "refused/llmq_range_then_min_spork_keys",
+    "LLMQ_TEST size (-1) or threshold (2) outside 0 to 65535",
+  ),
+];
 
 /// The hex of `hash` as the reference implementation prints it, big-endian.
 fn hash_hex(hash: Hash256) -> String {
@@ -82,8 +117,14 @@ fn llmq(out: &mut Flat, path: &str, llmq_type: LlmqType, q: &LlmqParams) {
   out.put_all(path, fields);
 }
 
-/// `p` in the shape of the corpus, flattened, without the [`BLOCK_KEYS`] and
-/// the static LLMQ table.
+/// [`llmq`] with the values the reference derives from the parameters.
+fn llmq_ext(out: &mut Flat, path: &str, llmq_type: LlmqType, q: &LlmqParams) {
+  llmq(out, path, llmq_type, q);
+  out.put(&format!("{path}.max_store_depth"), q.max_store_depth());
+  out.put(&format!("{path}.is_single_member"), q.is_single_member());
+}
+
+/// `p` in the shape of the corpus, flattened, without the [`BLOCK_KEYS`].
 fn dump(p: &ChainSetup) -> BTreeMap<String, Value> {
   let mut out = Flat::default();
   let c = &p.consensus;
@@ -211,11 +252,7 @@ fn dump(p: &ChainSetup) -> BTreeMap<String, Value> {
     "params.consensus.nMinimumChainWork",
     c.minimum_chain_work.to_bendian().to_lower_hex_string(),
   );
-  let llmqs: Vec<_> = c
-    .llmqs
-    .iter()
-    .map(|&t| (t, t.params().expect("a table entry")))
-    .collect();
+  let llmqs: Vec<_> = c.llmqs.iter().map(|&t| (t, c.llmq(t).unwrap())).collect();
   out.list("params.consensus.llmqs", &llmqs, |out, path, (t, q)| {
     llmq(out, path, *t, q)
   });
@@ -281,15 +318,39 @@ fn dump(p: &ChainSetup) -> BTreeMap<String, Value> {
       c.deployment_height(d).to_u32(),
     );
   }
+  out.list("ext.llmqs", &llmqs, |out, path, (t, q)| llmq_ext(out, path, *t, q));
+  let available = LlmqType::AVAILABLE.map(|t| (t, t.params().expect("a table entry")));
+  out.list("ext.availableLlmqs", &available, |out, path, (t, q)| {
+    llmq_ext(out, path, *t, q)
+  });
   match p.release() {
-    Release::V23_1 => out.put(
-      "ext.requireStandard",
-      p.require_standard.expect("v23 has a standard policy"),
-    ),
-    Release::V24_0 => out.put(
-      "ext.bech32PlatformHRP",
-      p.platform_hrp().expect("v24 has a Platform HRP"),
-    ),
+    Release::V23_1 => {
+      out.put(
+        "ext.requireStandard",
+        p.require_standard.expect("v23 has a standard policy"),
+      );
+      out.put(
+        "ext.minSporkKeys",
+        p.release().min_spork_keys().expect("v23 has a threshold"),
+      );
+    }
+    Release::V24_0 => {
+      out.put(
+        "ext.bech32PlatformHRP",
+        p.platform_hrp().expect("v24 has a Platform HRP"),
+      );
+      out.put("ext.MAX_LLMQ_SIZE", MAX_LLMQ_SIZE);
+    }
+  }
+  let signers = &p.spork_signers;
+  out.list("spork.keyIDs", &signers.key_ids, |out, path, id| {
+    out.put(path, id.as_bytes().to_lower_hex_string())
+  });
+  if let Some(min) = signers.min_spork_keys {
+    out.put("spork.minSporkKeys", min);
+  }
+  if let Some(warning) = &signers.warning {
+    out.put("spork.warning", warning.as_str());
   }
   out.0
 }
@@ -314,18 +375,22 @@ fn flatten(value: &Value, prefix: &str, out: &mut BTreeMap<String, Value>) {
   }
 }
 
-/// Each chain's corpus base, flattened.
-fn bases(corpus: &str) -> BTreeMap<String, BTreeMap<String, Value>> {
-  let root = Corpus::open(env!("CARGO_MANIFEST_DIR"), corpus).into_value();
+/// `value` flattened.
+fn flat(value: &Value) -> BTreeMap<String, Value> {
+  let mut out = BTreeMap::new();
+  flatten(value, "", &mut out);
+  out
+}
+
+/// The corpus `corpus`.
+fn root(corpus: &str) -> Value {
+  Corpus::open(env!("CARGO_MANIFEST_DIR"), corpus).into_value()
+}
+
+/// Each chain's base in `root`, flattened.
+fn bases(root: &Value) -> BTreeMap<String, BTreeMap<String, Value>> {
   let bases = root["bases"].as_object().unwrap();
-  bases
-    .iter()
-    .map(|(chain, v)| {
-      let mut out = BTreeMap::new();
-      flatten(v, "", &mut out);
-      (chain.clone(), out)
-    })
-    .collect()
+  bases.iter().map(|(chain, v)| (chain.clone(), flat(v))).collect()
 }
 
 fn corpus(release: Release) -> &'static str {
@@ -335,6 +400,16 @@ fn corpus(release: Release) -> &'static str {
   }
 }
 
+/// Asserts that `got` holds exactly the values of `want` but the
+/// [`BLOCK_KEYS`].
+fn assert_dump(got: &BTreeMap<String, Value>, mut want: BTreeMap<String, Value>, what: &str) {
+  want.retain(|path, _| !BLOCK_KEYS.contains(&path.as_str()));
+  for (path, v) in &want {
+    assert_eq!(got.get(path), Some(v), "{what}: {path}");
+  }
+  assert_eq!(got.len(), want.len(), "{what}: extra keys");
+}
+
 #[rstest]
 fn chain_setup_equals_the_reference(
   #[values(Release::V23_1, Release::V24_0)] release: Release,
@@ -342,19 +417,15 @@ fn chain_setup_equals_the_reference(
 ) {
   let corpus = corpus(release);
   let chain = network.network_id();
-  let mut want = bases(corpus).remove(chain).expect("a base per chain");
-  want.retain(|path, _| !BLOCK_KEYS.contains(&path.as_str()) && !path.starts_with(AVAILABLE));
+  let want = bases(&root(corpus)).remove(chain).expect("a base per chain");
   let got = dump(&ChainParamsBuilder::new(network, release).build().unwrap());
-  for (path, v) in &want {
-    assert_eq!(got.get(path), Some(v), "{corpus} {chain}: {path}");
-  }
-  assert_eq!(got.len(), want.len(), "{corpus} {chain}: extra keys");
+  assert_dump(&got, want, &format!("{corpus} {chain}"));
 }
 
 /// The corpora hold the four chains and nothing else.
 #[rstest]
 fn corpora_hold_every_chain(#[values(Release::V23_1, Release::V24_0)] release: Release) {
-  let chains: Vec<String> = bases(corpus(release)).into_keys().collect();
+  let chains: Vec<String> = bases(&root(corpus(release))).into_keys().collect();
   let mut want: Vec<_> = Network::ALL.map(|n| n.network_id().to_owned()).into();
   want.sort();
   assert_eq!(chains, want);
@@ -381,37 +452,79 @@ fn buried_deployments_keep_the_reference_order(#[values(Release::V23_1, Release:
   }
 }
 
-/// The static LLMQ table, which every chain dumps, equals the reference
-/// implementation's, type by type.
+/// Each corpus holds exactly the cases of the case list, each once.
 #[rstest]
-fn available_llmqs(#[values(Release::V23_1, Release::V24_0)] release: Release) {
+fn corpora_hold_the_case_list(#[values(Release::V23_1, Release::V24_0)] release: Release) {
   let corpus = corpus(release);
-  for (chain, base) in bases(corpus) {
-    let count = base[&format!("{AVAILABLE}.#")].as_u64().unwrap();
-    let mut types = BTreeSet::new();
-    for i in 0..count {
-      let path = format!("{AVAILABLE}.{i}");
-      let want: BTreeMap<String, Value> = base
-        .iter()
-        .filter_map(|(k, v)| Some((k.strip_prefix(&format!("{path}."))?.to_owned(), v.clone())))
-        .collect();
-      let base_type = u8::try_from(want["type"].as_u64().unwrap()).unwrap();
-      let llmq_type = LlmqType::new(base_type);
-      let mut got = Flat::default();
-      llmq(&mut got, "q", llmq_type, &llmq_type.params().expect("a table entry"));
-      let got: BTreeMap<String, Value> = got
-        .0
-        .into_iter()
-        .map(|(k, v)| (k.strip_prefix("q.").unwrap().to_owned(), v))
-        .collect();
-      assert_eq!(got, want, "{corpus} {chain}: {llmq_type}");
-      types.insert(base_type);
+  let list = Corpus::open(env!("CARGO_MANIFEST_DIR"), "chainparams_cases").into_value();
+  let list = list[corpus].as_array().unwrap();
+  let want: BTreeMap<&str, (&Value, &Value)> = list
+    .iter()
+    .map(|case| (case[0].as_str().unwrap(), (&case[1], &case[2])))
+    .collect();
+  assert_eq!(want.len(), list.len(), "{corpus}: a name twice in the case list");
+  let root = root(corpus);
+  let got: BTreeMap<&str, (&Value, &Value)> = root["cases"]
+    .as_object()
+    .unwrap()
+    .iter()
+    .map(|(name, case)| (name.as_str(), (&case["chain"], &case["args"])))
+    .collect();
+  assert_eq!(got, want, "{corpus}");
+}
+
+/// Every option case gives the reference's error text, or its parameters.
+/// The [`REFUSED`] cases are refused instead.
+#[rstest]
+fn option_cases_equal_the_reference(#[values(Release::V23_1, Release::V24_0)] release: Release) {
+  let corpus = corpus(release);
+  let root = root(corpus);
+  let bases = bases(&root);
+  for (name, case) in root["cases"].as_object().unwrap() {
+    let what = format!("{corpus} {name}");
+    let chain = case["chain"].as_str().unwrap();
+    let network = Network::from_network_id(chain).unwrap();
+    let mut builder = ChainParamsBuilder::new(network, release);
+    for arg in case["args"].as_array().unwrap() {
+      builder = builder.parse_arg(arg.as_str().unwrap()).expect("a chain option");
     }
-    let table: BTreeSet<u8> = LlmqType::variants()
-      .iter()
-      .filter(|t| t.params().is_some())
-      .map(|t| t.to_base())
-      .collect();
-    assert_eq!(types, table, "{corpus} {chain}");
+    let built = builder.build();
+    if let Some((_, refusal)) = REFUSED.iter().find(|(n, _)| n == name) {
+      assert!(case.get("delta").is_some(), "{what}: the reference refuses it too");
+      assert_eq!(built.unwrap_err().to_string(), *refusal, "{what}");
+      continue;
+    }
+    if let Some(error) = case.get("error") {
+      assert_eq!(built.unwrap_err().to_string(), error.as_str().unwrap(), "{what}");
+      continue;
+    }
+    let mut want = bases[chain].clone();
+    for key in case.get("missing_keys").into_iter().flat_map(|k| k.as_array().unwrap()) {
+      want.remove(key.as_str().unwrap());
+    }
+    for extra in [case.get("extra_keys"), case.get("delta")].into_iter().flatten() {
+      want.extend(extra.as_object().unwrap().iter().map(|(k, v)| (k.clone(), v.clone())));
+    }
+    let got = dump(&built.expect(&what));
+    assert_dump(&got, want, &what);
+  }
+}
+
+/// Every refused case is an option case of a corpus.
+#[rstest]
+fn refused_cases_are_option_cases() {
+  let names: BTreeSet<String> = Release::ALL
+    .into_iter()
+    .flat_map(|r| {
+      root(corpus(r))["cases"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>()
+    })
+    .collect();
+  for (name, _) in REFUSED {
+    assert!(names.contains(name), "{name}");
   }
 }

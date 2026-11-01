@@ -12,7 +12,10 @@
 //     the tag, commit, source sha256 and version string.
 //   chainparams_dump params <chain> [args...]
 //     the parameters of <chain> after the release parses [args...] and selects
-//     the chain, as "params" and "ext", or the release's error text ("error").
+//     the chain, as "params" and "ext", and the spork signers its startup then
+//     resolves ("spork"). A refused argument list gives the release's error
+//     text instead, "parse_error" while parsing, "error" while selecting the
+//     chain, or "spork.error" while resolving the spork signers.
 //   chainparams_dump payment <height> <block value>
 //     the mainnet masternode payment at <height> in the classic reward era.
 
@@ -20,11 +23,14 @@
 #include <chainparamsbase.h>
 #include <clientversion.h>
 #include <deploymentinfo.h>
+#include <key_io.h>
 #include <llmq/params.h>
+#include <script/standard.h>
 #include <streams.h>
 #include <univalue.h>
 #include <util/strencodings.h>
 #include <util/system.h>
+#include <util/translation.h>
 #include <validation.h>
 #include <version.h>
 
@@ -37,6 +43,7 @@
 #include <cstring>
 #include <exception>
 #include <functional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -68,6 +75,15 @@ UniValue LlmqJson(const Consensus::LLMQParams& q)
     llmq.pushKV("keepOldConnections", q.keepOldConnections);
     llmq.pushKV("keepOldKeys", q.keepOldKeys);
     llmq.pushKV("recoveryMembers", q.recoveryMembers);
+    return llmq;
+}
+
+// An LLMQ with the values the release derives from it.
+UniValue LlmqExtJson(const Consensus::LLMQParams& q)
+{
+    UniValue llmq{LlmqJson(q)};
+    llmq.pushKV("max_store_depth", q.max_store_depth());
+    llmq.pushKV("is_single_member", q.is_single_member());
     return llmq;
 }
 
@@ -208,6 +224,7 @@ UniValue ExtJson(const CChainParams& chain)
 #else
     ext.pushKV("requireStandard", chain.RequireStandard());
     for (const auto& a : chain.SporkAddresses()) spork.push_back(a);
+    ext.pushKV("minSporkKeys", chain.MinSporkKeys());
 #endif
     ext.pushKV("sporkAddresses", spork);
     ext.pushKV("defaultConsistencyChecks", chain.DefaultConsistencyChecks());
@@ -266,10 +283,97 @@ UniValue ExtJson(const CChainParams& chain)
     }
     ext.pushKV("buriedDeployments", buried);
 
+    UniValue llmqs{UniValue::VARR};
+    for (const auto& q : chain.GetConsensus().llmqs) llmqs.push_back(LlmqExtJson(q));
+    ext.pushKV("llmqs", llmqs);
     UniValue available{UniValue::VARR};
-    for (const auto& q : Consensus::available_llmqs) available.push_back(LlmqJson(q));
+    for (const auto& q : Consensus::available_llmqs) available.push_back(LlmqExtJson(q));
     ext.pushKV("availableLlmqs", available);
+#if CLIENT_VERSION_MAJOR >= 24
+    ext.pushKV("MAX_LLMQ_SIZE", Consensus::MAX_LLMQ_SIZE);
+#endif
     return ext;
+}
+
+// The spork signer state the release's spork manager keeps, with its two
+// setters as the release has them, without the lock and the log lines.
+struct SporkSigners {
+#if CLIENT_VERSION_MAJOR >= 24
+    CKeyID sporkPubKeyID;
+#else
+    std::set<CKeyID> setSporkPubKeyIDs;
+    int nMinSporkKeys{0};
+#endif
+
+    bool SetSporkAddress(const std::string& strAddress)
+    {
+        CTxDestination dest = DecodeDestination(strAddress);
+        const PKHash* pkhash = std::get_if<PKHash>(&dest);
+        if (!pkhash) {
+            return false;
+        }
+#if CLIENT_VERSION_MAJOR >= 24
+        sporkPubKeyID = ToKeyID(*pkhash);
+#else
+        setSporkPubKeyIDs.insert(ToKeyID(*pkhash));
+#endif
+        return true;
+    }
+
+#if CLIENT_VERSION_MAJOR < 24
+    bool SetMinSporkKeys(int minSporkKeys)
+    {
+        if (int maxKeysNumber = setSporkPubKeyIDs.size(); (minSporkKeys <= maxKeysNumber / 2) || (minSporkKeys > maxKeysNumber)) {
+            return false;
+        }
+        nMinSporkKeys = minSporkKeys;
+        return true;
+    }
+#endif
+};
+
+// The spork signers as the release's startup resolves them from the options,
+// with its error or warning recorded instead of raised.
+UniValue SporkJson(const ArgsManager& args, const CChainParams& chainparams)
+{
+    SporkSigners sporkman;
+    UniValue out{UniValue::VOBJ};
+    const auto InitError = [&](const bilingual_str& str) {
+        out.pushKV("error", str.original);
+        return out;
+    };
+#if CLIENT_VERSION_MAJOR >= 24
+    const std::string spork_address{args.GetArg("-sporkaddr", chainparams.SporkAddress())};
+    if (args.GetArgs("-sporkaddr").size() > 1) {
+        out.pushKV("warning", strprintf(_("More than one spork address is provided. Using %s."), spork_address).original);
+    }
+    if (!sporkman.SetSporkAddress(spork_address)) {
+        return InitError(_("Invalid spork address specified with -sporkaddr"));
+    }
+    UniValue keys{UniValue::VARR};
+    keys.push_back(HexStr(sporkman.sporkPubKeyID));
+#else
+    std::vector<std::string> vSporkAddresses;
+    if (args.IsArgSet("-sporkaddr")) {
+        vSporkAddresses = args.GetArgs("-sporkaddr");
+    } else {
+        vSporkAddresses = chainparams.SporkAddresses();
+    }
+    for (const auto& address : vSporkAddresses) {
+        if (!sporkman.SetSporkAddress(address)) {
+            return InitError(_("Invalid spork address specified with -sporkaddr"));
+        }
+    }
+    int minsporkkeys = args.GetIntArg("-minsporkkeys", chainparams.MinSporkKeys());
+    if (!sporkman.SetMinSporkKeys(minsporkkeys)) {
+        return InitError(_("Invalid minimum number of spork signers specified with -minsporkkeys"));
+    }
+    UniValue keys{UniValue::VARR};
+    for (const auto& id : sporkman.setSporkPubKeyIDs) keys.push_back(HexStr(id));
+    out.pushKV("minSporkKeys", sporkman.nMinSporkKeys);
+#endif
+    out.pushKV("keyIDs", keys);
+    return out;
 }
 
 int DumpInfo()
@@ -290,14 +394,22 @@ int DumpParams(int argc, char* argv[])
     UniValue out{UniValue::VOBJ};
     gArgs.ClearArgs();
     SetupChainParamsOptions(gArgs);
+    // The node's other options that its chain parameters or spork signers
+    // read, added as the node adds them.
+    gArgs.AddArg("-fastprune", "", ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
+#if CLIENT_VERSION_MAJOR < 24
+    gArgs.AddArg("-minsporkkeys=<n>", "", ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+#endif
+    gArgs.AddArg("-sporkaddr=<dashaddress>", "", ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
     std::string error;
     if (!gArgs.ParseParameters(args.size(), args.data(), error)) {
-        out.pushKV("error", error);
+        out.pushKV("parse_error", error);
     } else {
         try {
             SelectParams(argv[0]);
             out.pushKV("params", ParamsJson(Params()));
             out.pushKV("ext", ExtJson(Params()));
+            out.pushKV("spork", SporkJson(gArgs, Params()));
         } catch (const std::exception& e) {
             out.pushKV("error", std::string{e.what()});
         }

@@ -8,10 +8,10 @@
 
 Every value comes from a chainparams_dump that build.sh linked against a
 reference implementation release. Each dump writes the corpus of its release
-line, chainparams_v<major>_<minor>.json5, and together they write
-brr_payments.json5.
+line, chainparams_v<major>_<minor>.json5, with the option cases the case list
+names for it, and together they write brr_payments.json5.
 
-  gen.py --dump DIR [--dump DIR ...] --out pkgs/params/corpus
+  gen.py --dump DIR [--dump DIR ...] --cases CASES --out pkgs/params/corpus
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ import argparse
 import hashlib
 import json
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -35,9 +36,16 @@ CHAINPARAMS_HEADER = """\
 //
 // "bases" holds the parameters of each chain with no options, as
 // contrib/params/chainparams_dump prints them. "params" holds the consensus
-// and network parameters, "ext" the chain's other parameters. Each entry is
-// the output of the command above it. dash-primitives checks the genesis
-// block bytes, dash-params every other value.
+// and network parameters, "ext" the chain's other parameters and "spork" the
+// spork signers. Each entry is the output of the command above it.
+//
+// "cases" holds the option cases chainparams_cases.json5 lists, each the
+// result of the command above it. A case holds the release's error text
+// ("error"), or the values that differ from its chain's base ("delta"), keyed
+// by dotted path, where "#" is an array's length. A case whose keys differ
+// from its base's also lists the keys it adds ("extra_keys") and lacks
+// ("missing_keys"). dash-primitives checks the genesis block bytes,
+// dash-params every other value.
 //
 // Dump source sha256 {source}.
 // Regenerate as contrib/params/README.md describes.
@@ -75,12 +83,55 @@ def release_line(tag: str) -> str:
   return f"v{m[1]}_{m[2]}"
 
 
+def shell_word(arg: str) -> str:
+  """`arg` quoted for bash, with control characters escaped."""
+  if arg.isprintable():
+    return shlex.quote(arg)
+  escaped = "".join(
+    {"\\": "\\\\", "'": "\\'", "\t": "\\t", "\n": "\\n"}.get(c)
+    or (c if c.isprintable() else f"\\x{ord(c):02x}")
+    for c in arg
+  )
+  return f"$'{escaped}'"
+
+
+def flatten(value: object, prefix: str = "") -> dict[str, object]:
+  """Leaf values of a JSON value keyed by dotted path, "#" an array length."""
+  if isinstance(value, dict):
+    out: dict[str, object] = {}
+    for k, v in value.items():
+      out.update(flatten(v, f"{prefix}{k}."))
+    return out
+  if isinstance(value, list):
+    out = {f"{prefix}#": len(value)}
+    for i, v in enumerate(value):
+      out.update(flatten(v, f"{prefix}{i}."))
+    return out
+  return {prefix[:-1]: value}
+
+
+def case_result(out: dict, base: dict) -> dict:
+  """A case's dump `out` as its error text or its delta from `base`."""
+  for error in (out.get("parse_error"), out.get("error")):
+    if error is not None:
+      return {"error": error}
+  if "error" in out["spork"]:
+    return {"error": out["spork"]["error"]}
+  got, want = flatten(out), flatten(base)
+  result = {}
+  if got.keys() != want.keys():
+    result["extra_keys"] = {k: v for k, v in got.items() if k not in want}
+    result["missing_keys"] = [k for k in want if k not in got]
+  result["delta"] = {k: v for k, v in got.items() if k in want and want[k] != v}
+  return result
+
+
 def json_block(value: object, indent: int) -> str:
   text = json.dumps(value, indent=2)
   return text.replace("\n", "\n" + " " * indent)
 
 
-def chainparams_corpus(dump: Path, info: dict) -> tuple[str, dict]:
+def chainparams_corpus(dump: Path, info: dict, cases: list) -> tuple[str, dict]:
   bases = {}
   entries = []
   for chain in CHAINS:
@@ -92,13 +143,23 @@ def chainparams_corpus(dump: Path, info: dict) -> tuple[str, dict]:
       f"    // chainparams_dump params {chain}\n"
       f'    "{chain}": {json_block(out, 4)}'
     )
+  case_entries = []
+  for name, chain, args in cases:
+    out = run(dump, "params", chain, *args)
+    case = {"chain": chain, "args": args, **case_result(out, bases[chain])}
+    command = " ".join(shell_word(w) for w in ("params", chain, *args))
+    case_entries.append(
+      f"    // chainparams_dump {command}\n"
+      f"    {json.dumps(name)}: {json_block(case, 4)}"
+    )
   header = CHAINPARAMS_HEADER.format(
     tag=info["tag"], commit=info["commit"][:12], source=info["source_sha256"]
   )
   body = (
     "{\n"
     f'  "version": {json.dumps(info["version"])},\n'
-    '  "bases": {\n' + ",\n".join(entries) + "\n  }\n}\n"
+    '  "bases": {\n' + ",\n".join(entries) + "\n  },\n"
+    '  "cases": {\n' + ",\n".join(case_entries) + "\n  }\n}\n"
   )
   return header + body, bases["main"]
 
@@ -143,7 +204,21 @@ def payments_corpus(runs: list[tuple[Path, dict, dict]], source: str) -> str:
   )
 
 
-def build_corpora(dumps: list[Path]) -> dict[str, str]:
+def read_cases(path: Path) -> dict[str, list]:
+  """The case list, a JSON object after its leading comment lines. A name
+  repeated within a corpus is refused."""
+  lines = path.read_text().splitlines()
+  kept = (line for line in lines if not line.startswith("//"))
+  cases = json.loads("\n".join(kept))
+  for corpus, entries in cases.items():
+    names = [entry[0] for entry in entries]
+    repeated = sorted({name for name in names if names.count(name) > 1})
+    if repeated:
+      sys.exit(f"{path}: {corpus} repeats {', '.join(repeated)}")
+  return cases
+
+
+def build_corpora(dumps: list[Path], cases: dict[str, list]) -> dict[str, str]:
   source = hashlib.sha256((HERE / "chainparams_dump.cpp").read_bytes())
   texts = {}
   runs = []
@@ -151,10 +226,13 @@ def build_corpora(dumps: list[Path]) -> dict[str, str]:
     info = run(dump, "info")
     if info["source_sha256"] != source.hexdigest():
       sys.exit(f"{dump}: built from another chainparams_dump.cpp")
-    name = f"chainparams_{release_line(info['tag'])}.json5"
+    corpus = f"chainparams_{release_line(info['tag'])}"
+    name = f"{corpus}.json5"
     if name in texts:
       sys.exit(f"{dump}: a second dump of {name}")
-    texts[name], main = chainparams_corpus(dump, info)
+    if corpus not in cases:
+      sys.exit(f"{dump}: the case list has no {corpus}")
+    texts[name], main = chainparams_corpus(dump, info, cases[corpus])
     runs.append((dump, info, main))
   runs.sort(key=lambda r: release_line(r[1]["tag"]))
   texts["brr_payments.json5"] = payments_corpus(runs, source.hexdigest())
@@ -166,9 +244,10 @@ def main() -> int:
     description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
   )
   ap.add_argument("--dump", type=Path, action="append", required=True)
+  ap.add_argument("--cases", type=Path, required=True)
   ap.add_argument("--out", type=Path, required=True)
   args = ap.parse_args()
-  for name, text in build_corpora(args.dump).items():
+  for name, text in build_corpora(args.dump, read_cases(args.cases)).items():
     (args.out / name).write_text(text)
   return 0
 
