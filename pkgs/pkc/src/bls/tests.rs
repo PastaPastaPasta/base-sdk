@@ -124,6 +124,48 @@ cfg_if! {
       legacy.into_iter().zip(ietf).collect()
     }
 
+    /// The reference implementation's outcome for one `bls_read` input.
+    #[derive(Clone, Copy, Debug, Eq, PartialEq, ::serde::Deserialize)]
+    #[serde(rename_all = "lowercase")]
+    pub enum ReadOutcome {
+      Null,
+      Valid,
+      Invalid,
+    }
+
+    /// Whether the `x` of an input the legacy scheme reads as valid has a
+    /// point on the curve.
+    #[derive(Clone, Copy, Debug, Eq, PartialEq, ::serde::Deserialize)]
+    #[serde(rename_all = "lowercase")]
+    pub enum Curve {
+      On,
+      Off,
+    }
+
+    /// One `bls_read` input, its outcome under each scheme and, when the
+    /// legacy scheme reads it as valid, whether its `x` has a curve point.
+    #[derive(Debug, ::serde::Deserialize)]
+    pub struct ReadVector {
+      pub class: String,
+      #[serde(rename = "in")]
+      pub input: String,
+      legacy: ReadOutcome,
+      basic: ReadOutcome,
+      #[serde(default)]
+      pub curve: Option<Curve>,
+    }
+
+    impl ReadVector {
+      pub fn outcome(&self, legacy: bool) -> ReadOutcome {
+        if legacy { self.legacy } else { self.basic }
+      }
+    }
+
+    /// The `bls_read` vectors of one kind.
+    pub fn read_vectors(kind: SerType) -> Vec<ReadVector> {
+      Corpus::open(env!("CARGO_MANIFEST_DIR"), "bls_read").vectors(&kind.to_string())
+    }
+
     /// Whether the legacy G1 encoding `b` holds an `x` with no point on the
     /// curve.
     pub fn chia_pk_off_curve(b: &[u8; 48]) -> bool {

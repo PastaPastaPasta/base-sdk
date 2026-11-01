@@ -148,8 +148,8 @@ mod tests {
   use crate::bls::public_ops::BlsPublicKey;
   use crate::bls::secret_ops::BlsSecretKey;
   use crate::bls::tests::{
-    ser_pairs, test_ikm, test_msg, SerType, G2_OFF_SUBGROUP_CHIA, G2_OFF_SUBGROUP_IETF, MSG_8BADFOOD, MSG_DEADBEEF,
-    RSEED,
+    read_vectors, ser_pairs, test_ikm, test_msg, Curve, ReadOutcome, SerType, G2_OFF_SUBGROUP_CHIA,
+    G2_OFF_SUBGROUP_IETF, MSG_8BADFOOD, MSG_DEADBEEF, RSEED,
   };
   use crate::bls::{BlsScChia, BlsScIetf, BlsSigId};
   use crate::prelude::*;
@@ -279,6 +279,47 @@ mod tests {
         "{flag:#x}"
       );
     }
+  }
+
+  /// Every `bls_read` input reads as in the reference implementation.
+  ///
+  /// `is_canonical` follows its outcome. A valid input decodes to a signature
+  /// that encodes back to it, except a legacy encoding whose `x` the corpus
+  /// marks off the curve, which does not decode.
+  fn assert_sig_reads<S: BlsScheme>(legacy: bool) {
+    for v in read_vectors(SerType::Signature) {
+      let label = format!("{} {}", v.class, v.input);
+      let bytes = BlsSigBytes::from_bytes(arr_from_hex(&v.input));
+      let outcome = v.outcome(legacy);
+
+      assert_eq!(v.curve.is_some(), v.outcome(true) == ReadOutcome::Valid, "{label}");
+      assert_eq!(bytes.is_null(), outcome == ReadOutcome::Null, "{label}");
+      assert_eq!(
+        S::is_canonical_sig(bytes.as_bytes()),
+        outcome == ReadOutcome::Valid,
+        "{label}"
+      );
+      assert_eq!(bytes.is_canonical::<S>(), outcome != ReadOutcome::Invalid, "{label}");
+      if outcome == ReadOutcome::Valid {
+        let decoded = bytes.to::<S>();
+        if legacy && v.curve == Some(Curve::Off) {
+          assert!(decoded.is_err(), "{label}");
+        } else {
+          assert_eq!(
+            decoded.map(|sig| sig.to_bytes()).ok(),
+            Some(*bytes.as_bytes()),
+            "{label}"
+          );
+        }
+      }
+    }
+  }
+
+  #[rstest]
+  #[case::chia(assert_sig_reads::<BlsScChia>, true)]
+  #[case::ietf(assert_sig_reads::<BlsScIetf>, false)]
+  fn sig_reads_match_reference(#[case] assertion: fn(bool), #[case] legacy: bool) {
+    assertion(legacy);
   }
 
   fn assert_sig_roundtrip<S: BlsScheme>() {
