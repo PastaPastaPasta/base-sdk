@@ -315,6 +315,33 @@ fn negated_pow_target_spacing_is_refused_on_every_chain(
 }
 
 #[rstest]
+fn argument_parsing_errors_follow_argument_order() {
+  let negation_first = |release| {
+    regtest(release)
+      .negate(ChainOption::PowTargetSpacing)
+      .arg(ChainOption::MinSporkKeys, "1")
+      .build()
+      .unwrap_err()
+  };
+  let min_keys_first = |release| {
+    regtest(release)
+      .arg(ChainOption::MinSporkKeys, "1")
+      .negate(ChainOption::PowTargetSpacing)
+      .build()
+      .unwrap_err()
+  };
+  let forbidden = ParamsError::NegationForbidden(ChainOption::PowTargetSpacing);
+  assert_eq!(negation_first(Release::V24_0), forbidden);
+  assert_eq!(
+    min_keys_first(Release::V24_0),
+    ParamsError::InvalidParameter("-minsporkkeys=1".into())
+  );
+  // v23.1 has -minsporkkeys.
+  assert_eq!(negation_first(Release::V23_1), forbidden);
+  assert_eq!(min_keys_first(Release::V23_1), forbidden);
+}
+
+#[rstest]
 fn zero_adjustment_interval_is_none() {
   let spaced = |s| build(devnet(Release::V24_0).pow_target_spacing(s));
   assert_eq!(spaced(150).consensus.difficulty_adjustment_interval(), Some(576));
@@ -401,7 +428,9 @@ fn options_of_other_chains_are_ignored(
   #[values(Release::V23_1, Release::V24_0)] release: Release,
 ) {
   let mut builder = ChainParamsBuilder::new(network, release);
-  for option in ChainOption::ALL {
+  // The spork options are read on every chain.
+  let chain_only = |o: &ChainOption| !matches!(o, ChainOption::SporkAddr | ChainOption::MinSporkKeys);
+  for option in ChainOption::ALL.into_iter().filter(chain_only) {
     builder = builder.arg(option, "x");
   }
   assert_eq!(build(builder), build(ChainParamsBuilder::new(network, release)));
@@ -569,6 +598,11 @@ fn llmq_sizes_outside_u16_are_refused(#[values(Release::V23_1, Release::V24_0)] 
   &[(ChainOption::LlmqDevnetParams, "-2:9"), (ChainOption::PowTargetSpacing, "abc")],
   "Invalid parsing of powTargetSpacing (abc)"
 )]
+#[case::spork_address(
+  Network::Regtest,
+  &[(ChainOption::LlmqTestParams, "-1:2"), (ChainOption::SporkAddr, "invalid")],
+  "Invalid spork address specified with -sporkaddr"
+)]
 #[case::first_out_of_range(
   Network::Regtest,
   &[(ChainOption::LlmqTestPlatformParams, "3:70000"), (ChainOption::LlmqTestParams, "-1:2")],
@@ -611,4 +645,155 @@ fn llmq_derived_values() {
   assert!(LlmqType::AVAILABLE.iter().all(|t| !get(*t).is_single_member()));
   let types: Vec<u8> = LlmqType::AVAILABLE.iter().map(|t| t.to_base()).collect();
   assert_eq!(types, [100, 104, 102, 103, 106, 101, 105, 107, 1, 5, 2, 3, 4, 6]);
+}
+
+#[rstest]
+fn default_spork_signers(
+  #[values(Network::Main, Network::Testnet3, Network::Devnet, Network::Regtest)] network: Network,
+  #[values(Release::V23_1, Release::V24_0)] release: Release,
+) {
+  let p = build(ChainParamsBuilder::new(network, release));
+  assert_eq!(p.spork_signers.key_ids.len(), 1);
+  assert_eq!(p.spork_signers.min_spork_keys, release.min_spork_keys());
+  assert_eq!(p.spork_signers.warning, None);
+  let named = build(ChainParamsBuilder::new(network, release).arg(ChainOption::SporkAddr, p.spork_address));
+  assert_eq!(named.spork_signers, p.spork_signers);
+}
+
+const REGTEST_SIGNER: &str = "yj949n1UH6fDhw6HtVE5VMj2iSTaSWBMcW";
+const TESTNET_SIGNER: &str = "yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55";
+
+#[rstest]
+fn spork_options_follow_the_release() {
+  let two = |release| {
+    regtest(release)
+      .arg(ChainOption::SporkAddr, REGTEST_SIGNER)
+      .arg(ChainOption::SporkAddr, TESTNET_SIGNER)
+  };
+  // v23.1 has a set of signers, and a majority of them must sign.
+  assert_eq!(two(Release::V23_1).build().unwrap_err(), ParamsError::MinSporkKeys);
+  let p = build(two(Release::V23_1).arg(ChainOption::MinSporkKeys, "2"));
+  assert_eq!(
+    (p.spork_signers.key_ids.len(), p.spork_signers.min_spork_keys),
+    (2, Some(2))
+  );
+  assert!(p.spork_signers.key_ids.is_sorted());
+  let err = two(Release::V23_1)
+    .arg(ChainOption::MinSporkKeys, "3")
+    .build()
+    .unwrap_err();
+  assert_eq!(
+    err.to_string(),
+    "Invalid minimum number of spork signers specified with -minsporkkeys"
+  );
+  // v24 takes the last address with a warning, and has no threshold.
+  let p = build(two(Release::V24_0));
+  assert_eq!(p.spork_signers.key_ids.len(), 1);
+  let warning = format!("More than one spork address is provided. Using {TESTNET_SIGNER}.");
+  assert_eq!(p.spork_signers.warning, Some(warning));
+  let err = two(Release::V24_0)
+    .arg(ChainOption::MinSporkKeys, "2")
+    .build()
+    .unwrap_err();
+  assert_eq!(err.to_string(), "Invalid parameter -minsporkkeys=2");
+  let err = regtest(Release::V24_0)
+    .negate(ChainOption::MinSporkKeys)
+    .build()
+    .unwrap_err();
+  assert_eq!(err.to_string(), "Invalid parameter -nominsporkkeys");
+  for release in Release::ALL {
+    for invalid in ["invalid", "", "tdash1qqqqqqqq", "yj949n1UH6fDhw6HtVE5VMj2iSTaSWBMcW\0"] {
+      let err = regtest(release)
+        .arg(ChainOption::SporkAddr, invalid)
+        .build()
+        .unwrap_err();
+      assert_eq!(
+        err.to_string(),
+        "Invalid spork address specified with -sporkaddr",
+        "{invalid}"
+      );
+    }
+    // A mainnet address on regtest.
+    let err = regtest(release)
+      .arg(ChainOption::SporkAddr, "Xgtyuk76vhuFW2iT7UAiHgNdWXCf3J34wh")
+      .build()
+      .unwrap_err();
+    assert_eq!(err, ParamsError::SporkAddress);
+    // Whitespace around a Base58 address is skipped.
+    let spaced = build(regtest(release).arg(ChainOption::SporkAddr, format!(" {TESTNET_SIGNER}\t")));
+    let plain = build(regtest(release).arg(ChainOption::SporkAddr, TESTNET_SIGNER));
+    assert_eq!(spaced.spork_signers, plain.spork_signers);
+    // Chain parameter errors come before spork errors, in startup order.
+    let err = regtest(release)
+      .arg(ChainOption::SporkAddr, "invalid")
+      .arg(ChainOption::Dip3Params, "x")
+      .build()
+      .unwrap_err();
+    assert_eq!(err, ParamsError::Dip3Malformed);
+  }
+}
+
+/// The refusal of -minsporkkeys at v24 quotes the argument as given, and
+/// v23.1 reads its negations as the reference reads them.
+#[rstest]
+fn min_spork_keys_spellings() {
+  let parsed = |release, arg: &str| regtest(release).parse_arg(arg).unwrap().build();
+  for arg in [
+    "-minsporkkeys",
+    "-minsporkkeys=",
+    "-minsporkkeys=1",
+    "--minsporkkeys=1",
+    "-nominsporkkeys",
+    "-nominsporkkeys=0",
+    "-nominsporkkeys=1",
+    "-nominsporkkeys=x",
+  ] {
+    let err = parsed(Release::V24_0, arg).unwrap_err();
+    assert_eq!(err, ParamsError::InvalidParameter(arg.into()));
+    assert_eq!(err.to_string(), format!("Invalid parameter {arg}"));
+  }
+  // One regtest signer. A double negation is 1, a negation 0.
+  let min_keys = |arg| parsed(Release::V23_1, arg).map(|p| p.spork_signers.min_spork_keys);
+  assert_eq!(min_keys("-nominsporkkeys=0"), Ok(Some(1)));
+  assert_eq!(min_keys("-nominsporkkeys=x"), Ok(Some(1)));
+  for refused in ["-nominsporkkeys", "-nominsporkkeys=1", "-minsporkkeys="] {
+    assert_eq!(min_keys(refused), Err(ParamsError::MinSporkKeys), "{refused}");
+  }
+  // Two signers need 2, so a double negation's 1 is refused, not ignored.
+  let two = |last: &str| {
+    ["-minsporkkeys=2", last]
+      .into_iter()
+      .try_fold(
+        regtest(Release::V23_1)
+          .arg(ChainOption::SporkAddr, REGTEST_SIGNER)
+          .arg(ChainOption::SporkAddr, TESTNET_SIGNER),
+        |b, arg| b.parse_arg(arg),
+      )
+      .unwrap()
+      .build()
+      .map(|p| p.spork_signers.min_spork_keys)
+  };
+  assert_eq!(two("-minsporkkeys=2"), Ok(Some(2)));
+  for double in ["-nominsporkkeys=0", "-nominsporkkeys=x"] {
+    assert_eq!(two(double), Err(ParamsError::MinSporkKeys), "{double}");
+  }
+}
+
+/// The reference resolves the spork signers with the chain parameters, so
+/// their errors come before this crate's refusal of a negative height.
+#[rstest]
+#[case(ChainOption::Dip3Params, "-1:5")]
+#[case(ChainOption::BudgetParams, "10:-1:30")]
+#[case(ChainOption::VbParams, "v24:0:999:-350")]
+fn spork_errors_come_before_negative_heights(
+  #[values(Release::V23_1, Release::V24_0)] release: Release,
+  #[case] option: ChainOption,
+  #[case] value: &str,
+) {
+  let err = regtest(release)
+    .arg(option, value)
+    .arg(ChainOption::SporkAddr, "invalid")
+    .build()
+    .unwrap_err();
+  assert_eq!(err, ParamsError::SporkAddress);
 }

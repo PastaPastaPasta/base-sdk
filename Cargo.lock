@@ -479,6 +479,7 @@ dependencies = [
 name = "dash-params"
 version = "0.0.0"
 dependencies = [
+ "base58ck",
  "bitcoin-units",
  "bitcoin_hashes",
  "dash-dev",

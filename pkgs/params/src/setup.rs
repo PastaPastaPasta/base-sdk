@@ -9,7 +9,9 @@
 mod tables;
 
 use crate::prelude::*;
-use crate::{Bip9Deployment, ChainParams, DeploymentPos, DevnetGenesisParams, Network, ParamsError, Release};
+use crate::{
+  Bip9Deployment, ChainParams, DeploymentPos, DevnetGenesisParams, Network, ParamsError, Release, SporkSigners,
+};
 
 use bitcoin_units::BlockHeight;
 use dash_num::Hash256;
@@ -60,6 +62,8 @@ pub struct ChainSetup {
   /// Heights the reference implementation hard-codes outside its chain
   /// parameters.
   pub hard_coded: HardCodedHeights,
+  /// The keys that sign sporks.
+  pub spork_signers: SporkSigners,
 }
 
 impl ChainSetup {
@@ -86,6 +90,7 @@ impl ChainSetup {
       llmq_connection_retry_timeout: extras.llmq_connection_retry_timeout,
       fulfilled_request_expire_time: extras.fulfilled_request_expire_time,
       hard_coded: extras.hard_coded,
+      spork_signers: SporkSigners::default(),
     }
   }
 

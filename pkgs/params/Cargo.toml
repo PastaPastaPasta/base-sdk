@@ -15,6 +15,7 @@ bench = false
 [features]
 default = ["codec"]
 std = [
+  "base58ck/std",
   "bitcoin_hashes/std",
   "bitcoin-units/std",
   "dash-num/std",
@@ -31,6 +32,7 @@ full = [
 portable = ["dash-pow/portable"]
 
 [dependencies]
+base58ck = { workspace = true, features = ["alloc"] }
 bitcoin_hashes = { workspace = true, features = ["alloc"] }
 bitcoin-units = { workspace = true, features = ["alloc"] }
 dash-num = { version = "0.2.0-beta", path = "../num", default-features = false }

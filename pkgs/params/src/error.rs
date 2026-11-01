@@ -125,6 +125,17 @@ pub enum ParamsError {
   /// A `-powtargetspacing` below 1.
   #[error("Invalid value of powTargetSpacing ({0})")]
   PowTargetSpacingValue(String),
+  /// A `-sporkaddr` that is not a P2PKH address of the chain.
+  #[error("Invalid spork address specified with -sporkaddr")]
+  SporkAddress,
+  /// A v23.1 `-minsporkkeys` outside `(signers / 2, signers]`.
+  #[error("Invalid minimum number of spork signers specified with -minsporkkeys")]
+  MinSporkKeys,
+  /// An option the release does not have, refused while the arguments are
+  /// parsed (`-minsporkkeys` at v24). The text quotes the argument as the
+  /// caller spelled it.
+  #[error("Invalid parameter {0}")]
+  InvalidParameter(String),
   /// A negation of an option that is not
   /// [`negatable`](ChainOption::negatable), refused while the arguments
   /// are parsed.

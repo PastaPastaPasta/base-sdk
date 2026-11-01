@@ -97,6 +97,15 @@ impl Release {
     }
   }
 
+  /// The default number of signatures a spork needs, at releases with
+  /// `-minsporkkeys` (v23.1). v24 has one spork signer and no threshold.
+  pub const fn min_spork_keys(self) -> Option<i32> {
+    match self {
+      Self::V23_1 => Some(1),
+      Self::V24_0 => None,
+    }
+  }
+
   /// Whether LLMQ size overrides above [`MAX_LLMQ_SIZE`](crate::MAX_LLMQ_SIZE)
   /// are refused, at v24 only.
   pub(crate) const fn caps_llmq_size(self) -> bool {

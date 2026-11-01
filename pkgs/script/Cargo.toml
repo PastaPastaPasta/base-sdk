@@ -64,5 +64,10 @@ serde = { workspace = true, features = [
 hex-conservative = { workspace = true, features = ["std"] }
 rstest = { workspace = true }
 
+[[test]]
+name = "spork_key_ids"
+path = "tests/spork_key_ids.rs"
+required-features = ["codec"]
+
 [lints]
 workspace = true

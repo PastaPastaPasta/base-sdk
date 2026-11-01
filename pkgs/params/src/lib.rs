@@ -26,6 +26,7 @@ mod parse;
 mod prelude;
 mod release;
 mod setup;
+mod spork;
 
 use crate::params::{devnet, mainnet, regtest, test3};
 
@@ -42,6 +43,7 @@ pub use genesis::{DevnetGenesisParams, GenesisParams};
 pub use llmq::{LlmqParams, LlmqSizes, LlmqType, MAX_LLMQ_SIZE};
 pub use release::Release;
 pub use setup::{AssumeutxoData, ChainSetup, HardCodedHeights};
+pub use spork::SporkSigners;
 
 /// Dash network identifier.
 ///

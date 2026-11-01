@@ -10,7 +10,8 @@
 use crate::error::{ParamsError, VbField};
 use crate::parse::{int_arg, interpret_bool, parse_i32, parse_i64};
 use crate::prelude::*;
-use crate::{BuriedDeployment, ChainSetup, DeploymentPos, LlmqType, Network, Release, MAX_LLMQ_SIZE};
+use crate::spork::spork_key_id;
+use crate::{BuriedDeployment, ChainSetup, DeploymentPos, LlmqType, Network, Release, SporkSigners, MAX_LLMQ_SIZE};
 
 use bitcoin_units::BlockHeight;
 #[cfg(feature = "codec")]
@@ -19,8 +20,9 @@ use dash_types::type_id::Unencodable;
 /// A command-line option of the reference implementation that changes the
 /// chain parameters.
 ///
-/// These are its chain-params options, and `-fastprune`, which regtest's
-/// prune height reads.
+/// These are its chain-params options, `-fastprune`, which regtest's prune
+/// height reads, and the spork signer options, which its startup reads after
+/// the chain parameters.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "codec", derive(Unencodable))]
 #[non_exhaustive]
@@ -57,8 +59,12 @@ pub enum ChainOption {
   LlmqTestPlatformParams,
   /// `-minimumdifficultyblocks=<n>` (devnet).
   MinimumDifficultyBlocks,
+  /// `-minsporkkeys=<n>` (every chain, v23.1 only).
+  MinSporkKeys,
   /// `-powtargetspacing=<n>` (devnet).
   PowTargetSpacing,
+  /// `-sporkaddr=<address>` (every chain, repeatable at v23.1).
+  SporkAddr,
   /// `-testactivationheight=name@height` (regtest, repeatable).
   TestActivationHeight,
   /// `-vbparams=<deployment>:<start>:<end>...` (regtest, repeatable).
@@ -67,7 +73,7 @@ pub enum ChainOption {
 
 impl ChainOption {
   /// Every option, in name order.
-  pub const ALL: [Self; 19] = [
+  pub const ALL: [Self; 21] = [
     Self::BudgetParams,
     Self::Devnet,
     Self::Dip3Params,
@@ -84,7 +90,9 @@ impl ChainOption {
     Self::LlmqTestParams,
     Self::LlmqTestPlatformParams,
     Self::MinimumDifficultyBlocks,
+    Self::MinSporkKeys,
     Self::PowTargetSpacing,
+    Self::SporkAddr,
     Self::TestActivationHeight,
     Self::VbParams,
   ];
@@ -108,7 +116,9 @@ impl ChainOption {
       Self::LlmqTestParams => "-llmqtestparams",
       Self::LlmqTestPlatformParams => "-llmqtestplatformparams",
       Self::MinimumDifficultyBlocks => "-minimumdifficultyblocks",
+      Self::MinSporkKeys => "-minsporkkeys",
       Self::PowTargetSpacing => "-powtargetspacing",
+      Self::SporkAddr => "-sporkaddr",
       Self::TestActivationHeight => "-testactivationheight",
       Self::VbParams => "-vbparams",
     }
@@ -326,12 +336,16 @@ impl ChainParamsBuilder {
   /// [`ParamsError`]).
   ///
   /// The steps follow the reference's startup. The arguments are parsed
-  /// first (a forbidden negation is refused here, in argument order), then
-  /// the chain parameters are built. A height still negative and an LLMQ
-  /// size override outside `u16` are refused last, once the reference's own
+  /// first (an option the release lacks or a forbidden negation is refused
+  /// here, in argument order), then the chain parameters are built and the
+  /// spork signers resolved. A height still negative and an LLMQ size
+  /// override outside `u16` are refused last, once the reference's own
   /// checks have passed.
   pub fn build(&self) -> Result<ChainSetup, ParamsError> {
     for o in &self.args {
+      if o.option == ChainOption::MinSporkKeys && self.release.min_spork_keys().is_none() {
+        return Err(ParamsError::InvalidParameter(o.arg.clone()));
+      }
       if o.negated && !o.option.negatable() {
         return Err(ParamsError::NegationForbidden(o.option));
       }
@@ -343,8 +357,44 @@ impl ChainParamsBuilder {
       Network::Devnet => self.devnet(&mut setup, &mut late)?,
       Network::Regtest => self.regtest(&mut setup, &mut late)?,
     }
+    setup.spork_signers = self.spork_signers(&setup)?;
     late.check()?;
     Ok(setup)
+  }
+
+  /// `-sporkaddr` and `-minsporkkeys`.
+  fn spork_signers(&self, setup: &ChainSetup) -> Result<SporkSigners, ParamsError> {
+    let hrp = setup.platform_hrp();
+    let key = |a: &str| spork_key_id(a, setup.addr_params.pubkey_addr, hrp).ok_or(ParamsError::SporkAddress);
+    if let Some(default) = self.release.min_spork_keys() {
+      let addresses: Vec<&str> = if self.args.iter().any(|o| o.option == ChainOption::SporkAddr) {
+        self.all(ChainOption::SporkAddr).collect()
+      } else {
+        vec![setup.spork_address]
+      };
+      let mut key_ids = BTreeSet::new();
+      for address in addresses {
+        key_ids.insert(key(address)?);
+      }
+      let min = self.last(ChainOption::MinSporkKeys).map_or(default, int_arg);
+      let max = i32::try_from(key_ids.len()).unwrap_or(i32::MAX);
+      if min <= max / 2 || min > max {
+        return Err(ParamsError::MinSporkKeys);
+      }
+      return Ok(SporkSigners {
+        key_ids: key_ids.into_iter().collect(),
+        min_spork_keys: Some(min),
+        warning: None,
+      });
+    }
+    let address = self.last(ChainOption::SporkAddr).unwrap_or(setup.spork_address);
+    let warning = (self.all(ChainOption::SporkAddr).count() > 1)
+      .then(|| format!("More than one spork address is provided. Using {address}."));
+    Ok(SporkSigners {
+      key_ids: vec![key(address)?],
+      min_spork_keys: None,
+      warning,
+    })
   }
 
   /// The last setting of `option`. A negation reads `0`.
@@ -784,5 +834,15 @@ mod tests {
       .and_then(|s| s.as_ref().ok())
       .and_then(ChainSetup::devnet_name);
     assert_eq!(name, Some("devnet-MyNet"));
+  }
+
+  /// On Windows an error text quotes the argument as given.
+  #[rstest]
+  fn windows_error_texts_keep_the_spelling() {
+    let refused = parsed(Network::Regtest, Release::V24_0, true, &["/MINSPORKKEYS=2"]);
+    assert_eq!(
+      refused,
+      Some(Err(ParamsError::InvalidParameter("/MINSPORKKEYS=2".into())))
+    );
   }
 }
