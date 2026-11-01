@@ -16,12 +16,15 @@ leaves it to its own 'just lint' step.
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 import os
+import platform
 import re
 import subprocess
 import sys
 import tomllib
+import urllib.request
 from pathlib import Path
 
 from common import (
@@ -63,6 +66,34 @@ TREE_ENTRY = re.compile(
 )
 
 Crate = tuple[str, str]
+
+# Every host lints with this buildifier release, as releases disagree on
+# warnings. Digests from the release page, keyed by the asset suffix.
+_BUILDIFIER_VERSION = "10.1.0"
+_BUILDIFIER_SHA256S = {
+  "darwin-amd64": (
+    "e9e10ff52ec8786fcabccd251c8109ebf31ef7be1f667e27c6e069b96dbdc1f6"
+  ),
+  "darwin-arm64": (
+    "e9804864c407f920f5ecbf03a5e056a8145e11a6ae6b90d2438a3fd106d34473"
+  ),
+  "linux-amd64": (
+    "31b6a8aa1e5c746696788f428729701770ad91925873d8256cb885c60e12c77e"
+  ),
+  "linux-arm64": (
+    "38d2ed845f560b4a16ddee41de906508a95f8dc85b04e0851b0a71e3a70d3890"
+  ),
+  "windows-amd64.exe": (
+    "931a6e9c3844b90ccdb1467ccacd8dd72457e308d2709d624a3c5880d835ac3c"
+  ),
+  "windows-arm64.exe": (
+    "aeffa5a342ce119b52cd7aa17bd9dda22b0406245d90643985749d01f51d2de1"
+  ),
+}
+_BUILDIFIER_URL = (
+  "https://github.com/bazelbuild/buildtools/releases/download"
+  "/v{version}/buildifier-{asset}"
+)
 
 # The file restating the workspace lints.
 _RUST_BZL = "bazel/rust.bzl"
@@ -228,17 +259,63 @@ def _check_sync(repo_root: Path) -> int:
   return RETCODE_ERR
 
 
+def _buildifier(repo_root: Path) -> str | None:
+  """Return `BUILDIFIER`, else the pinned release fetched into '.cache'.
+
+  None where no release is pinned for the host.
+  """
+  if override := os.environ.get("BUILDIFIER"):
+    # The tool runs from the repository root, so a path relative to the
+    # caller's directory is made absolute first.
+    return str(Path(require_bin(override)).resolve())
+  system = platform.system().lower()
+  machine = {"x86_64": "amd64", "aarch64": "arm64"}.get(
+    platform.machine().lower(),
+    platform.machine().lower(),
+  )
+  asset = f"{system}-{machine}" + (".exe" if system == "windows" else "")
+  if asset not in _BUILDIFIER_SHA256S:
+    return None
+  want = _BUILDIFIER_SHA256S[asset]
+  path = repo_root / ".cache" / "buildifier" / _BUILDIFIER_VERSION / asset
+  if path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() == want:
+    return str(path)
+
+  url = _BUILDIFIER_URL.format(version=_BUILDIFIER_VERSION, asset=asset)
+  with urllib.request.urlopen(url, timeout=60) as response:  # noqa: S310
+    data = response.read()
+  got = hashlib.sha256(data).hexdigest()
+  if got != want:
+    raise ValueError(f"{url} has sha256 {got}, expected {want}")
+  path.parent.mkdir(parents=True, exist_ok=True)
+  partial = path.with_suffix(".partial")
+  partial.write_bytes(data)
+  partial.chmod(0o755)
+  partial.replace(path)
+  return str(path)
+
+
 def _check_format(
   repo_root: Path,
   *,
   fix: bool,
   only: list[str] | None = None,
 ) -> int | None:
-  """Format and lint Starlark, or None when buildifier is absent."""
+  """Format and lint Starlark, or None when buildifier is unavailable.
+
+  A fetch that fails or a release whose digest differs is an error, so a
+  network fault cannot pass the Starlark unchecked.
+  """
   try:
-    buildifier = require_bin("buildifier")
+    buildifier = _buildifier(repo_root)
   except FileNotFoundError as e:
-    print(f"{e}, skipping the Starlark check", file=sys.stderr)
+    print(f"{e}, skipping Starlark", file=sys.stderr)
+    return None
+  except (OSError, ValueError) as e:
+    print(f"error: fetching buildifier failed ({e})", file=sys.stderr)
+    return RETCODE_ERR
+  if buildifier is None:
+    print("no buildifier pinned for this host, skipping", file=sys.stderr)
     return None
 
   sources = (
