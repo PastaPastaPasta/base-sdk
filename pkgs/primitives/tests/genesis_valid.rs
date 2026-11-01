@@ -6,7 +6,9 @@
 
 //! Genesis validation test.
 
-use dash_params::{ChainParams, Network};
+#![expect(clippy::unwrap_used, reason = "test code")]
+
+use dash_params::{ChainParams, DevnetGenesisParams, Network};
 use dash_primitives::{Block, BlockHash, MerkleRoot};
 use dash_types::{Hashable, Numeric};
 use hex_conservative::hex;
@@ -44,4 +46,35 @@ fn genesis_block_hash_matches(
   // hash declared in the consensus parameters.
   let expected = BlockHash::from(params.consensus.hash_genesis_block);
   assert_eq!(genesis.header().hash(), expected);
+}
+
+/// The devnet genesis block primitives builds from the parameters hashes to
+/// the hash and nonce the parameters' own search found. The names straddle
+/// each push size of the coinbase input script, whose prefix is checked.
+///
+/// Two names also straddle the script's length prefix, which takes 3 bytes
+/// up to 65535 bytes of script and 5 bytes above.
+#[rstest]
+#[case::one_byte(String::from("x"), &[0x51, 0x01])]
+#[case::longest_direct_push("x".repeat(75), &[0x51, 0x4b])]
+#[case::shortest_pushdata1("x".repeat(76), &[0x51, 0x4c, 0x4c])]
+#[case::longest_pushdata1("x".repeat(255), &[0x51, 0x4c, 0xff])]
+#[case::shortest_pushdata2("x".repeat(256), &[0x51, 0x4d, 0x00, 0x01])]
+#[case::largest_u16_script("x".repeat(65_531), &[0x51, 0x4d, 0xfb, 0xff])]
+#[case::smallest_u32_script("x".repeat(65_532), &[0x51, 0x4d, 0xfc, 0xff])]
+#[case::longest_pushdata2("x".repeat(65_535), &[0x51, 0x4d, 0xff, 0xff])]
+#[case::shortest_pushdata4("x".repeat(65_536), &[0x51, 0x4e, 0x00, 0x00, 0x01, 0x00])]
+#[case::non_ascii(String::from("devnet-\u{fc}n\u{ef}c\u{f8}d\u{e9}"), &[0x51, 0x12])]
+fn devnet_genesis_blocks_match_their_params(#[case] name: String, #[case] push: &[u8]) {
+  let chain = Network::Regtest.chain();
+  let params = DevnetGenesisParams::find(&name, &chain.genesis).unwrap();
+  let script_sig = params.script_sig();
+  assert_eq!(script_sig[..push.len()], *push);
+  assert_eq!(script_sig[push.len()..], *name.as_bytes());
+  let block = Block::from(&params);
+  let header = block.header();
+  assert_eq!(header.hash(), BlockHash::from(params.hash));
+  assert_eq!(header.nonce(), params.nonce);
+  assert_eq!(header.prev_hash(), BlockHash::from(chain.consensus.hash_genesis_block));
+  assert_eq!(header.merkle_root(), block.merkle().0);
 }

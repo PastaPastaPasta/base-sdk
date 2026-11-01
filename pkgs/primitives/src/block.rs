@@ -14,7 +14,7 @@ use crate::{codec_base, codec_type, hash_impl};
 use bitcoin_hashes::sha256d;
 use bitcoin_primitives::script::{ScriptPubKeyBuf, ScriptSigBuf};
 use dash_num::{make_hash, Arith256, CompactTarget, Hash256};
-use dash_params::GenesisParams;
+use dash_params::{DevnetGenesisParams, GenesisParams};
 use dash_pow::__deps::digest::Digest;
 use dash_pow::X11;
 use dash_types::codec::{self, BaseCodec};
@@ -265,6 +265,40 @@ impl From<&GenesisParams> for Block {
       header: BlockHeader {
         version: params.version,
         prev_hash: BlockHash::default(),
+        merkle_root: MerkleRoot::default(),
+        time: params.time,
+        bits: params.bits,
+        nonce: params.nonce,
+      },
+      transactions: vec![coinbase],
+    };
+    block.header.merkle_root = block.merkle().0;
+    block
+  }
+}
+
+impl From<&DevnetGenesisParams> for Block {
+  fn from(params: &DevnetGenesisParams) -> Self {
+    let coinbase = Transaction::new(
+      1,
+      TxType::Spend,
+      vec![TxIn::new(
+        OutPoint::new(TxHash::default(), 0xFFFF_FFFF),
+        ScriptSigBuf::from_bytes(params.script_sig()),
+        0xFFFF_FFFF,
+      )],
+      vec![TxOut::new(
+        DevnetGenesisParams::REWARD,
+        ScriptPubKeyBuf::from_bytes(DevnetGenesisParams::SCRIPT_PUBKEY.to_vec()),
+      )],
+      0,
+      Vec::new(),
+    );
+
+    let mut block = Block {
+      header: BlockHeader {
+        version: DevnetGenesisParams::VERSION,
+        prev_hash: BlockHash::from(params.prev_hash),
         merkle_root: MerkleRoot::default(),
         time: params.time,
         bits: params.bits,

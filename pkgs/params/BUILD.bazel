@@ -7,8 +7,10 @@ dash_rust_library(
         "full",
         "std",
     ],
+    portable = True,
     deps = [
         "//pkgs/num:dash-num",
+        "//pkgs/pow:dash-pow",
         "//pkgs/types:dash-types",
     ],
 )

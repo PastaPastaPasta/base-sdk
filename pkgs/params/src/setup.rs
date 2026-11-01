@@ -9,7 +9,7 @@
 mod tables;
 
 use crate::prelude::*;
-use crate::{Bip9Deployment, ChainParams, DeploymentPos, Network, Release};
+use crate::{Bip9Deployment, ChainParams, DeploymentPos, DevnetGenesisParams, Network, Release};
 
 use bitcoin_units::BlockHeight;
 use dash_num::Hash256;
@@ -36,6 +36,8 @@ pub struct ChainSetup {
   chain: ChainParams,
   /// The devnet's name, on a devnet.
   devnet_name: Option<String>,
+  /// The devnet genesis block (height 1), on a devnet.
+  devnet_genesis: Option<DevnetGenesisParams>,
   /// Whether non-standard transactions are rejected by default (v23 release
   /// only).
   pub require_standard: Option<bool>,
@@ -62,12 +64,16 @@ impl ChainSetup {
     let mut chain = *network.chain();
     release.write_chain(network, &mut chain);
     let devnet_name = (network == Network::Devnet).then(|| String::from("devnet"));
+    let devnet_genesis = devnet_name
+      .as_deref()
+      .and_then(|name| DevnetGenesisParams::find(name, &chain.genesis));
     let extras = tables::extras(network);
     Self {
       network,
       release,
       chain,
       devnet_name,
+      devnet_genesis,
       require_standard: release.require_standard(network),
       assumeutxo: tables::assumeutxo(network, release),
       fixed_seeds: tables::fixed_seeds(network, release),
@@ -93,6 +99,11 @@ impl ChainSetup {
   /// elsewhere.
   pub fn devnet_name(&self) -> Option<&str> {
     self.devnet_name.as_deref()
+  }
+
+  /// The devnet genesis block (height 1), on a devnet.
+  pub const fn devnet_genesis(&self) -> Option<&DevnetGenesisParams> {
+    self.devnet_genesis.as_ref()
   }
 
   /// The chain's data directory, under the base data directory. Mainnet

@@ -6,10 +6,12 @@
 
 //! The chain setup a node reads, against the network tables.
 
+#![expect(clippy::unwrap_used, reason = "test code")]
+
 use bitcoin_units::BlockHeight;
 use dash_params::{
-  AddrParams, Bip9Deployment, ChainParams, ChainParamsBuilder, ChainSetup, DeploymentPos, HardCodedHeights, Network,
-  Release,
+  AddrParams, Bip9Deployment, ChainParams, ChainParamsBuilder, ChainSetup, DeploymentPos, DevnetGenesisParams,
+  HardCodedHeights, Network, Release,
 };
 use rstest::rstest;
 
@@ -191,6 +193,10 @@ fn data_dirs_are_the_references(#[case] network: Network, #[case] dir: &str) {
 fn devnet_checkpoints_hold_its_devnet_genesis_block(#[values(Release::V23_1, Release::V24_0)] release: Release) {
   let setup = setup(Network::Devnet, release);
   assert_eq!(setup.devnet_name(), Some("devnet"));
+  let devnet_genesis = setup.devnet_genesis().unwrap();
+  assert_eq!(devnet_genesis.name, "devnet");
+  assert_eq!(devnet_genesis.hash, setup.consensus.hash_devnet_genesis_block);
+  assert_eq!(devnet_genesis.prev_hash, setup.consensus.hash_genesis_block);
   let consensus = &setup.consensus;
   assert_eq!(
     setup.checkpoints,
@@ -201,9 +207,16 @@ fn devnet_checkpoints_hold_its_devnet_genesis_block(#[values(Release::V23_1, Rel
   );
 }
 
-/// Off devnets, a setup has no devnet name.
+/// Off devnets, a setup has no devnet name or devnet genesis block.
 #[rstest]
 fn only_devnets_have_a_devnet_name(#[values(Network::Main, Network::Testnet3, Network::Regtest)] network: Network) {
   let setup = setup(network, Release::V24_0);
   assert_eq!(setup.devnet_name(), None);
+  assert_eq!(setup.devnet_genesis(), None);
+}
+
+/// A devnet needs a name.
+#[rstest]
+fn an_unnamed_devnet_has_no_genesis_block() {
+  assert_eq!(DevnetGenesisParams::find("", &Network::Regtest.chain().genesis), None);
 }
