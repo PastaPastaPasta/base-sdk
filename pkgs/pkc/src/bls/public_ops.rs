@@ -228,8 +228,8 @@ type_cvrt!(for[S: BlsScheme] TryFrom<G1> for BlsPublicKey<S>, BlsError, |point| 
 mod tests {
   use super::*;
   use crate::bls::tests::{
-    chia_pk_off_curve, ietf_g1_encoding, ser_pairs, SerType, G1_OFF_SUBGROUP_CHIA, G1_OFF_SUBGROUP_IETF,
-    G1_X_EQ_PRIME_CHIA, G1_X_GE_PRIME_CHIA, G1_X_MAX_CHIA, MSG_8BADFOOD, RSEED,
+    chia_pk_off_curve, ietf_g1_encoding, read_vectors, ser_pairs, Curve, ReadOutcome, SerType, G1_OFF_SUBGROUP_CHIA,
+    G1_OFF_SUBGROUP_IETF, G1_X_EQ_PRIME_CHIA, G1_X_GE_PRIME_CHIA, G1_X_MAX_CHIA, MSG_8BADFOOD, RSEED,
   };
   use crate::bls::{BlsScChia, BlsScIetf, BlsSecretKey, BlsSignature};
 
@@ -578,6 +578,43 @@ mod tests {
     let bytes = BlsPkBytes::from_bytes(encoded);
     assert!(bytes.is_canonical::<BlsScChia>());
     assert!(bytes.to::<BlsScChia>().is_err());
+  }
+
+  /// Every `bls_read` input reads as in the reference implementation.
+  ///
+  /// `is_canonical` follows its outcome. A valid input decodes to a key that
+  /// encodes back to it, except a legacy encoding whose `x` the corpus marks
+  /// off the curve, which does not decode.
+  fn assert_pk_reads<S: BlsScheme>(legacy: bool) {
+    for v in read_vectors(SerType::PublicKey) {
+      let label = format!("{} {}", v.class, v.input);
+      let bytes = BlsPkBytes::from_bytes(arr_from_hex(&v.input));
+      let outcome = v.outcome(legacy);
+
+      assert_eq!(v.curve.is_some(), v.outcome(true) == ReadOutcome::Valid, "{label}");
+      assert_eq!(bytes.is_null(), outcome == ReadOutcome::Null, "{label}");
+      assert_eq!(
+        S::is_canonical_pk(bytes.as_bytes()),
+        outcome == ReadOutcome::Valid,
+        "{label}"
+      );
+      assert_eq!(bytes.is_canonical::<S>(), outcome != ReadOutcome::Invalid, "{label}");
+      if outcome == ReadOutcome::Valid {
+        let decoded = bytes.to::<S>();
+        if legacy && v.curve == Some(Curve::Off) {
+          assert!(decoded.is_err(), "{label}");
+        } else {
+          assert_eq!(decoded.map(|pk| pk.to_bytes()).ok(), Some(*bytes.as_bytes()), "{label}");
+        }
+      }
+    }
+  }
+
+  #[rstest]
+  #[case::chia(assert_pk_reads::<BlsScChia>, true)]
+  #[case::ietf(assert_pk_reads::<BlsScIetf>, false)]
+  fn pk_reads_match_reference(#[case] assertion: fn(bool), #[case] legacy: bool) {
+    assertion(legacy);
   }
 
   /// The same G1 point encodes differently under the two schemes, and each
