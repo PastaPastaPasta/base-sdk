@@ -107,8 +107,8 @@ fn dump(p: &ChainSetup) -> BTreeMap<String, Value> {
     "params.base58Prefixes.EXT_SECRET_KEY",
     a.ext_secret.to_lower_hex_string(),
   );
-  for (h, hash) in p.checkpoints {
-    out.put(&format!("params.checkpoints.{}", h.to_u32()), hash_hex(*hash));
+  for (h, hash) in p.all_checkpoints() {
+    out.put(&format!("params.checkpoints.{}", h.to_u32()), hash_hex(hash));
   }
 
   let hashes = [
@@ -175,8 +175,10 @@ fn dump(p: &ChainSetup) -> BTreeMap<String, Value> {
     c.rule_change_activation_threshold,
   );
   out.put("params.consensus.nMinerConfirmationWindow", c.miner_confirmation_window);
-  let deployments: Vec<_> = p.deployments().collect();
-  out.list("params.consensus.vDeployments", &deployments, |out, path, (pos, d)| {
+  // The reference lists each deployment at its index.
+  out.put("params.consensus.vDeployments.#", p.deployments().count());
+  for (pos, d) in p.deployments() {
+    let path = &format!("params.consensus.vDeployments.{}", pos.index());
     out.put(&format!("{path}.name"), pos.name());
     out.put(&format!("{path}.bit"), d.bit);
     out.put(
@@ -193,7 +195,7 @@ fn dump(p: &ChainSetup) -> BTreeMap<String, Value> {
     ];
     out.put_all(path, fields);
     out.put(&format!("{path}.useEHF"), d.use_ehf);
-  });
+  }
   out.put(
     "params.consensus.powLimit",
     c.pow_limit.to_bendian().to_lower_hex_string(),
@@ -342,7 +344,7 @@ fn chain_setup_equals_the_reference(
   let chain = network.network_id();
   let mut want = bases(corpus).remove(chain).expect("a base per chain");
   want.retain(|path, _| !BLOCK_KEYS.contains(&path.as_str()) && !path.starts_with(AVAILABLE));
-  let got = dump(&ChainParamsBuilder::new(network, release).build());
+  let got = dump(&ChainParamsBuilder::new(network, release).build().unwrap());
   for (path, v) in &want {
     assert_eq!(got.get(path), Some(v), "{corpus} {chain}: {path}");
   }

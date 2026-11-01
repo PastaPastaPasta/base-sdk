@@ -21,7 +21,7 @@ fn brr_table_equals_the_references_payments(#[case] release: Release, #[case] ke
   let int = |v: &Value, key: &str| v[key].as_i64().unwrap();
   let (start, period) = (int(&root, "realloc_start"), int(&root, "period_blocks"));
   let block_value = int(&root, "block_value");
-  let p = ChainParamsBuilder::new(Network::Main, release).build();
+  let p = ChainParamsBuilder::new(Network::Main, release).build().unwrap();
   let c = &p.consensus;
   // Reallocation starts with the first superblock cycle after its
   // activation, and a period is three superblock cycles.

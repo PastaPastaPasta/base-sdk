@@ -97,6 +97,12 @@ impl Release {
     }
   }
 
+  /// Whether LLMQ size overrides above [`MAX_LLMQ_SIZE`](crate::MAX_LLMQ_SIZE)
+  /// are refused, at v24 only.
+  pub(crate) const fn caps_llmq_size(self) -> bool {
+    matches!(self, Self::V24_0)
+  }
+
   /// Whether `network` rejects non-standard transactions by default, at
   /// v23.1 only. v24 dropped the setting.
   pub(crate) const fn require_standard(self, network: Network) -> Option<bool> {

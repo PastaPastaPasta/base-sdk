@@ -18,7 +18,7 @@ use rstest::rstest;
 use std::collections::BTreeSet;
 
 fn setup(network: Network, release: Release) -> ChainSetup {
-  ChainParamsBuilder::new(network, release).build()
+  ChainParamsBuilder::new(network, release).build().unwrap()
 }
 
 /// The [`ChainParams`] that `Deref` and coercion reach.
@@ -200,6 +200,11 @@ fn devnet_checkpoints_hold_its_devnet_genesis_block(#[values(Release::V23_1, Rel
   let consensus = &setup.consensus;
   assert_eq!(
     setup.checkpoints,
+    [(BlockHeight::from_u32(0), consensus.hash_genesis_block)]
+  );
+  let checkpoints: Vec<_> = setup.all_checkpoints().collect();
+  assert_eq!(
+    checkpoints,
     [
       (BlockHeight::from_u32(0), consensus.hash_genesis_block),
       (BlockHeight::from_u32(1), consensus.hash_devnet_genesis_block),

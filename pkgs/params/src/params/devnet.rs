@@ -8,7 +8,7 @@
 
 use crate::{
   AddrParams, Bip9Deployment, Bip9Deployments, ChainParams, ChainTxData, Checkpoint, ConsensusParams, GenesisParams,
-  LlmqType,
+  LlmqSizes, LlmqType,
 };
 
 use bitcoin_units::{Amount, BlockHeight};
@@ -120,6 +120,7 @@ pub static PARAMS: ChainParams = ChainParams {
       LlmqType::LlmqDevnetDip0024,
       LlmqType::LlmqDevnetPlatform,
     ],
+    llmq_sizes: LlmqSizes::NONE,
     llmq_type_chain_locks: LlmqType::LlmqDevnet,
     llmq_type_dip0024_instant_send: LlmqType::LlmqDevnetDip0024,
     llmq_type_platform: LlmqType::LlmqDevnetPlatform,
@@ -170,7 +171,6 @@ pub static PARAMS: ChainParams = ChainParams {
   },
 };
 
-const CHECKPOINTS: [Checkpoint; 2] = [
-  (BlockHeight::from_u32(0), GENESIS_HASH),
-  (BlockHeight::from_u32(1), DEVNET_GENESIS_HASH),
-];
+// The devnet genesis block at height 1 depends on the devnet's name, so
+// the chain parameters' all_checkpoints adds it from the consensus values.
+const CHECKPOINTS: [Checkpoint; 1] = [(BlockHeight::from_u32(0), GENESIS_HASH)];

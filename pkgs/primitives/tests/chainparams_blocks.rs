@@ -41,7 +41,7 @@ fn chain_params_blocks_equal_the_reference(
   let root = Corpus::open(params_dir, corpus).into_value();
   let chain = network.network_id();
   let base = &root["bases"][chain];
-  let setup = ChainParamsBuilder::new(network, release).build();
+  let setup = ChainParamsBuilder::new(network, release).build().unwrap();
   let genesis = Block::from(&setup.genesis);
   let want = base["params"]["genesisBlock"].as_str().unwrap();
   assert_eq!(serialize(&genesis), want, "{corpus} {chain}");

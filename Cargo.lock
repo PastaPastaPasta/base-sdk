@@ -488,6 +488,7 @@ dependencies = [
  "hex-conservative",
  "rstest",
  "serde",
+ "thiserror",
 ]
 
 [[package]]

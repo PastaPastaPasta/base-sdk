@@ -8,8 +8,11 @@
 
 use crate::{AddrParams, Checkpoint, ConsensusParams, GenesisParams};
 
+use bitcoin_units::BlockHeight;
+use dash_num::Hash256;
 #[cfg(feature = "codec")]
 use dash_types::type_id::Unencodable;
+use dash_types::Numeric;
 
 /// P2P network message start bytes (magic).
 pub type MessageStart = [u8; 4];
@@ -75,8 +78,23 @@ pub struct ChainParams {
   pub spork_address: &'static str,
   /// Number of blocks in a credit-pool accounting period.
   pub credit_pool_period_blocks: i32,
-  /// Hard-coded checkpoints for fast validation.
+  /// A devnet's checkpoint at height 1 is only in
+  /// [`all_checkpoints`](Self::all_checkpoints), which callers read. These
+  /// are the hard-coded checkpoints, sorted by height.
+  ///
+  /// That checkpoint is the devnet genesis block, which depends on the
+  /// devnet's name.
   pub checkpoints: &'static [Checkpoint],
   /// Transaction statistics for progress estimation.
   pub chain_tx_data: ChainTxData,
+}
+
+impl ChainParams {
+  /// Every checkpoint, by height. These are [`checkpoints`](Self::checkpoints)
+  /// and, on a devnet, its devnet genesis block at height 1.
+  pub fn all_checkpoints(&self) -> impl Iterator<Item = Checkpoint> + '_ {
+    let devnet_genesis = self.consensus.hash_devnet_genesis_block;
+    let devnet = (devnet_genesis != Hash256::ZERO).then_some((BlockHeight::from_u32(1), devnet_genesis));
+    self.checkpoints.iter().copied().chain(devnet)
+  }
 }

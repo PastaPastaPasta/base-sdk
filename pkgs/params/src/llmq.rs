@@ -73,8 +73,29 @@ impl Hashable for LlmqType {
 }
 
 impl LlmqType {
+  /// The types of the reference implementation's LLMQ table, in its order.
+  pub const AVAILABLE: [Self; 14] = [
+    Self::LlmqTest,
+    Self::LlmqTestInstantsend,
+    Self::LlmqTestV17,
+    Self::LlmqTestDip0024,
+    Self::LlmqTestPlatform,
+    Self::LlmqDevnet,
+    Self::LlmqDevnetDip0024,
+    Self::LlmqDevnetPlatform,
+    Self::Llmq50_60,
+    Self::Llmq60_75,
+    Self::Llmq400_60,
+    Self::Llmq400_85,
+    Self::Llmq100_67,
+    Self::Llmq25_67,
+  ];
+
   /// DKG and signing parameters of the type, or `None` for
   /// [`LlmqType::LlmqNone`] and unknown types.
+  ///
+  /// These are the network table's values. A chain's, with its size options,
+  /// come from [`ConsensusParams::llmq`](crate::ConsensusParams::llmq).
   pub const fn params(self) -> Option<LlmqParams> {
     Some(match self {
       Self::Llmq50_60 => LlmqParams::LLMQ_50_60,
@@ -93,6 +114,10 @@ impl LlmqType {
     })
   }
 }
+
+/// Largest quorum size the v24 signing protocol supports. The v24 release
+/// refuses larger LLMQ size overrides, and v23.1 has no limit.
+pub const MAX_LLMQ_SIZE: u16 = 400;
 
 /// DKG and signing parameters of an [`LlmqType`].
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -331,4 +356,81 @@ impl LlmqParams {
     keep_old_keys: 1440,
     recovery_members: 6,
   };
+
+  /// DKG cycles covering `quorums_count` quorums.
+  ///
+  /// Zero for a rotated type with no active quorums, where the reference
+  /// divides by zero. No table entry has that.
+  pub const fn max_cycles(&self, quorums_count: i32) -> i32 {
+    if self.use_rotation {
+      match quorums_count.checked_div(self.signing_active_quorum_count as i32) {
+        Some(cycles) => cycles,
+        None => 0,
+      }
+    } else {
+      quorums_count
+    }
+  }
+
+  /// Blocks of recent DKG data a node keeps for the type.
+  pub const fn max_store_depth(&self) -> i32 {
+    self
+      .max_cycles(self.keep_old_keys as i32)
+      .wrapping_mul(self.dkg_interval as i32)
+  }
+
+  /// Whether quorums of the type have a single member.
+  pub const fn is_single_member(&self) -> bool {
+    self.size == 1
+  }
+}
+
+/// Size overrides of the LLMQ types an option resizes, each a size and a
+/// threshold.
+///
+/// [`ConsensusParams::llmq`](crate::ConsensusParams::llmq) applies them. The
+/// threshold is also the type's minimum size and bad-votes threshold.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
+pub struct LlmqSizes {
+  /// [`LlmqType::LlmqTest`], from `-llmqtestparams`.
+  pub test: Option<(u16, u16)>,
+  /// [`LlmqType::LlmqTestInstantsend`], from `-llmqtestinstantsendparams`.
+  pub test_instant_send: Option<(u16, u16)>,
+  /// [`LlmqType::LlmqTestPlatform`], from `-llmqtestplatformparams`.
+  pub test_platform: Option<(u16, u16)>,
+  /// [`LlmqType::LlmqDevnet`], from `-llmqdevnetparams`.
+  pub devnet: Option<(u16, u16)>,
+}
+
+impl LlmqSizes {
+  /// No overrides, as every network's table has.
+  pub const NONE: Self = Self {
+    test: None,
+    test_instant_send: None,
+    test_platform: None,
+    devnet: None,
+  };
+
+  /// The size and threshold override of `llmq_type`, if it has one.
+  pub const fn get(&self, llmq_type: LlmqType) -> Option<(u16, u16)> {
+    match llmq_type {
+      LlmqType::LlmqTest => self.test,
+      LlmqType::LlmqTestInstantsend => self.test_instant_send,
+      LlmqType::LlmqTestPlatform => self.test_platform,
+      LlmqType::LlmqDevnet => self.devnet,
+      _ => None,
+    }
+  }
+
+  /// The override slot of `llmq_type`, if an option can resize it.
+  pub(crate) const fn slot_mut(&mut self, llmq_type: LlmqType) -> Option<&mut Option<(u16, u16)>> {
+    match llmq_type {
+      LlmqType::LlmqTest => Some(&mut self.test),
+      LlmqType::LlmqTestInstantsend => Some(&mut self.test_instant_send),
+      LlmqType::LlmqTestPlatform => Some(&mut self.test_platform),
+      LlmqType::LlmqDevnet => Some(&mut self.devnet),
+      _ => None,
+    }
+  }
 }

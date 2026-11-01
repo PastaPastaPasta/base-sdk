@@ -92,7 +92,7 @@ fn setup_genesis_blocks_match_their_hashes(
   #[values(Network::Main, Network::Testnet3, Network::Devnet, Network::Regtest)] network: Network,
   #[values(Release::V23_1, Release::V24_0)] release: Release,
 ) {
-  let setup = ChainParamsBuilder::new(network, release).build();
+  let setup = ChainParamsBuilder::new(network, release).build().unwrap();
   let genesis = Block::from(&setup.genesis);
   let genesis_hash = genesis.header().hash();
   assert_eq!(genesis_hash, BlockHash::from(setup.consensus.hash_genesis_block));
@@ -104,6 +104,6 @@ fn setup_genesis_blocks_match_their_hashes(
   let hash = BlockHash::from(setup.consensus.hash_devnet_genesis_block);
   assert_eq!(block.header().hash(), hash);
   assert_eq!(block.header().prev_hash(), genesis_hash);
-  let (height, checkpoint) = setup.checkpoints[1];
+  let (height, checkpoint) = setup.all_checkpoints().nth(1).unwrap();
   assert_eq!((height.to_u32(), BlockHash::from(checkpoint)), (1, hash));
 }

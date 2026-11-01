@@ -6,7 +6,7 @@
 
 //! Consensus parameters of a network.
 
-use crate::{Bip9Deployments, LlmqParams, LlmqType};
+use crate::{Bip9Deployments, LlmqParams, LlmqSizes, LlmqType};
 
 use bitcoin_units::BlockHeight;
 use dash_num::{Arith256, Hash256};
@@ -101,6 +101,25 @@ impl BuriedDeployment {
       Self::V20 => "v20",
       Self::MnRr => "mn_rr",
       Self::Withdrawals => "withdrawals",
+    }
+  }
+  /// The name regtest's `-testactivationheight` takes for the deployment, if
+  /// the option moves it.
+  pub const fn test_activation_name(self) -> Option<&'static str> {
+    match self {
+      Self::Bip147 => Some("bip147"),
+      Self::HeightInCoinbase => Some("bip34"),
+      Self::DerSig => Some("dersig"),
+      Self::Cltv => Some("cltv"),
+      Self::Csv => Some("csv"),
+      Self::Brr => Some("brr"),
+      Self::Dip0001 => Some("dip0001"),
+      Self::Dip0008 => Some("dip0008"),
+      Self::Dip0024 => Some("dip0024"),
+      Self::V19 => Some("v19"),
+      Self::V20 => Some("v20"),
+      Self::MnRr => Some("mn_rr"),
+      Self::Dip0003 | Self::Dip0020 | Self::Withdrawals => None,
     }
   }
 }
@@ -228,6 +247,9 @@ pub struct ConsensusParams {
   pub high_subsidy_factor: i32,
   /// LLMQ types the chain runs, in the reference implementation's order.
   pub llmqs: &'static [LlmqType],
+  /// Size overrides of the test and devnet LLMQ types, which
+  /// [`llmq`](Self::llmq) applies.
+  pub llmq_sizes: LlmqSizes,
   /// LLMQ type used for ChainLocks.
   pub llmq_type_chain_locks: LlmqType,
   /// LLMQ type used for DIP0024 InstantSend.
@@ -261,9 +283,32 @@ impl ConsensusParams {
     }
   }
 
-  /// Returns the parameters of an LLMQ type the chain runs, or `None` if the
-  /// chain does not run it.
+  /// Returns the parameters of an LLMQ type the chain runs, with its
+  /// [`llmq_sizes`](Self::llmq_sizes) override, or `None` if the chain does
+  /// not run it.
+  ///
+  /// An override sets the size and threshold, and the threshold is also the
+  /// minimum size and the bad-votes threshold.
   pub fn llmq(&self, llmq_type: LlmqType) -> Option<LlmqParams> {
-    llmq_type.params().filter(|_| self.llmqs.contains(&llmq_type))
+    let mut params = llmq_type.params().filter(|_| self.llmqs.contains(&llmq_type))?;
+    if let Some((size, threshold)) = self.llmq_sizes.get(llmq_type) {
+      params.size = size;
+      params.min_size = threshold;
+      params.threshold = threshold;
+      params.dkg_bad_votes_threshold = threshold;
+    }
+    Some(params)
+  }
+
+  /// Blocks between difficulty retargets, the target timespan over the
+  /// target spacing, or `None` where that is 0.
+  ///
+  /// A devnet spacing above the timespan makes it 0, and the reference then
+  /// divides by zero where it takes a height modulo the interval.
+  pub const fn difficulty_adjustment_interval(&self) -> Option<i64> {
+    match self.pow_target_timespan.checked_div(self.pow_target_spacing) {
+      Some(0) | None => None,
+      interval => interval,
+    }
   }
 }

@@ -9,7 +9,7 @@
 mod tables;
 
 use crate::prelude::*;
-use crate::{Bip9Deployment, ChainParams, DeploymentPos, DevnetGenesisParams, Network, Release};
+use crate::{Bip9Deployment, ChainParams, DeploymentPos, DevnetGenesisParams, Network, ParamsError, Release};
 
 use bitcoin_units::BlockHeight;
 use dash_num::Hash256;
@@ -23,8 +23,12 @@ use core::ops::Deref;
 /// implementation's chain parameters of a network at a [`Release`].
 ///
 /// Every [`ChainParams`] field is read through `Deref` and holds the
-/// release's value. A version-bits deployment the release lacks never
-/// activates there, and [`deployment`](Self::deployment) omits it.
+/// release's value with the builder's options applied. A version-bits
+/// deployment the release lacks never activates there, and
+/// [`deployment`](Self::deployment) omits it.
+///
+/// A devnet's checkpoint at height 1 has no slot in [`ChainParams`] and
+/// comes from [`ChainParams::all_checkpoints`].
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "codec", derive(Unencodable))]
 pub struct ChainSetup {
@@ -95,8 +99,8 @@ impl ChainSetup {
     self.release
   }
 
-  /// The devnet's name on a devnet, currently always `devnet`, and `None`
-  /// elsewhere.
+  /// The devnet's name on a devnet, `devnet`, or `devnet-<name>` once
+  /// `-devnet=<name>` names it, and `None` elsewhere.
   pub fn devnet_name(&self) -> Option<&str> {
     self.devnet_name.as_deref()
   }
@@ -133,6 +137,17 @@ impl ChainSetup {
       .then(|| self.chain.consensus.deployments.at(pos))
   }
 
+  /// The version-bits deployment at `pos`, to change, if this release has
+  /// it.
+  pub(crate) fn deployment_mut(&mut self, pos: DeploymentPos) -> Option<&mut Bip9Deployment> {
+    let deployments = &mut self.chain.consensus.deployments;
+    self
+      .release
+      .deployments()
+      .contains(&pos)
+      .then(|| deployments.at_mut(pos))
+  }
+
   /// The release's version-bits deployments, in position order.
   pub fn deployments(&self) -> impl Iterator<Item = (DeploymentPos, &Bip9Deployment)> {
     let deployments = &self.chain.consensus.deployments;
@@ -141,6 +156,24 @@ impl ChainSetup {
       .deployments()
       .iter()
       .map(move |&pos| (pos, deployments.at(pos)))
+  }
+
+  /// The parameters, to change.
+  pub(crate) const fn chain_mut(&mut self) -> &mut ChainParams {
+    &mut self.chain
+  }
+
+  /// Names the devnet `name`, which is `devnet-<name>`, with its own devnet
+  /// genesis block.
+  pub(crate) fn name_devnet(&mut self, name: String) -> Result<(), ParamsError> {
+    let Some(devnet_genesis) = DevnetGenesisParams::find(&name, &self.chain.genesis) else {
+      return Err(ParamsError::DevnetGenesis(name));
+    };
+    self.chain.consensus.hash_devnet_genesis_block = devnet_genesis.hash;
+    self.chain.chain_tx_data.timestamp = i64::from(devnet_genesis.time);
+    self.devnet_name = Some(name);
+    self.devnet_genesis = Some(devnet_genesis);
+    Ok(())
   }
 }
 

@@ -37,6 +37,7 @@ dash-num = { version = "0.2.0-beta", path = "../num", default-features = false }
 dash-pow = { version = "0.1.0-beta", path = "../pow", default-features = false }
 dash-types = { version = "0.2.0-beta", path = "../types", default-features = false }
 hex-conservative = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 dash-dev = { version = "0.0.0", path = "../../meta/dev", features = ["full"] }

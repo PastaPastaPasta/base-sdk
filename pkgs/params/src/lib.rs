@@ -17,9 +17,11 @@ mod builder;
 mod chain;
 mod consensus;
 mod deployment;
+mod error;
 mod genesis;
 mod llmq;
 mod params;
+mod parse;
 #[allow(unused_imports, reason = "ergonomic shim, exports may be unused")]
 mod prelude;
 mod release;
@@ -31,12 +33,13 @@ use crate::params::{devnet, mainnet, regtest, test3};
 use dash_types::type_id::Unencodable;
 
 pub use addr::AddrParams;
-pub use builder::ChainParamsBuilder;
+pub use builder::{ChainOption, ChainParamsBuilder};
 pub use chain::{ChainParams, ChainTxData, MessageStart};
 pub use consensus::{BuriedDeployment, Checkpoint, ConsensusParams, BRR_PERIODS_PERMILLE};
 pub use deployment::{Bip9Deployment, Bip9Deployments, DeploymentPos};
+pub use error::{ParamsError, VbField};
 pub use genesis::{DevnetGenesisParams, GenesisParams};
-pub use llmq::{LlmqParams, LlmqType};
+pub use llmq::{LlmqParams, LlmqSizes, LlmqType, MAX_LLMQ_SIZE};
 pub use release::Release;
 pub use setup::{AssumeutxoData, ChainSetup, HardCodedHeights};
 

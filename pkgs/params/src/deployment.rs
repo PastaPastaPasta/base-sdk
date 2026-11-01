@@ -24,6 +24,12 @@ pub enum DeploymentPos {
 }
 
 impl DeploymentPos {
+  /// The deployment's index in the reference implementation's deployment
+  /// array, the order its dumps list deployments in.
+  pub const fn index(self) -> usize {
+    self as usize
+  }
+
   /// The deployment's name, as the `-vbparams` option and RPC spell it.
   pub const fn name(self) -> &'static str {
     match self {
@@ -92,6 +98,15 @@ impl Bip9Deployments {
       DeploymentPos::TestDummy => &self.test_dummy,
       DeploymentPos::V24 => &self.v24,
       DeploymentPos::EvoShares => &self.evo_shares,
+    }
+  }
+
+  /// The deployment at `pos`, to change.
+  pub(crate) fn at_mut(&mut self, pos: DeploymentPos) -> &mut Bip9Deployment {
+    match pos {
+      DeploymentPos::TestDummy => &mut self.test_dummy,
+      DeploymentPos::V24 => &mut self.v24,
+      DeploymentPos::EvoShares => &mut self.evo_shares,
     }
   }
 }

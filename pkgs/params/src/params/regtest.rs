@@ -8,7 +8,7 @@
 
 use crate::{
   AddrParams, Bip9Deployment, Bip9Deployments, ChainParams, ChainTxData, Checkpoint, ConsensusParams, GenesisParams,
-  LlmqType,
+  LlmqSizes, LlmqType,
 };
 
 use bitcoin_units::{Amount, BlockHeight};
@@ -109,6 +109,7 @@ pub static PARAMS: ChainParams = ChainParams {
       LlmqType::LlmqTestDip0024,
       LlmqType::LlmqTestPlatform,
     ],
+    llmq_sizes: LlmqSizes::NONE,
     llmq_type_chain_locks: LlmqType::LlmqTest,
     llmq_type_dip0024_instant_send: LlmqType::LlmqTestDip0024,
     llmq_type_platform: LlmqType::LlmqTestPlatform,
