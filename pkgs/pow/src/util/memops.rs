@@ -47,17 +47,6 @@ pub(crate) const fn load_u64_be(buf: &[u8], i: usize) -> u64 {
   ])
 }
 
-/// Writes a little-endian `u32` into `buf` at byte offset `i * 4`.
-#[inline]
-pub(crate) const fn store_u32_le(buf: &mut [u8], i: usize, v: u32) {
-  let off = i * 4;
-  let b = v.to_le_bytes();
-  buf[off] = b[0];
-  buf[off + 1] = b[1];
-  buf[off + 2] = b[2];
-  buf[off + 3] = b[3];
-}
-
 /// Writes a little-endian `u64` into `buf` at byte offset `i * 8`.
 #[inline]
 pub(crate) const fn store_u64_le(buf: &mut [u8], i: usize, v: u64) {

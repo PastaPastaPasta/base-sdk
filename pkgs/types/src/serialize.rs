@@ -125,16 +125,10 @@ pub mod hex {
 ///
 /// An `Option<u64>` field takes the same form, with `None` as none.
 pub mod str_u64 {
-  mod sealed {
-    /// Sealing marker for the field types [`super::Value`] covers.
-    pub trait Sealed {}
-
-    impl Sealed for u64 {}
-    impl Sealed for Option<u64> {}
-  }
+  use crate::sealed::Sealed;
 
   /// A field type [`str_u64`](self) carries, either `u64` or `Option<u64>`.
-  pub trait Value: sealed::Sealed + Sized {
+  pub trait Value: Sealed + Sized {
     /// Serializes the value.
     fn serialize<S: ::serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error>;
 

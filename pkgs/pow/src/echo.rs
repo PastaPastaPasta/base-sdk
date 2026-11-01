@@ -5,11 +5,13 @@
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
 // Adapted from sphlib, written by Thomas Pornin <thomas.pornin@cryptolog.com>
+// Last-round trim first observed in work by sp <amigaguru@gmail.com>
+// and further optimization by Provos Alexis
 //
 
 //! Echo-512 hash function.
 
-use crate::aes::{block_from_words, round, round_nk, words_from_block, Block};
+use crate::aes::{block_from_words, hardware_aes, round, round_nk, software_aes, words_from_block, Block};
 use crate::consts::echo::BLOCK;
 use crate::util::buffer::{Buffer, Compress};
 use crate::util::memops::{digest_from_u32_le, load_u32s_le};
@@ -26,6 +28,31 @@ type BlockWords = [u32; 32];
 
 /// Grid permutation of the row-shift step, AES ShiftRows applied to cells.
 static BIG_SHIFT_ROWS: [usize; 16] = const_array!(0; 16; |i| 5 * i % 16);
+
+/// Cells that land in grid columns 0 and 2 after the row shift, the only
+/// columns the digest reads.
+static DIGEST_CELLS: [usize; 8] = [
+  BIG_SHIFT_ROWS[0],
+  BIG_SHIFT_ROWS[1],
+  BIG_SHIFT_ROWS[2],
+  BIG_SHIFT_ROWS[3],
+  BIG_SHIFT_ROWS[8],
+  BIG_SHIFT_ROWS[9],
+  BIG_SHIFT_ROWS[10],
+  BIG_SHIFT_ROWS[11],
+];
+
+software_aes! {
+  /// Whether the final compression skips the cells the digest never reads.
+  const TRIM_LAST_ROUND: bool = true;
+}
+hardware_aes! {
+  /// Whether the final compression skips the cells the digest never reads.
+  ///
+  /// Hardware rounds are cheap enough that the trimmed form loses to the
+  /// register spills it causes on aarch64.
+  const TRIM_LAST_ROUND: bool = false;
+}
 
 /// Lays four words out as one grid cell.
 #[cfg_attr(not(debug_assertions), inline(always))]
@@ -106,8 +133,16 @@ fn apply_big_mix_columns(grid: &mut Grid) {
 }
 
 /// Runs the compression function on one 1024-bit block.
+///
+/// With `LAST` and `TRIM_LAST_ROUND` set, chaining cells 4 through 7 keep
+/// their previous value. The digest reads only cells 0 through 3, which depend
+/// on grid columns 0 and 2, so the last round transforms only their inputs.
 #[cfg_attr(not(debug_assertions), inline(always))]
-fn compress_words(chaining_value: &mut ChainingValue, block: &BlockWords, counter: Counter) {
+fn compress_words<const LAST: bool>(chaining_value: &mut ChainingValue, block: &BlockWords, counter: Counter) {
+  let trim = LAST && TRIM_LAST_ROUND;
+  let full_rounds = if trim { 9 } else { 10 };
+  let updated_cells = if trim { 4 } else { 8 };
+
   // The upper half of the 4x4 grid starts from the chaining value and the
   // lower half from the message block.
   let mut grid = [Block::splat(0); 16];
@@ -120,18 +155,31 @@ fn compress_words(chaining_value: &mut ChainingValue, block: &BlockWords, counte
   }
 
   let mut round_counter = counter;
-  let mut round = 0;
-  while round < 10 {
+  let mut big_round = 0;
+  while big_round < full_rounds {
     let (round_keys, next_counter) = build_sub_word_keys(round_counter);
     apply_big_sub_words(&mut grid, &round_keys);
     round_counter = next_counter;
     apply_big_shift_rows(&mut grid);
     apply_big_mix_columns(&mut grid);
-    round += 1;
+    big_round += 1;
+  }
+
+  if trim {
+    let (round_keys, _) = build_sub_word_keys(round_counter);
+    index = 0;
+    while index < 8 {
+      let digest_cell = DIGEST_CELLS[index];
+      grid[digest_cell] = round_nk(round(grid[digest_cell], round_keys[digest_cell]));
+      index += 1;
+    }
+    apply_big_shift_rows(&mut grid);
+    mix_column(&mut grid, 0, 1, 2, 3);
+    mix_column(&mut grid, 8, 9, 10, 11);
   }
 
   index = 0;
-  while index < 8 {
+  while index < updated_cells {
     let offset = index * 4;
     let message = cell([block[offset], block[offset + 1], block[offset + 2], block[offset + 3]]);
     let mixed = cell(chaining_value[index]) ^ message ^ grid[index] ^ grid[index + 8];
@@ -142,9 +190,9 @@ fn compress_words(chaining_value: &mut ChainingValue, block: &BlockWords, counte
 
 /// Runs the compression function on one 1024-bit block.
 #[cfg_attr(not(debug_assertions), inline(always))]
-fn compress_block(chaining_value: &mut ChainingValue, block: &[u8; BLOCK], counter: Counter) {
+fn compress_block<const LAST: bool>(chaining_value: &mut ChainingValue, block: &[u8; BLOCK], counter: Counter) {
   let words = load_u32s_le(block);
-  compress_words(chaining_value, &words, counter);
+  compress_words::<LAST>(chaining_value, &words, counter);
 }
 
 /// Chaining value and HAIFA bit counter.
@@ -158,7 +206,7 @@ impl Compress<BLOCK> for Core {
   #[cfg_attr(not(debug_assertions), inline(always))]
   fn compress(&mut self, block: &[u8; BLOCK]) {
     self.counter = self.counter.wrapping_add(1024);
-    compress_block(&mut self.h, block, self.counter);
+    compress_block::<false>(&mut self.h, block, self.counter);
   }
 }
 
@@ -203,13 +251,13 @@ impl FixedOutput for Echo512 {
     if used == 0 {
       counter = 0;
     } else if used >= BLOCK - 18 {
-      compress_block(h, block, counter);
+      compress_block::<false>(h, block, counter);
       *block = [0u8; BLOCK];
       counter = 0;
     }
     block[BLOCK - 18..BLOCK - 16].copy_from_slice(&512u16.to_le_bytes());
     block[BLOCK - 16..].copy_from_slice(&total.to_le_bytes());
-    compress_block(h, block, counter);
+    compress_block::<true>(h, block, counter);
 
     let words: [u32; 16] = core::array::from_fn(|word| h[word / 4][word % 4]);
     out.copy_from_slice(&digest_from_u32_le(&words));

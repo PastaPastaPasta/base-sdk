@@ -5,6 +5,7 @@
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
 // Adapted from sphlib, written by Thomas Pornin <thomas.pornin@cryptolog.com>
+// Message-free blank round first observed in work by sp <amigaguru@gmail.com>
 //
 
 //! Luffa-512 hash function.
@@ -13,7 +14,6 @@ use crate::consts::luffa::{BLOCK, IV, RC, RC_FIRST4_HIGH, RC_FIRST4_LOW};
 use crate::util::arx::rotl_u32x4;
 use crate::util::buffer::{Buffer, Compress};
 use crate::util::impl_digest;
-use crate::util::memops::{load_u32_le, store_u32_le};
 
 use digest::{FixedOutput, Output, Update};
 use wide::u32x4;
@@ -110,19 +110,22 @@ fn xor_words(dst: &mut [u32; 8], src: &[u32; 8]) {
   }
 }
 
-/// Xors all five branches and writes one 32-byte output half (LE store + swap).
+/// Xors all five branches into one 32-byte output half of big-endian words.
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn write_output_half(state: &[[u32; 8]; 5], out: &mut [u8]) {
   let mut i = 0;
   while i < 8 {
     let word = state[0][i] ^ state[1][i] ^ state[2][i] ^ state[3][i] ^ state[4][i];
-    store_u32_le(out, i, word.swap_bytes());
+    out[i * 4..i * 4 + 4].copy_from_slice(&word.to_be_bytes());
     i += 1;
   }
 }
 
-/// Injects one message block into the five branches.
+/// Applies the state-only half of the message injection.
+///
+/// A blank finalization block has a zero message, so its injection ends here.
 #[cfg_attr(not(debug_assertions), inline(always))]
-fn inject_message(state: &mut [[u32; 8]; 5], msg: &[u32; 8]) {
+fn inject_blank(state: &mut [[u32; 8]; 5]) {
   let [mut b0, mut b1, mut b2, mut b3, mut b4] = *state;
 
   let mut sum = [0u32; 8];
@@ -163,20 +166,26 @@ fn inject_message(state: &mut [[u32; 8]; 5], msg: &[u32; 8]) {
   apply_m2_in_place(&mut b1);
   xor_words(&mut b1, &carry);
 
+  *state = [b0, b1, b2, b3, b4];
+}
+
+/// Injects one message block into the five branches.
+#[cfg_attr(not(debug_assertions), inline(always))]
+fn inject_message(state: &mut [[u32; 8]; 5], msg: &[u32; 8]) {
+  inject_blank(state);
+
   let mut msg_step = *msg;
   // The message is injected with the same repeated `M2` step so each branch
   // sees a rotated copy of the same 256-bit block.
-  xor_words(&mut b0, &msg_step);
+  xor_words(&mut state[0], &msg_step);
   apply_m2_in_place(&mut msg_step);
-  xor_words(&mut b1, &msg_step);
+  xor_words(&mut state[1], &msg_step);
   apply_m2_in_place(&mut msg_step);
-  xor_words(&mut b2, &msg_step);
+  xor_words(&mut state[2], &msg_step);
   apply_m2_in_place(&mut msg_step);
-  xor_words(&mut b3, &msg_step);
+  xor_words(&mut state[3], &msg_step);
   apply_m2_in_place(&mut msg_step);
-  xor_words(&mut b4, &msg_step);
-
-  *state = [b0, b1, b2, b3, b4];
+  xor_words(&mut state[4], &msg_step);
 }
 
 /// Rotates words 4 through 7 in branches 1 through 4.
@@ -216,27 +225,16 @@ fn permute_state(state: &mut [[u32; 8]; 5]) {
   permute_branch(&mut state[4], &RC[4][0], &RC[4][1]);
 }
 
+/// Reads one 32-byte block as eight big-endian words.
 #[cfg_attr(not(debug_assertions), inline(always))]
-fn load_block_words(buf: &[u8]) -> [u32; 8] {
-  core::array::from_fn(|i| load_u32_le(buf, i).swap_bytes())
+fn load_block_words(block: &[u8; BLOCK]) -> [u32; 8] {
+  core::array::from_fn(|i| u32::from_be_bytes([block[4 * i], block[4 * i + 1], block[4 * i + 2], block[4 * i + 3]]))
 }
 
-/// Transposes branches 0 through 3 into word-position vectors, runs the 8-round
-/// permutation, then writes the results back.
-///
-/// Each lane holds the same word index from one branch. That lets one
-/// `u32x4` instruction update four branches at once while keeping the
-/// branch-local message injection and finalization code unchanged.
-fn permute_first_four_branches(state: &mut [[u32; 8]; 5]) {
-  let mut x0 = WordVec::new([state[0][0], state[1][0], state[2][0], state[3][0]]);
-  let mut x1 = WordVec::new([state[0][1], state[1][1], state[2][1], state[3][1]]);
-  let mut x2 = WordVec::new([state[0][2], state[1][2], state[2][2], state[3][2]]);
-  let mut x3 = WordVec::new([state[0][3], state[1][3], state[2][3], state[3][3]]);
-  let mut x4 = WordVec::new([state[0][4], state[1][4], state[2][4], state[3][4]]);
-  let mut x5 = WordVec::new([state[0][5], state[1][5], state[2][5], state[3][5]]);
-  let mut x6 = WordVec::new([state[0][6], state[1][6], state[2][6], state[3][6]]);
-  let mut x7 = WordVec::new([state[0][7], state[1][7], state[2][7], state[3][7]]);
-
+/// Runs the eight rounds on the lane layout of one branch per lane.
+#[cfg_attr(not(debug_assertions), inline(always))]
+fn run_rounds(words: [WordVec; 8]) -> [WordVec; 8] {
+  let [mut x0, mut x1, mut x2, mut x3, mut x4, mut x5, mut x6, mut x7] = words;
   let mut round = 0;
   while round < 8 {
     apply_sub_crumb_vec(&mut x0, &mut x1, &mut x2, &mut x3);
@@ -249,25 +247,45 @@ fn permute_first_four_branches(state: &mut [[u32; 8]; 5]) {
     x4 ^= RC_FIRST4_HIGH[round];
     round += 1;
   }
+  [x0, x1, x2, x3, x4, x5, x6, x7]
+}
 
-  let y0 = x0.to_array();
-  let y1 = x1.to_array();
-  let y2 = x2.to_array();
-  let y3 = x3.to_array();
-  let y4 = x4.to_array();
-  let y5 = x5.to_array();
-  let y6 = x6.to_array();
-  let y7 = x7.to_array();
+/// Transposes branches 0 through 3 into word-position vectors, runs the 8-round
+/// permutation, then writes the results back.
+///
+/// Each lane holds the same word index from one branch. That lets one
+/// `u32x4` instruction update four branches at once while keeping the
+/// branch-local message injection and finalization code unchanged.
+#[cfg_attr(not(debug_assertions), inline(always))]
+fn permute_first_four_branches(state: &mut [[u32; 8]; 5]) {
+  let x0 = WordVec::new([state[0][0], state[1][0], state[2][0], state[3][0]]);
+  let x1 = WordVec::new([state[0][1], state[1][1], state[2][1], state[3][1]]);
+  let x2 = WordVec::new([state[0][2], state[1][2], state[2][2], state[3][2]]);
+  let x3 = WordVec::new([state[0][3], state[1][3], state[2][3], state[3][3]]);
+  let x4 = WordVec::new([state[0][4], state[1][4], state[2][4], state[3][4]]);
+  let x5 = WordVec::new([state[0][5], state[1][5], state[2][5], state[3][5]]);
+  let x6 = WordVec::new([state[0][6], state[1][6], state[2][6], state[3][6]]);
+  let x7 = WordVec::new([state[0][7], state[1][7], state[2][7], state[3][7]]);
+
+  let [x0, x1, x2, x3, x4, x5, x6, x7] = run_rounds([x0, x1, x2, x3, x4, x5, x6, x7]);
+
+  let y = [
+    x0.to_array(),
+    x1.to_array(),
+    x2.to_array(),
+    x3.to_array(),
+    x4.to_array(),
+    x5.to_array(),
+    x6.to_array(),
+    x7.to_array(),
+  ];
   let mut branch = 0;
   while branch < 4 {
-    state[branch][0] = y0[branch];
-    state[branch][1] = y1[branch];
-    state[branch][2] = y2[branch];
-    state[branch][3] = y3[branch];
-    state[branch][4] = y4[branch];
-    state[branch][5] = y5[branch];
-    state[branch][6] = y6[branch];
-    state[branch][7] = y7[branch];
+    let mut word = 0;
+    while word < 8 {
+      state[branch][word] = y[word][branch];
+      word += 1;
+    }
     branch += 1;
   }
 }
@@ -316,10 +334,10 @@ impl FixedOutput for Luffa512 {
     // then each drain one half of the digest.
     self.core.compress(self.buffer.pad(0x80));
     let state = &mut self.core.state;
-    inject_message(state, &[0u32; 8]);
+    inject_blank(state);
     permute_state(state);
     write_output_half(state, &mut out[..32]);
-    inject_message(state, &[0u32; 8]);
+    inject_blank(state);
     permute_state(state);
     write_output_half(state, &mut out[32..]);
   }

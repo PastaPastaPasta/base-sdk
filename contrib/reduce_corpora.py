@@ -7,16 +7,17 @@
 # See the accompanying file LICENSE or https://opensource.org/license/MIT
 #
 
-"""Reduce an AFL++ queue into a committed fuzz corpus.
+"""Reduce AFL++ queues into a committed fuzz corpus.
 
-Runs `afl-cmin.bash` to keep one input per coverage tuple, `afl-tmin` on each
-survivor, then replaces the corpus with the results named by their SHA-1. The
+Pools the queue of every instance under each AFL++ output directory with the
+corpus and runs `afl-cmin.bash` once per binary to keep one input per coverage
+tuple. The corpus becomes the union of survivors, named by their SHA-1. The
 Python `afl-cmin` writes nothing on macOS and the awk one refuses to run.
 
 Usage:
 
   ./contrib/reduce_corpora.py \\
-    --queue /Volumes/mrd-fuzz/out/blake/default/queue \\
+    --output /Volumes/mrd-fuzz/out/blake \\
     --binary /Volumes/mrd-fuzz/target/release/blake \\
     --corpus fuzz/pow/corpora/blake
 """
@@ -89,63 +90,83 @@ def _sizes(paths: list[Path]) -> str:
   return f"{len(paths)} files, {total} bytes"
 
 
+def _digest(data: bytes) -> str:
+  """Return the SHA-1 name of *data*."""
+  return hashlib.sha1(data, usedforsecurity=False).hexdigest()
+
+
 def _reduce(args: argparse.Namespace) -> int:
   afl_bin = _afl_bin(args.afl_bin)
-  queue = sorted(path for path in args.queue.iterdir() if path.is_file())
-  if not queue:
-    raise RuntimeError(f"{args.queue} holds no inputs")
-  print(f"queue: {_sizes(queue)}")
+  # `afl-fuzz -M` and `-S` name each instance's directory; other runs use
+  # `default`.
+  queues = sorted(
+    queue
+    for output in args.output
+    for queue in output.glob("*/queue")
+    if queue.is_dir()
+  )
+  if not queues:
+    raise RuntimeError("none of the outputs hold a queue")
+  inputs = [
+    path for queue in queues for path in queue.iterdir() if path.is_file()
+  ]
+  print(f"queue: {_sizes(inputs)}")
+  # The corpus joins the pool so no committed input is dropped unexamined.
+  if args.corpus.is_dir():
+    inputs += [path for path in args.corpus.iterdir() if path.is_file()]
 
-  with tempfile.TemporaryDirectory(dir=args.queue.parent) as work:
-    kept = Path(work) / "cmin"
-    cmin = afl_bin / "afl-cmin.bash"
-    _run(afl_bin, cmin, "-i", args.queue, "-o", kept, "--", args.binary)
-    survivors = sorted(kept.iterdir())
-    # A silent failure leaves no inputs, which is never a valid reduction.
-    if not survivors:
-      raise RuntimeError("afl-cmin kept no inputs")
-    print(f"cmin:  {_sizes(survivors)}")
+  with tempfile.TemporaryDirectory(dir=queues[0].parent) as work:
+    pool = Path(work) / "pool"
+    pool.mkdir()
+    for path in inputs:
+      data = path.read_bytes()
+      (pool / _digest(data)).write_bytes(data)
+
+    # Each binary keeps the inputs its own coverage needs. An input kept by
+    # one binary is trimmed with it; one kept by several stays whole, since
+    # trimming for one binary may lose coverage of another.
+    keepers: dict[str, list[Path]] = {}
+    for index, binary in enumerate(args.binary):
+      kept = Path(work) / f"cmin{index}"
+      cmin = afl_bin / "afl-cmin.bash"
+      _run(afl_bin, cmin, "-i", pool, "-o", kept, "--", binary)
+      # `AFL_KEEP_TRACES` leaves a `.traces` directory beside the survivors.
+      survivors = sorted(path for path in kept.iterdir() if path.is_file())
+      # A silent failure leaves no inputs, which is never a valid reduction.
+      if not survivors:
+        raise RuntimeError(f"afl-cmin kept no inputs for {binary}")
+      print(f"cmin:  {_sizes(survivors)} for {binary}")
+      for path in survivors:
+        keepers.setdefault(path.name, []).append(binary)
 
     trimmed = Path(work) / "tmin"
     trimmed.mkdir()
     tmin = afl_bin / "afl-tmin"
-    with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-      jobs = [
-        pool.submit(
-          _run,
-          afl_bin,
-          *(tmin, "-i", path, "-o", trimmed / path.name, "--", args.binary),
-        )
-        for path in survivors
-      ]
+    with ThreadPoolExecutor(max_workers=args.jobs) as pool_jobs:
+      jobs = []
+      for name, binaries in keepers.items():
+        if len(binaries) == 1:
+          command = (tmin, "-i", pool / name, "-o", trimmed / name)
+          jobs.append(
+            pool_jobs.submit(_run, afl_bin, *command, "--", binaries[0])
+          )
+        else:
+          shutil.copyfile(pool / name, trimmed / name)
       for job in jobs:
         job.result()
 
     # Inputs that trim to the same bytes share a name and collapse into one.
-    inputs = {}
+    reduced = {}
     for path in trimmed.iterdir():
       data = path.read_bytes()
-      inputs[hashlib.sha1(data, usedforsecurity=False).hexdigest()] = data
-    print(f"tmin:  {_sizes(list(trimmed.iterdir()))}, {len(inputs)} distinct")
+      reduced[_digest(data)] = data
+    print(f"tmin:  {_sizes(list(trimmed.iterdir()))}, {len(reduced)} distinct")
 
   args.corpus.mkdir(parents=True, exist_ok=True)
-  # A seed absent from the queue means the fuzzer did not start from the
-  # corpus, so replacing it may drop coverage the queue never had.
-  queued = {path.read_bytes() for path in queue}
-  unseen = [
-    path
-    for path in args.corpus.iterdir()
-    if path.is_file() and path.read_bytes() not in queued
-  ]
-  if unseen:
-    print(
-      f"warning: {len(unseen)} corpus inputs are not in the queue",
-      file=sys.stderr,
-    )
   for stale in args.corpus.iterdir():
     if stale.is_file():
       stale.unlink()
-  for name, data in inputs.items():
+  for name, data in reduced.items():
     (args.corpus / name).write_bytes(data)
   print(f"wrote {args.corpus}")
   return RETCODE_PASS
@@ -157,16 +178,18 @@ def _parse_args() -> argparse.Namespace:
     formatter_class=argparse.RawDescriptionHelpFormatter,
   )
   parser.add_argument(
-    "--queue",
+    "--output",
     type=Path,
+    action="append",
     required=True,
-    help="AFL++ queue directory",
+    help="AFL++ output directory, repeatable; missing ones are skipped",
   )
   parser.add_argument(
     "--binary",
     type=Path,
+    action="append",
     required=True,
-    help="instrumented target",
+    help="instrumented target, repeatable; each keeps its own coverage",
   )
   parser.add_argument(
     "--corpus",

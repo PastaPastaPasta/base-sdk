@@ -10,6 +10,8 @@ x86_64_flags := "-C target-cpu=x86-64-v3 -C target-feature=+aes"
 aarch64_flags := "-C target-cpu=generic -C target-feature=+aes"
 rustflags := if arch() == "x86_64" { x86_64_flags } else if arch() == "aarch64" { aarch64_flags } else { "" }
 
+import "pow/mod.just"
+
 # AFL++ needs `cargo afl system-config` again after every reboot.
 # Fetch sphlib, install cargo-afl and build AFL++
 setup:
@@ -17,28 +19,32 @@ setup:
     cargo install --locked cargo-afl@0.18.2
     cargo afl config --build
 
-# Fuzz a `dash-pow` `target` against sphlib; extra arguments go to `afl-fuzz`
-pow target *args: (run "pow" target args)
-
 # Check every stage against sphlib, natively and as a baseline `portable` build
 test:
     git submodule update --init pow/sphlib
     cargo test --locked --workspace
     RUSTFLAGS="" cargo test --locked --workspace --features dash-pow/portable
 
-# Reduce the AFL++ queue of `target` into its committed corpus
-reduce crate target:
-    {{ python }} ../contrib/reduce_corpora.py --queue {{ ramdisk }}/out/{{ target }}/default/queue \
-      --binary {{ ramdisk }}/target/release/{{ target }} --corpus {{ crate }}/corpora/{{ target }}
+# Reduce the queues of `target` under each of `roots` into its committed corpus
+[private]
+reduce-from crate target +roots:
+    {{ python }} ../contrib/reduce_corpora.py --corpus {{ crate }}/corpora/{{ target }} \
+      {{ prepend("--output ", append("/out/" + target, roots)) }} \
+      {{ prepend("--binary ", append("/target/release/" + target, roots)) }}
+
+# Build `target` of `dash-<crate>-fuzz` for AFL++ in a ramdisk
+[private]
+build crate target flags features root: mount-ramdisk
+    RUSTFLAGS="{{ flags }}" CARGO_TARGET_DIR={{ root }}/target \
+      cargo afl build --release -p dash-{{ crate }}-fuzz --bin {{ target }} {{ features }}
 
 # Fuzz `target` of `dash-<crate>-fuzz` with AFL++ in a ramdisk
 [private]
-run crate target *args: mount-ramdisk
-    RUSTFLAGS="{{ rustflags }}" CARGO_TARGET_DIR={{ ramdisk }}/target \
-      cargo afl build --release -p dash-{{ crate }}-fuzz --bin {{ target }}
-    AFL_AUTORESUME=1 cargo afl fuzz -i {{ crate }}/corpora/{{ target }} -o {{ ramdisk }}/out/{{ target }} \
+run crate target flags features root *args: (build crate target flags features root)
+    mkdir -p {{ root }}/out
+    AFL_AUTORESUME=1 cargo afl fuzz -i {{ crate }}/corpora/{{ target }} -o {{ root }}/out/{{ target }} \
       -x dicts/byte_patterns.dict {{ args }} \
-      -- {{ ramdisk }}/target/release/{{ target }}
+      -- {{ root }}/target/release/{{ target }}
 
 [private]
 ramdisk *args:

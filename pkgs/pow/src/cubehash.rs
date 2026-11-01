@@ -76,50 +76,54 @@ fn load_block(block: &[u8]) -> (U32x4, U32x4) {
 ///
 /// Each round pair updates the upper half, rotates the lower half, swaps lanes,
 /// then repeats with a different rotation amount.
-#[inline]
-fn sixteen_rounds(s: &mut [U32x4; 8]) {
+#[cfg_attr(not(debug_assertions), inline(always))]
+fn sixteen_rounds(state: &mut [U32x4; 8]) {
+  // Locals keep the state in registers, whereas array slots round-trip
+  // memory every round.
+  let [mut s0, mut s1, mut s2, mut s3, mut s4, mut s5, mut s6, mut s7] = *state;
   let mut i = 0;
   while i < 16 {
-    s[4] += s[0];
-    s[5] += s[1];
-    s[6] += s[2];
-    s[7] += s[3];
+    s4 += s0;
+    s5 += s1;
+    s6 += s2;
+    s7 += s3;
 
-    let next0 = rotl_u32x4(s[2], 7) ^ s[4];
-    let next1 = rotl_u32x4(s[3], 7) ^ s[5];
-    let next2 = rotl_u32x4(s[0], 7) ^ s[6];
-    let next3 = rotl_u32x4(s[1], 7) ^ s[7];
-    s[0] = next0;
-    s[1] = next1;
-    s[2] = next2;
-    s[3] = next3;
+    let next0 = rotl_u32x4(s2, 7) ^ s4;
+    let next1 = rotl_u32x4(s3, 7) ^ s5;
+    let next2 = rotl_u32x4(s0, 7) ^ s6;
+    let next3 = rotl_u32x4(s1, 7) ^ s7;
+    s0 = next0;
+    s1 = next1;
+    s2 = next2;
+    s3 = next3;
 
-    s[4] = swap_halves(s[4]);
-    s[5] = swap_halves(s[5]);
-    s[6] = swap_halves(s[6]);
-    s[7] = swap_halves(s[7]);
+    s4 = swap_halves(s4);
+    s5 = swap_halves(s5);
+    s6 = swap_halves(s6);
+    s7 = swap_halves(s7);
 
-    s[4] += s[0];
-    s[5] += s[1];
-    s[6] += s[2];
-    s[7] += s[3];
+    s4 += s0;
+    s5 += s1;
+    s6 += s2;
+    s7 += s3;
 
-    let next0 = rotl_u32x4(s[1], 11) ^ s[4];
-    let next1 = rotl_u32x4(s[0], 11) ^ s[5];
-    let next2 = rotl_u32x4(s[3], 11) ^ s[6];
-    let next3 = rotl_u32x4(s[2], 11) ^ s[7];
-    s[0] = next0;
-    s[1] = next1;
-    s[2] = next2;
-    s[3] = next3;
+    let next0 = rotl_u32x4(s1, 11) ^ s4;
+    let next1 = rotl_u32x4(s0, 11) ^ s5;
+    let next2 = rotl_u32x4(s3, 11) ^ s6;
+    let next3 = rotl_u32x4(s2, 11) ^ s7;
+    s0 = next0;
+    s1 = next1;
+    s2 = next2;
+    s3 = next3;
 
-    s[4] = swap_pairs(s[4]);
-    s[5] = swap_pairs(s[5]);
-    s[6] = swap_pairs(s[6]);
-    s[7] = swap_pairs(s[7]);
+    s4 = swap_pairs(s4);
+    s5 = swap_pairs(s5);
+    s6 = swap_pairs(s6);
+    s7 = swap_pairs(s7);
 
     i += 1;
   }
+  *state = [s0, s1, s2, s3, s4, s5, s6, s7];
 }
 
 /// Absorbs two word vectors into the state.

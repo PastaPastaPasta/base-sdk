@@ -19,6 +19,17 @@ mod macros;
 mod numeric;
 #[allow(unused_imports, reason = "ergonomic shim, exports may be unused")]
 mod prelude;
+#[cfg(any(feature = "codec", feature = "serde"))]
+mod sealed {
+  /// Sealing marker for traits only this crate implements.
+  pub trait Sealed {}
+
+  impl Sealed for u8 {}
+  impl Sealed for u16 {}
+  impl Sealed for u32 {}
+  impl Sealed for u64 {}
+  impl Sealed for Option<u64> {}
+}
 mod secret;
 mod traits;
 
@@ -39,10 +50,6 @@ cfg_if::cfg_if! {
     #[allow(unused_macros, reason = "used by feature-gated submodules")]
     mod adapters;
     mod compact;
-    mod sealed {
-      /// Sealing marker for traits only this crate implements.
-      pub trait Sealed {}
-    }
 
     pub mod codec;
     pub mod type_id;

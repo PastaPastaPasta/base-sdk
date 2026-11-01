@@ -5,17 +5,19 @@
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
 // Adapted from sphlib, written by Thomas Pornin <thomas.pornin@cryptolog.com>
+// Half-word byte swap by 16-bit rotate first observed in work by Hongjun Wu
 //
 
 //! JH-512 hash function.
 
-use crate::consts::jh::{BLOCK, IV, ROUND_CONSTS};
+use crate::consts::jh::{BLOCK, IV, ROUND_CONST_WORDS};
 use crate::util::buffer::{Buffer, Compress};
-use crate::util::memops::{load_u64_le, store_u64_le};
+use crate::util::memops::{load_u32s_le, store_u64_le};
 use crate::util::{impl_digest, impl_hash};
 
 use digest::{FixedOutput, Output, Update};
-use wide::u32x4;
+use wide::bytemuck::cast;
+use wide::{u16x8, u32x4};
 
 /// One 128-bit JH row, stored as four 32-bit lanes.
 type Row = u32x4;
@@ -42,32 +44,20 @@ fn row_to_u64_pair(row: Row) -> [u64; 2] {
 }
 
 /// Applies the 4-word boolean S-box to one column.
-#[inline]
-fn apply_sbox(x0: &mut Row, x1: &mut Row, x2: &mut Row, x3: &mut Row, constant: Row) {
-  *x3 = !*x3;
-  *x0 ^= constant & !*x2;
-  let tmp = constant ^ (*x0 & *x1);
-  *x0 ^= *x2 & *x3;
-  *x3 ^= !*x1 & *x2;
-  *x1 ^= *x0 & *x2;
-  *x2 ^= *x0 & !*x3;
-  *x0 ^= *x1 | *x3;
-  *x3 ^= *x1 & *x2;
-  *x1 ^= tmp & *x0;
-  *x2 ^= tmp;
-}
-
-/// Applies the linear diffusion layer to one 8-word bundle.
-#[inline]
-fn apply_linear_layer(y: &mut [Row; 8]) {
-  y[4] ^= y[1];
-  y[5] ^= y[2];
-  y[6] ^= y[3] ^ y[0];
-  y[7] ^= y[0];
-  y[0] ^= y[5];
-  y[1] ^= y[6];
-  y[2] ^= y[7] ^ y[4];
-  y[3] ^= y[4];
+#[cfg_attr(not(debug_assertions), inline(always))]
+fn sbox([mut x0, mut x1, mut x2, mut x3]: [Row; 4], constant: Row) -> [Row; 4] {
+  x3 = !x3;
+  x0 ^= constant & !x2;
+  let tmp = constant ^ (x0 & x1);
+  x0 ^= x2 & x3;
+  x3 ^= !x1 & x2;
+  x1 ^= x0 & x2;
+  x2 ^= x0 & !x3;
+  x0 ^= x1 | x3;
+  x3 ^= x1 & x2;
+  x1 ^= tmp & x0;
+  x2 ^= tmp;
+  [x0, x1, x2, x3]
 }
 
 /// Swaps neighbouring bit groups of `WIDTH` bits, where `LOW` masks the
@@ -77,46 +67,48 @@ fn swap_bit_groups<const LOW: u32, const WIDTH: u32>(x: Row) -> Row {
   ((x & const { Row::splat(LOW) }) << WIDTH) | ((x & const { Row::splat(!LOW) }) >> WIDTH)
 }
 
+/// Swaps the low and high byte inside each 16-bit chunk.
+///
+/// A 16-bit rotate lowers to `rev16` or `pshufb` where the target has one,
+/// and to two shifts and an or on plain SSE2.
+#[cfg_attr(not(debug_assertions), inline(always))]
+fn swap_bytes_in_half_words(x: Row) -> Row {
+  let halves: u16x8 = cast(x);
+  cast((halves << 8) | (halves >> 8))
+}
+
+/// Loads a round's constants for the even (`HALF` 0) or odd (`HALF` 1) columns.
+#[cfg_attr(not(debug_assertions), inline(always))]
+fn load_constants<const HALF: usize>(constants: &[u32; 8]) -> Row {
+  const { assert!(HALF < 2) };
+  Row::new([
+    constants[HALF * 4],
+    constants[HALF * 4 + 1],
+    constants[HALF * 4 + 2],
+    constants[HALF * 4 + 3],
+  ])
+}
+
 /// Applies the S-box and linear layer to all eight rows.
 #[cfg_attr(not(debug_assertions), inline(always))]
-fn apply_round_core(state: &mut State, constants: [u64; 4]) {
-  let mut x0 = state[0];
-  let mut x1 = state[1];
-  let mut x2 = state[2];
-  let mut x3 = state[3];
-  let mut x4 = state[4];
-  let mut x5 = state[5];
-  let mut x6 = state[6];
-  let mut x7 = state[7];
+fn apply_round_core(state: &mut State, constants: &[u32; 8]) {
+  let [y0, y1, y2, y3] = sbox([state[0], state[2], state[4], state[6]], load_constants::<0>(constants));
+  let [y4, y5, y6, y7] = sbox([state[1], state[3], state[5], state[7]], load_constants::<1>(constants));
 
-  apply_sbox(
-    &mut x0,
-    &mut x2,
-    &mut x4,
-    &mut x6,
-    row_from_u64_pair([constants[0], constants[1]]),
-  );
-  apply_sbox(
-    &mut x1,
-    &mut x3,
-    &mut x5,
-    &mut x7,
-    row_from_u64_pair([constants[2], constants[3]]),
-  );
-
-  // The S-box works on even and odd columns. The linear layer then mixes
-  // the result in row order, so we regroup before applying it.
-  let mut words = [x0, x2, x4, x6, x1, x3, x5, x7];
-  apply_linear_layer(&mut words);
-
-  state[0] = words[0];
-  state[1] = words[4];
-  state[2] = words[1];
-  state[3] = words[5];
-  state[4] = words[2];
-  state[5] = words[6];
-  state[6] = words[3];
-  state[7] = words[7];
+  // The S-box works on even and odd columns, while the linear layer mixes
+  // the results in row order.
+  let z4 = y4 ^ y1;
+  let z5 = y5 ^ y2;
+  let z6 = y6 ^ y3 ^ y0;
+  let z7 = y7 ^ y0;
+  state[0] = y0 ^ y5 ^ y2;
+  state[1] = z4;
+  state[2] = y1 ^ z6;
+  state[3] = z5;
+  state[4] = y2 ^ z7 ^ z4;
+  state[5] = z6;
+  state[6] = y3 ^ y4 ^ y1;
+  state[7] = z7;
 }
 
 /// Swaps the bit groups of width `2^OP` in the odd rows.
@@ -130,7 +122,7 @@ fn apply_swap<const OP: usize>(state: &mut State) {
       0 => state[row] = swap_bit_groups::<0x5555_5555, 1>(state[row]),
       1 => state[row] = swap_bit_groups::<0x3333_3333, 2>(state[row]),
       2 => state[row] = swap_bit_groups::<0x0f0f_0f0f, 4>(state[row]),
-      3 => state[row] = swap_bit_groups::<0x00ff_00ff, 8>(state[row]),
+      3 => state[row] = swap_bytes_in_half_words(state[row]),
       4 => state[row] = swap_bit_groups::<0x0000_ffff, 16>(state[row]),
       5 => state[row] = state[row].shuffle(SWAP_WORDS),
       6 => state[row] = state[row].shuffle(SWAP_DWORDS),
@@ -149,19 +141,19 @@ fn apply_e8(state: &mut State) {
   let mut group = 0;
   while group < 6 {
     let base = group * 7;
-    apply_round_core(state, ROUND_CONSTS[base]);
+    apply_round_core(state, &ROUND_CONST_WORDS[base]);
     apply_swap::<0>(state);
-    apply_round_core(state, ROUND_CONSTS[base + 1]);
+    apply_round_core(state, &ROUND_CONST_WORDS[base + 1]);
     apply_swap::<1>(state);
-    apply_round_core(state, ROUND_CONSTS[base + 2]);
+    apply_round_core(state, &ROUND_CONST_WORDS[base + 2]);
     apply_swap::<2>(state);
-    apply_round_core(state, ROUND_CONSTS[base + 3]);
+    apply_round_core(state, &ROUND_CONST_WORDS[base + 3]);
     apply_swap::<3>(state);
-    apply_round_core(state, ROUND_CONSTS[base + 4]);
+    apply_round_core(state, &ROUND_CONST_WORDS[base + 4]);
     apply_swap::<4>(state);
-    apply_round_core(state, ROUND_CONSTS[base + 5]);
+    apply_round_core(state, &ROUND_CONST_WORDS[base + 5]);
     apply_swap::<5>(state);
-    apply_round_core(state, ROUND_CONSTS[base + 6]);
+    apply_round_core(state, &ROUND_CONST_WORDS[base + 6]);
     apply_swap::<6>(state);
     group += 1;
   }
@@ -175,11 +167,12 @@ fn store_row(buf: &mut [u8], index: usize, row: Row) {
   store_u64_le(buf, index * 2 + 1, row[1]);
 }
 
+/// Runs the F_8 compression on one block held as four message rows.
 #[cfg_attr(not(debug_assertions), inline(always))]
-fn compress(state: &mut State, block_words: &[u64; 8]) {
+fn compress(state: &mut State, rows: &[Row; 4]) {
   let mut row = 0;
   while row < 4 {
-    state[row] ^= row_from_u64_pair([block_words[row * 2], block_words[row * 2 + 1]]);
+    state[row] ^= rows[row];
     row += 1;
   }
 
@@ -187,13 +180,15 @@ fn compress(state: &mut State, block_words: &[u64; 8]) {
 
   row = 0;
   while row < 4 {
-    state[row + 4] ^= row_from_u64_pair([block_words[row * 2], block_words[row * 2 + 1]]);
+    state[row + 4] ^= rows[row];
     row += 1;
   }
 }
 
-fn load_block_words(buf: &[u8]) -> [u64; 8] {
-  core::array::from_fn(|i| load_u64_le(buf, i))
+/// Reads one 64-byte block as four rows of little-endian words.
+#[cfg_attr(not(debug_assertions), inline(always))]
+fn load_block_rows(block: &[u8; BLOCK]) -> [Row; 4] {
+  core::array::from_fn(|row| Row::new(load_u32s_le(&block[16 * row..])))
 }
 
 /// State and block count.
@@ -206,7 +201,7 @@ struct Core {
 impl Compress<BLOCK> for Core {
   #[cfg_attr(not(debug_assertions), inline(always))]
   fn compress(&mut self, block: &[u8; BLOCK]) {
-    compress(&mut self.state, &load_block_words(block));
+    compress(&mut self.state, &load_block_rows(block));
     self.blocks = self.blocks.wrapping_add(1);
   }
 }

@@ -199,6 +199,12 @@ pub(crate) static IV: [[u64; 2]; 8] = {
   const_array!([0; 2]; 8; |i| [load_u64_le(&h, 2 * i), load_u64_le(&h, 2 * i + 1)])
 };
 
+/// Round constants split into `u32` lanes in row order.
+///
+/// Each 128-bit constant row loads with a single 16-byte vector load.
+pub(crate) static ROUND_CONST_WORDS: [[u32; 8]; 42] =
+  const_array!([0; 8]; 42; |r| const_array!(0; 8; |i| (ROUND_CONSTS[r][i / 2] >> (32 * (i % 2))) as u32));
+
 #[cfg(test)]
 mod tests {
   use super::*;

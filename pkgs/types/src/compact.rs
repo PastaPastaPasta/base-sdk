@@ -21,8 +21,6 @@ pub trait CompactUint: Sealed + Sized {
 
 macro_rules! impl_compactuint {
   ($($ty:ty),+) => {$(
-    impl Sealed for $ty {}
-
     impl CompactUint for $ty {
       const MAX: u64 = <$ty>::MAX as u64;
 
