@@ -95,8 +95,10 @@ def _hard_link_fault(repo_root: Path, path: str) -> str | None:
 
 
 def main() -> int:
-  here = Path(__file__).resolve().parent
-  repo_root = Path(_git_out(here, "rev-parse", "--show-toplevel").strip())
+  # Two levels above 'maint/lint'. Git cannot say, as '--show-toplevel'
+  # names the working directory under an inherited GIT_DIR, which
+  # 'git rebase --exec' sets.
+  repo_root = Path(__file__).resolve().parents[2]
   entries = _tracked(repo_root)
   modes = {path: mode for mode, _, path in entries}
 
