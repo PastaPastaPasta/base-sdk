@@ -24,7 +24,8 @@ bool say(const std::string& text)
   HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
   DWORD written = 0;
   const auto length = static_cast<DWORD>(text.size());
-  return out != INVALID_HANDLE_VALUE && WriteFile(out, text.data(), length, &written, nullptr) && written == length;
+  return out != INVALID_HANDLE_VALUE && WriteFile(out, text.data(), length, &written, nullptr) &&
+    written == length;
 }
 #elif defined(__APPLE__)
 bool say(const std::string& text)
@@ -41,7 +42,8 @@ bool say(const std::string& text)
   }
   dispatch_queue_t queue = dispatch_get_global_queue(qos, 0);
   dispatch_semaphore_t done = dispatch_semaphore_create(0);
-  dispatch_data_t data = dispatch_data_create(text.data(), text.size(), queue, DISPATCH_DATA_DESTRUCTOR_DEFAULT);
+  dispatch_data_t data =
+    dispatch_data_create(text.data(), text.size(), queue, DISPATCH_DATA_DESTRUCTOR_DEFAULT);
   __block bool failed = true;
   dispatch_write(STDOUT_FILENO, data, queue, ^(dispatch_data_t rest, int error) {
     failed = rest != nullptr || error != 0;
@@ -51,11 +53,14 @@ bool say(const std::string& text)
   return !failed;
 }
 #elif defined(__linux__)
-static_assert(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0), "the UAPI headers predate Linux 5.10");
+static_assert(
+  LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0), "the UAPI headers predate Linux 5.10"
+);
 
 bool say(const std::string& text)
 {
-  return syscall(SYS_write, STDOUT_FILENO, text.data(), text.size()) == static_cast<long>(text.size());
+  return syscall(SYS_write, STDOUT_FILENO, text.data(), text.size()) ==
+    static_cast<long>(text.size());
 }
 #endif
 
