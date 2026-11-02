@@ -6,8 +6,6 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
 
-    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-
     nixpkgs-llvm.url = "github:NixOS/nixpkgs/3e2cf88148e732abc1d259286123e06a9d8c964a";
 
     pyproject-build-systems = {
@@ -38,7 +36,6 @@
     {
       nixpkgs,
       nixpkgs-llvm,
-      nixpkgs-unstable,
       rust-overlay,
       ...
     }@inputs:
@@ -62,10 +59,6 @@
               config.allowUnfree = true;
               overlays = [ rust-overlay.overlays.default ];
             };
-            unstable = import nixpkgs-unstable {
-              inherit system;
-              config.allowUnfree = true;
-            };
             llvm = (import nixpkgs-llvm { inherit system; }).llvmPackages_20;
           }
         );
@@ -74,7 +67,6 @@
       devShells = eachSystem (
         {
           pkgs,
-          unstable,
           llvm,
         }:
         let
@@ -84,7 +76,6 @@
               lib
               inputs
               llvm
-              unstable
               ;
             root = ../..;
           };

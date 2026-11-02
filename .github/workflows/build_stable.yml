@@ -51,6 +51,10 @@ jobs:
         with:
           large-packages: false
 
+      - name: Allow unprivileged user namespaces
+        shell: bash
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v23
 
