@@ -1,3 +1,8 @@
 [submodule "fuzz/pow/sphlib"]
 	path = fuzz/pow/sphlib
 	url = https://github.com/pornin/sphlib
+[submodule "pkgs/pkc/contrib/dash"]
+	path = pkgs/pkc/contrib/dash
+	url = https://github.com/dashpay/dash
+	shallow = true
+	update = none
