@@ -11,8 +11,6 @@
 
 from __future__ import annotations
 
-import os
-import platform
 import re
 import subprocess
 import sys
@@ -25,6 +23,8 @@ from common import (
   RETCODE_ERR,
   RETCODE_PASS,
   RETCODE_SKIP,
+  cxx_environ,
+  cxx_includes,
   declare_verbs,
   formatted,
   relay,
@@ -36,11 +36,6 @@ from common import (
 
 # Base name of this script (equivalent to argv[0]).
 SCRIPT = Path(__file__).stem
-
-# Include directories a unit is built with, keyed by the directory holding it.
-INCLUDES: dict[str, tuple[str, ...]] = {
-  "fuzz/pow": ("fuzz/pow/sphlib/c",),
-}
 
 # Progress and summary lines clang-tidy prints per unit, naming no fault.
 _NOISE_RE = re.compile(
@@ -54,39 +49,6 @@ def _sources(repo_root: Path, only: list[str] | None) -> list[Path]:
   if only is not None:
     return [repo_root / name for name in only]
   return repo_files(repo_root, *(f"*{s}" for s in CXX_UNITS + CXX_HEADERS))
-
-
-def _includes(repo_root: Path, unit: Path) -> tuple[str, ...]:
-  """Return the include directories *unit* is built with."""
-  relative = unit.relative_to(repo_root)
-  return tuple(
-    include
-    for holder, includes in INCLUDES.items()
-    if relative.is_relative_to(holder)
-    for include in includes
-  )
-
-
-def _environ() -> dict[str, str]:
-  """Return the environment clang-tidy runs in.
-
-  A clang that is not Apple's finds the macOS system headers only through
-  'SDKROOT', so it is filled in from xcrun when unset.
-  """
-  env = dict(os.environ)
-  if platform.system() != "Darwin" or env.get("SDKROOT"):
-    return env
-  try:
-    xcrun = require_bin("xcrun")
-  except FileNotFoundError:
-    return env
-  env["SDKROOT"] = subprocess.run(  # noqa: S603
-    [xcrun, "--show-sdk-path"],
-    capture_output=True,
-    check=True,
-    text=True,
-  ).stdout.strip()
-  return env
 
 
 def _check_format(
@@ -137,10 +99,10 @@ def _check_tidy(repo_root: Path, sources: list[Path]) -> int | None:
   # Units sharing include directories share one run.
   groups: dict[tuple[str, ...], list[Path]] = {}
   for unit in units:
-    groups.setdefault(_includes(repo_root, unit), []).append(unit)
+    groups.setdefault(cxx_includes(repo_root, unit), []).append(unit)
 
   config = repo_root / "maint" / ".clang-tidy"
-  env = _environ()
+  env = cxx_environ()
   linted = 0
   failed = False
   for includes, members in groups.items():

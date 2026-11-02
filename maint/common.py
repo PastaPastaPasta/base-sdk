@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -43,6 +44,11 @@ CXX_UNITS: tuple[str, ...] = (".c", ".cc", ".cpp", ".cxx")
 
 # C and C++ headers; a parser reaches them only through a unit.
 CXX_HEADERS: tuple[str, ...] = (".h", ".hh", ".hpp", ".hxx")
+
+# Include directories a unit is built with, keyed by the directory holding it.
+CXX_INCLUDES: dict[str, tuple[str, ...]] = {
+  "fuzz/pow": ("fuzz/pow/sphlib/c",),
+}
 
 # Assumed base branch for codebase.
 DEFAULT_BASE = "develop"
@@ -308,6 +314,39 @@ def format_table(
       *(fmt(r, color=True) for r in rows),
     ]
   )
+
+
+def cxx_includes(repo_root: Path, unit: Path) -> tuple[str, ...]:
+  """Return the include directories *unit* is built with."""
+  relative = unit.relative_to(repo_root)
+  return tuple(
+    include
+    for holder, includes in CXX_INCLUDES.items()
+    if relative.is_relative_to(holder)
+    for include in includes
+  )
+
+
+def cxx_environ() -> dict[str, str]:
+  """Return the environment clang-tidy runs in.
+
+  A clang that is not Apple's finds the macOS system headers only through
+  'SDKROOT', so it is filled in from xcrun when unset.
+  """
+  env = dict(os.environ)
+  if platform.system() != "Darwin" or env.get("SDKROOT"):
+    return env
+  try:
+    xcrun = require_bin("xcrun")
+  except FileNotFoundError:
+    return env
+  env["SDKROOT"] = subprocess.run(  # noqa: S603
+    [xcrun, "--show-sdk-path"],
+    capture_output=True,
+    check=True,
+    text=True,
+  ).stdout.strip()
+  return env
 
 
 def find_up_dir(
