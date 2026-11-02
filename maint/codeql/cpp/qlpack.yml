@@ -1,0 +1,5 @@
+name: base-sdk/codeql-cpp
+version: 0.0.0
+dependencies:
+  codeql/cert-cpp-coding-standards: 2.62.0
+  codeql/cpp-queries: ~1.4.1

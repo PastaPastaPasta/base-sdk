@@ -15,6 +15,7 @@ import contextlib
 import csv
 import datetime
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -27,10 +28,14 @@ if TYPE_CHECKING:
   from collections.abc import Iterator
 
 from common import (
+  C_UNITS,
+  CPP_UNITS,
   RETCODE_ERR,
   RETCODE_PASS,
   RETCODE_SKIP,
   SOURCE_DIRS,
+  cxx_environ,
+  cxx_flags,
   declare_verbs,
   format_verbs,
   formatted,
@@ -65,6 +70,17 @@ class Language(NamedTuple):
   requires: tuple[str, ...]
   # Findings to drop, each matched whole as (path, message).
   suppressions: tuple[tuple[str, str], ...] = ()
+  # Suites every analysis runs, each as (pack, suite), on top of any
+  # `--with-suite`.
+  standards: tuple[tuple[str, str], ...] = ()
+  # Units a traced build compiles, with `compiler`. Left empty, the
+  # extractor reads the sources on disk without a build.
+  units: tuple[str, ...] = ()
+  compiler: str = ""
+
+
+# MinGW ships no `cc`, so Windows calls `gcc` by name.
+_CC = "gcc" if sys.platform == "win32" else "cc"
 
 
 # Every language this harness knows, in the order `run-all` walks them.
@@ -74,6 +90,26 @@ LANGUAGES: tuple[Language, ...] = (
     directory="rust",
     pack="codeql/rust-queries",
     requires=("rustc",),
+  ),
+  # SEI CERT C 2016 and CERT C++ 2016, as github/codeql-coding-standards
+  # enables them. Each standard reads only the units of its own language.
+  Language(
+    name="c",
+    directory="c",
+    pack="codeql/cpp-queries",
+    requires=(_CC,),
+    standards=(("codeql/cert-c-coding-standards", "cert-c-default"),),
+    units=C_UNITS,
+    compiler=_CC,
+  ),
+  Language(
+    name="cpp",
+    directory="cpp",
+    pack="codeql/cpp-queries",
+    requires=("c++",),
+    standards=(("codeql/cert-cpp-coding-standards", "cert-cpp-default"),),
+    units=CPP_UNITS,
+    compiler="c++",
   ),
 )
 
@@ -172,8 +208,9 @@ def _generate_source_lines(
 def _print_csv_diagnostics(
   results_path: Path,
   suppressions: tuple[tuple[str, str], ...],
+  owned: frozenset[str],
 ) -> int:
-  """Print CSV results to stderr. Returns the unsuppressed finding count."""
+  """Print the findings in *owned* files to stderr, returning how many."""
   count = 0
   with results_path.open(newline="") as f:
     for row in csv.reader(f):
@@ -184,7 +221,7 @@ def _print_csv_diagnostics(
       uri = Path(row[4].lstrip("/"))
       line = row[5]
       msg = row[3].replace("\n", " ")
-      if (str(uri), msg) in suppressions:
+      if str(uri) not in owned or (str(uri), msg) in suppressions:
         continue
       print(f"{uri}:{line}: {msg}", file=sys.stderr)
       count += 1
@@ -205,6 +242,30 @@ def _locked_pack(pack: str, query_dir: Path) -> str:
   if not match:
     raise ValueError(f"no pinned version for {pack} in {lock_file}")
   return f"{pack}@{match.group(1)}"
+
+
+def _build_commands(
+  repo_root: Path,
+  language: Language,
+) -> list[str]:
+  """Return the `--command` options compiling each unit of *language*."""
+  compiler = require_bin(language.compiler)
+  options: list[str] = []
+  for unit in repo_files(repo_root, *(f"*{s}" for s in language.units)):
+    try:
+      flags = cxx_flags(repo_root, unit)
+    except FileNotFoundError as e:
+      name = unit.relative_to(repo_root)
+      print(f"{e}, skipping the analysis of {name}", file=sys.stderr)
+      continue
+    argv = [compiler, "-fsyntax-only", *flags, str(unit)]
+    # Windows splits a command line by its own quoting rules, not POSIX ones.
+    if sys.platform == "win32":
+      command = subprocess.list2cmdline(argv)
+    else:
+      command = shlex.join(argv)
+    options.append(f"--command={command}")
+  return options
 
 
 def _search_suites(pack: str, names: list[str]) -> list[str]:
@@ -314,11 +375,23 @@ def _analyse(
 
   query_dir = repo_root / "maint" / "codeql" / language.directory
   queries = _discover_queries(query_dir)
-  if not queries:
+  if not queries and not language.standards:
     print(f"no queries for {language.name}, skipping", file=sys.stderr)
     return None
 
-  print(f"checking {language.name}: {len(queries)} query(s)")
+  # Without a command the extractor parses the sources on disk, so a query
+  # sees every cfg rather than one build's selection.
+  build: list[str] = ["--build-mode=none"]
+  if language.units:
+    build = _build_commands(repo_root, language)
+    if not build:
+      print(f"no units for {language.name}, skipping", file=sys.stderr)
+      return None
+
+  print(
+    f"checking {language.name}: {len(queries)} query(s), "
+    f"{len(language.standards) + len(args.suites)} suite(s)",
+  )
 
   # Only Rust needs the pre-scanned source text; see the generator itself.
   if language.name == "rust":
@@ -331,15 +404,17 @@ def _analyse(
   # The lock file is only consulted to pin a suite, so a language that
   # requests none is not held to having one.
   suites: list[str] = []
-  if args.suites:
-    try:
-      suites = _search_suites(
+  try:
+    for pack, name in language.standards:
+      suites += _search_suites(_locked_pack(pack, query_dir), [name])
+    if args.suites:
+      suites += _search_suites(
         _locked_pack(language.pack, query_dir),
         args.suites,
       )
-    except ValueError as e:
-      print(f"error: {e}", file=sys.stderr)
-      return RETCODE_ERR
+  except ValueError as e:
+    print(f"error: {e}", file=sys.stderr)
+    return RETCODE_ERR
 
   # Install CodeQL pack dependencies.
   subprocess.run(  # noqa: S603
@@ -360,6 +435,11 @@ def _analyse(
         shutil.rmtree(active_db)
       active_db.parent.mkdir(parents=True, exist_ok=True)
       config_file = query_dir / "codeql-config.yml"
+      config = (
+        [f"--codescanning-config={config_file}"]
+        if config_file.is_file()
+        else []
+      )
       result = subprocess.run(  # noqa: S603
         [
           codeql_bin,
@@ -367,14 +447,13 @@ def _analyse(
           "create",
           str(active_db),
           f"--language={language.name}",
-          # Without a command the extractor parses the sources on disk,
-          # so a query sees every cfg rather than one build's selection.
-          "--build-mode=none",
+          *build,
           f"--source-root={repo_root}",
-          f"--codescanning-config={config_file}",
+          *config,
           f"-j{usable_threads()}",
         ],
         cwd=str(repo_root),
+        env=cxx_environ() if language.units else None,
         check=False,
       )
       if result.returncode != RETCODE_PASS or not db_yml.is_file():
@@ -402,9 +481,13 @@ def _analyse(
       check=True,
     )
 
+    owned = frozenset(
+      str(p.relative_to(repo_root)) for p in repo_files(repo_root)
+    )
     total_findings = _print_csv_diagnostics(
       results_path,
       language.suppressions,
+      owned,
     )
 
   return RETCODE_ERR if total_findings > 0 else RETCODE_PASS

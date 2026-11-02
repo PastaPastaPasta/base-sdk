@@ -346,7 +346,7 @@ def cxx_flags(repo_root: Path, unit: Path) -> list[str]:
 
 
 def cxx_environ() -> dict[str, str]:
-  """Return the environment clang-tidy runs in.
+  """Return the environment a C/C++ parser runs in.
 
   A clang that is not Apple's finds the macOS system headers only through
   'SDKROOT', so it is filled in from xcrun when unset.

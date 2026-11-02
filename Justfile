@@ -40,6 +40,8 @@ lint:
     {{ python }} maint/lint/lint_bazel.py graph
     {{ python }} maint/lint/lint_codeql.py check
     {{ python }} maint/lint/lint_codeql.py run --lang=rust --with-suite=rust-security-and-quality
+    {{ python }} maint/lint/lint_codeql.py run --lang=c --with-suite=cpp-security-and-quality
+    {{ python }} maint/lint/lint_codeql.py run --lang=cpp --with-suite=cpp-security-and-quality
 
 [positional-arguments]
 [unix]
