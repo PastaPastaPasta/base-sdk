@@ -9,6 +9,7 @@ serialization and hashing, and commitment hash function, apart from fixed inputs
 | `bls_ies.json5` | `gen_ies.cpp` |
 | `bls_keygen.json5` | `gen_keygen.cpp` |
 | `bls_llmq_100.json5` | `gen_llmq_100.cpp` |
+| `bls_read.json5` | `gen_read.cpp` |
 | `bls_secure_aggregate.json5` | `gen_secure_aggregate.cpp` |
 | `bls_serialize.json5` | `gen_serialize.cpp` |
 | `bls_sign.json5` | `gen_sign.cpp` |
@@ -18,6 +19,12 @@ Each program prints its corpus on stdout. For `bls_llmq_100.json5`, its `member_
 inputs, which the program checks against the commitment hash it computes. For `bls_hash.json5`, the program repeats the
 legacy map's hashing and reduction steps with relic, which the library does not expose, and the library's own point
 anchors them.
+
+`bls_read.json5` records how the release's BLS library reads public keys and signatures from bytes under each scheme.
+Its inputs come from seeded classes that `gen_read.cpp` builds with relic's field and curve operations. Each outcome is
+the library's read, with an all-zero input marked null as the release's key and signature types do. An input is valid
+when the library reads an element other than the identity that encodes back to it, and invalid otherwise. For an input
+the legacy scheme reads as valid, relic also gives whether its `x` has a point on the curve.
 
 ## Regenerating
 
