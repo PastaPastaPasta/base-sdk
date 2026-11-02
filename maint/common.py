@@ -39,13 +39,22 @@ CARGO_WORKSPACES: tuple[str, ...] = (".", "docs/samples", "fuzz")
 # Rust source roots the analysers scan, relative to the repository root.
 SOURCE_DIRS: tuple[str, ...] = ("meta", "pkgs", "docs/samples", "fuzz")
 
+# C translation units. The builds pass no standard, so clang's default holds.
+C_UNITS: tuple[str, ...] = (".c",)
+C_STD = "gnu17"
+
+# C++ translation units, at the standard the Bazel toolchain passes.
+CPP_UNITS: tuple[str, ...] = (".cc", ".cpp", ".cxx")
+CPP_STD = "c++17"
+
 # C and C++ translation units.
-CXX_UNITS: tuple[str, ...] = (".c", ".cc", ".cpp", ".cxx")
+CXX_UNITS: tuple[str, ...] = C_UNITS + CPP_UNITS
 
 # C and C++ headers; a parser reaches them only through a unit.
 CXX_HEADERS: tuple[str, ...] = (".h", ".hh", ".hpp", ".hxx")
 
 # Include directories a unit is built with, keyed by the directory holding it.
+# Each entry mirrors its directory's build script and changes with it.
 CXX_INCLUDES: dict[str, tuple[str, ...]] = {
   "fuzz/pow": ("fuzz/pow/sphlib/c",),
 }
@@ -316,15 +325,24 @@ def format_table(
   )
 
 
-def cxx_includes(repo_root: Path, unit: Path) -> tuple[str, ...]:
-  """Return the include directories *unit* is built with."""
+def cxx_flags(repo_root: Path, unit: Path) -> list[str]:
+  """Return the flags *unit* is compiled with.
+
+  Raises FileNotFoundError naming an absent include directory, which is
+  what an uninitialised submodule leaves behind.
+  """
+  std = C_STD if unit.suffix in C_UNITS else CPP_STD
   relative = unit.relative_to(repo_root)
-  return tuple(
+  includes = [
     include
-    for holder, includes in CXX_INCLUDES.items()
+    for holder, held in CXX_INCLUDES.items()
     if relative.is_relative_to(holder)
-    for include in includes
-  )
+    for include in held
+  ]
+  absent = [i for i in includes if not (repo_root / i).is_dir()]
+  if absent:
+    raise FileNotFoundError(f"{', '.join(absent)} is absent")
+  return [f"-std={std}", *(f"-I{repo_root / i}" for i in includes)]
 
 
 def cxx_environ() -> dict[str, str]:

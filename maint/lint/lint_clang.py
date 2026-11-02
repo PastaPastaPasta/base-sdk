@@ -24,7 +24,7 @@ from common import (
   RETCODE_PASS,
   RETCODE_SKIP,
   cxx_environ,
-  cxx_includes,
+  cxx_flags,
   declare_verbs,
   formatted,
   relay,
@@ -96,25 +96,22 @@ def _check_tidy(repo_root: Path, sources: list[Path]) -> int | None:
     print(f"{SCRIPT}: no C/C++ unit was touched")
     return RETCODE_PASS
 
-  # Units sharing include directories share one run.
+  # Units sharing flags share one run.
   groups: dict[tuple[str, ...], list[Path]] = {}
   for unit in units:
-    groups.setdefault(cxx_includes(repo_root, unit), []).append(unit)
+    try:
+      flags = cxx_flags(repo_root, unit)
+    except FileNotFoundError as e:
+      name = unit.relative_to(repo_root)
+      print(f"{e}, skipping the lint of {name}", file=sys.stderr)
+      continue
+    groups.setdefault(tuple(flags), []).append(unit)
 
   config = repo_root / "maint" / ".clang-tidy"
   env = cxx_environ()
   linted = 0
   failed = False
-  for includes, members in groups.items():
-    # An uninitialised submodule leaves its include directory absent.
-    absent = [i for i in includes if not (repo_root / i).is_dir()]
-    if absent:
-      print(
-        f"{', '.join(absent)} is absent, skipping the lint of "
-        f"{len(members)} unit(s)",
-        file=sys.stderr,
-      )
-      continue
+  for flags, members in groups.items():
     result = subprocess.run(  # noqa: S603
       [
         clang_tidy,
@@ -122,7 +119,7 @@ def _check_tidy(repo_root: Path, sources: list[Path]) -> int | None:
         f"--config-file={config}",
         *[str(m) for m in members],
         "--",
-        *[f"-I{repo_root / i}" for i in includes],
+        *flags,
       ],
       capture_output=True,
       check=False,
