@@ -20,6 +20,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -53,6 +54,10 @@ _SOURCE_KEYWORDS = (
   "Serialize", "Deserialize", "Unencodable", "TypeId", "Zeroize", "#[cfg",
 )
 
+# Findings a language drops, relative to its pack directory. Each
+# `[[finding]]` names a `path` and a `message`, both matched whole.
+_SUPPRESSIONS = "suppressions.toml"
+
 # QL a run writes into the tree, relative to a language's pack directory.
 _GENERATED_QL = ("lib", "source_lines.qll")
 
@@ -68,8 +73,6 @@ class Language(NamedTuple):
   pack: str
   # Binaries it needs; absent, the language skips rather than fails.
   requires: tuple[str, ...]
-  # Findings to drop, each matched whole as (path, message).
-  suppressions: tuple[tuple[str, str], ...] = ()
   # Suites every analysis runs, each as (pack, suite), on top of any
   # `--with-suite`.
   standards: tuple[tuple[str, str], ...] = ()
@@ -205,9 +208,24 @@ def _generate_source_lines(
   return out
 
 
+def _load_suppressions(query_dir: Path) -> frozenset[tuple[str, str]]:
+  """Return the (path, message) pairs that *query_dir* suppresses."""
+  path = query_dir / _SUPPRESSIONS
+  if not path.is_file():
+    return frozenset()
+  found: set[tuple[str, str]] = set()
+  for entry in tomllib.loads(path.read_text(encoding="utf-8")).get(
+    "finding", []
+  ):
+    if not isinstance(entry, dict) or set(entry) != {"path", "message"}:
+      raise ValueError(f"{path}: want only `path` and `message`: {entry!r}")
+    found.add((entry["path"], entry["message"]))
+  return frozenset(found)
+
+
 def _print_csv_diagnostics(
   results_path: Path,
-  suppressions: tuple[tuple[str, str], ...],
+  suppressions: frozenset[tuple[str, str]],
   owned: frozenset[str],
 ) -> int:
   """Print the findings in *owned* files to stderr, returning how many."""
@@ -486,7 +504,7 @@ def _analyse(
     )
     total_findings = _print_csv_diagnostics(
       results_path,
-      language.suppressions,
+      _load_suppressions(query_dir),
       owned,
     )
 
