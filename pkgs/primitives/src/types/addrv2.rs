@@ -256,8 +256,8 @@ type_cvrt!(From<AddrV1> for AddrV2, |v1| {
 });
 
 /// Reads the text of an address. Text in fc00::/8 reads as
-/// [`AddrV2::Ipv6`], so an [`AddrV2::Cjdns`] address does not read back
-/// from its text.
+/// [`AddrV2::Cjdns`], so an [`AddrV2::Ipv6`] address in fc00::/8 does not
+/// read back from its text.
 impl FromStr for AddrV2 {
   type Err = NetAddrError;
 
@@ -310,7 +310,11 @@ impl FromStr for AddrV2 {
     }
     if let Some(inner) = s.strip_prefix('[').and_then(|r| r.strip_suffix(']')) {
       let ip: Ipv6Addr = inner.parse().map_err(|_| NetAddrError::BadEncode { pos: 0 })?;
-      return Ok(Self::Ipv6(ip.octets()));
+      let octets = ip.octets();
+      if octets[0] == 0xfc {
+        return Ok(Self::Cjdns(octets));
+      }
+      return Ok(Self::Ipv6(octets));
     }
     let ip: Ipv4Addr = s.parse().map_err(|_| NetAddrError::BadEncode { pos: 0 })?;
     Ok(Self::Ipv4(ip.octets()))
@@ -413,8 +417,8 @@ mod tests {
     AddrV2::Ipv6(hex!("00000000000000000000000000000001")),
     "[::1]",
   )]
-  #[case::ipv6_fc00(
-    AddrV2::Ipv6(hex!("fc000000000000000000000000000001")),
+  #[case::cjdns(
+    AddrV2::Cjdns(hex!("fc000000000000000000000000000001")),
     "[fc00::1]",
   )]
   fn display(#[case] addr: AddrV2, #[case] expected: &str) {
@@ -422,13 +426,22 @@ mod tests {
     assert_eq!(expected.parse::<AddrV2>().unwrap(), addr);
   }
 
-  /// A CJDNS address shows as IPv6 text, which reads back as IPv6.
+  /// An IPv6 address in fc00::/8 shows as text that reads back as CJDNS.
   #[rstest]
-  fn cjdns_text_reads_as_ipv6() {
+  fn ipv6_fc00_text_reads_as_cjdns() {
     let bytes = hex!("fc000000000000000000000000000001");
-    let text = AddrV2::Cjdns(bytes).to_string();
+    let text = AddrV2::Ipv6(bytes).to_string();
     assert_eq!(text, "[fc00::1]");
-    assert_eq!(text.parse::<AddrV2>().unwrap(), AddrV2::Ipv6(bytes));
+    assert_eq!(text.parse::<AddrV2>().unwrap(), AddrV2::Cjdns(bytes));
+  }
+
+  /// The serde form keeps the network of an address in fc00::/8.
+  #[cfg(feature = "serde")]
+  #[rstest]
+  #[case::ipv6(AddrV2::Ipv6(hex!("fc000000000000000000000000000001")))]
+  #[case::cjdns(AddrV2::Cjdns(hex!("fc000000000000000000000000000001")))]
+  fn serde_keeps_network(#[case] addr: AddrV2) {
+    dash_dev::assert_json_rt(&ServiceV2 { addr, port: 9999 });
   }
 
   #[rstest]
@@ -556,7 +569,7 @@ mod tests {
   #[rstest]
   #[case::ipv4("1.2.3.4:8333")]
   #[case::ipv6("[::1]:9999")]
-  #[case::ipv6_fc00("[fc00::1]:1234")]
+  #[case::cjdns("[fc00::1]:1234")]
   #[case::tor("pg6mmjiyjmcrsslvykfwnntlaru7p5svn6y2ymmju6nubxndf4pscryd.onion:8333")]
   #[case::i2p("ukeu3k5oycgaauneqgtnvselmt4yemvoilkln7jpvamvfx7dnkdq.b32.i2p:7654")]
   fn service_from_str_roundtrip(#[case] s: &str) {
