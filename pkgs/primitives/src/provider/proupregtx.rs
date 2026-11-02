@@ -69,7 +69,7 @@ impl BaseCodec for ProUpRegTx {
     let mode = u16::decode(data)?;
     let pub_key_operator = BlsPkBytes::decode(data)?;
     let key_id_voting = PubKeyHash::decode(data)?;
-    let (script_payout, payouts) = if version >= ProTxVersion::ExtAddr {
+    let (script_payout, payouts) = if version >= ProTxVersion::CoreV24 {
       (ScriptPubKeyBuf::new(), decode_list(data)?)
     } else {
       (ScriptPubKeyBuf::decode(data)?, Vec::new())
@@ -94,7 +94,7 @@ impl BaseCodec for ProUpRegTx {
     self.mode.encode(buf);
     self.pub_key_operator.encode(buf);
     self.key_id_voting.encode(buf);
-    if self.version >= ProTxVersion::ExtAddr {
+    if self.version >= ProTxVersion::CoreV24 {
       encode_list(&self.payouts, buf);
     } else {
       self.script_payout.encode(buf);
@@ -148,7 +148,7 @@ impl Checkable for ProUpRegTx {
       return Some(ProTxInvalid::NullKey);
     }
 
-    if self.version >= ProTxVersion::ExtAddr {
+    if self.version >= ProTxVersion::CoreV24 {
       return check_payouts(&self.payouts, None, &self.key_id_voting);
     }
     let payout = PayoutShare::new(self.script_payout.clone(), MAX_REWARD);
@@ -268,7 +268,7 @@ mod tests {
   #[case::payout_version(
     update(),
     |ptx: &mut ProUpRegTx| ptx.script_payout = ptx.payouts[0].script_payout().clone(),
-    Some(ProTxInvalid::PayoutVersionMismatch { version: ProTxVersion::ExtAddr })
+    Some(ProTxInvalid::PayoutVersionMismatch { version: ProTxVersion::CoreV24 })
   )]
   fn check(#[case] mut ptx: ProUpRegTx, #[case] edit: fn(&mut ProUpRegTx), #[case] expected: Option<ProTxInvalid>) {
     assert_eq!(ptx.check(), None);

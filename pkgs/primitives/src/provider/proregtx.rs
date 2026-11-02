@@ -121,7 +121,7 @@ pub(super) fn check_platform_fields(
     if node_id.is_null() {
       return Some(ProTxInvalid::NullPlatformNodeId);
     }
-    if version < ProTxVersion::ExtAddr {
+    if version < ProTxVersion::CoreV24 {
       if platform_p2p_port.is_none() || platform_http_port.is_none() {
         return Some(ProTxInvalid::BadPlatformFields);
       }
@@ -149,7 +149,7 @@ impl BaseCodec for ProRegTx {
     let mode = u16::decode(data)?;
     let collateral_hash = TxHash::decode(data)?;
     let collateral_index = u32::decode(data)?;
-    let net_info = if version >= ProTxVersion::ExtAddr {
+    let net_info = if version >= ProTxVersion::CoreV24 {
       NetInfo::Extended(NetInfoV2::decode(data)?)
     } else {
       NetInfo::Legacy(NetInfoV1::decode(data)?)
@@ -158,12 +158,12 @@ impl BaseCodec for ProRegTx {
     let pub_key_operator = BlsPkBytes::decode(data)?;
     let key_id_voting = PubKeyHash::decode(data)?;
     let operator_reward = u16::decode(data)?;
-    let (script_payout, payouts) = if version >= ProTxVersion::ExtAddr {
+    let (script_payout, payouts) = if version >= ProTxVersion::CoreV24 {
       (ScriptPubKeyBuf::new(), decode_list(data)?)
     } else {
       (ScriptPubKeyBuf::decode(data)?, Vec::new())
     };
-    let (shares, join_sigs, early_period_blocks, early_penalty) = if version >= ProTxVersion::ExtAddr {
+    let (shares, join_sigs, early_period_blocks, early_penalty) = if version >= ProTxVersion::CoreV24 {
       let count = u8::decode(data)?;
       let shares = decode_items(data, count)?;
       let join_sigs = decode_items(data, count)?;
@@ -174,7 +174,7 @@ impl BaseCodec for ProRegTx {
     let inputs_hash = InputsHash::decode(data)?;
     let (platform_node_id, platform_p2p_port, platform_http_port) = if mn_type == MnType::Evo {
       let node_id = PlatformNodeId::decode(data)?;
-      if version < ProTxVersion::ExtAddr {
+      if version < ProTxVersion::CoreV24 {
         (Some(node_id), Some(u16::decode(data)?), Some(u16::decode(data)?))
       } else {
         (Some(node_id), None, None)
@@ -216,7 +216,7 @@ impl BaseCodec for ProRegTx {
     self.collateral_index.encode(buf);
     // Branch on version to match the decode path. Validation
     // guarantees the variant matches the version.
-    if self.version >= ProTxVersion::ExtAddr {
+    if self.version >= ProTxVersion::CoreV24 {
       if let NetInfo::Extended(ext) = &self.net_info {
         ext.encode(buf);
       }
@@ -227,7 +227,7 @@ impl BaseCodec for ProRegTx {
     self.pub_key_operator.encode(buf);
     self.key_id_voting.encode(buf);
     self.operator_reward.encode(buf);
-    if self.version >= ProTxVersion::ExtAddr {
+    if self.version >= ProTxVersion::CoreV24 {
       encode_list(&self.payouts, buf);
       // The signatures reuse the share count, so a signature list of another
       // length does not read back.
@@ -241,7 +241,7 @@ impl BaseCodec for ProRegTx {
     self.inputs_hash.encode(buf);
     if self.mn_type == MnType::Evo {
       self.platform_node_id.unwrap_or_default().encode(buf);
-      if self.version < ProTxVersion::ExtAddr {
+      if self.version < ProTxVersion::CoreV24 {
         self.platform_p2p_port.unwrap_or(0).encode(buf);
         self.platform_http_port.unwrap_or(0).encode(buf);
       }
@@ -256,7 +256,7 @@ impl Signable for ProRegTx {
   type Error = EcdsaError;
 
   fn payload(&self, ctx: &AddrParams) -> Vec<u8> {
-    let payout = if self.version >= ProTxVersion::ExtAddr {
+    let payout = if self.version >= ProTxVersion::CoreV24 {
       let payouts: Vec<String> = self
         .payouts
         .iter()
@@ -314,7 +314,7 @@ impl Checkable for ProRegTx {
         shares: self.shares.len(),
       });
     }
-    if shared && self.version < ProTxVersion::ExtAddr {
+    if shared && self.version < ProTxVersion::CoreV24 {
       return Some(ProTxInvalid::SharesVersionTooLow { version: self.version });
     }
     if let Some(e) = check_payout_version(self.version, &self.script_payout, &self.payouts) {
@@ -347,7 +347,7 @@ impl Checkable for ProRegTx {
     }
 
     let is_extended = matches!(self.net_info, NetInfo::Extended(_));
-    if is_extended != (self.version >= ProTxVersion::ExtAddr) {
+    if is_extended != (self.version >= ProTxVersion::CoreV24) {
       return Some(ProTxInvalid::NetInfoVersionMismatch);
     }
 
@@ -455,7 +455,7 @@ impl ProRegTx {
         &self.key_id_voting,
       );
     }
-    if self.version >= ProTxVersion::ExtAddr {
+    if self.version >= ProTxVersion::CoreV24 {
       return check_payouts(&self.payouts, Some(&self.key_id_owner), &self.key_id_voting);
     }
     let payout = PayoutShare::new(self.script_payout.clone(), MAX_REWARD);
@@ -733,7 +733,7 @@ mod tests {
   #[case::payout_version(
     registration(),
     |ptx: &mut ProRegTx| ptx.script_payout = ptx.payouts[0].script_payout().clone(),
-    ProTxInvalid::PayoutVersionMismatch { version: ProTxVersion::ExtAddr }
+    ProTxInvalid::PayoutVersionMismatch { version: ProTxVersion::CoreV24 }
   )]
   #[case::null_platform_node_id(
     entry("2770d2493755b59b3426474b2a18eb5c34df636530ae8059aa1fe4b22ce47c3c"),

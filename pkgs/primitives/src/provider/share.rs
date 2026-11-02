@@ -127,7 +127,7 @@ pub(super) fn check_payout_version(
   script_payout: &ScriptPubKeyBuf,
   payouts: &[PayoutShare],
 ) -> Option<ProTxInvalid> {
-  let stray = if version >= ProTxVersion::ExtAddr {
+  let stray = if version >= ProTxVersion::CoreV24 {
     !script_payout.is_empty()
   } else {
     !payouts.is_empty()
@@ -431,8 +431,8 @@ pub(crate) mod tests {
   }
 
   #[rstest]
-  #[case::ext_addr_payouts(ProTxVersion::ExtAddr, ScriptPubKeyBuf::new(), spread(1, 10_000), None)]
-  #[case::ext_addr_script(ProTxVersion::ExtAddr, p2pkh(1), spread(1, 10_000), Some(ProTxVersion::ExtAddr))]
+  #[case::core_v24_payouts(ProTxVersion::CoreV24, ScriptPubKeyBuf::new(), spread(1, 10_000), None)]
+  #[case::core_v24_script(ProTxVersion::CoreV24, p2pkh(1), spread(1, 10_000), Some(ProTxVersion::CoreV24))]
   #[case::basic_bls_script(ProTxVersion::BasicBls, p2pkh(1), vec![], None)]
   #[case::basic_bls_payouts(ProTxVersion::BasicBls, p2pkh(1), spread(1, 10_000), Some(ProTxVersion::BasicBls))]
   #[case::legacy_bls_payouts(ProTxVersion::LegacyBls, p2pkh(1), spread(1, 10_000), Some(ProTxVersion::LegacyBls))]

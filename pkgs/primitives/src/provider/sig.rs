@@ -275,7 +275,7 @@ mod tests {
   #[rstest]
   #[case::legacy_bls(ProTxVersion::LegacyBls, true)]
   #[case::basic_bls(ProTxVersion::BasicBls, false)]
-  #[case::ext_addr(ProTxVersion::ExtAddr, false)]
+  #[case::core_v24(ProTxVersion::CoreV24, false)]
   fn operator_scheme_follows_the_version(#[case] version: ProTxVersion, #[case] legacy: bool) {
     let (legacy_key, legacy_sig) = bls_sign::<BlsScChia>(1, &[7; 32]);
     let (basic_key, basic_sig) = bls_sign::<BlsScIetf>(1, &[7; 32]);

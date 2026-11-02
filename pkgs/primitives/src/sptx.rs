@@ -240,7 +240,7 @@ pub(crate) fn check_sptx_netinfo(ext: &NetInfoV2, version: ProTxVersion, mn_type
       error: NIError::Malformed,
     });
   }
-  if version >= ProTxVersion::ExtAddr
+  if version >= ProTxVersion::CoreV24
     && mn_type == MnType::Evo
     && (!ext.has_entries(NIPurpose::PlatformP2p) || !ext.has_entries(NIPurpose::PlatformHttps))
   {

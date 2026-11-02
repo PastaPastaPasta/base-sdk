@@ -26,10 +26,6 @@ use getset::{CopyGetters, Getters};
 use core::fmt;
 
 /// ProUpServTx -- update MN service addr (type 2).
-///
-/// - v1: LegacyBLS (no mn_type field)
-/// - v2: BasicBLS (adds mn_type)
-/// - v3: ExtAddr (extended network info)
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
@@ -81,7 +77,7 @@ impl BaseCodec for ProUpServTx {
     };
 
     let pro_tx_hash = TxHash::decode(data)?;
-    let net_info = if version >= ProTxVersion::ExtAddr {
+    let net_info = if version >= ProTxVersion::CoreV24 {
       NetInfo::Extended(NetInfoV2::decode(data)?)
     } else {
       NetInfo::Legacy(NetInfoV1::decode(data)?)
@@ -90,7 +86,7 @@ impl BaseCodec for ProUpServTx {
     let inputs_hash = InputsHash::decode(data)?;
     let (platform_node_id, platform_p2p_port, platform_http_port) = if mn_type == MnType::Evo {
       let node_id = PlatformNodeId::decode(data)?;
-      if version < ProTxVersion::ExtAddr {
+      if version < ProTxVersion::CoreV24 {
         (Some(node_id), Some(u16::decode(data)?), Some(u16::decode(data)?))
       } else {
         (Some(node_id), None, None)
@@ -121,7 +117,7 @@ impl BaseCodec for ProUpServTx {
     self.pro_tx_hash.encode(buf);
     // Branch on version to match the decode path. Validation
     // guarantees the variant matches the version.
-    if self.version >= ProTxVersion::ExtAddr {
+    if self.version >= ProTxVersion::CoreV24 {
       if let NetInfo::Extended(ext) = &self.net_info {
         ext.encode(buf);
       }
@@ -132,7 +128,7 @@ impl BaseCodec for ProUpServTx {
     self.inputs_hash.encode(buf);
     if self.mn_type == MnType::Evo {
       self.platform_node_id.unwrap_or_default().encode(buf);
-      if self.version < ProTxVersion::ExtAddr {
+      if self.version < ProTxVersion::CoreV24 {
         self.platform_p2p_port.unwrap_or(0).encode(buf);
         self.platform_http_port.unwrap_or(0).encode(buf);
       }
@@ -180,7 +176,7 @@ impl Checkable for ProUpServTx {
     }
 
     let is_extended = matches!(self.net_info, NetInfo::Extended(_));
-    if is_extended != (self.version >= ProTxVersion::ExtAddr) {
+    if is_extended != (self.version >= ProTxVersion::CoreV24) {
       return Some(ProTxInvalid::NetInfoVersionMismatch);
     }
 

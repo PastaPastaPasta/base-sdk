@@ -23,7 +23,7 @@ enum_map! {
     /// Basic BLS operator keys.
     BasicBls = 2 => "basic_bls",
     /// Extended network info, owner payouts and collateral shares.
-    ExtAddr = 3 => "ext_addr",
+    CoreV24 = 3 => "core_v24",
   }
 }
 
