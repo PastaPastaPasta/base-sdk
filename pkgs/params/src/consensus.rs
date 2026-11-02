@@ -16,6 +16,17 @@ use dash_types::type_id::Unencodable;
 /// Block height paired with its block hash.
 pub type Checkpoint = (BlockHeight, Hash256);
 
+/// The masternode share of the block value, in permille, for each block reward
+/// reallocation period of three superblock cycles, until
+/// [`ConsensusParams::v20_height`].
+///
+/// The first period starts with the first superblock cycle after
+/// [`ConsensusParams::brr_height`], and the last share then holds. The shares
+/// are the same on every network.
+pub const BRR_PERIODS_PERMILLE: [u16; 19] = [
+  513, 526, 533, 540, 546, 552, 557, 562, 567, 572, 577, 582, 585, 588, 591, 594, 597, 599, 600,
+];
+
 /// Buried deployment positions with hardcoded activation heights.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "codec", derive(Unencodable))]

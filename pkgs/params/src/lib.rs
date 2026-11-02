@@ -29,7 +29,7 @@ use dash_types::type_id::Unencodable;
 
 pub use addr::AddrParams;
 pub use chain::{ChainParams, ChainTxData, MessageStart};
-pub use consensus::{BuriedDeployment, Checkpoint, ConsensusParams};
+pub use consensus::{BuriedDeployment, Checkpoint, ConsensusParams, BRR_PERIODS_PERMILLE};
 pub use deployment::{Bip9Deployment, Bip9Deployments};
 pub use genesis::GenesisParams;
 pub use llmq::{LlmqParams, LlmqType};

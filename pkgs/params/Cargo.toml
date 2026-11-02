@@ -1,6 +1,9 @@
 [package]
 name = "dash-params"
 version = "0.0.0"
+exclude = [
+  "contrib",
+]
 readme = "README.md"
 authors.workspace = true
 edition.workspace = true
