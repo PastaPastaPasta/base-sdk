@@ -4,8 +4,7 @@
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
 
-//! Block reward reallocation shares against the reference implementation's
-//! masternode payments.
+//! Block reward reallocation shares against mainnet and testnet.
 
 use dash_dev::Corpus;
 use dash_params::{ConsensusParams, Network, BRR_PERIODS_PERMILLE};

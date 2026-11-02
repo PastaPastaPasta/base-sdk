@@ -9,30 +9,10 @@
 
 """Write the block reward reallocation payment corpus.
 
-Reads blocks from nodes of the reference implementation over JSON-RPC and
-writes `pkgs/params/corpus/brr_payments.json5`. For the first and last block
-of each block reward reallocation period before `v20` activates, a row holds
-the block value and the masternode payment from it, keyed by the chain the
-node reports. A node needs `-txindex` and the block and undo data of the
-heights read, but no connections.
-
-Only established RPCs are read:
-
-- `getblockchaininfo`, for the chain and its tip;
-- `getdeploymentinfo`, for the `realloc` and `v20` heights;
-- `getgovernanceinfo`, for the superblock cycle;
-- `getblockhash` and `getblockstats`, whose subsidy plus fees is the block
-  value;
-- `masternode payments`, for the masternode payment;
-- `getblock`, for the coinbase, which must pay each masternode payee;
-- `getnetworkinfo`, for the node version.
-
-Each node is given by its RPC address and cookie file. Nodes are reached on
-loopback only. Heights above a chain's `--max-height`, by default the node's
-tip, are left out, and a `--max-height` above the tip is refused. `--release`
-names the release archive the nodes run, whose SHA-256 goes into the header.
-Without `--output` the corpus is written, which needs a node on `main` and
-one on `test`. Other sets of chains need `--output`.
+For the first and last block of each block reward reallocation period before
+`v20`, the corpus holds the block value and the masternode payment from it, on
+mainnet and testnet. The params tests check `BRR_PERIODS_PERMILLE` against
+these payments. Each node needs `-txindex`.
 
 Usage:
 
