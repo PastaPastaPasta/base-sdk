@@ -38,6 +38,12 @@ CARGO_WORKSPACES: tuple[str, ...] = (".", "docs/samples", "fuzz")
 # Rust source roots the analysers scan, relative to the repository root.
 SOURCE_DIRS: tuple[str, ...] = ("meta", "pkgs", "docs/samples", "fuzz")
 
+# C and C++ translation units.
+CXX_UNITS: tuple[str, ...] = (".c", ".cc", ".cpp", ".cxx")
+
+# C and C++ headers; a parser reaches them only through a unit.
+CXX_HEADERS: tuple[str, ...] = (".h", ".hh", ".hpp", ".hxx")
+
 # Assumed base branch for codebase.
 DEFAULT_BASE = "develop"
 

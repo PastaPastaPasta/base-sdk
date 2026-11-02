@@ -19,6 +19,8 @@ import sys
 from pathlib import Path
 
 from common import (
+  CXX_HEADERS,
+  CXX_UNITS,
   DEFAULT_BASE,
   RETCODE_ERR,
   RETCODE_PASS,
@@ -34,12 +36,6 @@ from common import (
 
 # Base name of this script (equivalent to argv[0]).
 SCRIPT = Path(__file__).stem
-
-# Translation units, visited by `clang-tidy`.
-UNITS: tuple[str, ...] = (".c", ".cc", ".cpp", ".cxx")
-
-# Headers, visited by `clang-format`.
-HEADERS: tuple[str, ...] = (".h", ".hh", ".hpp", ".hxx")
 
 # Include directories a unit is built with, keyed by the directory holding it.
 INCLUDES: dict[str, tuple[str, ...]] = {
@@ -57,7 +53,7 @@ def _sources(repo_root: Path, only: list[str] | None) -> list[Path]:
   """Return the C and C++ files to lint, or just *only* when given."""
   if only is not None:
     return [repo_root / name for name in only]
-  return repo_files(repo_root, *(f"*{s}" for s in UNITS + HEADERS))
+  return repo_files(repo_root, *(f"*{s}" for s in CXX_UNITS + CXX_HEADERS))
 
 
 def _includes(repo_root: Path, unit: Path) -> tuple[str, ...]:
@@ -133,7 +129,7 @@ def _check_tidy(repo_root: Path, sources: list[Path]) -> int | None:
     print(f"{e}, skipping the lint", file=sys.stderr)
     return None
 
-  units = [s for s in sources if s.suffix in UNITS]
+  units = [s for s in sources if s.suffix in CXX_UNITS]
   if not units:
     print(f"{SCRIPT}: no C/C++ unit was touched")
     return RETCODE_PASS
@@ -200,7 +196,11 @@ def main() -> int:
   ).parse_args()
   fix = args.verb.startswith("apply")
   repo_root = root_dir()
-  only = touched(repo_root, UNITS + HEADERS) if args.verb == "apply" else None
+  only = (
+    touched(repo_root, CXX_UNITS + CXX_HEADERS)
+    if args.verb == "apply"
+    else None
+  )
   sources = _sources(repo_root, only)
 
   verdicts: list[int | None] = [

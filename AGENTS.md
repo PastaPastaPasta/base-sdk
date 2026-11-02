@@ -26,6 +26,8 @@ The full guide is at [`docs/dev/guide_rust.md`](./docs/dev/guide_rust.md). Key p
     fragmentation.
   - No vague references (`the other`, `that thing`); name the item.
   - No exposition, history, or conversational tone.
+  - C/C++ doc comments are Javadoc-style `/** */` blocks with `@` commands (`@param[in]`, `@return`). `//!` (and
+    `//!<`) suits variables and members, `/*!` suits copyright headers. Never `///`.
 - **Code segmentation**: organise code through modules (in-file or separate files) and naming prefixes. Never use
   decorative separator comments (`// ----`, `// ====`, `// -- Section --`). Latin-1/ISO 8859-1 characters in source
   files only; no Unicode dashes, arrows, box drawing, or other decoration in comments or identifiers.

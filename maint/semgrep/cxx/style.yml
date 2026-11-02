@@ -1,0 +1,29 @@
+rules:
+  - id: style-doc-no-triple-slash
+    message: "doc comments use /** */ blocks, //! or /*!, not ///"
+    severity: ERROR
+    languages: [regex]
+    pattern-regex: '(?m)^\s*///|///<'
+
+  - id: style-doc-at-commands
+    message: "doxygen commands are spelt with @, not a backslash"
+    severity: ERROR
+    languages: [regex]
+    pattern-regex: |-
+      (?xm)
+      ^[ \t]* (?: /\*[*!] | //! | \* )  # a doc comment line or continuation
+      .*? \\                            # ... holding a backslash command
+      (?: a | addtogroup | b | brief | c | code | copydoc | defgroup
+        | deprecated | details | e | endcode | exception | file | ingroup
+        | note | p | par | param | post | pre | ref | return | returns
+        | retval | sa | see | since | throw | throws | todo | tparam
+        | warning ) \b
+
+  - id: style-no-separator-comments
+    message: "decorative separator comments are not permitted"
+    severity: ERROR
+    languages: [regex]
+    pattern-regex: |-
+      (?xm)
+      ^[ \t]* (?: //[/!]? | /\*[*!]? )         # a line or block comment
+      (?: [ \t]* [-=]{4,} | [ \t]+ -- [ \t] )  # ---- or a -- Section -- banner
