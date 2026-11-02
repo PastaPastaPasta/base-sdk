@@ -68,6 +68,10 @@ bool say(const std::string& text)
 
 int main()
 {
-  const std::string greeting = std::string("Hello") + ", world!\n";
-  return say(greeting) ? 0 : 1;
+  try {
+    const std::string greeting = std::string("Hello") + ", world!\n";
+    return say(greeting) ? 0 : 1;
+  } catch (...) {
+    return 1;
+  }
 }
