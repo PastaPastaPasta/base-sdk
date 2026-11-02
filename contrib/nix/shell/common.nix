@@ -93,7 +93,7 @@ in
     codeql = import ../mods/codeql.nix { inherit pkgs unstable; };
     cxx = cxx.compiler;
     fhs = import ../mods/fhs.nix { inherit pkgs lib; };
-    nixpkgs = import ../mods/nixpkgs.nix { inherit pkgs; };
+    nixpkgs = import ../mods/nixpkgs.nix { inherit pkgs llvm; };
     python = import ../mods/python.nix {
       inherit pkgs lib;
       inherit (inputs) uv2nix pyproject-nix pyproject-build-systems;
