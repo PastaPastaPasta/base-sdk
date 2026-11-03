@@ -1,0 +1,106 @@
+name: Build corpus generators
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || steps.filter.outputs.corpora == 'true' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: .github/paths.yml
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Filter paths
+        id: filter
+        if: github.event_name == 'pull_request' || github.event_name == 'push'
+        uses: dorny/paths-filter@v4
+        env:
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: fetch.recurseSubmodules
+          GIT_CONFIG_VALUE_0: "false"
+        with:
+          filters: .github/paths.yml
+
+  build:
+    name: Build and check the corpora
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+
+    defaults:
+      run:
+        shell: nix develop ./contrib/nix#ci --command bash -eo pipefail {0}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - name: Check cache write access
+        id: cache_write
+        uses: $/.github/actions/cache_write
+
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v2
+        with:
+          large-packages: false
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v23
+
+      - name: Cache Nix
+        uses: Mic92/niks3-action@v1
+        if: vars.CACHE_NIX_URL != ''
+        with:
+          server-url: ${{ vars.CACHE_NIX_URL }}
+          skip-push: ${{ steps.cache_write.outputs.allowed != 'true' }}
+
+      - name: Write the corpora
+        run: pkgs/pkc/contrib/regen.py
+
+      - name: Show the build log
+        if: failure()
+        shell: bash
+        run: cat target/bls-corpus/*-*/build.log
+
+      - name: Check the corpora are unchanged
+        run: |
+          git diff --exit-code -- pkgs/pkc/corpus
+          test -z "$(git status --porcelain -- pkgs/pkc/corpus)"
+
+      - name: Lint the programs against the build
+        run: |
+          python3 maint/lint/lint_clang.py 2>&1 | tee "${RUNNER_TEMP}/lint_clang.log"
+          if grep -qF 'skipping the lint of pkgs/pkc/contrib' "${RUNNER_TEMP}/lint_clang.log"; then
+            echo '::error::the programs were not linted'
+            exit 1
+          fi
