@@ -14,6 +14,7 @@ compose [
   (cxx.forWasm commonTargets)
   mods.bazel
   mods.codeql
+  mods.corpora
   mods.cxx
   mods.fhs
   mods.nixpkgs
