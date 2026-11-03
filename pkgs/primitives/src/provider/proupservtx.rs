@@ -6,11 +6,10 @@
 
 //! ProUpServTx service-update payload (type 2).
 
+use super::proregtx::check_platform_fields;
 use super::sig::verify_operator;
-use super::{
-  check_platform_fields, read_platform_fields, write_net_info, write_platform_fields, OperatorSig, PlatformNodeId,
-  ProTxVersion,
-};
+use super::{write_net_info, OperatorSig, PlatformNodeId, ProTxVersion};
+use crate::codec::impl_payload;
 use crate::payload::bls::{self, protx_bls_scheme, protx_source};
 use crate::prelude::*;
 use crate::sign::sha256d;
@@ -21,16 +20,12 @@ use crate::{hash_impl, TxHash};
 use bitcoin_primitives::script::ScriptPubKeyBuf;
 use dash_pkc::bls::{BlsEagerSig, BlsError, BlsPkBytes, BlsSigBytes, BlsValue, BLS_SIG_LEN};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
-use dash_types::{impl_type, type_id::TypeId, Checkable, Numeric, Signable};
+use dash_types::{type_id::TypeId, Checkable, Numeric, Signable};
 use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
 /// ProUpServTx -- update MN service addr (type 2).
-///
-/// - v1: LegacyBLS (no mn_type field)
-/// - v2: BasicBLS (adds mn_type)
-/// - v3: ExtAddr (extended network info)
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(into = "ProUpServTxSerde", try_from = "ProUpServTxSerde"))]
@@ -69,7 +64,7 @@ pub struct ProUpServTx {
   sig: BlsEagerSig,
 }
 
-impl_type!(ProUpServTx);
+impl_payload!(ProUpServTx);
 
 /// The serde form of [`ProUpServTx`], with the signature as raw bytes.
 #[cfg(feature = "serde")]
@@ -106,14 +101,23 @@ impl BaseCodec for ProUpServTx {
       MnType::Regular
     };
     let pro_tx_hash = TxHash::decode(data)?;
-    let net_info = if version >= ProTxVersion::ExtAddr {
+    let net_info = if version >= ProTxVersion::CoreV24 {
       NetInfo::Extended(NetInfoV2::decode(data)?)
     } else {
       NetInfo::Legacy(NetInfoV1::decode(data)?)
     };
     let script_operator_payout = ScriptPubKeyBuf::decode(data)?;
     let inputs_hash = InputsHash::decode(data)?;
-    let (platform_node_id, platform_p2p_port, platform_http_port) = read_platform_fields(data, mn_type, version)?;
+    let (platform_node_id, platform_p2p_port, platform_http_port) = if mn_type == MnType::Evo {
+      let node_id = PlatformNodeId::decode(data)?;
+      if version < ProTxVersion::CoreV24 {
+        (Some(node_id), Some(u16::decode(data)?), Some(u16::decode(data)?))
+      } else {
+        (Some(node_id), None, None)
+      }
+    } else {
+      (None, None, None)
+    };
 
     Ok(Self {
       version,
@@ -183,7 +187,7 @@ impl Checkable for ProUpServTx {
     }
 
     let is_extended = matches!(self.net_info, NetInfo::Extended(_));
-    if is_extended != (self.version >= ProTxVersion::ExtAddr) {
+    if is_extended != (self.version >= ProTxVersion::CoreV24) {
       return Some(ProTxInvalid::NetInfoVersionMismatch);
     }
 
@@ -265,14 +269,13 @@ impl ProUpServTx {
     write_net_info(buf, &self.net_info, self.version);
     self.script_operator_payout.encode(buf);
     self.inputs_hash.encode(buf);
-    write_platform_fields(
-      buf,
-      self.mn_type,
-      self.version,
-      &self.platform_node_id,
-      self.platform_p2p_port,
-      self.platform_http_port,
-    );
+    if self.mn_type == MnType::Evo {
+      self.platform_node_id.unwrap_or_default().encode(buf);
+      if self.version < ProTxVersion::CoreV24 {
+        self.platform_p2p_port.unwrap_or(0).encode(buf);
+        self.platform_http_port.unwrap_or(0).encode(buf);
+      }
+    }
   }
 }
 
@@ -326,11 +329,27 @@ impl TryFrom<ProUpServTxSerde> for ProUpServTx {
 }
 
 #[cfg(all(test, feature = "serde"))]
+#[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
+  use crate::types::NIError;
 
-  use dash_dev::{assert_serde_rt, check_sptx, Corpus};
+  use dash_dev::{assert_serde_rt, check_sptx, check_sptx_except, Corpus};
   use rstest::rstest;
+
+  /// The corpus entries from regtest, whose services are on local addresses.
+  /// The reference implementation accepts them on regtest alone, and the
+  /// check refuses them on every network.
+  const REGTEST: [&str; 3] = [
+    "369881c12aa676d0a9829cdc849df0c75e9729296883cbbdc3822f1e267c6368",
+    "639f00f22f730daa3fb0bb09e250d3f5c486987c4fb48da42804908c015a1ef6",
+    "1c4cee0257db158902bfdd4441c88f86e1dd53617156cb53ff3cc92d6caeef43",
+  ];
+
+  /// The check's refusal of the entries in [`REGTEST`].
+  const LOCAL_ADDRESS: ProTxInvalid = ProTxInvalid::NetInfoInvalid {
+    error: NIError::SpecialUse,
+  };
 
   /// An Evo update with an extended NetInfo whose version is unsupported reads
   /// the version alone, and its next fields read from the byte after it.
@@ -366,7 +385,38 @@ mod tests {
   #[rstest]
   fn corpus_proupservtx() {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "proupservtx");
-    let items = corpus.entries::<ProUpServTx>("proupservtx", check_sptx);
+    let items = corpus.entries::<ProUpServTx>("proupservtx", |raw, details, label| {
+      if REGTEST.contains(&label) {
+        assert_eq!(
+          check_sptx_except::<ProUpServTx>(raw, label, &[LOCAL_ADDRESS]),
+          *details,
+          "{label}"
+        );
+      } else {
+        check_sptx(raw, details, label);
+      }
+    });
+    assert!(
+      REGTEST.iter().all(|label| items.contains_key(*label)),
+      "a regtest label left the corpus"
+    );
     assert_serde_rt("proupservtx", &items);
+  }
+
+  /// Checks on mainnet Evo update `e8812ae7`.
+  #[rstest]
+  #[case::null_platform_node_id(
+    |ptx: &mut ProUpServTx| ptx.platform_node_id = Some(PlatformNodeId::default()),
+    ProTxInvalid::NullPlatformNodeId
+  )]
+  fn check(#[case] edit: fn(&mut ProUpServTx), #[case] expected: ProTxInvalid) {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "proupservtx");
+    let mut ptx = corpus
+      .entries::<ProUpServTx>("proupservtx", |_, _, _| {})
+      .remove("e8812ae795f44406cbdc70fc5ebe8e975180e8b28d7ab4eb0f7b3e9d66b1d62b")
+      .unwrap();
+    assert_eq!(ptx.check(), None);
+    edit(&mut ptx);
+    assert_eq!(ptx.check(), Some(expected));
   }
 }

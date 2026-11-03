@@ -86,6 +86,11 @@ pub const fn ietf_g1_encoding(mut chia: [u8; 48]) -> [u8; 48] {
 
 cfg_if! {
   if #[cfg(test)] {
+    use super::group::G1Affine;
+    use super::scheme_ops::BlsScheme;
+    use super::schemes::BlsScChia;
+
+    use blst::BLST_ERROR;
     use dash_dev::Corpus;
 
     use core::fmt;
@@ -117,6 +122,94 @@ cfg_if! {
       let ietf: Vec<String> = corpus.scope("ietf").vectors(&section);
       assert_eq!(legacy.len(), ietf.len(), "bls_serialize: {section} arms must pair by index");
       legacy.into_iter().zip(ietf).collect()
+    }
+
+    /// The reference implementation's outcome for one `bls_read` input.
+    #[derive(Clone, Copy, Debug, Eq, PartialEq, ::serde::Deserialize)]
+    #[serde(rename_all = "lowercase")]
+    pub enum ReadOutcome {
+      Null,
+      Valid,
+      Invalid,
+    }
+
+    /// Whether the `x` of an input the legacy scheme reads as valid has a
+    /// point on the curve.
+    #[derive(Clone, Copy, Debug, Eq, PartialEq, ::serde::Deserialize)]
+    #[serde(rename_all = "lowercase")]
+    pub enum Curve {
+      On,
+      Off,
+    }
+
+    /// One `bls_read` input, its outcome under each scheme and, when the
+    /// legacy scheme reads it as valid, whether its `x` has a curve point.
+    #[derive(Debug, ::serde::Deserialize)]
+    pub struct ReadVector {
+      pub class: String,
+      #[serde(rename = "in")]
+      pub input: String,
+      legacy: ReadOutcome,
+      basic: ReadOutcome,
+      #[serde(default)]
+      pub curve: Option<Curve>,
+    }
+
+    impl ReadVector {
+      pub fn outcome(&self, legacy: bool) -> ReadOutcome {
+        if legacy { self.legacy } else { self.basic }
+      }
+    }
+
+    /// The `bls_read` vectors of one kind.
+    pub fn read_vectors(kind: SerType) -> Vec<ReadVector> {
+      Corpus::open(env!("CARGO_MANIFEST_DIR"), "bls_read").vectors(&kind.to_string())
+    }
+
+    /// Whether the legacy G1 encoding `b` holds an `x` with no point on the
+    /// curve.
+    pub fn chia_pk_off_curve(b: &[u8; 48]) -> bool {
+      matches!(
+        G1Affine::uncompress(&BlsScChia::pk_ietf_bytes(b)),
+        Err(BLST_ERROR::BLST_POINT_NOT_ON_CURVE)
+      )
+    }
+
+    #[expect(clippy::unwrap_used, reason = "test code")]
+    mod layouts {
+      use super::*;
+      use crate::bls::group::G2Affine;
+      use crate::bls::schemes::BlsScIetf;
+
+      use rstest::rstest;
+
+      /// A point other than infinity in the scheme's layout, taken back to the
+      /// IETF compressed layout, is the point's IETF encoding for G1, and its
+      /// `x` with the sign bit clear for G2.
+      fn assert_layouts_reach_ietf<S: BlsScheme>() {
+        let mut signs = [[false; 2]; 2];
+        for seed in &RSEED {
+          let sk = BlsScIetf::sk_from_ikm(seed).unwrap();
+          let g1 = BlsScIetf::derive_pk(&sk).compress();
+          let g2 = BlsScIetf::sign(&sk, &MSG_DEADBEEF).compress();
+          let point = G1Affine::uncompress(&g1).unwrap();
+          assert_eq!(S::pk_ietf_bytes(&S::g1_bytes(&point)), g1);
+          let point = G2Affine::uncompress(&g2).unwrap();
+          let mut unsigned = g2;
+          unsigned[0] &= !0x20;
+          assert_eq!(S::sig_ietf_x_bytes(&S::g2_bytes(&point)), unsigned);
+          signs[0][usize::from(g1[0] & 0x20 != 0)] = true;
+          signs[1][usize::from(g2[0] & 0x20 != 0)] = true;
+        }
+        assert_eq!(signs, [[true; 2]; 2], "the seeds cover both signs");
+      }
+
+      #[rstest]
+      #[case::chia(assert_layouts_reach_ietf::<BlsScChia>)]
+      #[case::ietf(assert_layouts_reach_ietf::<BlsScIetf>)]
+      fn layouts_reach_the_ietf_form(#[case] check: fn()) {
+        check();
+      }
     }
 
     mod builders {

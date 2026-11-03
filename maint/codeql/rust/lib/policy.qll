@@ -68,9 +68,11 @@ predicate isSecretType(TypeItem t) {
       // The identifier a share is issued against is the participant's, known to every member of the
       // quorum; only the scalar the share carries is secret.
       "BlsShareId",
-      // A masternode's owner payouts and shared-collateral entries (v24 ProTx) hold public scripts,
-      // key ids and amounts, and the share-update payload a public script and signature.
-      "PayoutShare", "CollateralShare", "ProUpShareTx",
+      // A masternode's owner payouts and the shares of its collateral hold public scripts, key ids
+      // and amounts.
+      "PayoutShare", "CollateralShare",
+      // A share's reward update holds a public script and signature.
+      "ProUpShareTx",
       // LLMQ signing messages carry signature shares, published like `BlsSigShare`, and the
       // sessions and inventories that name them.
       "SigShare", "SigShareMsg", "SigSharesInv", "SigSharesInvMsg", "BatchedSigShare",

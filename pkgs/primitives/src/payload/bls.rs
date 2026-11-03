@@ -299,7 +299,7 @@ mod tests {
   #[rstest]
   #[case::legacy(ProTxVersion::LegacyBls, BlsSchemeKind::Legacy)]
   #[case::basic(ProTxVersion::BasicBls, BlsSchemeKind::Basic)]
-  #[case::ext_addr(ProTxVersion::ExtAddr, BlsSchemeKind::Basic)]
+  #[case::ext_addr(ProTxVersion::CoreV24, BlsSchemeKind::Basic)]
   fn protx_version_picks_scheme(#[case] version: ProTxVersion, #[case] scheme: BlsSchemeKind) {
     assert_eq!(protx_bls_scheme(version), scheme);
     assert_eq!(protx_source(version), BlsSchemeSource::Version(scheme));

@@ -28,7 +28,7 @@ permissions:
 jobs:
   changes:
     name: Detect changes
-    runs-on: ubuntu-slim
+    runs-on: ${{ vars.DASH_LIGHT_RUNNER || 'ubuntu-slim' }}
     permissions:
       contents: read
       pull-requests: read

@@ -199,15 +199,19 @@ impl BlsPkBytes {
   /// # Errors
   ///
   /// Returns `InvalidPublicKey` when the bytes are not a valid point under `S`.
+  /// That includes legacy encodings of an `x` with no point on the curve,
+  /// which [`is_canonical`](Self::is_canonical) accepts; there is no point to
+  /// return for them.
   pub fn to<S: BlsScheme>(&self) -> Result<BlsPublicKey<S>, BlsError> {
     BlsPublicKey::try_from(self)
   }
 
-  /// Whether `S` decodes the bytes to a key that re-encodes to them.
+  /// Whether `S` reads the bytes as a key that re-encodes to them, or under
+  /// the legacy scheme as an `x` with no point on the curve.
   ///
   /// Null bytes pass, so pair with [`is_null`](Self::is_null) to require a key.
   pub fn is_canonical<S: BlsScheme>(&self) -> bool {
-    self.is_null() || self.to::<S>().is_ok_and(|pk| pk.to_bytes() == *self.as_bytes())
+    self.is_null() || S::is_canonical_pk(self.as_bytes())
   }
 }
 
@@ -224,8 +228,8 @@ type_cvrt!(for[S: BlsScheme] TryFrom<G1> for BlsPublicKey<S>, BlsError, |point| 
 mod tests {
   use super::*;
   use crate::bls::tests::{
-    ietf_g1_encoding, ser_pairs, SerType, G1_OFF_SUBGROUP_CHIA, G1_OFF_SUBGROUP_IETF, G1_X_EQ_PRIME_CHIA,
-    G1_X_GE_PRIME_CHIA, G1_X_MAX_CHIA, MSG_8BADFOOD, RSEED,
+    chia_pk_off_curve, ietf_g1_encoding, read_vectors, ser_pairs, Curve, ReadOutcome, SerType, G1_OFF_SUBGROUP_CHIA,
+    G1_OFF_SUBGROUP_IETF, G1_X_EQ_PRIME_CHIA, G1_X_GE_PRIME_CHIA, G1_X_MAX_CHIA, MSG_8BADFOOD, RSEED,
   };
   use crate::bls::{BlsScChia, BlsScIetf, BlsSecretKey, BlsSignature};
 
@@ -531,6 +535,86 @@ mod tests {
   #[case::ietf_off_subgroup(assert_pk_bytes_not_canonical::<BlsScIetf>, G1_OFF_SUBGROUP_IETF)]
   fn pk_bytes_undecodable_are_not_canonical(#[case] assertion: fn([u8; 48]), #[case] encoded: [u8; 48]) {
     assertion(encoded);
+  }
+
+  /// `x = 0` with the sign bit set, (0, -2), reads under the legacy scheme as
+  /// a key that encodes back to the same bytes, as in the reference
+  /// implementation.
+  #[rstest]
+  fn chia_reads_x_zero_with_sign_bit() {
+    let mut encoded = [0u8; 48];
+    encoded[0] = 0x80;
+
+    let pk = BlsPublicKey::<BlsScChia>::from_bytes(&encoded).unwrap();
+    assert_eq!(pk.to_bytes(), encoded);
+    assert!(BlsPkBytes::from_bytes(encoded).is_canonical::<BlsScChia>());
+  }
+
+  /// With `x = 0` and the sign bit clear, stray bits 5-6 mask down to the null
+  /// encoding, so the bytes are neither a key nor canonical.
+  #[rstest]
+  #[case::bit_five(0x20)]
+  #[case::bit_six(0x40)]
+  #[case::bits_five_six(0x60)]
+  fn chia_x_zero_with_stray_bits_is_not_a_key(#[case] byte0: u8) {
+    let mut encoded = [0u8; 48];
+    encoded[0] = byte0;
+
+    let bytes = BlsPkBytes::from_bytes(encoded);
+    assert!(bytes.to::<BlsScChia>().is_err());
+    assert!(!bytes.is_canonical::<BlsScChia>());
+  }
+
+  /// The reference implementation accepts a legacy encoding of an `x` with no
+  /// point on the curve, so `is_canonical` does too, while `to` has no point
+  /// to return.
+  #[rstest]
+  fn chia_off_curve_x_is_canonical_but_not_a_key() {
+    // p - 1, with no point on the curve.
+    let mut encoded = G1_X_EQ_PRIME_CHIA;
+    encoded[47] -= 1;
+    assert!(chia_pk_off_curve(&encoded));
+
+    let bytes = BlsPkBytes::from_bytes(encoded);
+    assert!(bytes.is_canonical::<BlsScChia>());
+    assert!(bytes.to::<BlsScChia>().is_err());
+  }
+
+  /// Every `bls_read` input reads as in the reference implementation.
+  ///
+  /// `is_canonical` follows its outcome. A valid input decodes to a key that
+  /// encodes back to it, except a legacy encoding whose `x` the corpus marks
+  /// off the curve, which does not decode.
+  fn assert_pk_reads<S: BlsScheme>(legacy: bool) {
+    for v in read_vectors(SerType::PublicKey) {
+      let label = format!("{} {}", v.class, v.input);
+      let bytes = BlsPkBytes::from_bytes(arr_from_hex(&v.input));
+      let outcome = v.outcome(legacy);
+
+      assert_eq!(v.curve.is_some(), v.outcome(true) == ReadOutcome::Valid, "{label}");
+      assert_eq!(bytes.is_null(), outcome == ReadOutcome::Null, "{label}");
+      assert_eq!(
+        S::is_canonical_pk(bytes.as_bytes()),
+        outcome == ReadOutcome::Valid,
+        "{label}"
+      );
+      assert_eq!(bytes.is_canonical::<S>(), outcome != ReadOutcome::Invalid, "{label}");
+      if outcome == ReadOutcome::Valid {
+        let decoded = bytes.to::<S>();
+        if legacy && v.curve == Some(Curve::Off) {
+          assert!(decoded.is_err(), "{label}");
+        } else {
+          assert_eq!(decoded.map(|pk| pk.to_bytes()).ok(), Some(*bytes.as_bytes()), "{label}");
+        }
+      }
+    }
+  }
+
+  #[rstest]
+  #[case::chia(assert_pk_reads::<BlsScChia>, true)]
+  #[case::ietf(assert_pk_reads::<BlsScIetf>, false)]
+  fn pk_reads_match_reference(#[case] assertion: fn(bool), #[case] legacy: bool) {
+    assertion(legacy);
   }
 
   /// The same G1 point encodes differently under the two schemes, and each

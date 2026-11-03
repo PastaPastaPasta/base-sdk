@@ -23,7 +23,7 @@ use dash_pkc::bls::{
   BlsSchemeSource, BlsSigBytes, BlsSigId, BlsSignature,
 };
 use dash_pkc::ecdsa::{EcdsaPkBytes, EcdsaPublicKey, EcdsaRecSigBytes, EcdsaRecSignature};
-use dash_primitives::{llmq_sign_hash, CompactSig, QuorumHash, SpecialPayload, Transaction};
+use dash_primitives::{llmq_sign_hash, QuorumHash, SpecialPayload, Transaction};
 use dash_types::codec::BaseCodec;
 use dash_types::{Hashable, Numeric};
 use hex_conservative::DisplayHex;
@@ -92,10 +92,6 @@ fn ecdsa(sig: Option<&[u8; 65]>) -> &[u8] {
   sig.map_or(&[], |sig| &sig[..])
 }
 
-fn compact(sig: &CompactSig) -> &[u8] {
-  sig.as_bytes()
-}
-
 /// Whether `sig` verifies under the signer's quorum over
 /// `SignHash(llmq_type, quorum_hash, id, msg_hash)`.
 fn quorum_signed(signer: &Value, quorum_hash: &QuorumHash, id: &Hash256, msg: &Hash256, sig: &BlsEagerSig) -> bool {
@@ -144,7 +140,7 @@ fn check_signed(txid: &str, entry: &Value) -> (u16, u16) {
       let hash = hash(&p.shared_consent_bytes(&tx));
       (
         p.version().to_base(),
-        owners_signed(&owners, p.join_sigs().iter().map(compact), &hash),
+        owners_signed(&owners, p.join_sigs().iter().map(|sig| &sig.as_bytes()[..]), &hash),
       )
     }
     SpecialPayload::ProviderRegister(p) => {
@@ -203,7 +199,7 @@ fn check_signed(txid: &str, entry: &Value) -> (u16, u16) {
       let hash = hash(&p.sig_hash_bytes(&tx, u8::try_from(p.sigs().len()).unwrap()));
       (
         p.version(),
-        owners_signed(&key_ids, p.sigs().iter().map(compact), &hash),
+        owners_signed(&key_ids, p.sigs().iter().map(|sig| &sig.as_bytes()[..]), &hash),
       )
     }
     SpecialPayload::ProviderUpdateShare(p) => (
@@ -212,7 +208,11 @@ fn check_signed(txid: &str, entry: &Value) -> (u16, u16) {
     ),
     SpecialPayload::ProviderUpdateSharedRegistrar(p) => (
       p.version(),
-      owners_signed(&key_ids, p.sigs().iter().map(compact), &hash(&p.sig_hash_bytes())),
+      owners_signed(
+        &key_ids,
+        p.sigs().iter().map(|sig| &sig.as_bytes()[..]),
+        &hash(&p.sig_hash_bytes()),
+      ),
     ),
     other => panic!("{txid}: unexpected payload {other:?}"),
   };

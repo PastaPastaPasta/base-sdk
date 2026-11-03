@@ -7,7 +7,7 @@
 //! Dash block (header + transactions).
 
 use crate::prelude::*;
-use crate::sptx::TxType;
+use crate::sptx::{PayloadDecode, SpecialPayload, TxType};
 use crate::transaction::{OutPoint, Transaction, TxHash, TxIn, TxInvalid, TxOut};
 use crate::{codec_base, codec_type, hash_impl};
 
@@ -104,6 +104,9 @@ pub enum BlockInvalid {
   /// `bad-txns-duplicate`
   #[error("bad-txns-duplicate")]
   DuplicateTransactions,
+  /// `bad-cbtx-assetunlockmerkleroot`
+  #[error("bad-cbtx-assetunlockmerkleroot")]
+  BadAssetUnlockMerkleRoot,
   /// `bad-blk-length`
   #[error("bad-blk-length: {size} bytes")]
   BadBlockLength { size: usize },
@@ -151,6 +154,16 @@ impl Checkable for Block {
     }
     if mutated {
       return Some(BlockInvalid::DuplicateTransactions);
+    }
+    let decoded = self.coinbase_commitment_tx().and_then(Transaction::decode_payload);
+    if let Some(SpecialPayload::CoinbaseCommitment(cbtx)) = decoded
+      .and_then(Result::ok)
+      .filter(PayloadDecode::is_complete)
+      .map(PayloadDecode::into_payload)
+    {
+      if cbtx.version().to_base() >= 4 && cbtx.merkle_root_asset_unlocks() != Some(self.asset_unlock_merkle_root()) {
+        return Some(BlockInvalid::BadAssetUnlockMerkleRoot);
+      }
     }
 
     let size = codec::encoded_size(self);
@@ -235,6 +248,28 @@ impl Block {
     let leaves: Vec<TxHash> = self.transactions.iter().map(|tx| tx.hash()).collect();
     compute_merkle_root(&leaves)
   }
+
+  /// Computes the merkle root a version 4 coinbase payload commits to, over the
+  /// [`Transaction::instance_hash`] of each transaction with a [stable
+  /// txid](Transaction::has_stable_txid) in block order, or null for none.
+  pub fn asset_unlock_merkle_root(&self) -> MerkleRoot {
+    let leaves: Vec<TxHash> = self
+      .transactions
+      .iter()
+      .filter(|tx| tx.has_stable_txid())
+      .map(Transaction::instance_hash)
+      .collect();
+    compute_merkle_root(&leaves).0
+  }
+
+  /// The first transaction if it has the coinbase type, the only one whose
+  /// payload is decoded for the asset unlock root.
+  fn coinbase_commitment_tx(&self) -> Option<&Transaction> {
+    self
+      .transactions
+      .first()
+      .filter(|tx| tx.tx_type() == TxType::CoinbaseCommitment)
+  }
 }
 
 impl fmt::Display for Block {
@@ -254,7 +289,7 @@ impl From<&GenesisParams> for Block {
         0xFFFF_FFFF,
       )],
       vec![TxOut::new(
-        params.reward,
+        params.reward.to_signed(),
         ScriptPubKeyBuf::from_bytes(params.script_pubkey.to_vec()),
       )],
       0,
@@ -288,7 +323,7 @@ impl From<&DevnetGenesisParams> for Block {
         0xFFFF_FFFF,
       )],
       vec![TxOut::new(
-        DevnetGenesisParams::REWARD,
+        DevnetGenesisParams::REWARD.to_signed(),
         ScriptPubKeyBuf::from_bytes(DevnetGenesisParams::SCRIPT_PUBKEY.to_vec()),
       )],
       0,
@@ -315,30 +350,51 @@ impl From<&DevnetGenesisParams> for Block {
 #[expect(clippy::panic, clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
-  use crate::sptx::TxType;
+  use crate::payload::{AssetUnlock, CbCommitmentVersion, CoinbaseCommitment};
+  use crate::sptx::{QuorumHash, TxType};
   use crate::transaction::{OutPoint, TxIn, TxOut};
 
+  use bitcoin_consensus_encoding::decode_from_slice;
   use bitcoin_primitives::script::{ScriptPubKeyBuf, ScriptSigBuf};
-  use dash_dev::{assert_serde_rt, check_wire, Corpus};
+  use bitcoin_units::{BlockHeight, SignedAmount};
+  use dash_dev::{assert_json_rt, assert_serde_rt, check_wire, vec_from_hex, Corpus};
+  use dash_pkc::bls::{BlsGlobalSig, BLS_SIG_LEN};
   use dash_script::Opcode;
   use rstest::rstest;
   use serde::Deserialize;
 
+  /// Checks `raw` as block `label` (its hash) decoded as `details`.
+  fn check_block(raw: &[u8], details: &Block, label: &str) {
+    check_wire(raw, details, label);
+    if let Some(e) = details.check() {
+      panic!("{label}: check: {e}");
+    }
+    let expected = crate::BlockHash::from_hex(label).unwrap();
+    assert_eq!(details.header.hash(), expected, "{label}: pow hash");
+    let (root, mutated) = details.merkle();
+    assert_eq!(root, details.header.merkle_root, "{label}: merkle root");
+    assert!(!mutated, "{label}: merkle mutated");
+  }
+
   #[rstest]
   fn corpus_block() {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "blocks");
-    let items = corpus.entries::<Block>("blocks", |raw, details, label| {
-      check_wire(raw, details, label);
-      if let Some(e) = details.check() {
-        panic!("{label}: check: {e}");
-      }
-      let expected = crate::BlockHash::from_hex(label).unwrap();
-      assert_eq!(details.header.hash(), expected, "{label}: pow hash");
-      let (root, mutated) = details.merkle();
-      assert_eq!(root, details.header.merkle_root, "{label}: merkle root");
-      assert!(!mutated, "{label}: merkle mutated");
-    });
+    let items = corpus.entries::<Block>("blocks", check_block);
     assert_serde_rt("blocks", &items);
+  }
+
+  /// A regtest block with a version 2 asset unlock, as hash and raw bytes,
+  /// from the reference implementation's functional test
+  /// feature_asset_locks.py line 1118 at v24.0.0-rc.4.
+  const REGTEST_BLOCK: (&str, &str) = ("64b2baa9cf5b20e65ca4690520e8db3d0b9ba6e7c5d048c8d256198f8a1a6c96", "000000204f28d50a1befa68a1fcb0be21af2cf31f68a901420c8cdd173c91660ad416d737555ddaeb1a9e83f5568838cbf8b291ce5b42b21eb1d1dd8ac6b23c550bbfdea9cbe8054ffff7f20000000000203000500010000000000000000000000000000000000000000000000000000000000000000ffffffff016affffffff030ef9c604000000001976a914d1e414e99c4cf3160d099aeb70438a3ca92dad1a88ac478b5f0500000000016ae25ff508000000001976a91456908bca5913585daa9bad834f6a20d4ee792e4488ac00000000cf0400c9030000932cbd03b309d2d8c018844e23f3fbffd6d43de89380abe080220714ba4790197dca3f6655eede191c16618307a5d0234aed1aaba580ac03e1cb26670541ca1400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000696046c679000000b6ef079a8505a849326d910f14586af59339c996f366c9d6848b9cee7e43614603000900000190cff40500000000232102472c66bc4fd71f30167ac9b8888944ca749dcb0a130329ab95380be0a43c25b0ac000000009102210300000000000070110100c80300002a3631100ae30009d1bf863e5db641069985121ad4ab37dfda0800a65cc1116088250d04fb32aef4219a552f35627d46a9f448a742564cb9e7c4b107325e1f875f64a0c90d517b137cb44d359e401dce015a077ec33ba4c078e4b74f252181943daa2cc30eb90b693e3aee521016f22ddecc52b0e4c79781b76c8def1c66db46");
+
+  #[rstest]
+  fn regtest_block() {
+    let (hash, raw) = REGTEST_BLOCK;
+    let raw = vec_from_hex(raw);
+    let block: Block = decode_from_slice(&raw).unwrap();
+    check_block(&raw, &block, hash);
+    assert_json_rt(&block);
   }
 
   #[derive(Deserialize)]
@@ -387,26 +443,145 @@ mod tests {
     }
   }
 
+  /// Builds a block that commits to `transactions` and passes the proof of
+  /// work.
+  fn mine(transactions: Vec<Transaction>) -> Block {
+    let mut block = Block {
+      header: BlockHeader {
+        bits: 0x207f_ffff,
+        ..BlockHeader::default()
+      },
+      transactions,
+    };
+    block.header.merkle_root = block.merkle().0;
+    while block.check() == Some(BlockInvalid::BadProofOfWork) {
+      block.header.nonce += 1;
+    }
+    block
+  }
+
   #[rstest]
   fn check_matches_vectors() {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "block_check");
     for (i, v) in corpus.vectors::<CheckVector>("check").into_iter().enumerate() {
-      let mut block = Block {
-        header: BlockHeader {
-          bits: 0x207f_ffff,
-          ..BlockHeader::default()
-        },
-        transactions: v.txs.iter().map(TxShape::build).collect(),
-      };
-      block.header.merkle_root = block.merkle().0;
+      let block = mine(v.txs.iter().map(TxShape::build).collect());
       assert_eq!(block.header.merkle_root, v.merkle_root, "vector {i}");
-      while block.check() == Some(BlockInvalid::BadProofOfWork) {
-        block.header.nonce += 1;
-      }
       let mut buf = Vec::new();
       block.encode(&mut buf);
       assert_eq!(buf.len(), v.size, "vector {i}");
       assert_eq!(reason(block.check()), v.reason, "vector {i}");
     }
+  }
+
+  /// An asset unlock of `version` and `index`, signed by the quorum hash
+  /// filled with `quorum`.
+  fn unlock((version, index, quorum): (u8, u64, u8)) -> Transaction {
+    let payload = AssetUnlock::new(
+      version,
+      index,
+      1,
+      0,
+      QuorumHash::from_lendian([quorum; 32]),
+      BlsGlobalSig::decode(&[0; BLS_SIG_LEN]).unwrap(),
+    );
+    let mut extra_payload = Vec::new();
+    payload.encode(&mut extra_payload);
+    Transaction::new(
+      3,
+      TxType::AssetUnlock,
+      vec![],
+      vec![TxOut::new(SignedAmount::ONE_SAT, ScriptPubKeyBuf::new())],
+      0,
+      extra_payload,
+    )
+  }
+
+  /// A coinbase whose payload of `version` commits to `root`. Its input spends
+  /// output 0 of the hash filled with `seed`, or the null outpoint for 0.
+  fn coinbase(seed: u8, version: u16, root: Option<MerkleRoot>) -> Transaction {
+    let payload = CoinbaseCommitment::new(
+      CbCommitmentVersion::from_base(version),
+      BlockHeight::from_u32(0),
+      MerkleRoot::default(),
+      Some(MerkleRoot::default()),
+      Some(0),
+      Some(BlsGlobalSig::decode(&[0; BLS_SIG_LEN]).unwrap()),
+      Some(0),
+      root,
+    );
+    let mut extra_payload = Vec::new();
+    payload.encode(&mut extra_payload);
+    Transaction::new(
+      3,
+      TxType::CoinbaseCommitment,
+      vec![TxIn::new(
+        OutPoint::new(TxHash::from_lendian([seed; 32]), if seed == 0 { u32::MAX } else { 0 }),
+        ScriptSigBuf::from_bytes(vec![0; 2]),
+        u32::MAX,
+      )],
+      vec![TxOut::new(SignedAmount::ONE_SAT, ScriptPubKeyBuf::new())],
+      0,
+      extra_payload,
+    )
+  }
+
+  /// The merkle root of the instance hashes of `unlocks`.
+  fn instance_root(unlocks: &[(u8, u64, u8)]) -> MerkleRoot {
+    let leaves: Vec<TxHash> = unlocks.iter().map(|&u| unlock(u).instance_hash()).collect();
+    compute_merkle_root(&leaves).0
+  }
+
+  /// A version 4 coinbase payload commits to the instance hashes of the
+  /// version 2 unlocks, in block order. `committed` lists the unlocks of its
+  /// root.
+  #[rstest]
+  #[case::no_unlocks(0, 4, &[], &[], "")]
+  #[case::one(0, 4, &[(2, 1, 1)], &[(2, 1, 1)], "")]
+  #[case::other_quorum(0, 4, &[(2, 1, 2)], &[(2, 1, 1)], "bad-cbtx-assetunlockmerkleroot")]
+  #[case::left_out(0, 4, &[(2, 1, 1)], &[], "bad-cbtx-assetunlockmerkleroot")]
+  #[case::committed_without_unlocks(0, 4, &[], &[(2, 1, 1)], "bad-cbtx-assetunlockmerkleroot")]
+  #[case::v1_left_out(0, 4, &[(1, 1, 1)], &[], "")]
+  #[case::two(0, 4, &[(2, 1, 1), (2, 2, 1)], &[(2, 1, 1), (2, 2, 1)], "")]
+  #[case::two_reversed(0, 4, &[(2, 1, 1), (2, 2, 1)], &[(2, 2, 1), (2, 1, 1)], "bad-cbtx-assetunlockmerkleroot")]
+  #[case::v1_and_v2(0, 4, &[(1, 1, 1), (2, 2, 1)], &[(2, 2, 1)], "")]
+  #[case::v3_coinbase(0, 3, &[(2, 1, 2)], &[], "")]
+  #[case::duplicate_first(0, 4, &[(2, 1, 1), (2, 2, 1), (2, 2, 1)], &[(2, 1, 1), (2, 2, 1)], "bad-txns-duplicate")]
+  #[case::root_before_coinbase_input(1, 4, &[(2, 1, 2)], &[(2, 1, 1)], "bad-cbtx-assetunlockmerkleroot")]
+  #[case::coinbase_input(1, 4, &[(2, 1, 1)], &[(2, 1, 1)], "bad-cb-missing")]
+  fn check_asset_unlock_root(
+    #[case] seed: u8,
+    #[case] version: u16,
+    #[case] unlocks: &[(u8, u64, u8)],
+    #[case] committed: &[(u8, u64, u8)],
+    #[case] expected: &str,
+  ) {
+    let first = coinbase(seed, version, (version >= 4).then(|| instance_root(committed)));
+    let block = mine(
+      core::iter::once(first)
+        .chain(unlocks.iter().copied().map(unlock))
+        .collect(),
+    );
+    assert_eq!(reason(block.check()), expected);
+  }
+
+  /// Only a first transaction of the coinbase type is taken for the asset
+  /// unlock root.
+  #[rstest]
+  fn coinbase_commitment_tx_takes_only_the_coinbase_type() {
+    let lock = Transaction::new(
+      3,
+      TxType::AssetLock,
+      vec![],
+      vec![TxOut::new(SignedAmount::ONE_SAT, ScriptPubKeyBuf::new())],
+      0,
+      Vec::new(),
+    );
+    let first = coinbase(0, 3, None);
+    let block = |tx: &Transaction| Block {
+      header: BlockHeader::default(),
+      transactions: vec![tx.clone()],
+    };
+    assert_eq!(block(&lock).coinbase_commitment_tx(), None);
+    assert_eq!(block(&first).coinbase_commitment_tx(), Some(&first));
   }
 }

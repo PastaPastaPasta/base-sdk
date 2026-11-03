@@ -12,10 +12,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   spork command-line options with Core's errors. It adds devnets (`Network::Devnet`, named devnets and their devnet
   genesis blocks), v23.1's parameters, LLMQ overrides and the spork signers to the network tables, which stay as they
   are. LLMQ sizes and thresholds outside `u16`, which Core accepts, are refused (`ParamsError::LlmqOutOfRange`).
-- `ChainParams::min_blocks_to_keep`: pruning keeps the block files of the blocks this close to the tip. At
+- `ChainSetup` holds the runtime-policy fields `ChainParams` drops, `prune_after_height` (which `-fastprune` moves on
+  regtest), `assumed_blockchain_size_gb`, `assumed_chain_state_size_gb`, `default_consistency_checks` and
+  `is_mockable_chain`, and `min_blocks_to_keep`: pruning keeps the block files of the blocks this close to the tip. At
   `Release::V24_0` it is 2304 (four days) on mainnet, testnet and devnets and 288 on regtest; at `Release::V23_1` it
   is 288 on every chain.
 - `Release::V24_0` and the network tables follow Dash Core v24.0.0-rc.5: the mainnet `v24` and `evo_shares`
   schedule, the minimum chain work, assumed-valid block, checkpoints and transaction statistics of mainnet and
   testnet, the fixed seeds, the assumed mainnet size (62 GB) and the testnet and devnet prune height (3000).
   `Release::V23_1` keeps v23.1.8's values.
+
+### Added
+
+- `BRR_PERIODS_PERMILLE`, the masternode share of the block value in each block reward reallocation period.
+
+### Changed
+
+- **`ChainParams` drops the runtime-policy fields** `prune_after_height`, `assumed_blockchain_size_gb`,
+  `assumed_chain_state_size_gb`, `default_consistency_checks` and `is_mockable_chain`.

@@ -10,6 +10,7 @@
         "pubKeyOperator": "80777d5d4a837040bd15047a3583b960bd59c28407dc2c359f2ab6a2dc5802545cb53724944a37e316db970cbef0f7af",
         "keyIdVoting": "74b7a52d0b19cc721fab9fc7cf90f45b306e3492",
         "scriptPayout": "76a914695a20b9b16659d4da796f71d539a5221f35865f88ac",
+        "payouts": [],
         "inputsHash": "5295009f6298e4050a8c44bd388f6d1f9c18bf9873b021613d5ca5d4df339b58",
         "vchSig": "1f63e1cfabd0b69e1a367da1f6fa50a1639d3467817f0827c1a6957aef2d56e86f60e81b9020b46784ef05c85deaba3bced309bdd4f660de9089c2c7237edacc23"
       }
@@ -24,6 +25,7 @@
         "pubKeyOperator": "86f925bb639e681242df5e77e11f0a95b3b5bc97b43434c455b9bbd343394816c5b7bf6016f170bc3558a84c7717021a",
         "keyIdVoting": "4c01950a82030a67a8a1be3b54d051802893f239",
         "scriptPayout": "76a914695a20b9b16659d4da796f71d539a5221f35865f88ac",
+        "payouts": [],
         "inputsHash": "0994f499d646314c933cd89bb7396fae71b527c7c7fe616f8c2f9c3c2e0064b8",
         "vchSig": "1f8ebec9659d734920e6ca4e9cccf37822b0b22a12985ae5744b096921676cf47f4abefcbf62fe2b65d3a9ab669ac3480278c66c43d6c5087c1dc8b7158d64a18f"
       }
@@ -38,6 +40,7 @@
         "pubKeyOperator": "b3291ae3c6fd9be650a427c32f5c46396f2bf1bfd65834ff4cdcd79cafb6d560c8a2e3a365892dd5d6b24fe7cf92d234",
         "keyIdVoting": "11be62b20b5b14131b39a9f54026f6b826e99d1d",
         "scriptPayout": "76a914695a20b9b16659d4da796f71d539a5221f35865f88ac",
+        "payouts": [],
         "inputsHash": "104168c3b4e2861b3a47b3402e0d914a1f3365eaf90818eb6a866c6c9fe3cf91",
         "vchSig": "1fce6fa07fd0fd7438812ae8535c574e11c69117b9c45b8b81bda788a4e0e774e6584837d6a51ec62cfcbe6b757e2396cf5fe14cdda7657fd6c24bb3bfe47d2f0b"
       }
@@ -52,6 +55,7 @@
         "pubKeyOperator": "aaf6274d78af492579ca0d74e8161517d68efba72a40f258813b44c786806138fc1d99f836462e7622e768b1e02c6989",
         "keyIdVoting": "808db83bd9654fb6e82fd6118947895276a81216",
         "scriptPayout": "76a914695a20b9b16659d4da796f71d539a5221f35865f88ac",
+        "payouts": [],
         "inputsHash": "ba21f1fd49ba3b0dc6e9a59cd3dcbadc572d0105ba6b4ad7843edaf094bf12d8",
         "vchSig": "1fdbbf81e959799963e78c9dad092b4cabd5ba7119c9490570541c569d952cf3e81baa878cc19197df353f1ccba01ef68437112938718c41f6528bdb76c59e9298"
       }
@@ -66,6 +70,7 @@
         "pubKeyOperator": "9690d85c0c46b8139897c17adf13166b38d7bb1853cf88c581ed5e04714583ad66b3ca4cdeeee5f4d49b7529ae6a0504",
         "keyIdVoting": "ecdb0cceffbeebf46ae1a1057ec44ba049c77da6",
         "scriptPayout": "76a9145f653444990053babbf3977743ece907a5b7e3cf88ac",
+        "payouts": [],
         "inputsHash": "b90c1d3df0f5a22970e4d6030db2f58b5b23ee22d3791288bcbbded5c35be561",
         "vchSig": "1f8ed06bd0e57c6aeb6bb9e4448251f218286e7ad7f3b29de81664b4c1e3149ca738259ac23ec04c04632eebe063964d56a4aff98551f8f95440b00b4979571517"
       }
@@ -80,6 +85,7 @@
         "pubKeyOperator": "b3b95a1a6ad8aaaeba9aa8ea3a3e8f0448f271228ea931184480e21e74fd30bc23fb24c87ab35629509a5af7b625e5e9",
         "keyIdVoting": "f3dbfc5a31ede2957ba0ae9748153c59341b9be1",
         "scriptPayout": "76a9147ccacc4367427e65fa9b382f67c503fad332aaa988ac",
+        "payouts": [],
         "inputsHash": "073cf78bc60c4b72656052494b8e8cd06ca3c56db99c30da2d3215d93c87fc31",
         "vchSig": "1fe64b93d7293344598d2377491da7e73a8304ed75d21029cd4a7f2744d6c7047e2f7ccdf9ee9e6b86f86634735aab0d1b8ccf88ace51ea2eaf2e91bf727dc5630"
       }
@@ -94,6 +100,7 @@
         "pubKeyOperator": "94757380f521b2d5ab06782b48563060987ea2102ab3a97ea9d7eedbae78a493d40e0fd9ae34ee0b9fdb9cab54312cf0",
         "keyIdVoting": "32299b2bef4fbd88f0de91a44d3b5b56634d828b",
         "scriptPayout": "76a914605857ca7739d8f4043ec61d31899a40b94e07e588ac",
+        "payouts": [],
         "inputsHash": "428881a1a7739859c80501047a20242a01bdb71547171cc752a81f34eaab31a5",
         "vchSig": "1f7acd9b9ed98d08fb97ad3c3885b68a378b23c0127f960baca8947d0a4766bb4209530892070eaaf6b20032ef6985fb05206430e04c571b070585c55f168cdc4d"
       }
@@ -108,6 +115,7 @@
         "pubKeyOperator": "b6ec536b38bad5c2482f23836ad9fc1962e46b5906173c758e609db1bd65baef1576ff07e297e36b254d5a9a3b110d17",
         "keyIdVoting": "92177c4669e30d8614902e4d94b11a4bb8f89e24",
         "scriptPayout": "76a9141ae72d32f583eec629b24b25927de260ef46e6bf88ac",
+        "payouts": [],
         "inputsHash": "ebafa725f3f9ff8f877f52768b54e01ba400dc9d8b6ab86f774fb43eb32063af",
         "vchSig": "20326e9b4b8a92a709d18ca39ad7b7df2edb7dba912af94e0fcf6e3c4b4770ae737ecff022e67ff5593dddc5dc234aa8c38c0b406734a04f332035bc950b2d9031"
       }
@@ -122,6 +130,7 @@
         "pubKeyOperator": "86ae0dfe35b272c48274b3a7da09a2343edbbdad8e6feee0feeeaa6b3ee175d7039943ce6fc1733dd68bc8a142080f88",
         "keyIdVoting": "1fd5886dc4ad4c4b8cbd8dbb579ab872b3b37321",
         "scriptPayout": "76a9146826043ad65f3f5cfe72d9c3d09c16218132e9c888ac",
+        "payouts": [],
         "inputsHash": "a2670490c13eb156d0d73fe467f1d82004e2777dae0b8d69c40069ca48534dcc",
         "vchSig": "1fa8b5a6258bf7ab6ce222c978446e7f975605629b37b58504d2a2fffe648eae29320209563bfacbe110d6c34d2c077fc9e9bb5e810b7873cb95f2725e74ab497b"
       }
@@ -136,6 +145,7 @@
         "pubKeyOperator": "8ca717f0fd3b1a25bbb23c5fe0717eeab511c6ee8a3e4dac7ffddec76f503f239047cd09fe6880e63cd13442bb6ce417",
         "keyIdVoting": "94ee41b35562758d448616cfd8ebd375512423f9",
         "scriptPayout": "76a914bffff341b7f366f9f963e0816e646ad56ec71df788ac",
+        "payouts": [],
         "inputsHash": "3fa1564099aa80342e1dc3af7a241511e6f6d49143346da417daf3cbf3896f75",
         "vchSig": "20d73aef231ddd8c6eb279aa2627789db30d07b1f3fdb458f3fb8ef0f5d5ff4af7638879ea51dd9d2b26fbab272e2e1ee7385f7231cf0e16a9af24b547740cc602"
       }
@@ -150,6 +160,7 @@
         "pubKeyOperator": "b3b95a1a6ad8aaaeba9aa8ea3a3e8f0448f271228ea931184480e21e74fd30bc23fb24c87ab35629509a5af7b625e5e9",
         "keyIdVoting": "f3dbfc5a31ede2957ba0ae9748153c59341b9be1",
         "scriptPayout": "76a9147ccacc4367427e65fa9b382f67c503fad332aaa988ac",
+        "payouts": [],
         "inputsHash": "b3d0e7160530668bef71025256cdee64c9c4736cecdf12b995fb5ff45d41e75c",
         "vchSig": "20c15459dddc6baf68cbe9e468207b115c3fc71706f0a8d0008782d2e578fcdcea5a0185d33d08364662c2a8ffdc4fba93d165f361461edbc333d0c46f4d6a4fe5"
       }
@@ -164,6 +175,7 @@
         "pubKeyOperator": "a882c307cf5f8b5ce2c9c91bcab0715fe30aebee110590bd1a4ec72389470ebc95abd46ab050c01e2ba26652368af166",
         "keyIdVoting": "4836665a450a8d8933bc01c1a67f410d21f35fe0",
         "scriptPayout": "76a914bffff341b7f366f9f963e0816e646ad56ec71df788ac",
+        "payouts": [],
         "inputsHash": "b20ef1260fafe539baa1e60c82dd98f0e83e8b01bb9b3754e2a5828794267867",
         "vchSig": "1f6704b7a1f005127b5f55429e33835d56ad6e3899c41b0b10b78539fdaff5d9d10ee914daff1429ad2aa32ed0b4c0a3ed18f43196dfe95cee76ccd6c58fce1d0a"
       }
@@ -178,6 +190,7 @@
         "pubKeyOperator": "8375a7832eff92a818267428982069cd8f821b943374d57f4ea5afb98ca65b5063cfbfdba3dc545182199ab79a7b3edb",
         "keyIdVoting": "1d13452fb0f24b94bd157175fc82bd44aadfd7a1",
         "scriptPayout": "76a914bffff341b7f366f9f963e0816e646ad56ec71df788ac",
+        "payouts": [],
         "inputsHash": "913af954c9c002650a913c617a606a109b06a74970595c8f340543fd3ade7de1",
         "vchSig": "20984cf85ff3ff002987f824c70e651999e23f0b5340ead9c857168ae329c4fc1809a4047f7b2c7b5062d9354ef60d6621ea90a654791acb4ddff25ced850bd023"
       }
@@ -192,6 +205,7 @@
         "pubKeyOperator": "a4921a9097ce1b25b4ea325f71b195f0bd6f5b36bda1d7ce37efa37e235fcb1dff70e89b1967703a4bad8d0812ca1517",
         "keyIdVoting": "f0dc6f6b4dc99d989fb78f8a4e47f1e666f3c2b3",
         "scriptPayout": "76a91431ec0c3f5021938701e0208a4d21f34aa6f0a4ea88ac",
+        "payouts": [],
         "inputsHash": "7a5306b6c15feb79a874d0e6027ed9a11d2c9cd866aa6fb9411efcdad02f08e5",
         "vchSig": "2031f5f0d7f46e88af7086919fe9525bc7318d2a83efa0fa33f84a5e9709df2e22287090c4f1cb03f38d30eff874f7bbf55bea116e71c595968f2e864b52c3ea13"
       }
@@ -206,6 +220,7 @@
         "pubKeyOperator": "a4921a9097ce1b25b4ea325f71b195f0bd6f5b36bda1d7ce37efa37e235fcb1dff70e89b1967703a4bad8d0812ca1517",
         "keyIdVoting": "f0dc6f6b4dc99d989fb78f8a4e47f1e666f3c2b3",
         "scriptPayout": "76a91431ec0c3f5021938701e0208a4d21f34aa6f0a4ea88ac",
+        "payouts": [],
         "inputsHash": "d06971b7785bc3e56673d59da40a26e91a10c3c85190098fea0a1053be73d703",
         "vchSig": "1fd28854184b200c1c415186579b8432234b88d1bb5c4023ad512b479b72f9259e53cf65408c1cdedeb5755f4e3c25bed7d7326b6dcee1d1008ab7ee4f016d6489"
       }
@@ -220,6 +235,7 @@
         "pubKeyOperator": "aa9a89cd82a6938ca7c5d6daaebf13f8989021f1bea7d55f66064f5ebb0bcf918cceac6a5189e9459f7cd45cec6a6730",
         "keyIdVoting": "f0dc6f6b4dc99d989fb78f8a4e47f1e666f3c2b3",
         "scriptPayout": "76a91431ec0c3f5021938701e0208a4d21f34aa6f0a4ea88ac",
+        "payouts": [],
         "inputsHash": "f771ddd44d234d03c8c88c9cbddf0b61947e8413bd5887bac3a895613f1cccf2",
         "vchSig": "1fa264d37157463a0c6c724c092e1d5b2b0ffbd31d90e55fe6a404070ed030da757589c0e7043249cf5bdb2540272c021139ba2bd15f4e4db9068d8c98ae5af28d"
       }
@@ -234,6 +250,7 @@
         "pubKeyOperator": "aa9a89cd82a6938ca7c5d6daaebf13f8989021f1bea7d55f66064f5ebb0bcf918cceac6a5189e9459f7cd45cec6a6730",
         "keyIdVoting": "f0dc6f6b4dc99d989fb78f8a4e47f1e666f3c2b3",
         "scriptPayout": "76a91431ec0c3f5021938701e0208a4d21f34aa6f0a4ea88ac",
+        "payouts": [],
         "inputsHash": "7a4f818f14d078fd8aaf6989ef223df5bcfde0a8d7b6f79fdbb448a0bc14ab5c",
         "vchSig": "1f5cd259d853f3c03c71d04716f450f6fc316d0638f85125fab39790e335d6db670dcde2080e3fa3890166ee0a051978cc30fba16b40917eee412c860be86f9fb7"
       }
@@ -248,6 +265,7 @@
         "pubKeyOperator": "acefd02d9bbd4bc824a3817b4c51dc4032e70cfb9540b902bb9ef1af1a2cef995c95dd26e7f041489e142eae31d936c8",
         "keyIdVoting": "207510045288f1f8461423188b055dd709dd9172",
         "scriptPayout": "76a914bdf33ea7da15da7936e665972c9da5e555fbbcc188ac",
+        "payouts": [],
         "inputsHash": "fc2653bdbfcafe1e9aca0ffbf8323313932388df7b9badb4c86927c567ac1b6f",
         "vchSig": "20c1de37b415e678ca5a1ec98c2283a1a54d4bc715748db0b6b4eae9f9200289e076b90a090a612d1faf223d7fe0d8a44d0a3cda102ab83fa832f65b5bbe2a35b8"
       }
@@ -262,6 +280,7 @@
         "pubKeyOperator": "acefd02d9bbd4bc824a3817b4c51dc4032e70cfb9540b902bb9ef1af1a2cef995c95dd26e7f041489e142eae31d936c8",
         "keyIdVoting": "207510045288f1f8461423188b055dd709dd9172",
         "scriptPayout": "76a914bdf33ea7da15da7936e665972c9da5e555fbbcc188ac",
+        "payouts": [],
         "inputsHash": "139d927504691a1b113e97d6607634119e0431fac4c4fa9bbb3b8751784f46d2",
         "vchSig": "203a06d428c44e760fe1ddc1568577bc771d3e4582ea8961ca8e16277dbee5a4ad66e7a115beeea4968a006fedbe7382c4b416cd1154cfcc177f450069469d57f2"
       }
@@ -276,6 +295,7 @@
         "pubKeyOperator": "8fbcf7cd32d2cc6245250536ea38cb5495025a2d86a38c9193c42c4b62101a3319b72437a693c3b135b98e0ac01e38bc",
         "keyIdVoting": "2f19e09be9a1cdfb94289a9f704cd567d491c95f",
         "scriptPayout": "76a91443a85739fe1bcb83f01addf432f340602c059c5f88ac",
+        "payouts": [],
         "inputsHash": "b930af762fa41dd45a11e0bdff36f3e2da1d0c5f994dcb945c0b14b870859e74",
         "vchSig": "1fa040d812d6c71d5028070dfcbe4670f102a9cee4ec0506fb76c53a1afc32c318259daf122c87332706b330d4f4c5e27ba415a9b1a2ec446949b113f44e427def"
       }

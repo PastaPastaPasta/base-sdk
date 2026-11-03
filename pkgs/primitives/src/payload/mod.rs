@@ -24,7 +24,7 @@ pub(crate) mod sighash;
 pub use self::assetlock::{AssetLock, AssetLockInvalid};
 pub use self::assetunlock::{AssetUnlock, AssetUnlockInvalid};
 pub use self::bls::{commitment_bls_scheme, protx_bls_scheme};
-pub use self::cbtx::{CbTxInvalid, CoinbaseCommitment};
+pub use self::cbtx::{CbCommitmentVersion, CbTxInvalid, CoinbaseCommitment};
 pub use self::mnhftx::{MnHardFork, MnHardForkInvalid, VERSIONBITS_NUM_BITS};
 pub use self::quorum::{Commitment, CommitmentInvalid, FinalCommitment, QuorumVvecHash};
 pub use self::sighash::llmq_sign_hash;

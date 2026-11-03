@@ -38,131 +38,189 @@ int FN(abi_version)(void);
 const char* FN(core_version)(void);
 size_t FN(last_error)(char* out, size_t cap);
 int FN(bls_exec)(const uint8_t* script, size_t script_len, uint8_t* out, size_t* out_len);
-int FN(bls_decode)(int kind, int mode, int legacy, const uint8_t* in, size_t in_len, int* valid, uint8_t* reser,
-                   size_t* reser_len);
+int FN(bls_decode)(
+  int kind,
+  int mode,
+  int legacy,
+  const uint8_t* in,
+  size_t in_len,
+  int* valid,
+  uint8_t* reser,
+  size_t* reser_len
+);
 
 #define ORACLE_E_BUFFER (-3)
 
 static void die(const char* what)
 {
-    fprintf(stderr, "probe: %s\n", what);
-    exit(2);
+  const int written = fprintf(stderr, "probe: %s\n", what);
+  exit(written < 0 ? 3 : 2);
 }
 
-static int nibble(char c)
+/* Writes to stdout, whose failure ends the probe: `printf`, which returns a
+ * negative count on failure, and the calls that return EOF. */
+#define PUT(call)          \
+  do {                     \
+    if ((call) < 0) {      \
+      die("write failed"); \
+    }                      \
+  } while (0)
+#define PUT_EOF(call)      \
+  do {                     \
+    if ((call) == EOF) {   \
+      die("write failed"); \
+    }                      \
+  } while (0)
+
+static int nibble(unsigned char c)
 {
-    if (c >= '0' && c <= '9') return c - '0';
-    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-    die("bad hex digit");
-    return 0;
+  if (c >= '0' && c <= '9') {
+    return c - '0';
+  }
+  if (c >= 'a' && c <= 'f') {
+    return c - 'a' + 10;
+  }
+  if (c >= 'A' && c <= 'F') {
+    return c - 'A' + 10;
+  }
+  die("bad hex digit");
+  return 0;
 }
 
 /* Decode a hex token ("-" is empty) into a fresh buffer. */
 static uint8_t* unhex(const char* tok, size_t* len)
 {
-    if (tok == NULL) die("missing argument");
-    if (strcmp(tok, "-") == 0) tok = "";
-    size_t n = strlen(tok);
-    if (n % 2 != 0) die("odd hex length");
-    uint8_t* out = malloc(n / 2 + 1);
-    if (out == NULL) die("out of memory");
-    for (size_t i = 0; i < n / 2; i++) out[i] = (uint8_t)(nibble(tok[2 * i]) << 4 | nibble(tok[2 * i + 1]));
-    *len = n / 2;
-    return out;
+  if (tok == NULL) {
+    die("missing argument");
+  }
+  const int empty = strcmp(tok, "-") == 0;
+  const size_t n = empty ? 0 : strlen(tok);
+  if (n % 2 != 0) {
+    die("odd hex length");
+  }
+  uint8_t* out = malloc(n == 0 ? 1 : n);
+  if (out == NULL) {
+    die("out of memory");
+  }
+  const char* digit = tok;
+  for (size_t i = 0; i < n / 2; i++) {
+    const int hi = nibble((unsigned char)digit[0]);
+    const int lo = nibble((unsigned char)digit[1]);
+    if (hi < 0 || hi > 15 || lo < 0 || lo > 15) {
+      die("bad hex digit");
+    }
+    out[i] = (uint8_t)(hi * 16 + lo);
+    digit += 2;
+  }
+  *len = n / 2;
+  return out;
 }
 
 /* Decode a hex token that must hold exactly len bytes. */
 static void put_hex(const uint8_t* bytes, size_t len)
 {
-    if (len == 0) {
-        fputs("-", stdout);
-        return;
-    }
-    for (size_t i = 0; i < len; i++) printf("%02x", bytes[i]);
+  if (len == 0) {
+    PUT_EOF(fputs("-", stdout));
+    return;
+  }
+  for (size_t i = 0; i < len; i++) {
+    PUT(printf("%02x", bytes[i]));
+  }
 }
 
 static void put_error(int ret)
 {
-    if (ret >= 0) return;
-    char msg[512];
-    FN(last_error)(msg, sizeof msg);
-    msg[sizeof msg - 1] = '\0';
-    for (char* p = msg; *p != '\0'; p++) {
-        if (*p == '\t' || *p == '\n') *p = ' ';
+  if (ret >= 0) {
+    return;
+  }
+  char msg[512];
+  FN(last_error)(msg, sizeof msg);
+  msg[sizeof msg - 1] = '\0';
+  const size_t msg_len = strlen(msg);
+  for (size_t i = 0; i < msg_len; i++) {
+    const unsigned char c = (unsigned char)msg[i];
+    if (c == '\t' || c == '\n') {
+      msg[i] = ' ';
     }
-    printf("\t%s", msg);
+  }
+  PUT(printf("\t%s", msg));
 }
 
 static int to_int(const char* tok)
 {
-    if (tok == NULL) die("missing argument");
-    return atoi(tok);
+  if (tok == NULL) {
+    die("missing argument");
+  }
+  return atoi(tok);
 }
 
 /* oracle_bls_exec, growing the output buffer when Core asks for more. */
 static void request_exec(char* save)
 {
-    size_t in_len;
-    uint8_t* in = unhex(strtok_r(NULL, " ", &save), &in_len);
-    size_t cap = 4096;
-    uint8_t* out = NULL;
-    size_t out_len;
-    int ret;
-    do {
-        free(out);
-        out = malloc(cap);
-        if (out == NULL) die("out of memory");
-        out_len = cap;
-        ret = FN(bls_exec)(in, in_len, out, &out_len);
-        cap = out_len;
-    } while (ret == ORACLE_E_BUFFER);
-    printf("%d ", ret);
-    put_hex(out, ret >= 0 ? out_len : 0);
-    put_error(ret);
-    free(in);
+  size_t in_len;
+  uint8_t* in = unhex(strtok_r(NULL, " ", &save), &in_len);
+  size_t cap = 4096;
+  uint8_t* out = NULL;
+  size_t out_len;
+  int ret;
+  do {
     free(out);
+    out = malloc(cap);
+    if (out == NULL) {
+      die("out of memory");
+    }
+    out_len = cap;
+    ret = FN(bls_exec)(in, in_len, out, &out_len);
+    cap = out_len;
+  } while (ret == ORACLE_E_BUFFER);
+  PUT(printf("%d ", ret));
+  put_hex(out, ret >= 0 ? out_len : 0);
+  put_error(ret);
+  free(in);
+  free(out);
 }
 
 static void request_decode(char* save)
 {
-    const int kind = to_int(strtok_r(NULL, " ", &save));
-    const int mode = to_int(strtok_r(NULL, " ", &save));
-    const int legacy = to_int(strtok_r(NULL, " ", &save));
-    size_t in_len;
-    uint8_t* in = unhex(strtok_r(NULL, " ", &save), &in_len);
-    uint8_t out[96];
-    size_t out_len = sizeof out;
-    int valid = 0;
-    const int ret = FN(bls_decode)(kind, mode, legacy, in, in_len, &valid, out, &out_len);
-    printf("%d %d ", ret, valid);
-    put_hex(out, ret == 0 ? out_len : 0);
-    put_error(ret);
-    free(in);
+  const int kind = to_int(strtok_r(NULL, " ", &save));
+  const int mode = to_int(strtok_r(NULL, " ", &save));
+  const int legacy = to_int(strtok_r(NULL, " ", &save));
+  size_t in_len;
+  uint8_t* in = unhex(strtok_r(NULL, " ", &save), &in_len);
+  uint8_t out[96];
+  size_t out_len = sizeof out;
+  int valid = 0;
+  const int ret = FN(bls_decode)(kind, mode, legacy, in, in_len, &valid, out, &out_len);
+  PUT(printf("%d %d ", ret, valid));
+  put_hex(out, ret == 0 ? out_len : 0);
+  put_error(ret);
+  free(in);
 }
 
 int main(void)
 {
-    char* line = NULL;
-    size_t cap = 0;
-    ssize_t n;
-    while ((n = getline(&line, &cap, stdin)) > 0) {
-        if (line[n - 1] == '\n') line[n - 1] = '\0';
-        char* save = NULL;
-        const char* cmd = strtok_r(line, " ", &save);
-        if (cmd == NULL) continue;
-        if (strcmp(cmd, "I") == 0) {
-            printf("%d %s", FN(abi_version)(), FN(core_version)());
-        } else if (strcmp(cmd, "X") == 0) {
-            request_exec(save);
-        } else if (strcmp(cmd, "D") == 0) {
-            request_decode(save);
-        } else {
-            die("unknown request");
-        }
-        putchar('\n');
-        fflush(stdout);
+  char* line = NULL;
+  size_t cap = 0;
+  ssize_t n;
+  while ((n = getline(&line, &cap, stdin)) > 0) {
+    line[strcspn(line, "\n")] = '\0';
+    char* save = NULL;
+    const char* cmd = strtok_r(line, " ", &save);
+    if (cmd == NULL) {
+      continue;
     }
-    free(line);
-    return 0;
+    if (strcmp(cmd, "I") == 0) {
+      PUT(printf("%d %s", FN(abi_version)(), FN(core_version)()));
+    } else if (strcmp(cmd, "X") == 0) {
+      request_exec(save);
+    } else if (strcmp(cmd, "D") == 0) {
+      request_decode(save);
+    } else {
+      die("unknown request");
+    }
+    PUT_EOF(putchar('\n'));
+    PUT_EOF(fflush(stdout));
+  }
+  free(line);
+  return 0;
 }

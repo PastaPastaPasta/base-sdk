@@ -141,10 +141,6 @@ pub static PARAMS: ChainParams = ChainParams {
   default_platform_http_port: 443,
   rpc_port: 9998,
   onion_service_target_port: 9996,
-  prune_after_height: 100_000,
-  min_blocks_to_keep: 2304,
-  assumed_blockchain_size_gb: 62,
-  assumed_chain_state_size_gb: 1,
   dns_seeds: &["dnsseed.dash.org."],
   addr_params: AddrParams {
     pubkey_addr: 76,                      // addresses start with 'X'
@@ -157,8 +153,6 @@ pub static PARAMS: ChainParams = ChainParams {
   },
   network_id: "main",
   is_test_chain: false,
-  default_consistency_checks: false,
-  is_mockable_chain: false,
   pool_min_participants: 3,
   pool_max_participants: 20,
   spork_address: "Xgtyuk76vhuFW2iT7UAiHgNdWXCf3J34wh",

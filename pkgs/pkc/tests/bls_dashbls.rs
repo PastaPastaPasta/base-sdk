@@ -286,7 +286,7 @@ fn check_valid_legacy_g2() {
 
 /// The BLS files directly under `corpus/` with a `PROVENANCE.md` section:
 /// every one but `bls_wrapper.json5`, whose header records its origin.
-const PROVENANCE_FILES: [&str; 12] = [
+const PROVENANCE_FILES: [&str; 13] = [
   "bls_aggregate",
   "bls_dashbls",
   "bls_dh",
@@ -295,6 +295,7 @@ const PROVENANCE_FILES: [&str; 12] = [
   "bls_keygen",
   "bls_llmq_100",
   "bls_pairing",
+  "bls_read",
   "bls_secure_aggregate",
   "bls_serialize",
   "bls_sign",

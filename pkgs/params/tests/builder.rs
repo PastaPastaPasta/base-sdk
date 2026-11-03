@@ -90,7 +90,8 @@ fn typed_setters_equal_their_arguments(#[values(Release::V23_1, Release::V24_0)]
 }
 
 /// Every override reaches both the setup's views and the [`ChainParams`]
-/// copy, except the LLMQ parameters, which only the setup holds.
+/// copy, except the LLMQ parameters and the prune height, which only the
+/// setup holds.
 #[rstest]
 fn overrides_reach_the_static_copy(#[values(Release::V23_1, Release::V24_0)] release: Release) {
   let p = build(
@@ -104,7 +105,7 @@ fn overrides_reach_the_static_copy(#[values(Release::V23_1, Release::V24_0)] rel
   assert_eq!(chain(&p).consensus.deployments.v24, p.consensus.deployments.v24);
   assert_eq!(p.consensus.deployments.v24.min_activation_height, h(10));
   assert_eq!(chain(&p).consensus.dip0003_height, h(105));
-  assert_eq!(chain(&p).prune_after_height, 100);
+  assert_eq!(p.prune_after_height, 100);
   let q = p.consensus.llmq(LlmqType::LlmqTest).unwrap();
   assert_eq!(
     (q.size, q.min_size, q.threshold, q.dkg_bad_votes_threshold),

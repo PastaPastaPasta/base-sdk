@@ -72,6 +72,19 @@ pub struct ChainSetup {
   pub fulfilled_request_expire_time: i32,
   /// Values Core hard-codes outside its chain parameters.
   pub pins: HardCodedPins,
+  /// Height after which pruning may discard blocks.
+  pub prune_after_height: u64,
+  /// Pruning keeps every block file holding a block within this many blocks
+  /// of the tip.
+  pub min_blocks_to_keep: u32,
+  /// Estimated full blockchain size in gigabytes.
+  pub assumed_blockchain_size_gb: u64,
+  /// Estimated chain-state size in gigabytes.
+  pub assumed_chain_state_size_gb: u64,
+  /// Whether internal consistency checks run by default.
+  pub default_consistency_checks: bool,
+  /// Whether the chain allows mock time and state.
+  pub is_mockable_chain: bool,
 }
 
 impl ChainSetup {
@@ -82,6 +95,7 @@ impl ChainSetup {
     let deployments = ReleaseDeployments::new(network, release, &chain.consensus.deployments);
     deployments.write_to(&mut chain.consensus.deployments);
     let extras = tables::extras(network);
+    let policy = tables::policy(network, release);
     Self {
       network,
       release,
@@ -102,6 +116,12 @@ impl ChainSetup {
       llmq_connection_retry_timeout: extras.llmq_connection_retry_timeout,
       fulfilled_request_expire_time: extras.fulfilled_request_expire_time,
       pins: extras.pins,
+      prune_after_height: policy.prune_after_height,
+      min_blocks_to_keep: policy.min_blocks_to_keep,
+      assumed_blockchain_size_gb: policy.assumed_blockchain_size_gb,
+      assumed_chain_state_size_gb: policy.assumed_chain_state_size_gb,
+      default_consistency_checks: policy.default_consistency_checks,
+      is_mockable_chain: policy.is_mockable_chain,
       chain,
     }
   }

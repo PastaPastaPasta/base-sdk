@@ -22,8 +22,8 @@ enum_map! {
     LegacyBls = 1 => "legacy_bls",
     /// Basic BLS operator keys.
     BasicBls = 2 => "basic_bls",
-    /// Extended network addresses.
-    ExtAddr = 3 => "ext_addr",
+    /// Extended network info, owner payouts and collateral shares.
+    CoreV24 = 3 => "core_v24",
   }
 }
 

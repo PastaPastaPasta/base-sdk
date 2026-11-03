@@ -46,15 +46,6 @@ pub struct ChainParams {
   pub rpc_port: u16,
   /// Tor onion service target port.
   pub onion_service_target_port: u16,
-  /// Height after which pruning may discard blocks.
-  pub prune_after_height: u64,
-  /// Pruning keeps every block file holding a block within this many blocks
-  /// of the tip.
-  pub min_blocks_to_keep: u32,
-  /// Estimated full blockchain size in gigabytes.
-  pub assumed_blockchain_size_gb: u64,
-  /// Estimated chain-state size in gigabytes.
-  pub assumed_chain_state_size_gb: u64,
   /// DNS seed hostnames for peer discovery.
   pub dns_seeds: &'static [&'static str],
   /// Address encoding parameters.
@@ -63,10 +54,6 @@ pub struct ChainParams {
   pub network_id: &'static str,
   /// Whether this is a test network.
   pub is_test_chain: bool,
-  /// Whether internal consistency checks run by default.
-  pub default_consistency_checks: bool,
-  /// Whether the chain allows mock time and state.
-  pub is_mockable_chain: bool,
   /// Minimum participants for a CoinJoin session.
   pub pool_min_participants: i32,
   /// Maximum participants for a CoinJoin session.

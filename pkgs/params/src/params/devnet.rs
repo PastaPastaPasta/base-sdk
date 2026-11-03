@@ -141,10 +141,6 @@ pub static PARAMS: ChainParams = ChainParams {
   default_platform_http_port: 22101,
   rpc_port: 19798,
   onion_service_target_port: 19796,
-  prune_after_height: 3000,
-  min_blocks_to_keep: 2304,
-  assumed_blockchain_size_gb: 0,
-  assumed_chain_state_size_gb: 0,
   dns_seeds: &[],
   addr_params: AddrParams {
     pubkey_addr: 140,                     // addresses start with 'y'
@@ -157,8 +153,6 @@ pub static PARAMS: ChainParams = ChainParams {
   },
   network_id: "devnet",
   is_test_chain: true,
-  default_consistency_checks: false,
-  is_mockable_chain: false,
   pool_min_participants: 2,
   pool_max_participants: 20,
   spork_address: "yjPtiKh2uwk3bDutTEA2q9mCtXyiZRWn55",

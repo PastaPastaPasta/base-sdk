@@ -15,8 +15,8 @@
 use dash_dev::{Corpus, Value};
 use dash_pkc::bls::{BlsCtx, BlsEager, BlsLazyPk, BlsSchemeKind, BlsWire};
 use dash_primitives::{
-  CoinbaseCommitment, Commitment, MnType, NIEntry, NITrait, NetInfo, PayloadDecode, ProTxVersion, SpecialPayload,
-  Transaction,
+  CoinbaseCommitment, Commitment, MnType, NIEntry, NIError, NITrait, NetInfo, PayloadDecode, PayloadInvalid,
+  ProTxInvalid, ProTxVersion, SpecialPayload, Transaction,
 };
 use dash_types::codec::BaseCodec;
 use dash_types::{Checkable, Numeric};
@@ -378,8 +378,8 @@ fn compare(label: &str, payload: &SpecialPayload, core: &Value, bls: BlsCtx) {
 }
 
 fn compare_cbtx(f: &mut Fields<'_>, p: &CoinbaseCommitment, bls: BlsCtx) {
-  f.eq("version", p.version());
-  f.eq("height", p.height());
+  f.eq("version", p.version().to_base());
+  f.eq("height", p.height().to_u32());
   f.eq("merkleRootMNList", p.merkle_root_mn_list().to_string());
   if let Some(root) = p.merkle_root_quorums() {
     f.eq("merkleRootQuorums", root.to_string());
@@ -450,18 +450,31 @@ fn crafted_payloads_match_core() {
 fn v24_payloads_match_core() {
   let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "v24").into_value();
   let entries = corpus["v24"].as_object().unwrap();
+  let special_use = PayloadInvalid::ProTx(ProTxInvalid::NetInfoInvalid {
+    error: NIError::SpecialUse,
+  });
   let mut types = BTreeSet::new();
+  let mut regtest_special_use = 0;
   for (txid, entry) in entries {
     let tx = decode_tx(entry["raw"].as_str().unwrap());
     let decoded = accepted(&tx).unwrap_or_else(|| panic!("{txid}: payload"));
     let core = entry["core"].as_object().unwrap().values().next().unwrap();
     compare(txid, decoded.payload(), core, BlsCtx::BASIC);
-    // Core mined these, so base-sdk's partial checks must pass them.
-    assert_eq!(decoded.payload().check(), None, "{txid}: check");
+    // Core mined these, so base-sdk's partial checks must pass them, apart
+    // from refusing the services on local addresses the regtest nodes use:
+    // Core requires routable addresses on every network but regtest.
+    let check = decoded.payload().check();
+    let regtest = entry["source"].as_str().unwrap().starts_with("regtest");
+    if regtest && check.as_ref() == Some(&special_use) {
+      regtest_special_use += 1;
+    } else {
+      assert!(check.is_none(), "{txid}: check {check:?}");
+    }
     types.insert(tx.tx_type().to_base());
     assert_eq!(&reencode(decoded.payload()), tx.extra_payload(), "{txid}: re-encode");
   }
   assert_eq!(types, (1..=12).filter(|t| *t != 4 && *t != 7).collect());
+  assert_eq!(regtest_special_use, 4, "regtest entries refused as SpecialUse");
 }
 
 fn reencode(payload: &SpecialPayload) -> Vec<u8> {

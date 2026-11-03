@@ -235,3 +235,15 @@ the consensus oracle (its README, "Checking the upstream files", gives the class
 - Checker: `python3 contrib/vectors/bls_oracle/check_upstream.py --probe <probe> --corpus-dir pkgs/pkc/corpus`.
 - Test: `src/bls/sig_threshold.rs`, `recovery_matches_vectors`.
 - `bls_threshold.json5` sha256 `6073351b70ecfb01c4711a0749984182d02901a3fb20603a0b85c83636ec9995`
+
+## bls_read.json5
+
+- Content: 79 public-key and 130 signature inputs, up to 3 per input class, each with how the reference
+  implementation reads it under the legacy and the basic scheme (`null`, `valid` or `invalid`), and for a legacy
+  `valid` read whether the x it encodes has a point on the curve.
+- Source: upstream `03eefd72` (2026-11-02), written by `contrib/gen_read.cpp` (seed `0xb511a7`) against the BLS
+  library of the release the `contrib/dash` submodule pins, Dash Core v24.0.0-rc.5. Regenerate with
+  `contrib/regen.py`.
+- Test: `src/bls/public_ops.rs`, `pk_reads_match_reference`, and `src/bls/sig_basic.rs`, `sig_reads_match_reference`,
+  through `read_vectors` in `src/bls/tests.rs`.
+- `bls_read.json5` sha256 `39ebf58560050146ae5e81b32a66d97d4b7b24c3dacdbbc9b046ac7262ddfd99`

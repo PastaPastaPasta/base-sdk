@@ -7,33 +7,50 @@
 //! CoinbaseCommitment coinbase commitment payload (type 5).
 
 use super::bls;
+use crate::codec::impl_payload;
 use crate::{hash_impl, MerkleRoot};
 
+use bitcoin_units::BlockHeight;
 use dash_pkc::bls::BlsGlobalSig;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{impl_new, impl_type, Checkable, CompactSize, Numeric};
+use dash_types::{enum_map, impl_new, impl_num, Checkable, CompactSize, Numeric};
 use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
+enum_map! {
+  /// Coinbase commitment payload version. Each version adds fields to the one
+  /// before it.
+  #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
+  pub enum CbCommitmentVersion, u16, Unknown {
+    /// Merkle root of the masternode list.
+    MerkleRootMnList = 1 => "merkle_root_mn_list",
+    /// Merkle root of quorum commitments.
+    MerkleRootQuorums = 2 => "merkle_root_quorums",
+    /// ChainLock proof and credit pool balance.
+    ClSigAndBalance = 3 => "clsig_and_balance",
+    /// Merkle root of asset unlocks.
+    MerkleRootAssetUnlocks = 4 => "merkle_root_asset_unlocks",
+  }
+}
+
+impl_num!(CbCommitmentVersion, u16);
+
+hash_impl!(CbCommitmentVersion);
+
 impl_new! {
 /// CoinbaseCommitment -- coinbase commitment payload.
-///
-/// - v1: base fields (version, height, merkle_root_mn_list)
-/// - v2: adds merkle_root_quorums
-/// - v3: adds ChainLock proof and credit pool balance
-/// - v4: adds the asset-unlock merkle root (v24)
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct CoinbaseCommitment {
-  /// Payload version (1 to 4).
+  /// Payload version.
   #[getset(get_copy = "pub")]
-  version: u16,
-  /// Block height (Core's `int32_t`).
+  version: CbCommitmentVersion,
+  /// Block height.
   #[getset(get_copy = "pub")]
-  height: i32,
+  height: BlockHeight,
   /// Merkle root of the masternode list.
   #[getset(get_copy = "pub")]
   merkle_root_mn_list: MerkleRoot,
@@ -52,64 +69,70 @@ pub struct CoinbaseCommitment {
   /// Credit pool balance in duffs (v3+).
   #[getset(get_copy = "pub")]
   credit_pool_balance: Option<i64>,
-  /// Merkle root over the instance hashes of the block's v2+ asset unlocks,
-  /// in block order (v4+).
-  #[cfg_attr(feature = "serde", serde(default, skip_serializing_if = "Option::is_none"))]
+  /// Merkle root of the instance hashes of the block's asset unlocks with a
+  /// stable txid (v4+).
   #[getset(get_copy = "pub")]
   merkle_root_asset_unlocks: Option<MerkleRoot>,
 }
 }
 
-impl_type!(CoinbaseCommitment);
+impl_payload!(CoinbaseCommitment);
 
 impl BaseCodec for CoinbaseCommitment {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    let version = u16::decode(data)?;
-    let height = i32::decode(data)?;
+    let version = CbCommitmentVersion::decode(data)?;
+    let height = BlockHeight::from_u32(u32::decode(data)?);
     let merkle_root_mn_list = MerkleRoot::decode(data)?;
-    let mut cbtx = Self {
+    let merkle_root_quorums = if version.to_base() >= 2 {
+      Some(MerkleRoot::decode(data)?)
+    } else {
+      None
+    };
+    let (best_cl_height_diff, best_cl_signature, credit_pool_balance) = if version.to_base() >= 3 {
+      (
+        Some(CompactSize::decode(data)?.to_base()),
+        Some(bls::read_global(data)?),
+        Some(i64::decode(data)?),
+      )
+    } else {
+      (None, None, None)
+    };
+    let merkle_root_asset_unlocks = if version.to_base() >= 4 {
+      Some(MerkleRoot::decode(data)?)
+    } else {
+      None
+    };
+
+    Ok(Self {
       version,
       height,
       merkle_root_mn_list,
-      merkle_root_quorums: None,
-      best_cl_height_diff: None,
-      best_cl_signature: None,
-      credit_pool_balance: None,
-      merkle_root_asset_unlocks: None,
-    };
-    if version < 2 {
-      return Ok(cbtx);
-    }
-    cbtx.merkle_root_quorums = Some(MerkleRoot::decode(data)?);
-    if version < 3 {
-      return Ok(cbtx);
-    }
-    cbtx.best_cl_height_diff = Some(CompactSize::decode(data)?.to_base());
-    cbtx.best_cl_signature = Some(bls::read_global(data)?);
-    cbtx.credit_pool_balance = Some(i64::decode(data)?);
-    if version >= 4 {
-      cbtx.merkle_root_asset_unlocks = Some(MerkleRoot::decode(data)?);
-    }
-    Ok(cbtx)
+      merkle_root_quorums,
+      best_cl_height_diff,
+      best_cl_signature,
+      credit_pool_balance,
+      merkle_root_asset_unlocks,
+    })
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
     self.version.encode(buf);
-    self.height.encode(buf);
+    self.height.to_u32().encode(buf);
     self.merkle_root_mn_list.encode(buf);
-    if self.version < 2 {
-      return;
+    if let Some(root) = self.merkle_root_quorums {
+      root.encode(buf);
     }
-    self.merkle_root_quorums.unwrap_or_default().encode(buf);
-    if self.version < 3 {
-      return;
+    if let (Some(diff), Some(sig), Some(bal)) = (
+      self.best_cl_height_diff,
+      &self.best_cl_signature,
+      self.credit_pool_balance,
+    ) {
+      CompactSize::from(diff).encode(buf);
+      sig.to_bytes().encode(buf);
+      bal.encode(buf);
     }
-    CompactSize::from(self.best_cl_height_diff.unwrap_or(0)).encode(buf);
-    let sig = self.best_cl_signature.as_ref().map(BlsGlobalSig::to_bytes);
-    sig.unwrap_or([0u8; dash_pkc::bls::BLS_SIG_LEN]).encode(buf);
-    self.credit_pool_balance.unwrap_or(0).encode(buf);
-    if self.version >= 4 {
-      self.merkle_root_asset_unlocks.unwrap_or_default().encode(buf);
+    if let Some(root) = self.merkle_root_asset_unlocks {
+      root.encode(buf);
     }
   }
 }
@@ -131,12 +154,15 @@ pub enum CbTxInvalid {
 impl Checkable for CoinbaseCommitment {
   type Error = CbTxInvalid;
 
+  /// Checks the rules that need no chain context. The version that the active
+  /// deployments require is left to the caller.
   fn check(&self) -> Option<Self::Error> {
-    if self.version == 0 || self.version > 4 {
-      return Some(CbTxInvalid::BadVersion { version: self.version });
+    let version = self.version.to_base();
+    if matches!(self.version, CbCommitmentVersion::Unknown(_)) {
+      return Some(CbTxInvalid::BadVersion { version });
     }
 
-    if self.version >= 2 {
+    if version >= 2 {
       if self.merkle_root_quorums.is_none() {
         return Some(CbTxInvalid::MissingField);
       }
@@ -144,7 +170,7 @@ impl Checkable for CoinbaseCommitment {
       return Some(CbTxInvalid::UnexpectedField);
     }
 
-    if self.version >= 3 {
+    if version >= 3 {
       if self.best_cl_height_diff.is_none() || self.best_cl_signature.is_none() || self.credit_pool_balance.is_none() {
         return Some(CbTxInvalid::MissingField);
       }
@@ -155,12 +181,12 @@ impl Checkable for CoinbaseCommitment {
       return Some(CbTxInvalid::UnexpectedField);
     }
 
-    if (self.version >= 4) != self.merkle_root_asset_unlocks.is_some() {
-      return Some(if self.version >= 4 {
-        CbTxInvalid::MissingField
-      } else {
-        CbTxInvalid::UnexpectedField
-      });
+    if version >= 4 {
+      if self.merkle_root_asset_unlocks.is_none() {
+        return Some(CbTxInvalid::MissingField);
+      }
+    } else if self.merkle_root_asset_unlocks.is_some() {
+      return Some(CbTxInvalid::UnexpectedField);
     }
 
     None
@@ -171,7 +197,12 @@ hash_impl!(CoinbaseCommitment);
 
 impl fmt::Display for CoinbaseCommitment {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "CoinbaseCommitment {{ v{}, height: {} }}", self.version, self.height)
+    write!(
+      f,
+      "CoinbaseCommitment {{ v{}, height: {} }}",
+      self.version.to_base(),
+      self.height
+    )
   }
 }
 
@@ -179,11 +210,12 @@ impl fmt::Display for CoinbaseCommitment {
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
+  use crate::prelude::*;
   use crate::Transaction;
 
-  use dash_dev::{assert_serde_rt, check_sptx, vec_from_hex, Corpus};
+  use dash_dev::{assert_json_rt, assert_serde_rt, check_sptx, check_sptx_raw, vec_from_hex, Corpus};
   use dash_types::MAX_SER_SIZE;
-  use rstest::rstest;
+  use rstest::{fixture, rstest};
 
   /// `COMPACTSIZE(bestCLHeightDiff)` is range-checked. With the mainnet CbTx
   /// ac9fc5d0... re-encoded at each value, decoderawtransaction on v23.1.8
@@ -213,5 +245,76 @@ mod tests {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "cbtx");
     let items = corpus.entries::<CoinbaseCommitment>("cbtx", check_sptx);
     assert_serde_rt("cbtx", &items);
+  }
+
+  /// Regtest transactions as txid and raw bytes, from functional tests of the
+  /// reference implementation at v24.0.0-rc.4.
+  /// `dash-cli -regtest decoderawtransaction <raw>` decodes each one.
+  const REGTEST: [(&str, &str); 1] = [
+    // feature_asset_locks.py line 1118
+    ("76faabf33cadbe42fbe6ac5b876babddd83b9e307c079edf148c2b8ea192dca8", "03000500010000000000000000000000000000000000000000000000000000000000000000ffffffff016affffffff030ef9c604000000001976a914d1e414e99c4cf3160d099aeb70438a3ca92dad1a88ac478b5f0500000000016ae25ff508000000001976a91456908bca5913585daa9bad834f6a20d4ee792e4488ac00000000cf0400c9030000932cbd03b309d2d8c018844e23f3fbffd6d43de89380abe080220714ba4790197dca3f6655eede191c16618307a5d0234aed1aaba580ac03e1cb26670541ca1400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000696046c679000000b6ef079a8505a849326d910f14586af59339c996f366c9d6848b9cee7e436146"),
+  ];
+
+  #[rstest]
+  #[case::asset_locks_1118(REGTEST[0])]
+  fn regtest_vectors(#[case] vector: (&str, &str)) {
+    let (txid, raw) = vector;
+    assert_json_rt(&check_sptx_raw::<CoinbaseCommitment>(&vec_from_hex(raw), txid));
+  }
+
+  /// The testnet payload at the v24 activation height.
+  #[fixture]
+  fn activation() -> CoinbaseCommitment {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "cbtx");
+    let mut entries = corpus.entries::<CoinbaseCommitment>("cbtx", |_, _, _| {});
+    entries
+      .remove("ab22dcb7082a94cbf8c11091dc3f4ac3aea5aee150177137791da2b33108bacc")
+      .unwrap()
+  }
+
+  /// `cbtx` encoded as `version` with the fields of that version and the
+  /// asset unlock root if `root`.
+  fn encode_as(cbtx: CoinbaseCommitment, version: u16, root: bool) -> Vec<u8> {
+    let mut buf = Vec::new();
+    CoinbaseCommitment {
+      version: CbCommitmentVersion::from_base(version),
+      merkle_root_quorums: cbtx.merkle_root_quorums.filter(|_| version >= 2),
+      best_cl_height_diff: cbtx.best_cl_height_diff.filter(|_| version >= 3),
+      best_cl_signature: cbtx.best_cl_signature.filter(|_| version >= 3),
+      credit_pool_balance: cbtx.credit_pool_balance.filter(|_| version >= 3),
+      merkle_root_asset_unlocks: cbtx.merkle_root_asset_unlocks.filter(|_| root),
+      ..cbtx
+    }
+    .encode(&mut buf);
+    buf
+  }
+
+  /// Each version reads its own fields, and the check refuses unknown ones.
+  #[rstest]
+  #[case::v0(0, Some(CbTxInvalid::BadVersion { version: 0 }))]
+  #[case::v1(1, None)]
+  #[case::v2(2, None)]
+  #[case::v3(3, None)]
+  #[case::v4(4, None)]
+  #[case::v5(5, Some(CbTxInvalid::BadVersion { version: 5 }))]
+  fn version_sets_fields(activation: CoinbaseCommitment, #[case] version: u16, #[case] expected: Option<CbTxInvalid>) {
+    let raw = encode_as(activation, version, version >= 4);
+    let mut cursor = &raw[..];
+    let cbtx = CoinbaseCommitment::decode(&mut cursor).unwrap();
+    assert!(cursor.is_empty());
+    assert_eq!(cbtx.check(), expected);
+  }
+
+  /// Only version 4 and later read the asset unlock root.
+  #[rstest]
+  #[case::v1_root(1, true)]
+  #[case::v2_root(2, true)]
+  #[case::v3_root(3, true)]
+  #[case::v4_no_root(4, false)]
+  #[case::v5_no_root(5, false)]
+  fn root_follows_version(activation: CoinbaseCommitment, #[case] version: u16, #[case] root: bool) {
+    let raw = encode_as(activation, version, root);
+    let mut cursor = &raw[..];
+    assert!(CoinbaseCommitment::decode(&mut cursor).is_err() || !cursor.is_empty());
   }
 }

@@ -21,7 +21,8 @@ static int say(const char* text, DWORD length)
 {
   HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
   DWORD written = 0;
-  return out != INVALID_HANDLE_VALUE && WriteFile(out, text, length, &written, NULL) && written == length;
+  return out != INVALID_HANDLE_VALUE && WriteFile(out, text, length, &written, NULL) &&
+    written == length;
 }
 #elif defined(__APPLE__)
 static int say(const char* text, size_t length)
@@ -38,7 +39,8 @@ static int say(const char* text, size_t length)
   }
   dispatch_queue_t queue = dispatch_get_global_queue(qos, 0);
   dispatch_semaphore_t done = dispatch_semaphore_create(0);
-  dispatch_data_t data = dispatch_data_create(text, length, queue, DISPATCH_DATA_DESTRUCTOR_DEFAULT);
+  dispatch_data_t data =
+    dispatch_data_create(text, length, queue, DISPATCH_DATA_DESTRUCTOR_DEFAULT);
   __block int failed = 1;
   dispatch_write(STDOUT_FILENO, data, queue, ^(dispatch_data_t rest, int error) {
     failed = rest != NULL || error != 0;
@@ -48,7 +50,9 @@ static int say(const char* text, size_t length)
   return !failed;
 }
 #elif defined(__linux__)
-_Static_assert(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0), "the UAPI headers predate Linux 5.10");
+_Static_assert(
+  LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0), "the UAPI headers predate Linux 5.10"
+);
 
 static int say(const char* text, size_t length)
 {

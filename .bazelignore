@@ -1,5 +1,6 @@
 .cache
 .venv
 docs/.site
+pkgs/pkc/contrib/dash
 public
 target

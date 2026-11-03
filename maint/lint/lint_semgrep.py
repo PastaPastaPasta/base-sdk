@@ -19,6 +19,8 @@ if TYPE_CHECKING:
   from pathlib import Path
 
 from common import (
+  CXX_HEADERS,
+  CXX_UNITS,
   RETCODE_ERR,
   RETCODE_PASS,
   RETCODE_SKIP,
@@ -33,6 +35,7 @@ CONFIG_ROOT = ("maint", "semgrep")
 
 # Pathspecs each language's rules are scanned against.
 LANGUAGES: dict[str, tuple[str, ...]] = {
+  "cxx": tuple(f"*{s}" for s in CXX_UNITS + CXX_HEADERS),
   "rust": SOURCE_DIRS,
 }
 

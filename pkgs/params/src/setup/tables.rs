@@ -5,7 +5,8 @@
 //
 
 //! Per-network values outside [`ChainParams`](crate::ChainParams), the same
-//! at v23.1.8 and v24.0.0-rc.5 but for the fixed seeds and assumeutxo.
+//! at v23.1.8 and v24.0.0-rc.5 but for the fixed seeds, assumeutxo and the
+//! runtime policy.
 
 use super::{AssumeutxoData, HardCodedPins};
 use crate::{Network, Release};
@@ -76,6 +77,72 @@ pub(super) const fn extras(network: Network) -> Extras {
       llmq_connection_retry_timeout: 1,
       fulfilled_request_expire_time: 5 * 60,
       pins: TEST_PINS,
+    },
+  }
+}
+
+/// Runtime-policy values Core keeps in `CChainParams`, which
+/// [`ChainParams`](crate::ChainParams) does not hold (DEC-1043).
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
+pub(super) struct Policy {
+  /// Height after which pruning may discard blocks.
+  pub(super) prune_after_height: u64,
+  /// Blocks near the tip whose block files pruning keeps.
+  pub(super) min_blocks_to_keep: u32,
+  /// Estimated full blockchain size in gigabytes.
+  pub(super) assumed_blockchain_size_gb: u64,
+  /// Estimated chain-state size in gigabytes.
+  pub(super) assumed_chain_state_size_gb: u64,
+  /// Whether internal consistency checks run by default.
+  pub(super) default_consistency_checks: bool,
+  /// Whether the chain allows mock time and state.
+  pub(super) is_mockable_chain: bool,
+}
+
+/// The runtime policy of `network` at `release`, at v24.0.0-rc.5
+/// (chainparams.cpp:245-248, :292-297, :451-454, :497-502, :635-638,
+/// :691-696, :880-903).
+///
+/// v24.0.0-rc.5 moved the assumed mainnet size, the testnet and devnet prune
+/// height and the blocks pruning keeps, which is 288 on every chain at
+/// v23.1.8 (chainparams.cpp:237, :430, :602; validation.h:92).
+pub(super) const fn policy(network: Network, release: Release) -> Policy {
+  let v23 = matches!(release, Release::V23_1);
+  let min_blocks_to_keep = if v23 { 288 } else { 2304 };
+  let test_prune = if v23 { 1000 } else { 3000 };
+  match network {
+    Network::Main => Policy {
+      prune_after_height: 100_000,
+      min_blocks_to_keep,
+      assumed_blockchain_size_gb: if v23 { 57 } else { 62 },
+      assumed_chain_state_size_gb: 1,
+      default_consistency_checks: false,
+      is_mockable_chain: false,
+    },
+    Network::Testnet3 => Policy {
+      prune_after_height: test_prune,
+      min_blocks_to_keep,
+      assumed_blockchain_size_gb: 10,
+      assumed_chain_state_size_gb: 1,
+      default_consistency_checks: false,
+      is_mockable_chain: false,
+    },
+    Network::Devnet => Policy {
+      prune_after_height: test_prune,
+      min_blocks_to_keep,
+      assumed_blockchain_size_gb: 0,
+      assumed_chain_state_size_gb: 0,
+      default_consistency_checks: false,
+      is_mockable_chain: false,
+    },
+    Network::Regtest => Policy {
+      prune_after_height: 1000,
+      min_blocks_to_keep: 288,
+      assumed_blockchain_size_gb: 0,
+      assumed_chain_state_size_gb: 0,
+      default_consistency_checks: true,
+      is_mockable_chain: true,
     },
   }
 }

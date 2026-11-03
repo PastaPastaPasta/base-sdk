@@ -7,6 +7,7 @@
 //! Provider transaction signatures.
 
 use super::ProTxVersion;
+use crate::hash_impl;
 use crate::prelude::*;
 use crate::sign::verify_bls;
 
@@ -18,11 +19,20 @@ use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 #[cfg(feature = "serde")]
 use dash_types::serialize::hex as serde_hex;
 use dash_types::type_id::TypeId;
-use dash_types::{Hashable, Numeric};
+use dash_types::{dlgt_codec, make_bytes, type_cvrt, Hashable, Numeric};
 #[cfg(feature = "serde")]
 use serde::de::Error as _;
 #[cfg(feature = "serde")]
 use serde::{Deserializer, Serializer};
+
+use core::convert::Infallible;
+
+make_bytes! {
+  /// Compact recoverable ECDSA signature, written without a length.
+  EcdsaRecSigArray, ECDSA_REC_SIG_LEN
+}
+
+hash_impl!(EcdsaRecSigArray);
 
 /// The compact signature `bytes` hold, `None` unless they are 65 bytes.
 fn compact_view(bytes: &[u8]) -> Option<&[u8; ECDSA_REC_SIG_LEN]> {
@@ -35,25 +45,22 @@ pub(crate) mod compact_hex {
   use super::*;
 
   /// The signature bytes, empty when unsigned.
-  fn compact_image(sig: Option<&[u8; ECDSA_REC_SIG_LEN]>) -> Vec<u8> {
-    sig.map(|s| s.to_vec()).unwrap_or_default()
+  fn compact_image(sig: Option<&impl AsRef<[u8]>>) -> Vec<u8> {
+    sig.map(|s| s.as_ref().to_vec()).unwrap_or_default()
   }
 
-  pub(crate) fn serialize<S: Serializer>(
-    sig: &Option<[u8; ECDSA_REC_SIG_LEN]>,
-    serializer: S,
-  ) -> Result<S::Ok, S::Error> {
+  pub(crate) fn serialize<S: Serializer, T: AsRef<[u8]>>(sig: &Option<T>, serializer: S) -> Result<S::Ok, S::Error> {
     serde_hex::serialize(&compact_image(sig.as_ref()), serializer)
   }
 
-  pub(crate) fn deserialize<'de, D: Deserializer<'de>>(
+  pub(crate) fn deserialize<'de, D: Deserializer<'de>, T: From<[u8; ECDSA_REC_SIG_LEN]>>(
     deserializer: D,
-  ) -> Result<Option<[u8; ECDSA_REC_SIG_LEN]>, D::Error> {
+  ) -> Result<Option<T>, D::Error> {
     let bytes: Vec<u8> = serde_hex::deserialize(deserializer)?;
     match bytes.len() {
       0 => Ok(None),
       _ => <[u8; ECDSA_REC_SIG_LEN]>::try_from(bytes.as_slice())
-        .map(Some)
+        .map(|sig| Some(T::from(sig)))
         .map_err(|_| D::Error::custom("compact signature is not 0 or 65 bytes")),
     }
   }
@@ -207,6 +214,49 @@ impl Default for OperatorSig {
   }
 }
 
+/// Declares a compact signature that names what it signs and delegates its
+/// codec to [`EcdsaRecSigArray`].
+macro_rules! rec_sig {
+  ($(#[$attr:meta])* $name:ident) => {
+    $(#[$attr])*
+    #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, TypeId)]
+    #[cfg_attr(
+      feature = "serde",
+      derive(::serde::Serialize, ::serde::Deserialize),
+      serde(transparent)
+    )]
+    pub struct $name(EcdsaRecSigArray);
+
+    dlgt_codec!($name => EcdsaRecSigArray, Hash256, Infallible, ECDSA_REC_SIG_LEN);
+
+    type_cvrt!(From<EcdsaRecSigArray> for $name, |sig| Self(*sig));
+
+    type_cvrt!(From<$name> for EcdsaRecSigArray, |sig| sig.0);
+
+    impl $name {
+      /// Borrows the signature bytes.
+      pub fn as_bytes(&self) -> &[u8; ECDSA_REC_SIG_LEN] {
+        self.0.as_bytes()
+      }
+    }
+  };
+}
+
+rec_sig! {
+  /// Consent of a collateral share owner to a shared registration.
+  JoinSig
+}
+
+rec_sig! {
+  /// Signature of a share owner dissolving a shared masternode.
+  DissolveSig
+}
+
+rec_sig! {
+  /// Signature of a share owner replacing the keys of a shared masternode.
+  SharedRegistrarSig
+}
+
 #[cfg(test)]
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
@@ -259,7 +309,7 @@ mod tests {
   #[rstest]
   #[case::legacy_bls(ProTxVersion::LegacyBls, true)]
   #[case::basic_bls(ProTxVersion::BasicBls, false)]
-  #[case::ext_addr(ProTxVersion::ExtAddr, false)]
+  #[case::core_v24(ProTxVersion::CoreV24, false)]
   fn operator_scheme_follows_the_version(#[case] version: ProTxVersion, #[case] legacy: bool) {
     let (legacy_key, legacy_sig) = bls_sign::<BlsScChia>(1, &[7; 32]);
     let (basic_key, basic_sig) = bls_sign::<BlsScIetf>(1, &[7; 32]);

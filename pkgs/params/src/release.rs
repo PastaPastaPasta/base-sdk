@@ -64,17 +64,14 @@ impl Release {
   /// Writes the release's values into `chain`, the table of `network`.
   ///
   /// v24.0.0-rc.5 moved the minimum chain work, the assumed-valid block, the
-  /// last checkpoint and the transaction statistics of mainnet and testnet,
-  /// the assumed mainnet size, the testnet and devnet prune height and the
-  /// blocks pruning keeps. v23.1.8 has the earlier values
-  /// (chainparams.cpp:221-222, :237, :336, :346-349, :420-421, :430, :509,
-  /// :519-522, :602; validation.h:92), and no `evo_shares`, whose slot here
-  /// never activates.
+  /// last checkpoint and the transaction statistics of mainnet and testnet.
+  /// v23.1.8 has the earlier values (chainparams.cpp:221-222, :336, :346-349,
+  /// :420-421, :509, :519-522), and no `evo_shares`, whose slot here never
+  /// activates.
   pub(crate) fn write_chain(self, network: Network, chain: &mut ChainParams) {
     if self == Self::V24_0 {
       return;
     }
-    chain.min_blocks_to_keep = 288;
     let consensus = &mut chain.consensus;
     let shares = &mut consensus.deployments.evo_shares;
     (shares.start_time, shares.timeout) = (Bip9Deployment::NEVER_ACTIVE, Bip9Deployment::NO_TIMEOUT);
@@ -89,7 +86,6 @@ impl Release {
           tx_count: 69_770_814,
           tx_rate: 0.1569520632249578,
         };
-        chain.assumed_blockchain_size_gb = 57;
         chain.checkpoints = before_rc5(chain.checkpoints);
       }
       Network::Testnet3 => {
@@ -102,11 +98,9 @@ impl Release {
           tx_count: 8_182_713,
           tx_rate: 0.1796716675173412,
         };
-        chain.prune_after_height = 1000;
         chain.checkpoints = before_rc5(chain.checkpoints);
       }
-      Network::Devnet => chain.prune_after_height = 1000,
-      Network::Regtest => {}
+      Network::Devnet | Network::Regtest => {}
     }
   }
 

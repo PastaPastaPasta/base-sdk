@@ -27,7 +27,7 @@ use core::fmt;
 ///
 /// - v1: LegacyBLS
 /// - v2: BasicBLS
-/// - v3: ExtAddr (same fields)
+/// - v3: CoreV24 (same fields)
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, Setters, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(into = "ProUpRevTxSerde", try_from = "ProUpRevTxSerde"))]
