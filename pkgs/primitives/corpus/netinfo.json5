@@ -25,6 +25,7 @@ BOOST_AUTO_TEST_CASE(netinfo_entry_reads)
     for (const std::string& hex : std::vector<std::string>{
              "01" "01" "04" "01020304" "270f",
              "01" "02" "10" "26064700470000000000000000001111" "270f",
+             "01" "02" "10" "fc000000000000000000000000000001" "270f",
              "01" "04" "20" "79bcc625184b05194975c28b66b66b0469f7f6556fb1ac3189a79b40dda32f1f" "270f",
              "01" "05" "20" "a2894dabaec08c0051a481a6dac88b64f98232ae42d4b6fd2fa81952dfe36a87" "0000",
              "01" "06" "10" "fc000000000000000000000000000001" "270f",
@@ -74,6 +75,8 @@ BOOST_AUTO_TEST_CASE(netinfo_entry_reads)
     { "raw": "01010401020304270f", "read": 9, "written": "01010401020304270f", "addr_port": "1.2.3.4:9999" },
     // An IPv6 service.
     { "raw": "01021026064700470000000000000000001111270f", "read": 21, "written": "01021026064700470000000000000000001111270f", "addr_port": "[2606:4700:4700::1111]:9999" },
+    // An IPv6 service in fc00::/8 keeps network 2.
+    { "raw": "010210fc000000000000000000000000000001270f", "read": 21, "written": "010210fc000000000000000000000000000001270f", "addr_port": "[fc00::1]:9999" },
     // A TORv3 service.
     { "raw": "01042079bcc625184b05194975c28b66b66b0469f7f6556fb1ac3189a79b40dda32f1f270f", "read": 37, "written": "01042079bcc625184b05194975c28b66b66b0469f7f6556fb1ac3189a79b40dda32f1f270f", "addr_port": "pg6mmjiyjmcrsslvykfwnntlaru7p5svn6y2ymmju6nubxndf4pscryd.onion:9999" },
     // An I2P service, on port 0.
@@ -173,7 +176,7 @@ BOOST_AUTO_TEST_CASE(netinfo_legacy_reads)
     { "raw": "26064700470000000000000000001111270f", "read": 18, "written": "26064700470000000000000000001111270f", "entries": ["[2606:4700:4700::1111]:9999"], "empty": false },
     // A valid address on port 0 is kept.
     { "raw": "00000000000000000000ffff010203040000", "read": 18, "written": "00000000000000000000ffff010203040000", "entries": ["1.2.3.4:0"], "empty": false },
-    // An IPv6 address in fc00::/8 is valid in this format.
+    // An IPv6 address in fc00::/8 is valid.
     { "raw": "fc000000000000000000000000000001270f", "read": 18, "written": "fc000000000000000000000000000001270f", "entries": ["[fc00::1]:9999"], "empty": false },
     // A service without its whole port is refused.
     { "raw": "00000000000000000000ffff0102030427", "read": null, "written": null, "entries": null, "empty": null },

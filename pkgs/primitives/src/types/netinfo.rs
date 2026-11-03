@@ -564,7 +564,12 @@ fn read_purpose(data: &mut &[u8], last: Option<NIPurpose>) -> Result<NIPurpose, 
 /// ignoring port.
 fn same_addr(a: &NIEntry, b: &NIEntry) -> bool {
   match (a, b) {
-    (NIEntry::Service(sa), NIEntry::Service(sb)) => sa.addr() == sb.addr(),
+    (NIEntry::Service(sa), NIEntry::Service(sb)) => match (sa.addr(), sb.addr()) {
+      // An IPv6 and a CJDNS address with the same bytes have the same text,
+      // so the reference implementation counts them as one address.
+      (AddrV2::Ipv6(x) | AddrV2::Cjdns(x), AddrV2::Ipv6(y) | AddrV2::Cjdns(y)) => x == y,
+      (x, y) => x == y,
+    },
     (NIEntry::Domain { name: na, .. }, NIEntry::Domain { name: nb, .. }) => na == nb,
     _ => false,
   }
@@ -873,6 +878,7 @@ mod tests {
   )]
   #[case::tor_port_valid(AddrV2::TorV3([1; 32]), 9998, None)]
   #[case::cjdns_valid(AddrV2::Cjdns(hex!("fc000000000000000000000000000001")), 9998, None)]
+  #[case::ipv6_fc00_valid(AddrV2::Ipv6(hex!("fc000000000000000000000000000001")), 9998, None)]
   fn check_entry_service(#[case] addr: AddrV2, #[case] port: u16, #[case] expected: Option<NIError>) {
     let entry = NIEntry::Service(ServiceV2::new(addr, port));
     assert_eq!(entry.check(), expected);
@@ -1131,6 +1137,14 @@ mod tests {
     vec![svc(AddrV2::Ipv4([1, 2, 3, 4]), 9999), svc(AddrV2::Ipv4([1, 2, 3, 4]), 8888)],
     Some(NIError::Duplicate),
   )]
+  #[case::duplicate_ipv6_cjdns_same_group(
+    NIPurpose::CoreP2p,
+    vec![
+      svc(AddrV2::Ipv6(hex!("fc000000000000000000000000000001")), 9999),
+      svc(AddrV2::Cjdns(hex!("fc000000000000000000000000000001")), 9998),
+    ],
+    Some(NIError::Duplicate),
+  )]
   fn check_v2_group(#[case] purpose: NIPurpose, #[case] group: Vec<NIEntry>, #[case] expected: Option<NIError>) {
     let v2 = NetInfoV2 {
       version: 1,
@@ -1183,6 +1197,13 @@ mod tests {
       (NIPurpose::PlatformP2p, vec![svc(AddrV2::Ipv4([1, 2, 3, 4]), 9999)]),
     ],
     Some(NIError::Duplicate),
+  )]
+  #[case::ipv6_cjdns_cross_group(
+    vec![
+      (NIPurpose::CoreP2p, vec![svc(AddrV2::Ipv6(hex!("fc000000000000000000000000000001")), 9999)]),
+      (NIPurpose::PlatformP2p, vec![svc(AddrV2::Cjdns(hex!("fc000000000000000000000000000001")), 9999)]),
+    ],
+    None,
   )]
   fn check_v2_structure(#[case] entries: Vec<(NIPurpose, Vec<NIEntry>)>, #[case] expected: Option<NIError>) {
     let v2 = NetInfoV2 {

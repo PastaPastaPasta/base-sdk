@@ -70,12 +70,8 @@ impl BaseCodec for AddrV2 {
       NetworkType::Ipv6 => {
         let mut buf = [0u8; 16];
         buf.copy_from_slice(raw);
-        // BIP155: fc00::/8 is CJDNS, not generic IPv6.
-        if buf[0] == 0xfc {
-          Ok(Self::Cjdns(buf))
-        } else {
-          Ok(Self::Ipv6(buf))
-        }
+        // Only network 6 is CJDNS, as in the reference implementation.
+        Ok(Self::Ipv6(buf))
       }
       NetworkType::TorV3 => {
         let mut buf = [0u8; 32];
@@ -121,12 +117,6 @@ impl Checkable for AddrV2 {
         // broadcast address (255.255.255.255)
         if *b == [255; 4] {
           return Some(NetAddrError::BadRange { value: 255 });
-        }
-      }
-      Self::Ipv6(b) => {
-        // fc00::/8 belongs in the Cjdns variant per BIP155.
-        if b[0] == 0xfc {
-          return Some(NetAddrError::BadRange { value: 0xfc });
         }
       }
       Self::Cjdns(b) => {
@@ -265,6 +255,9 @@ type_cvrt!(From<AddrV1> for AddrV2, |v1| {
   }
 });
 
+/// Reads the text of an address. Text in fc00::/8 reads as
+/// [`AddrV2::Cjdns`], so an [`AddrV2::Ipv6`] address in fc00::/8 does not
+/// read back from its text.
 impl FromStr for AddrV2 {
   type Err = NetAddrError;
 
@@ -433,6 +426,24 @@ mod tests {
     assert_eq!(expected.parse::<AddrV2>().unwrap(), addr);
   }
 
+  /// An IPv6 address in fc00::/8 shows as text that reads back as CJDNS.
+  #[rstest]
+  fn ipv6_fc00_text_reads_as_cjdns() {
+    let bytes = hex!("fc000000000000000000000000000001");
+    let text = AddrV2::Ipv6(bytes).to_string();
+    assert_eq!(text, "[fc00::1]");
+    assert_eq!(text.parse::<AddrV2>().unwrap(), AddrV2::Cjdns(bytes));
+  }
+
+  /// The serde form keeps the network of an address in fc00::/8.
+  #[cfg(feature = "serde")]
+  #[rstest]
+  #[case::ipv6(AddrV2::Ipv6(hex!("fc000000000000000000000000000001")))]
+  #[case::cjdns(AddrV2::Cjdns(hex!("fc000000000000000000000000000001")))]
+  fn serde_keeps_network(#[case] addr: AddrV2) {
+    dash_dev::assert_json_rt(&ServiceV2 { addr, port: 9999 });
+  }
+
   #[rstest]
   #[case::ipv4(AddrV2::Ipv4([1, 2, 3, 4]))]
   #[case::ipv6(AddrV2::Ipv6(hex!("20010db8000000000000000000000001")))]
@@ -441,6 +452,25 @@ mod tests {
     addr.encode(&mut buf);
     let decoded = AddrV2::decode(&mut buf.as_slice()).unwrap();
     assert_eq!(decoded, addr);
+  }
+
+  /// An address keeps the network it was read with, whatever its prefix.
+  #[rstest]
+  #[case::ipv6(
+    hex!("0210fc000000000000000000000000000001"),
+    AddrV2::Ipv6(hex!("fc000000000000000000000000000001")),
+  )]
+  #[case::cjdns(
+    hex!("0610fc000000000000000000000000000001"),
+    AddrV2::Cjdns(hex!("fc000000000000000000000000000001")),
+  )]
+  fn decode_keeps_network(#[case] raw: [u8; 18], #[case] expected: AddrV2) {
+    let mut data = raw.as_slice();
+    assert_eq!(AddrV2::decode(&mut data), Ok(expected.clone()));
+    assert!(data.is_empty());
+    let mut written = Vec::new();
+    expected.encode(&mut written);
+    assert_eq!(written, raw);
   }
 
   #[rstest]
@@ -498,10 +528,7 @@ mod tests {
     Some(NetAddrError::BadRange { value: 0xfd }),
   )]
   #[case::cjdns_valid(AddrV2::Cjdns(hex!("fc000000000000000000000000000001")), None)]
-  #[case::ipv6_cjdns_range(
-    AddrV2::Ipv6(hex!("fc000000000000000000000000000001")),
-    Some(NetAddrError::BadRange { value: 0xfc }),
-  )]
+  #[case::ipv6_fc00(AddrV2::Ipv6(hex!("fc000000000000000000000000000001")), None)]
   #[case::unknown_known_id(
     AddrV2::Unknown { network: 1, addr: vec![1, 2, 3, 4] },
     Some(NetAddrError::BadRange { value: 1 }),
