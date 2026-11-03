@@ -10,6 +10,7 @@ serialization and hashing, and commitment hash function, apart from fixed inputs
 | `bls_ies.json5` | `gen_ies.cpp` |
 | `bls_keygen.json5` | `gen_keygen.cpp` |
 | `bls_llmq_100.json5` | `gen_llmq_100.cpp` |
+| `bls_read.json5` | `gen_read.cpp` |
 | `bls_secure_aggregate.json5` | `gen_secure_aggregate.cpp` |
 | `bls_serialize.json5` | `gen_serialize.cpp` |
 | `bls_sign.json5` | `gen_sign.cpp` |
@@ -19,6 +20,8 @@ Each program prints its corpus on stdout. For `bls_llmq_100.json5`, its `member_
 inputs, which the program checks against the commitment hash it computes. For `bls_hash.json5`, the program repeats the
 legacy map's hashing and reduction steps with relic, which the library does not expose, and the library's own point
 anchors them.
+
+`bls_read.json5` records how the library reads key and signature bytes under each scheme, as `gen_read.cpp` describes.
 
 ## Regenerating
 

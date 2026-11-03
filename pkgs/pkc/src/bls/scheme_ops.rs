@@ -8,7 +8,7 @@
 
 use super::blst_ffi;
 use super::error::BlsError;
-use super::group::{Point, G1, G2};
+use super::group::{G1Affine, G2Affine, Point, G1, G2};
 use super::scalar::{Fr, FR_BITS};
 use super::schemes::BlsSchemeId;
 use super::{BlsDhBytes, BlsShareId};
@@ -84,6 +84,16 @@ pub trait BlsScheme: BlsSchemeId + Sealed + Sized {
   /// Serialize a public key to its 48-byte encoding.
   fn pk_to_bytes(pk: &Self::InnerPk) -> [u8; 48];
 
+  /// Encode a G1 point in the scheme's 48-byte layout.
+  fn g1_bytes(point: &G1Affine) -> [u8; 48];
+
+  /// The IETF compressed form of `b`, a G1 encoding of a point other than
+  /// infinity in the scheme's layout, with the same `x` and sign.
+  fn pk_ietf_bytes(b: &[u8; 48]) -> [u8; 48];
+
+  /// Whether the scheme reads `b` as a canonical public key encoding.
+  fn is_canonical_pk(b: &[u8; 48]) -> bool;
+
   /// Lift a public key to a projective G1 point.
   ///
   /// # Errors
@@ -107,6 +117,18 @@ pub trait BlsScheme: BlsSchemeId + Sealed + Sized {
 
   /// Serialize a signature to its 96-byte encoding.
   fn sig_to_bytes(sig: &Self::InnerSig) -> [u8; 96];
+
+  /// Encode a G2 point in the scheme's 96-byte layout.
+  fn g2_bytes(point: &G2Affine) -> [u8; 96];
+
+  /// The `x` of `b`, a G2 encoding of a point other than infinity in the
+  /// scheme's layout, in the IETF compressed layout with the sign bit clear.
+  ///
+  /// It need not be the IETF encoding of the point `b` encodes.
+  fn sig_ietf_x_bytes(b: &[u8; 96]) -> [u8; 96];
+
+  /// Whether the scheme reads `b` as a canonical signature encoding.
+  fn is_canonical_sig(b: &[u8; 96]) -> bool;
 
   /// Lift a signature to a projective G2 point.
   ///

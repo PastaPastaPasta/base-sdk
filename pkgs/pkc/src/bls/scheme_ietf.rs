@@ -73,6 +73,21 @@ impl BlsScheme for BlsScIetf {
     pk.compress()
   }
 
+  /// Compress the G1 point to 48 bytes.
+  fn g1_bytes(point: &G1Affine) -> [u8; 48] {
+    point.compress()
+  }
+
+  /// The bytes are already in the IETF compressed form.
+  fn pk_ietf_bytes(b: &[u8; 48]) -> [u8; 48] {
+    *b
+  }
+
+  /// Decode `b` and require it to encode back to the same bytes.
+  fn is_canonical_pk(b: &[u8; 48]) -> bool {
+    Self::pk_from_bytes(b).is_ok_and(|pk| Self::pk_to_bytes(&pk) == *b)
+  }
+
   /// Lift the blst public key into a projective G1 point.
   fn pk_to_g1(pk: &Self::InnerPk) -> Result<G1, BlsError> {
     let aff = G1Affine::deserialize(&pk.serialize()).map_err(|_| BlsError::InvalidPublicKey)?;
@@ -81,7 +96,7 @@ impl BlsScheme for BlsScIetf {
 
   /// Re-encode the projective point and parse it back through `validate`.
   fn g1_to_pk(point: G1) -> Result<Self::InnerPk, BlsError> {
-    Self::pk_from_bytes(&point.to_affine().compress())
+    Self::pk_from_bytes(&Self::g1_bytes(&point.to_affine()))
   }
 
   /// Uncompress the standard encoding without re-running `validate`.
@@ -107,6 +122,23 @@ impl BlsScheme for BlsScIetf {
     sig.compress()
   }
 
+  /// Compress the G2 point to 96 bytes.
+  fn g2_bytes(point: &G2Affine) -> [u8; 96] {
+    point.compress()
+  }
+
+  /// The `x` of the encoding, with the sign bit, bit 5 of byte 0, clear.
+  fn sig_ietf_x_bytes(b: &[u8; 96]) -> [u8; 96] {
+    let mut ietf = *b;
+    ietf[0] &= !0x20;
+    ietf
+  }
+
+  /// Decode `b` and require it to encode back to the same bytes.
+  fn is_canonical_sig(b: &[u8; 96]) -> bool {
+    Self::sig_from_bytes(b).is_ok_and(|sig| Self::sig_to_bytes(&sig) == *b)
+  }
+
   /// Lift the blst signature into a projective G2 point.
   fn sig_to_g2(sig: &Self::InnerSig) -> Result<G2, BlsError> {
     let aff = G2Affine::deserialize(&sig.serialize()).map_err(|_| BlsError::InvalidSignature)?;
@@ -115,7 +147,7 @@ impl BlsScheme for BlsScIetf {
 
   /// Re-encode the projective point and parse it back through `validate`.
   fn g2_to_sig(point: G2) -> Result<Self::InnerSig, BlsError> {
-    Self::sig_from_bytes(&point.to_affine().compress())
+    Self::sig_from_bytes(&Self::g2_bytes(&point.to_affine()))
   }
 
   /// Sign with the basic-scheme DST.
