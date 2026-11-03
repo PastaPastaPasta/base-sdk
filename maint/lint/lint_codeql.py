@@ -58,6 +58,10 @@ _SOURCE_KEYWORDS = (
 # `[[finding]]` names a `path` and a `message`, both matched whole.
 _SUPPRESSIONS = "suppressions.toml"
 
+# Directories of standalone test programs a traced build leaves out. A
+# database joins its units into one program, where their entry points clash.
+_UNANALYSED: tuple[str, ...] = ("pkgs/pkc/contrib",)
+
 # QL a run writes into the tree, relative to a language's pack directory.
 _GENERATED_QL = ("lib", "source_lines.qll")
 
@@ -269,7 +273,12 @@ def _build_commands(
   """Return the `--command` options compiling each unit of *language*."""
   compiler = require_bin(language.compiler)
   options: list[str] = []
-  for unit in repo_files(repo_root, *(f"*{s}" for s in language.units)):
+  units = repo_files(
+    repo_root,
+    *(f"*{s}" for s in language.units),
+    *(f":(exclude){d}" for d in _UNANALYSED),
+  )
+  for unit in units:
     try:
       flags = cxx_flags(repo_root, unit)
     except FileNotFoundError as e:
