@@ -1,5 +1,5 @@
 HeaderFilterRegex: '.*'
-ExcludeHeaderFilterRegex: '/fuzz/pow/sphlib/'
+ExcludeHeaderFilterRegex: '/fuzz/pow/sphlib/|/target/bls-corpus/'
 WarningsAsErrors: '*'
 ExtraArgs: ['-Wdocumentation']
 Checks: '

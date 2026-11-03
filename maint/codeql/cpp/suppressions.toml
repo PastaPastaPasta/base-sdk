@@ -1,0 +1,6 @@
+# The corpus programs link a stand-in for the release's strong random source
+# that aborts, so a program that draws random bytes stops rather than writing
+# a corpus that differs from run to run.
+[[finding]]
+path = "pkgs/pkc/contrib/util/no_random.cpp"
+message = "Explicit termination of the program"

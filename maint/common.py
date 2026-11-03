@@ -57,6 +57,21 @@ CXX_HEADERS: tuple[str, ...] = (".h", ".hh", ".hpp", ".hxx")
 # Each entry mirrors its directory's build script and changes with it.
 CXX_INCLUDES: dict[str, tuple[str, ...]] = {
   "fuzz/pow": ("fuzz/pow/sphlib/c",),
+  # The last build of `regen.py`, absent until it runs.
+  "pkgs/pkc/contrib": (
+    "pkgs/pkc/contrib",
+    "target/bls-corpus/current/build/dashbls/depends/relic/include",
+    "target/bls-corpus/current/build/generated",
+    "target/bls-corpus/current/src",
+    "target/bls-corpus/current/src/dashbls/depends/relic/include",
+    "target/bls-corpus/current/src/dashbls/include",
+    "target/bls-corpus/current/src/dashbls/include/dashbls",
+  ),
+}
+
+# Standards of units built otherwise, keyed by the directory holding them.
+CXX_STDS: dict[str, str] = {
+  "pkgs/pkc/contrib": "c++20",
 }
 
 # Assumed base branch for codebase.
@@ -329,10 +344,13 @@ def cxx_flags(repo_root: Path, unit: Path) -> list[str]:
   """Return the flags *unit* is compiled with.
 
   Raises FileNotFoundError naming an absent include directory, which is
-  what an uninitialised submodule leaves behind.
+  what an uninitialised submodule or a build not yet run leaves behind.
   """
-  std = C_STD if unit.suffix in C_UNITS else CPP_STD
   relative = unit.relative_to(repo_root)
+  std = next(
+    (s for holder, s in CXX_STDS.items() if relative.is_relative_to(holder)),
+    C_STD if unit.suffix in C_UNITS else CPP_STD,
+  )
   includes = [
     include
     for holder, held in CXX_INCLUDES.items()
