@@ -41,5 +41,6 @@ let
   };
 in
 {
+  inherit run;
   packages = lib.optional pkgs.stdenv.hostPlatform.isLinux run;
 }

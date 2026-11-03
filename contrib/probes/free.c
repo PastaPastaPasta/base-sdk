@@ -2,5 +2,6 @@
 
 int add(int a, int b)
 {
-  return a + b;
+  int sum = 0;
+  return __builtin_add_overflow(a, b, &sum) ? 0 : sum;
 }

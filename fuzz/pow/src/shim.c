@@ -20,12 +20,13 @@
 #include "sph_simd.h"
 #include "sph_skein.h"
 
-#define DASH_SPH(name)                                                       \
-  void dash_sph_##name(const void *data, size_t len, unsigned char *out) { \
-    sph_##name##512_context cc;                                            \
-    sph_##name##512_init(&cc);                                             \
-    sph_##name##512(&cc, data, len);                                       \
-    sph_##name##512_close(&cc, out);                                       \
+#define DASH_SPH(name)                                                   \
+  void dash_sph_##name(const void* data, size_t len, unsigned char* out) \
+  {                                                                      \
+    sph_##name##512_context cc;                                          \
+    sph_##name##512_init(&cc);                                           \
+    sph_##name##512(&cc, data, len);                                     \
+    sph_##name##512_close(&cc, out);                                     \
   }
 
 DASH_SPH(blake)

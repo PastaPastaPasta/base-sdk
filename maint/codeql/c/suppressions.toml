@@ -1,0 +1,9 @@
+# CodeQL's front end does not know clang's `__builtin_available`, so it reads
+# the builtin as an implicitly declared function.
+[[finding]]
+path = "contrib/probes/hello.c"
+message = "Reserved identifier '__builtin_available' is declared."
+
+[[finding]]
+path = "contrib/probes/hello.c"
+message = "Function call implicitly declares '__builtin_available'."

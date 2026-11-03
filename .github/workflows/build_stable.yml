@@ -29,6 +29,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 100
+          submodules: true
 
       - name: Check cache write access
         id: cache_write
@@ -49,6 +50,10 @@ jobs:
         uses: jlumbroso/free-disk-space@v2
         with:
           large-packages: false
+
+      - name: Allow unprivileged user namespaces
+        shell: bash
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v23

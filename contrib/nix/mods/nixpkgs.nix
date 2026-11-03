@@ -1,6 +1,6 @@
 # Native packages sourced from the Nix Packages collection (nixpkgs)
 
-{ pkgs }:
+{ pkgs, llvm }:
 
 let
   # nixpkgs builds `zensical` against its own interpreter, which lacks
@@ -37,6 +37,7 @@ in
     pkgs.wasm-pack
 
     # Packages synced with '.tools' from 'pyproject.toml'.
+    llvm.clang-tools
     pkgs.ruff
     pkgs.semgrep
     pkgs.taplo
