@@ -126,6 +126,9 @@ pub enum NIError {
   /// Structural integrity violation.
   #[error("malformed structure")]
   Malformed,
+  /// Service address in a special-use range.
+  #[error("address in a special-use range")]
+  SpecialUse,
 }
 
 /// A single network info entry within a purpose group.
@@ -211,6 +214,10 @@ fn is_valid_addr(addr: &AddrV2) -> bool {
   }
 }
 
+fn is_special_use(addr: &impl NetAddr) -> bool {
+  (addr.is_ipv4() || addr.is_ipv6()) && !addr.is_routable()
+}
+
 /// Returns `true` for a domain name the reference implementation holds
 /// valid, in lowercase RFC 1035 syntax with at least two labels.
 fn is_valid_domain(name: &[u8]) -> bool {
@@ -261,6 +268,9 @@ fn check_domain(name: &[u8]) -> Option<NIError> {
 fn check_service(svc: &ServiceV2, purpose: Option<NIPurpose>) -> Option<NIError> {
   if let Some(error) = svc.check() {
     return Some(NIError::BadAddr { error });
+  }
+  if is_special_use(svc.addr()) {
+    return Some(NIError::SpecialUse);
   }
   let is_https_port = purpose == Some(NIPurpose::PlatformHttps) && svc.port() == PLATFORM_HTTPS_PORT;
   if !svc.addr().is_i2p() && is_bad_port(svc.port()) && !is_https_port {
@@ -606,6 +616,9 @@ impl Checkable for NetInfoV1 {
     if let Some(error) = self.0.check() {
       return Some(NIError::BadAddr { error });
     }
+    if is_special_use(&self.0.addr()) {
+      return Some(NIError::SpecialUse);
+    }
     None
   }
 }
@@ -878,7 +891,15 @@ mod tests {
   )]
   #[case::tor_port_valid(AddrV2::TorV3([1; 32]), 9998, None)]
   #[case::cjdns_valid(AddrV2::Cjdns(hex!("fc000000000000000000000000000001")), 9998, None)]
-  #[case::ipv6_fc00_valid(AddrV2::Ipv6(hex!("fc000000000000000000000000000001")), 9998, None)]
+  #[case::ipv6_fc00_refused(AddrV2::Ipv6(hex!("fc000000000000000000000000000001")), 9998, Some(NIError::SpecialUse))]
+  #[case::ipv4_local(AddrV2::Ipv4([127, 0, 0, 1]), 9999, Some(NIError::SpecialUse))]
+  #[case::ipv6_local(AddrV2::Ipv6(hex!("00000000000000000000000000000001")), 9999, Some(NIError::SpecialUse))]
+  #[case::special_use_before_port(AddrV2::Ipv4([127, 0, 0, 1]), 22, Some(NIError::SpecialUse))]
+  #[case::port_zero_before_special_use(
+    AddrV2::Ipv4([127, 0, 0, 1]),
+    0,
+    Some(NIError::BadAddr { error: NetAddrError::BadPort { port: 0 } })
+  )]
   fn check_entry_service(#[case] addr: AddrV2, #[case] port: u16, #[case] expected: Option<NIError>) {
     let entry = NIEntry::Service(ServiceV2::new(addr, port));
     assert_eq!(entry.check(), expected);
@@ -996,6 +1017,7 @@ mod tests {
   #[case::bad_port("1.2.3.4", 0, Some(NIError::BadAddr { error: NetAddrError::BadPort { port: 0 } }))]
   #[case::null_addr_raw("[::0]", 9999, Some(NIError::BadAddr { error: NetAddrError::BadRange { value: 0 } }))]
   #[case::ipv6_valid("[2001::1]", 9999, None)]
+  #[case::ipv4_local("127.0.0.1", 9999, Some(NIError::SpecialUse))]
   fn check_v1(#[case] addr_str: &str, #[case] port: u16, #[case] expected: Option<NIError>) {
     let addr: AddrV1 = addr_str.parse().unwrap();
     let v1 = NetInfoV1(ServiceV1::new(addr, port));
@@ -1203,7 +1225,8 @@ mod tests {
       (NIPurpose::CoreP2p, vec![svc(AddrV2::Ipv6(hex!("fc000000000000000000000000000001")), 9999)]),
       (NIPurpose::PlatformP2p, vec![svc(AddrV2::Cjdns(hex!("fc000000000000000000000000000001")), 9999)]),
     ],
-    None,
+    // Not duplicates, so the IPv6 entry is refused later for its range.
+    Some(NIError::SpecialUse),
   )]
   fn check_v2_structure(#[case] entries: Vec<(NIPurpose, Vec<NIEntry>)>, #[case] expected: Option<NIError>) {
     let v2 = NetInfoV2 {

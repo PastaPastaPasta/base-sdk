@@ -96,25 +96,56 @@ where
 /// Check function for special-transaction vectors that record no details,
 /// such as vectors written out in a test.
 ///
-/// Verifies the txid, decodes the full transaction, then decodes the
-/// payload from `extra_payload`, checks it, re-encodes both payload and
-/// full transaction, and returns the payload.
+/// Decodes the vector as [`decode_sptx`] does, checks the payload, and
+/// returns it.
 ///
 /// # Panics
 ///
-/// Panics on decode failure, check failure, encode mismatch, or txid
-/// mismatch.
+/// Panics as [`decode_sptx`] does, or on check failure.
 pub fn check_sptx_raw<T>(raw: &[u8], label: &str) -> T
 where
   T: BaseCodec + Checkable,
   T::Error: Display,
 {
-  assert_txid(raw, label);
-  let tx = decode_tx(raw);
-  let decoded = T::decode(&mut &tx.extra_payload()[..]).unwrap_or_else(|e| panic!("{label}: payload: {e}"));
+  let decoded = decode_sptx::<T>(raw, label);
   if let Some(e) = decoded.check() {
     panic!("{label}: payload check: {e}");
   }
+  decoded
+}
+
+/// Check function like [`check_sptx_raw`] that also passes a payload the
+/// check refuses with one of the `allowed` errors.
+///
+/// # Panics
+///
+/// Panics as [`decode_sptx`] does, or on a refusal outside `allowed`.
+pub fn check_sptx_except<T>(raw: &[u8], label: &str, allowed: &[T::Error]) -> T
+where
+  T: BaseCodec + Checkable,
+  T::Error: Display + PartialEq,
+{
+  let decoded = decode_sptx::<T>(raw, label);
+  if let Some(e) = decoded.check() {
+    assert!(allowed.contains(&e), "{label}: payload check: {e}");
+  }
+  decoded
+}
+
+/// Decodes a special-transaction vector without checking its payload, for
+/// tests that read its fields or verify its signature.
+///
+/// Verifies the txid, decodes the full transaction, then decodes the
+/// payload from `extra_payload`, re-encodes both payload and full
+/// transaction, and returns the payload.
+///
+/// # Panics
+///
+/// Panics on decode failure, encode mismatch, or txid mismatch.
+pub fn decode_sptx<T: BaseCodec>(raw: &[u8], label: &str) -> T {
+  assert_txid(raw, label);
+  let tx = decode_tx(raw);
+  let decoded = T::decode(&mut &tx.extra_payload()[..]).unwrap_or_else(|e| panic!("{label}: payload: {e}"));
   let mut buf = Vec::new();
   decoded.encode(&mut buf);
   assert_eq!(&buf, tx.extra_payload(), "{label}: payload encode");
