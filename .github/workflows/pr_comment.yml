@@ -17,7 +17,7 @@ permissions:
 jobs:
   comment:
     name: Comment on pull requests
-    runs-on: ubuntu-slim
+    runs-on: ${{ vars.DASH_LIGHT_RUNNER || 'ubuntu-slim' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7

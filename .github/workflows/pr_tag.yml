@@ -13,7 +13,7 @@ permissions: {}
 jobs:
   tag:
     name: Tag pull requests
-    runs-on: ubuntu-slim
+    runs-on: ${{ vars.DASH_LIGHT_RUNNER || 'ubuntu-slim' }}
     # Each run rescans every pull request, so a newer run supersedes an older one.
     concurrency:
       group: ${{ github.workflow }}
@@ -53,7 +53,7 @@ jobs:
     name: Cancel the pull request's runs
     # The halt job stays out of the tag job's concurrency group, so a newer tag run cannot cancel it.
     if: github.event.action == 'labeled' && github.event.label.name == 'tag:halt-ci'
-    runs-on: ubuntu-slim
+    runs-on: ${{ vars.DASH_LIGHT_RUNNER || 'ubuntu-slim' }}
     permissions:
       actions: write
       contents: read
