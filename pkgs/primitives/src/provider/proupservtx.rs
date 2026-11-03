@@ -256,9 +256,24 @@ impl fmt::Display for ProUpServTx {
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
+  use crate::types::NIError;
 
-  use dash_dev::{assert_serde_rt, check_sptx, Corpus};
+  use dash_dev::{assert_serde_rt, check_sptx, check_sptx_except, Corpus};
   use rstest::rstest;
+
+  /// The corpus entries from regtest, whose services are on local addresses.
+  /// The reference implementation accepts them on regtest alone, and the
+  /// check refuses them on every network.
+  const REGTEST: [&str; 3] = [
+    "369881c12aa676d0a9829cdc849df0c75e9729296883cbbdc3822f1e267c6368",
+    "639f00f22f730daa3fb0bb09e250d3f5c486987c4fb48da42804908c015a1ef6",
+    "1c4cee0257db158902bfdd4441c88f86e1dd53617156cb53ff3cc92d6caeef43",
+  ];
+
+  /// The check's refusal of the entries in [`REGTEST`].
+  const LOCAL_ADDRESS: ProTxInvalid = ProTxInvalid::NetInfoInvalid {
+    error: NIError::SpecialUse,
+  };
 
   /// An Evo update with an extended NetInfo whose version is unsupported reads
   /// the version alone, and its next fields read from the byte after it.
@@ -294,7 +309,21 @@ mod tests {
   #[rstest]
   fn corpus_proupservtx() {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "proupservtx");
-    let items = corpus.entries::<ProUpServTx>("proupservtx", check_sptx);
+    let items = corpus.entries::<ProUpServTx>("proupservtx", |raw, details, label| {
+      if REGTEST.contains(&label) {
+        assert_eq!(
+          check_sptx_except::<ProUpServTx>(raw, label, &[LOCAL_ADDRESS]),
+          *details,
+          "{label}"
+        );
+      } else {
+        check_sptx(raw, details, label);
+      }
+    });
+    assert!(
+      REGTEST.iter().all(|label| items.contains_key(*label)),
+      "a regtest label left the corpus"
+    );
     assert_serde_rt("proupservtx", &items);
   }
 

@@ -479,8 +479,11 @@ impl fmt::Display for ProRegTx {
 mod tests {
   use super::*;
   use crate::provider::share::tests::script;
+  use crate::types::{AddrV2, NIEntry, NIError, NIPurpose, ServiceV2};
 
-  use dash_dev::{arr_from_hex, assert_json_rt, assert_serde_rt, check_sptx, check_sptx_raw, vec_from_hex, Corpus};
+  use dash_dev::{
+    arr_from_hex, assert_json_rt, assert_serde_rt, check_sptx, check_sptx_except, decode_sptx, vec_from_hex, Corpus,
+  };
   use dash_params::Network;
   use rstest::rstest;
 
@@ -516,10 +519,17 @@ mod tests {
     ("7cf73bfa24c05f3ef39b4c365366a0622c72a4de43ec8c18adfefa246be70ae7", "0300010009d1f1b3603ec12c1f971d9baa14c2c34281fe13ec21d8aca5f6e6e5467bcf4015000000006a47304402207eade9c58fc018bfa38aef636aa00378fb121acd8da3fe66d323e477b10433cc022016542ab1c0dac0a5f90c2b2a469e8ae6355978c6e1aa85553e187d1e6dedc78c0121038af19f35924e37ad7c3c8045d1e19b9b90b7310e08b892e620c253a102fe49f0feffffffd0519e7879c443371aee1bccbf4680bcccb93003944e7d3f5a4601e760cefca2000000006a47304402200897ee0e3d9942e2813c8a2b895d7574dd1248b5966c0d1523b32967d05ad30302204097e0b4f07e0466f31c7023fa030a765c28ac4f719e1aa8eaf57c2ae93bc1450121038af19f35924e37ad7c3c8045d1e19b9b90b7310e08b892e620c253a102fe49f0fefffffff5e2f69628aa31e91612a24a054596886fe124fa85d187e06663dcc4ecabd8ba000000006a473044022020ee9ae5204f52daddb32461334b90a734ee77a36e5d97c2ab72da253335473b022057f259b2cb058fec459387c54d67829b1c47abbd2fdf89c28b7d8aa648a97a160121038af19f35924e37ad7c3c8045d1e19b9b90b7310e08b892e620c253a102fe49f0feffffffa99a5fb12b8f2f262db6720e75bab893cfc24961db1b28c451738e9056a7e1d1000000006a473044022037cfe26ba2b1758ecbd83dc1e02f917b55b7ce20f460396c93774d5e0e0a98470220796fca698b14bf451fdf64fbc4391d2822bb6f7308df339334eda2c40c3593710121038af19f35924e37ad7c3c8045d1e19b9b90b7310e08b892e620c253a102fe49f0feffffff9f8ae5ce53cdb384958ba98298ae6937e3a061379043f9ee57b23d5d8af3bdd4000000006a47304402205a864017c6018bf979c421921e0cd9bb952e1514b2c0753236f82caeb8fb369502202dde9503f4328f3ca6bf74ae4ea42ea9d25cc631e9323510d1e92de9b1cf83420121038af19f35924e37ad7c3c8045d1e19b9b90b7310e08b892e620c253a102fe49f0feffffffe31f7906c797ed49318b5aac5e2e8151abb99a6917f2539aab4135c8e26fcfdb000000006a47304402202f65fd7bb6a4474d8308eb25a7f60c54c849075840556a6f99b703a564ee10aa02207aae54dcb82cf267b63b99b9942820c16a4b4d8f9414c652c038453e9a06cee10121038af19f35924e37ad7c3c8045d1e19b9b90b7310e08b892e620c253a102fe49f0feffffff7385d18bddf2c90c5b2525557cca7870c9a62deaf1bee99d9940a30a127e33ef000000006a473044022076500acd66bc029b6201444460d0fdf1adf65acc3fffd370b83e477824a5763502207fa4e4989d25890153ac70bbd9346ffb11e85edd7f7d4e264c3113faae0f5529012103d2316cb9fe06c78518b0fe4fdf6ab2675f1c68b29a4e409f5df2aac695f2770dfeffffff7385d18bddf2c90c5b2525557cca7870c9a62deaf1bee99d9940a30a127e33ef010000006a47304402205d81f759651970ce3b2047db6756c810d4999b32e5fc8b5c1c0dcbf1b3c8807e02202d48fb710a9c9ecafac68e9089a204ecac21e4077c67e21409f31389dfb91a78012103640922d6c301cf0694fb8f19ca609924d01cb36a772b89cbe068da73741638cafeffffff9cd8d2686d5885ba1e3765d8dc7e82edebd64e852d245e7c46dac506ea80efff000000006a473044022071e95a5e72dcf5cc75c49cd323ace8f55c5b67291345e46db059e1b1911e3c2b022060df64edc291e111cd1487b8e001ddea0b2b5f0c6b61daeab2cfa0134c744f38012102871bee1ba20b1a8aee9e52a6ef3f8cb1a593a73b00f0d3f1ee0543d9d8c69e1afeffffff02a9160800000000001976a914efb6d8fac2ad8d20ea23fceaa09a7d6a18fdc2c888ac00a0db215d000000070444534843755100000000fdda01030001000000000000000000000000000000000000000000000000000000000000000000000001000000010300010101047f0000012de501010101047f00000131cd02010101047f00000135b50000000000000000000000000000000000000000a6b9ec666acff86c94aa1ef4f907c6b13c87113af970ab2cb662169930eae830533b45c663e0604b669cb298b31865b22fbf9afb45e031451e06f7ab0164fc0b9d1197080000000200b864d9450000001976a914e4bfda1f1ea786645110e10bea91fde266e84ee388ac00e6352ddbbc903c71b33a328df325593f200c0b8700e87648170000001976a9143bed3c650fcba45a7a9eeab4873eebca7646e14888ac00e0395093ad7ced8e70e47fb9993502d5fc0a82921ff424422bf85a319dce3a4507c34d971afc38ff04048130c899416c1b3b07135c3bd3cd8a84414bf90fda754401d6c78adac859bcf6f7fd78633c66f9132791711fe6b1e72121e8bb4f47ff6d90be2df3ec8a6411747fa47749c9e7633b8575139d51dfeb71a27ac82a5488835c5d01e4d90dc2d1658c805dd1e32f8092d6bb2e461e00000000f2052a010000002ddb952e530c328afec8c9bb38cb99d9fadab2446e0f87d2b470eaa4ed033d12e52d00000000000000000000000000000000000000"),
   ];
 
-  /// The payload of regtest transaction `txid`.
+  /// The check's refusal of a regtest vector, whose services are on local
+  /// addresses. The reference implementation accepts them on regtest alone,
+  /// and the check refuses them on every network.
+  const LOCAL_ADDRESS: ProTxInvalid = ProTxInvalid::NetInfoInvalid {
+    error: NIError::SpecialUse,
+  };
+
+  /// The payload of regtest transaction `txid`, decoded without the check.
   fn regtest(txid: &str) -> ProRegTx {
     let (txid, raw) = REGTEST.into_iter().find(|(t, _)| *t == txid).unwrap();
-    check_sptx_raw(&vec_from_hex(raw), txid)
+    decode_sptx(&vec_from_hex(raw), txid)
   }
 
   #[rstest]
@@ -530,7 +540,11 @@ mod tests {
   #[case::masternode_shares_1358(REGTEST[4])]
   fn regtest_vectors(#[case] vector: (&str, &str)) {
     let (txid, raw) = vector;
-    assert_json_rt(&check_sptx_raw::<ProRegTx>(&vec_from_hex(raw), txid));
+    assert_json_rt(&check_sptx_except::<ProRegTx>(
+      &vec_from_hex(raw),
+      txid,
+      &[LOCAL_ADDRESS],
+    ));
   }
 
   /// A share's `amount`, `refundScript`, `rewardScript` and `ownerAddress`, as
@@ -649,9 +663,13 @@ mod tests {
     entry("13ccca675ed8a8a788693f46191e7237e2896701ede3058c20263e1b2343923d")
   }
 
-  /// A regtest registration with two shares.
+  /// A regtest registration with two shares. Its one service moves from
+  /// 127.0.0.1 to a public address, so that each edit is the only failure.
   fn shared() -> ProRegTx {
-    regtest("be0bcc4773f4510a7a3afdfd18e7758f007c3ff1eb57c3c7a500620c13a05b9c")
+    let mut ptx = regtest("be0bcc4773f4510a7a3afdfd18e7758f007c3ff1eb57c3c7a500620c13a05b9c");
+    let service = NIEntry::Service(ServiceV2::new(AddrV2::Ipv4([1, 2, 3, 4]), 11741));
+    ptx.net_info = NetInfo::Extended(NetInfoV2::new(1, vec![(NIPurpose::CoreP2p, vec![service])]));
+    ptx
   }
 
   /// `share` with its refund script paying `key`.
