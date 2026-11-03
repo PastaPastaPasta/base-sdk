@@ -58,6 +58,11 @@ _SOURCE_KEYWORDS = (
 # `[[finding]]` names a `path` and a `message`, both matched whole.
 _SUPPRESSIONS = "suppressions.toml"
 
+# Directories of standalone programs. A database joins its units into one
+# program, so each unit directly in one of these is a program analysed in a
+# database of its own, with the units below it, which every program links.
+_PROGRAMS: tuple[str, ...] = ("pkgs/pkc/contrib",)
+
 # QL a run writes into the tree, relative to a language's pack directory.
 _GENERATED_QL = ("lib", "source_lines.qll")
 
@@ -227,8 +232,13 @@ def _print_csv_diagnostics(
   results_path: Path,
   suppressions: frozenset[tuple[str, str]],
   owned: frozenset[str],
+  seen: set[tuple[str, str, str]],
 ) -> int:
-  """Print the findings in *owned* files to stderr, returning how many."""
+  """Print the findings in *owned* files to stderr, returning how many.
+
+  A finding in *seen*, which an earlier database of the run reported, is
+  not printed again.
+  """
   count = 0
   with results_path.open(newline="") as f:
     for row in csv.reader(f):
@@ -241,6 +251,9 @@ def _print_csv_diagnostics(
       msg = row[3].replace("\n", " ")
       if str(uri) not in owned or (str(uri), msg) in suppressions:
         continue
+      if (str(uri), line, msg) in seen:
+        continue
+      seen.add((str(uri), line, msg))
       print(f"{uri}:{line}: {msg}", file=sys.stderr)
       count += 1
   return count
@@ -262,13 +275,32 @@ def _locked_pack(pack: str, query_dir: Path) -> str:
   return f"{pack}@{match.group(1)}"
 
 
+def _targets(repo_root: Path, language: Language) -> dict[str, list[Path]]:
+  """Return the units of *language* by the database that analyses them."""
+  patterns = [f"*{s}" for s in language.units]
+  targets = {
+    "tree": repo_files(
+      repo_root,
+      *patterns,
+      *(f":(exclude){d}" for d in _PROGRAMS),
+    ),
+  }
+  for directory in _PROGRAMS:
+    units = repo_files(repo_root, *(f"{directory}/{p}" for p in patterns))
+    top = repo_root / directory
+    linked = [u for u in units if u.parent != top]
+    for program in (u for u in units if u.parent == top):
+      targets[program.stem] = [program, *linked]
+  return targets
+
+
 def _build_commands(
   repo_root: Path,
   language: Language,
-) -> list[str]:
+) -> dict[Path, str]:
   """Return the `--command` options compiling each unit of *language*."""
   compiler = require_bin(language.compiler)
-  options: list[str] = []
+  options: dict[Path, str] = {}
   for unit in repo_files(repo_root, *(f"*{s}" for s in language.units)):
     try:
       flags = cxx_flags(repo_root, unit)
@@ -282,7 +314,7 @@ def _build_commands(
       command = subprocess.list2cmdline(argv)
     else:
       command = shlex.join(argv)
-    options.append(f"--command={command}")
+    options[unit] = f"--command={command}"
   return options
 
 
@@ -300,7 +332,7 @@ def _workspace_dirs(
   *,
   cache: bool,
 ) -> Iterator[tuple[Path, Path]]:
-  """Yield ``(db_path, results_dir)`` for analysis.
+  """Yield ``(db_root, results_dir)``, each target's database in the root.
 
   When *cache* is false a temporary directory is used for both
   the database and the results so no persistent cache is created
@@ -399,16 +431,22 @@ def _analyse(
 
   # Without a command the extractor parses the sources on disk, so a query
   # sees every cfg rather than one build's selection.
-  build: list[str] = ["--build-mode=none"]
+  builds: dict[str, list[str]] = {"tree": ["--build-mode=none"]}
   if language.units:
-    build = _build_commands(repo_root, language)
-    if not build:
+    commands = _build_commands(repo_root, language)
+    builds = {
+      name: options
+      for name, units in _targets(repo_root, language).items()
+      if (options := [commands[u] for u in units if u in commands])
+    }
+    if not builds:
       print(f"no units for {language.name}, skipping", file=sys.stderr)
       return None
 
   print(
     f"checking {language.name}: {len(queries)} query(s), "
-    f"{len(language.standards) + len(args.suites)} suite(s)",
+    f"{len(language.standards) + len(args.suites)} suite(s), "
+    f"{len(builds)} database(s)",
   )
 
   # Only Rust needs the pre-scanned source text; see the generator itself.
@@ -441,72 +479,79 @@ def _analyse(
   )
 
   cache_dir = query_dir / ".cache"
+  owned = frozenset(
+    str(p.relative_to(repo_root)) for p in repo_files(repo_root)
+  )
+  suppressions = _load_suppressions(query_dir)
+  seen: set[tuple[str, str, str]] = set()
+  total_findings = 0
 
   with _workspace_dirs(cache_dir, cache=args.cache) as (
-    active_db,
+    db_root,
     results_dir,
   ):
-    db_yml = active_db / "codeql-database.yml"
-    if not db_yml.is_file():
-      # Remove stale artifacts left behind by a previous failed run.
-      if active_db.exists():
-        shutil.rmtree(active_db)
-      active_db.parent.mkdir(parents=True, exist_ok=True)
-      config_file = query_dir / "codeql-config.yml"
-      config = (
-        [f"--codescanning-config={config_file}"]
-        if config_file.is_file()
-        else []
-      )
-      result = subprocess.run(  # noqa: S603
+    for target, build in builds.items():
+      active_db = db_root / target
+      db_yml = active_db / "codeql-database.yml"
+      if not db_yml.is_file():
+        # Remove stale artifacts left behind by a previous failed run.
+        if active_db.exists():
+          shutil.rmtree(active_db)
+        active_db.parent.mkdir(parents=True, exist_ok=True)
+        config_file = query_dir / "codeql-config.yml"
+        config = (
+          [f"--codescanning-config={config_file}"]
+          if config_file.is_file()
+          else []
+        )
+        result = subprocess.run(  # noqa: S603
+          [
+            codeql_bin,
+            "database",
+            "create",
+            str(active_db),
+            f"--language={language.name}",
+            *build,
+            f"--source-root={repo_root}",
+            *config,
+            f"-j{usable_threads()}",
+          ],
+          cwd=str(repo_root),
+          env=cxx_environ() if language.units else None,
+          check=False,
+        )
+        if result.returncode != RETCODE_PASS or not db_yml.is_file():
+          raise RuntimeError(
+            f"codeql database create failed for {language.name} {target} "
+            f"(exit {result.returncode}); database manifest {db_yml} was not "
+            "produced",
+          )
+
+      # Run each query and collect diagnostics.
+      results_path = results_dir / f"{target}.csv"
+
+      subprocess.run(  # noqa: S603
         [
           codeql_bin,
           "database",
-          "create",
+          "analyze",
           str(active_db),
-          f"--language={language.name}",
-          *build,
-          f"--source-root={repo_root}",
-          *config,
-          f"-j{usable_threads()}",
+          *[str(q) for q in queries],
+          *suites,
+          "--format=csv",
+          f"--output={results_path}",
+          f"--threads={usable_threads()}",
+          f"--ram={usable_mem()}",
         ],
-        cwd=str(repo_root),
-        env=cxx_environ() if language.units else None,
-        check=False,
+        check=True,
       )
-      if result.returncode != RETCODE_PASS or not db_yml.is_file():
-        raise RuntimeError(
-          f"codeql database create failed for {language.name} (exit "
-          f"{result.returncode}); database manifest {db_yml} was not produced",
-        )
 
-    # Run each query and collect diagnostics.
-    results_path = results_dir / "results.csv"
-
-    subprocess.run(  # noqa: S603
-      [
-        codeql_bin,
-        "database",
-        "analyze",
-        str(active_db),
-        *[str(q) for q in queries],
-        *suites,
-        "--format=csv",
-        f"--output={results_path}",
-        f"--threads={usable_threads()}",
-        f"--ram={usable_mem()}",
-      ],
-      check=True,
-    )
-
-    owned = frozenset(
-      str(p.relative_to(repo_root)) for p in repo_files(repo_root)
-    )
-    total_findings = _print_csv_diagnostics(
-      results_path,
-      _load_suppressions(query_dir),
-      owned,
-    )
+      total_findings += _print_csv_diagnostics(
+        results_path,
+        suppressions,
+        owned,
+        seen,
+      )
 
   return RETCODE_ERR if total_findings > 0 else RETCODE_PASS
 

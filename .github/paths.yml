@@ -24,6 +24,22 @@ bazel:
   - MODULE.bazel.lock
   - pkgs/**
 
+corpora:
+  - .github/actions/cache_write/**
+  - .github/actions/gha_cache/**
+  - .github/paths.yml
+  - .github/workflows/build_corpora.yml
+  - .gitmodules
+  - contrib/nix/**
+  - maint/.clang-format
+  - maint/.clang-tidy
+  - maint/codeql/cpp/**
+  - maint/common.py
+  - maint/lint/lint_clang.py
+  - maint/lint/lint_codeql.py
+  - pkgs/pkc/contrib/**
+  - pkgs/pkc/corpus/**
+
 msrv:
   - .github/actions/cache_write/**
   - .github/actions/gha_cache/**

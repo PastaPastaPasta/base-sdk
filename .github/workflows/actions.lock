@@ -9,6 +9,14 @@ workflows:
         - 'dorny/paths-filter@v4'
         - 'jlumbroso/free-disk-space@v2'
         - 'taiki-e/install-action@v2'
+    '.github/workflows/build_corpora.yml':
+        - 'actions/cache@v6'
+        - 'actions/checkout@v7'
+        - 'determinatesystems/nix-installer-action@v23'
+        - 'dorny/paths-filter@v4'
+        - 'jlumbroso/free-disk-space@v2'
+        - 'mic92/niks3-action@v1'
+        - 'runs-on/cache@v5.0.7'
     '.github/workflows/build_cross.yml':
         - 'actions/cache@v6'
         - 'actions/checkout@v7'
