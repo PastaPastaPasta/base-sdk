@@ -26,8 +26,8 @@ Bytes Id(int k)
   return id;
 }
 
-/** Writes the corpus to stdout, returning the exit code. */
-int WriteCorpus()
+/** Writes the signature recovery of the 3-of-5 split under @p recover. */
+void WriteRecoverSig(Json& recover, const Scheme& scheme)
 {
   const auto& msg = Digests()[0];
 
@@ -36,44 +36,50 @@ int WriteCorpus()
     master.push_back(SkOf(k));
   }
 
+  Json& inputs = recover.Set("inputs", Json::Object());
+  inputs.Set("t", Json::Int(kThreshold));
+  inputs.Set("n", Json::Int(kSize));
+  inputs.Set("msg", Json::Str(Hex(msg)));
+  Json& master_sks = inputs.Set("master_sks", Json::List());
+  for (const auto& sk : master) {
+    master_sks.Push(Json::Str(SkHex(sk)));
+  }
+
+  Json& out = recover.Set("outputs", Json::List()).Push(Json::Object());
+  Json& sk_shares = out.Set("sk_shares", Json::List());
+  Json& sig_shares = out.Set("sig_shares", Json::List());
+  std::vector<bls::G2Element> shares;
+  for (int k = 1; k <= kSize; ++k) {
+    const auto ids = Id(k);
+    const auto share = bls::Threshold::PrivateKeyShare(master, bls::Bytes(ids));
+    shares.push_back(SignDigest(share, msg, scheme.legacy));
+    sk_shares.Push(Json::Str(SkHex(share)));
+    sig_shares.Push(Json::Str(SigHex(shares.back(), scheme.legacy)));
+  }
+
+  Json& ids = out.Set("recover_ids", Json::List());
+  std::vector<bls::G2Element> picked;
+  std::vector<Bytes> picked_ids;
+  for (int k : kRecoverIds) {
+    ids.Push(Json::Int(k));
+    picked.push_back(shares.at(k - 1));
+    picked_ids.push_back(Id(k));
+  }
+  std::vector<bls::Bytes> id_refs(picked_ids.begin(), picked_ids.end());
+  const auto recovered = bls::Threshold::SignatureRecover(picked, id_refs);
+  out.Set("recovered_sig", Json::Str(SigHex(recovered, scheme.legacy)));
+  out.Set(
+    "full_sig", Json::Str(SigHex(SignDigest(master.at(0), msg, scheme.legacy), scheme.legacy))
+  );
+}
+
+/** Writes the corpus to stdout, returning the exit code. */
+int WriteCorpus()
+{
   Json root = Json::Object();
   for (const auto& scheme : kSchemes) {
-    Json& recover = root.Set(scheme.name, Json::Object()).Set("recover_sig", Json::Object());
-    Json& inputs = recover.Set("inputs", Json::Object());
-    inputs.Set("t", Json::Int(kThreshold));
-    inputs.Set("n", Json::Int(kSize));
-    inputs.Set("msg", Json::Str(Hex(msg)));
-    Json& master_sks = inputs.Set("master_sks", Json::List());
-    for (const auto& sk : master) {
-      master_sks.Push(Json::Str(SkHex(sk)));
-    }
-
-    Json& out = recover.Set("outputs", Json::List()).Push(Json::Object());
-    Json& sk_shares = out.Set("sk_shares", Json::List());
-    Json& sig_shares = out.Set("sig_shares", Json::List());
-    std::vector<bls::G2Element> shares;
-    for (int k = 1; k <= kSize; ++k) {
-      const auto ids = Id(k);
-      const auto share = bls::Threshold::PrivateKeyShare(master, bls::Bytes(ids));
-      shares.push_back(SignDigest(share, msg, scheme.legacy));
-      sk_shares.Push(Json::Str(SkHex(share)));
-      sig_shares.Push(Json::Str(SigHex(shares.back(), scheme.legacy)));
-    }
-
-    Json& ids = out.Set("recover_ids", Json::List());
-    std::vector<bls::G2Element> picked;
-    std::vector<Bytes> picked_ids;
-    for (int k : kRecoverIds) {
-      ids.Push(Json::Int(k));
-      picked.push_back(shares.at(k - 1));
-      picked_ids.push_back(Id(k));
-    }
-    std::vector<bls::Bytes> id_refs(picked_ids.begin(), picked_ids.end());
-    const auto recovered = bls::Threshold::SignatureRecover(picked, id_refs);
-    out.Set("recovered_sig", Json::Str(SigHex(recovered, scheme.legacy)));
-    out.Set(
-      "full_sig", Json::Str(SigHex(SignDigest(master.at(0), msg, scheme.legacy), scheme.legacy))
-    );
+    Json& section = root.Set(scheme.name, Json::Object());
+    WriteRecoverSig(section.Set("recover_sig", Json::Object()), scheme);
   }
   return Print(root);
 }
