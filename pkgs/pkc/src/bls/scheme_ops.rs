@@ -611,6 +611,45 @@ pub trait BlsScheme: BlsSchemeId + Sealed + Sized {
     Self::g1_to_pk(recovered)
   }
 
+  /// Recover a master secret key from threshold shares by interpolation.
+  ///
+  /// The scalar counterpart of [`Self::recover_pk_shares`], over the field
+  /// secret keys live in.
+  ///
+  /// # Errors
+  ///
+  /// Returns `InsufficientShares` when fewer than two shares are given,
+  /// `CountMismatch` when `ids` and `sks` differ in length,
+  /// `ZeroScalar`/`DuplicateShareId` on bad ids, or `InvalidSecretKey`
+  /// when the recovered scalar is zero.
+  fn recover_sk_shares(ids: &[&BlsShareId], sks: &[&Self::InnerSk]) -> Result<Self::InnerSk, BlsError> {
+    if sks.len() < 2 {
+      return Err(BlsError::InsufficientShares);
+    }
+    // ids and sks are paired. A length mismatch would silently truncate
+    // the interpolation in interpolate_fr and yield a wrong key.
+    if ids.len() != sks.len() {
+      return Err(BlsError::CountMismatch);
+    }
+
+    let reduced = reduce_share_ids(ids)?;
+    let mut scalars = Zeroizing::new(Vec::with_capacity(sks.len()));
+    for sk in sks {
+      let bytes = Self::sk_to_bytes(sk);
+      let mut scalar = blst_ffi::scalar_from_bendian(&bytes);
+      scalars.push(Fr::from(&scalar));
+      scalar.b.zeroize();
+    }
+
+    let mut recovered = interpolate_fr(&reduced, &scalars);
+    let mut out_scalar = blst::blst_scalar::from(&recovered);
+    let out_bytes = Zeroizing::new(blst_ffi::bendian_from_scalar(&out_scalar));
+    out_scalar.b.zeroize();
+    recovered.zeroize();
+
+    Self::sk_from_bytes(&out_bytes)
+  }
+
   /// Derive a public key share from the master verification vector.
   ///
   /// # Errors
@@ -828,6 +867,22 @@ fn interpolate_g1(ids: &[Fr], points: &[G1]) -> G1 {
     // Convert Fr coefficient to scalar for point multiplication.
     let scalar = blst::blst_scalar::from(&coeffs[i]);
     result += points[i].mul_scalar(&scalar.b, FR_BITS);
+  }
+  result
+}
+
+/// Recover a scalar from shares via Lagrange interpolation at x=0.
+///
+/// The field counterpart of [`interpolate_g1`], over the scalars secret
+/// keys live in. Same coefficients, no point multiplication.
+fn interpolate_fr(ids: &[Fr], scalars: &[Fr]) -> Fr {
+  let mut coeffs = Zeroizing::new(compute_lagrange_coeffs(ids));
+
+  let mut result = Fr::default();
+  for (coeff, scalar) in coeffs.iter_mut().zip(scalars) {
+    let mut term = *coeff * *scalar;
+    result += term;
+    term.zeroize();
   }
   result
 }

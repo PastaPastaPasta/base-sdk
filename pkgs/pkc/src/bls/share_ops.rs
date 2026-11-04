@@ -225,6 +225,25 @@ impl<S: BlsScheme> BlsSecretKey<S> {
     let inner_refs: Vec<&S::InnerSk> = master_sks.iter().map(|sk| &sk.0).collect();
     S::derive_sk_share(&inner_refs, id).map(Self::from_inner)
   }
+
+  /// Recover the master secret key from threshold secret key shares via
+  /// Lagrange interpolation in the scalar field.
+  ///
+  /// Interpolation does not know the split's threshold, so a short quorum
+  /// still yields a key, just not the master. `Ok` alone proves nothing, so
+  /// compare the result's public key against a trusted master public key.
+  ///
+  /// # Errors
+  ///
+  /// Returns `InsufficientShares` if fewer than 2 shares are provided,
+  /// `ZeroScalar`/`DuplicateShareId` on bad ids, or `InvalidSecretKey`
+  /// when the recovered scalar is zero.
+  pub fn recover_shares(shares: &[&BlsSkShare<S>]) -> Result<Self, BlsError> {
+    let ids: Vec<&BlsShareId> = shares.iter().map(|s| s.id()).collect();
+    let sks: Vec<&S::InnerSk> = shares.iter().map(|s| &s.secret_key().0).collect();
+
+    S::recover_sk_shares(&ids, &sks).map(Self::from_inner)
+  }
 }
 
 impl<S: BlsScheme> BlsPublicKey<S> {
@@ -447,6 +466,90 @@ mod tests {
   #[case::chia(assert_pk_shares_recover_master::<BlsScChia>)]
   #[case::ietf(assert_pk_shares_recover_master::<BlsScIetf>)]
   fn pk_shares_recover_master(#[case] assertion: fn()) {
+    assertion();
+  }
+
+  /// Secret key shares interpolate back to the key they were split from.
+  fn assert_sk_shares_recover_master<S: BlsScheme>() {
+    let sk = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap();
+    let ids = sequential_ids(5);
+
+    let shares = sk.split(3, &ids, &mut UnwrapErr(SysRng)).unwrap();
+
+    // Any threshold-sized subset recovers the master key, and a different
+    // subset recovers the same key.
+    let first: Vec<&BlsSkShare<S>> = shares[..3].iter().collect();
+    let second: Vec<&BlsSkShare<S>> = shares[2..].iter().collect();
+    assert_eq!(BlsSecretKey::<S>::recover_shares(&first).unwrap(), sk);
+    assert_eq!(BlsSecretKey::<S>::recover_shares(&second).unwrap(), sk);
+
+    // One share is a point, not a polynomial, and two ids that collide mod
+    // the group order would invert a zero denominator.
+    assert!(matches!(
+      BlsSecretKey::<S>::recover_shares(&first[..1]),
+      Err(BlsError::InsufficientShares)
+    ));
+    assert!(matches!(
+      BlsSecretKey::<S>::recover_shares(&[first[0], first[0]]),
+      Err(BlsError::DuplicateShareId)
+    ));
+  }
+
+  #[rstest]
+  #[case::chia(assert_sk_shares_recover_master::<BlsScChia>)]
+  #[case::ietf(assert_sk_shares_recover_master::<BlsScIetf>)]
+  fn sk_shares_recover_master(#[case] assertion: fn()) {
+    assertion();
+  }
+
+  /// Two shares whose Lagrange-weighted sum cancels recover zero, which is
+  /// no secret key.
+  fn assert_sk_shares_reject_zero<S: BlsScheme>() {
+    let (id0, id1) = (make_id(1), make_id(2));
+    let x0 = Fr::from_bendian_reduce(id0.as_bytes()).unwrap();
+    let x1 = Fr::from_bendian_reduce(id1.as_bytes()).unwrap();
+
+    let a = Fr::from_bendian_reduce(&RSEED[1]).unwrap();
+    let b = a * x1 * x0.inverse();
+
+    let share0 = BlsSkShare::new(id0, BlsSecretKey::<S>::from_bytes(&a.to_bendian()).unwrap());
+    let share1 = BlsSkShare::new(id1, BlsSecretKey::<S>::from_bytes(&b.to_bendian()).unwrap());
+    assert!(matches!(
+      BlsSecretKey::<S>::recover_shares(&[&share0, &share1]),
+      Err(BlsError::InvalidSecretKey)
+    ));
+  }
+
+  #[rstest]
+  #[case::chia(assert_sk_shares_reject_zero::<BlsScChia>)]
+  #[case::ietf(assert_sk_shares_reject_zero::<BlsScIetf>)]
+  fn sk_shares_reject_zero(#[case] assertion: fn()) {
+    assertion();
+  }
+
+  /// The two slices are paired, so a length mismatch in either direction is
+  /// a fault of its own rather than a short quorum.
+  fn assert_sk_mismatched_id_count_rejected<S: BlsScheme>() {
+    let sk = BlsSecretKey::<S>::from_ikm(&RSEED[0]).unwrap();
+    let ids = sequential_ids(3);
+    let shares = sk.split(2, &ids, &mut UnwrapErr(SysRng)).unwrap();
+
+    let id_refs: Vec<&BlsShareId> = ids.iter().collect();
+    let sk_refs: Vec<&S::InnerSk> = shares.iter().map(|s| &s.secret_key().0).collect();
+    assert!(matches!(
+      S::recover_sk_shares(&id_refs, &sk_refs[..2]),
+      Err(BlsError::CountMismatch)
+    ));
+    assert!(matches!(
+      S::recover_sk_shares(&id_refs[..2], &sk_refs),
+      Err(BlsError::CountMismatch)
+    ));
+  }
+
+  #[rstest]
+  #[case::chia(assert_sk_mismatched_id_count_rejected::<BlsScChia>)]
+  #[case::ietf(assert_sk_mismatched_id_count_rejected::<BlsScIetf>)]
+  fn sk_recover_rejects_mismatched_id_count(#[case] assertion: fn()) {
     assertion();
   }
 
@@ -722,6 +825,50 @@ mod tests {
     #[case] label: &str,
   ) {
     assertion(scheme, hash_field, label);
+  }
+
+  /// The quorum secret recovered from the signers' shares is the key behind
+  /// the reference quorum public key.
+  fn assert_llmq_finalize_recover_quorum_sk<S: BlsScheme>(scheme: &str) {
+    let f: Value = Corpus::open(env!("CARGO_MANIFEST_DIR"), "bls_llmq_100")
+      .scope(scheme)
+      .into_value();
+    let fin = &f["finalize"];
+    let commits = f["commit"].as_array().unwrap();
+
+    let member_ids: Vec<String> = f["inputs"]["member_ids"]
+      .as_array()
+      .unwrap()
+      .iter()
+      .map(|v| v.as_str().unwrap().to_string())
+      .collect();
+
+    let sk_shares: Vec<BlsSkShare<S>> = fin["signer_ids"]
+      .as_array()
+      .unwrap()
+      .iter()
+      .map(|sid| {
+        let member_id = BlsShareId::from_bendian(arr_from_hex::<32>(sid.as_str().unwrap()));
+        let sid_display = member_id.to_string();
+        let idx = member_ids.iter().position(|m| *m == sid_display).unwrap();
+        let sk = BlsSecretKey::<S>::from_bytes(&arr_from_hex(commits[idx]["sk_share"].as_str().unwrap())).unwrap();
+        BlsSkShare::new(member_id, sk)
+      })
+      .collect();
+
+    let share_refs: Vec<&BlsSkShare<S>> = sk_shares.iter().collect();
+    let recovered = BlsSecretKey::<S>::recover_shares(&share_refs).unwrap();
+
+    let quorum_pk =
+      BlsPublicKey::<S>::from_bytes(&arr_from_hex(commits[0]["quorum_public_key"].as_str().unwrap())).unwrap();
+    assert_eq!(recovered.public_key(), quorum_pk);
+  }
+
+  #[rstest]
+  #[case::chia("chia", assert_llmq_finalize_recover_quorum_sk::<BlsScChia>)]
+  #[case::ietf("ietf", assert_llmq_finalize_recover_quorum_sk::<BlsScIetf>)]
+  fn llmq_finalize_recover_quorum_sk(#[case] scheme: &str, #[case] assertion: fn(&str)) {
+    assertion(scheme);
   }
 
   fn assert_llmq_finalize_recover_quorum_sig<S: BlsScheme>(scheme: &str) {

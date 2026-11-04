@@ -41,6 +41,7 @@ extensions:
       - ["Bls", "PublicKey", "derive_share"]              # Get share from master keys
       - ["Bls", "Signature", "recover_shares"]            # Get signature
       - ["Bls", "PublicKey", "recover_shares"]            # Get master public key
+      - ["Bls", "SecretKey", "recover_shares"]            # Get master secret key
       # ECDSA
       # Compression
       - ["Ecdsa", "SecretKey", "is_compressed"]           # Form the derived key will take
