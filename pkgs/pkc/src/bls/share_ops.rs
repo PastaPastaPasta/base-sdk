@@ -502,6 +502,66 @@ mod tests {
     assertion();
   }
 
+  /// Secret key recovery over the reference implementation's shares and ids
+  /// yields the master key it recorded, from every recorded subset.
+  fn assert_sk_recovery_matches_vectors<S: BlsScheme>(scheme: &str) {
+    let f: Value = Corpus::open(env!("CARGO_MANIFEST_DIR"), "bls_threshold")
+      .scope(scheme)
+      .into_value();
+
+    for case in f["recover_sk"].as_array().unwrap() {
+      let inputs = &case["inputs"];
+      let threshold = inputs["t"].as_u64().unwrap() as usize;
+      let total = inputs["n"].as_u64().unwrap() as usize;
+      let master_sks = inputs["master_sks"].as_array().unwrap();
+      assert_eq!(master_sks.len(), threshold);
+
+      for out in case["outputs"].as_array().unwrap() {
+        let ids = out["ids"].as_array().unwrap();
+        let sk_shares = out["sk_shares"].as_array().unwrap();
+        assert_eq!(ids.len(), total);
+        assert_eq!(sk_shares.len(), total);
+
+        // Recorded ids are the 32 bytes the curve reads, so they are stored
+        // as they are.
+        let shares: Vec<BlsSkShare<S>> = ids
+          .iter()
+          .zip(sk_shares)
+          .map(|(id_hex, sk_hex)| {
+            let id = BlsShareId::from_lendian(arr_from_hex(id_hex.as_str().unwrap()));
+            let sk = BlsSecretKey::<S>::from_bytes(&arr_from_hex(sk_hex.as_str().unwrap())).unwrap();
+            BlsSkShare::new(id, sk)
+          })
+          .collect();
+
+        let master = out["master_sk"].as_str().unwrap();
+        assert_eq!(master, master_sks[0].as_str().unwrap());
+        for recovery in out["recoveries"].as_array().unwrap() {
+          let picked: Vec<&BlsSkShare<S>> = recovery["recover_ids"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|k| &shares[k.as_u64().unwrap() as usize - 1])
+            .collect();
+          assert!(picked.len() >= threshold);
+          let recovered = BlsSecretKey::<S>::recover_shares(&picked).unwrap();
+          assert_eq!(
+            recovered.to_bytes().to_lower_hex_string(),
+            recovery["recovered_sk"].as_str().unwrap()
+          );
+          assert_eq!(recovered.to_bytes().to_lower_hex_string(), master);
+        }
+      }
+    }
+  }
+
+  #[rstest]
+  #[case::chia(assert_sk_recovery_matches_vectors::<BlsScChia>, "chia")]
+  #[case::ietf(assert_sk_recovery_matches_vectors::<BlsScIetf>, "ietf")]
+  fn sk_recovery_matches_vectors(#[case] assertion: fn(&str), #[case] scheme: &str) {
+    assertion(scheme);
+  }
+
   /// Two shares whose Lagrange-weighted sum cancels recover zero, which is
   /// no secret key.
   fn assert_sk_shares_reject_zero<S: BlsScheme>() {
