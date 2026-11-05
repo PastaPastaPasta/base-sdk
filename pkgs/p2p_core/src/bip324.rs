@@ -15,6 +15,8 @@ use crate::version::ProtocolVersion;
 use crate::P2pDecodeError;
 
 use dash_types::codec::BaseCodec;
+use dash_types::type_id::Unencodable;
+use getset::CopyGetters;
 
 /// Encodes a `P2pMsg` into V2 contents, given `common`, the version both
 /// peers share.
@@ -40,42 +42,83 @@ pub fn encode_v2(msg: &P2pMsg, common: ProtocolVersion, buf: &mut Vec<u8>) {
 /// The type byte, a 12-byte command and a [`MAX_P2P_PAYLOAD_SIZE`] payload.
 const MAX_V2_CONTENTS_SIZE: usize = 1 + 12 + MAX_P2P_PAYLOAD_SIZE;
 
-/// Decodes V2 message contents into a `P2pMsg`.
+/// V2 contents split into their message type and payload.
+///
+/// Only [`split_v2`] builds one, so the contents were within the V2 bound and
+/// the type is one the transport takes.
+#[derive(Clone, Copy, CopyGetters, Debug, Eq, Hash, PartialEq, Unencodable)]
+pub struct V2Message<'a> {
+  /// The message type: the long-form command, the command of the short ID,
+  /// or [`CommandString::EMPTY`] for a short ID the tables hold without a
+  /// message.
+  #[getset(get_copy = "pub")]
+  command: CommandString,
+  /// The bytes after the 1-byte short ID or the 13-byte long-form type.
+  #[getset(get_copy = "pub")]
+  payload: &'a [u8],
+}
+
+impl V2Message<'_> {
+  /// Decodes the payload as the message its type names.
+  ///
+  /// # Errors
+  ///
+  /// Returns `UnknownCommand` for a type without a message, including
+  /// [`CommandString::EMPTY`], and otherwise the error from decoding the
+  /// payload as that message.
+  pub fn decode(self) -> Result<P2pMsg, P2pDecodeError> {
+    P2pMsg::decode_unbounded(&self.command, self.payload)
+  }
+}
+
+/// Splits V2 contents into their message type and payload, without decoding
+/// the payload.
 ///
 /// The size bound applies to the whole contents and comes before any check
 /// of the type. A short-ID payload may thus be 12 bytes larger than a
-/// long-format payload.
+/// long-format payload. A short ID the tables hold without a message, such
+/// as 5, gives [`CommandString::EMPTY`].
 ///
 /// # Errors
 ///
 /// Returns `PayloadTooLarge` above the bound, with an empty command for an
 /// unknown short ID. Returns `MissingCommand`, `UnknownShortId` or
-/// `InvalidCommand` for a type the transport refuses, and otherwise the error
-/// decoding the message.
-pub fn decode_v2(contents: &[u8]) -> Result<P2pMsg, P2pDecodeError> {
+/// `InvalidCommand` for a type the transport refuses.
+pub fn split_v2(contents: &[u8]) -> Result<V2Message<'_>, P2pDecodeError> {
   let mut payload = contents;
   let short_id = u8::decode(&mut payload).map_err(|_| P2pDecodeError::MissingCommand)?;
   let id = ShortId::new(short_id);
   let cmd = if id == ShortId::LONG_FORMAT {
     Some(CommandString::decode(&mut payload).map_err(|_| P2pDecodeError::MissingCommand)?)
   } else if id.is_in_table() {
-    Some(id.to_command().unwrap_or(CommandString::from_static("")))
+    Some(id.to_command().unwrap_or(CommandString::EMPTY))
   } else {
     None
   };
 
   if contents.len() > MAX_V2_CONTENTS_SIZE {
     return Err(P2pDecodeError::PayloadTooLarge {
-      command: cmd.unwrap_or(CommandString::from_static("")),
+      command: cmd.unwrap_or(CommandString::EMPTY),
       size: contents.len(),
       max: MAX_V2_CONTENTS_SIZE,
     });
   }
-  let cmd = cmd.ok_or(P2pDecodeError::UnknownShortId { id: short_id })?;
-  if id == ShortId::LONG_FORMAT && !cmd.is_valid_v2() {
-    return Err(P2pDecodeError::InvalidCommand { command: cmd });
+  let command = cmd.ok_or(P2pDecodeError::UnknownShortId { id: short_id })?;
+  if id == ShortId::LONG_FORMAT && !command.is_valid_v2() {
+    return Err(P2pDecodeError::InvalidCommand { command });
   }
-  P2pMsg::decode_unbounded(&cmd, payload)
+  Ok(V2Message { command, payload })
+}
+
+/// Decodes V2 message contents into a `P2pMsg`: [`split_v2`], then
+/// [`V2Message::decode`].
+///
+/// # Errors
+///
+/// Returns the error from [`split_v2`] if the split fails, and otherwise the
+/// error from [`V2Message::decode`].
+pub fn decode_v2(contents: &[u8]) -> Result<P2pMsg, P2pDecodeError> {
+  split_v2(contents)?.decode()
 }
 
 #[cfg(test)]

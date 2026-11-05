@@ -22,6 +22,10 @@ impl_bytes!(CommandString, 12);
 hash_impl!(CommandString);
 
 impl CommandString {
+  /// The empty type, which the V2 transport gives a short ID its tables hold
+  /// without a message.
+  pub const EMPTY: Self = Self([0; 12]);
+
   /// Builds a command string from a static `&str` at compile time.
   ///
   /// # Panics

@@ -45,8 +45,8 @@ pub enum P2pDecodeError {
   PayloadTooLarge {
     /// The message's command.
     command: CommandString,
-    /// Size of the payload, or of the whole contents for `decode_v2`, in
-    /// bytes.
+    /// Size of the payload, or of the whole contents for `split_v2` and
+    /// `decode_v2`, in bytes.
     size: usize,
     /// Maximum allowed size, in bytes.
     max: usize,
