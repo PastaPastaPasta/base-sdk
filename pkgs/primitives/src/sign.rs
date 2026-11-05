@@ -7,9 +7,11 @@
 //! Signature checks shared by the signed payloads.
 
 use crate::prelude::*;
-use crate::Transaction;
+use crate::{QuorumHash, Transaction};
 
 use bitcoin_hashes::sha256d;
+use dash_num::Hash256;
+use dash_params::LlmqType;
 use dash_pkc::bls::{BlsError, BlsPkBytes, BlsScheme, BlsSigBytes};
 use dash_pkc::ecdsa::{EcdsaError, EcdsaPublicKey, EcdsaRecSigBytes, EcdsaRecSignature, ECDSA_REC_SIG_LEN};
 use dash_script::PubKeyHash;
@@ -22,6 +24,11 @@ pub const MESSAGE_MAGIC: &str = "DarkCoin Signed Message:\n";
 /// Double SHA-256 of `data`.
 pub(crate) fn sha256d(data: &[u8]) -> [u8; 32] {
   sha256d::Hash::hash(data).to_byte_array()
+}
+
+/// Double SHA-256 of `data`, as a hash.
+pub(crate) fn sha256d_hash(data: &[u8]) -> Hash256 {
+  Hash256::from_lendian(sha256d(data))
 }
 
 /// Double SHA-256 of the encoded `payload` without `sig`, its trailing field.
@@ -40,6 +47,42 @@ pub(crate) fn write_tx_header(tx: &Transaction, buf: &mut impl EncodeBuf) {
   tx.version().encode(buf);
   tx.tx_type().to_base().encode(buf);
   tx.lock_time().encode(buf);
+}
+
+/// The hash of `tx` with its extra payload replaced by `payload`.
+pub(crate) fn tx_hash_with(tx: &Transaction, payload: &impl BaseCodec) -> Hash256 {
+  let mut extra = Vec::new();
+  payload.encode(&mut extra);
+  let tx = Transaction::new(
+    tx.version(),
+    tx.tx_type(),
+    tx.inputs().clone(),
+    tx.outputs().clone(),
+    tx.lock_time(),
+    extra,
+  );
+  let mut image = Vec::new();
+  tx.encode(&mut image);
+  sha256d_hash(&image)
+}
+
+/// The id of a quorum signing request, the hash of `prefix` and `n`.
+pub(crate) fn request_id(prefix: &str, n: &impl BaseCodec) -> Hash256 {
+  let mut buf = Vec::new();
+  String::from(prefix).encode(&mut buf);
+  n.encode(&mut buf);
+  sha256d_hash(&buf)
+}
+
+/// The digest a quorum of `llmq_type` signs for request `id` over the
+/// message hash `msg_hash`.
+pub fn llmq_sig_hash(llmq_type: LlmqType, quorum_hash: &QuorumHash, id: &Hash256, msg_hash: &Hash256) -> Hash256 {
+  let mut buf = Vec::new();
+  llmq_type.encode(&mut buf);
+  quorum_hash.encode(&mut buf);
+  id.encode(&mut buf);
+  msg_hash.encode(&mut buf);
+  sha256d_hash(&buf)
 }
 
 /// Digest signed for the message `msg`.
