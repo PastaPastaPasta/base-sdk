@@ -4,8 +4,7 @@
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
 
-//! V2 transport outcomes of `split_v2` and `decode_v2` against the reference
-//! vectors.
+//! V2 outcomes of `split_v2` and `decode_v2` against the reference vectors.
 
 #![expect(clippy::unwrap_used, reason = "test code")]
 
@@ -42,6 +41,36 @@ fn decode_v2_matches_vectors() {
       ) => "accept",
     };
     assert_eq!(result, v.result, "{} of {} bytes", v.prefix, v.len);
+  }
+}
+
+#[derive(Deserialize)]
+struct RecvVector {
+  byte: u8,
+  #[serde(rename = "type")]
+  ty: Option<String>,
+  size: Option<usize>,
+}
+
+#[rstest]
+fn split_v2_matches_vectors() {
+  let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "transport");
+  let vectors = corpus.vectors::<RecvVector>("v2_recv");
+  assert_eq!(vectors.len(), 256);
+  for (i, v) in vectors.into_iter().enumerate() {
+    assert_eq!(usize::from(v.byte), i);
+    let mut contents = vec![v.byte];
+    contents.extend_from_slice(CommandString::PING.as_bytes());
+    contents.extend_from_slice(&[0x07; 8]);
+    let split = split_v2(&contents);
+    match (v.ty, v.size) {
+      (Some(ty), Some(size)) => {
+        let msg = split.unwrap();
+        assert_eq!(msg.command(), CommandString::from_static(&ty), "{i}");
+        assert_eq!(msg.payload(), &contents[contents.len() - size..], "{i}");
+      }
+      _ => assert_eq!(split, Err(P2pDecodeError::UnknownShortId { id: v.byte }), "{i}"),
+    }
   }
 }
 
