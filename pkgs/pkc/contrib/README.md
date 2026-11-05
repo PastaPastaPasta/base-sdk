@@ -15,6 +15,7 @@ serialization and hashing, and commitment hash function, apart from fixed inputs
 | `bls_serialize.json5` | `gen_serialize.cpp` |
 | `bls_sign.json5` | `gen_sign.cpp` |
 | `bls_threshold.json5` | `gen_threshold.cpp` |
+| `bls_wrapper.json5` | `gen_wrapper.cpp` |
 
 Each program prints its corpus on stdout. For `bls_llmq_100.json5`, its `member_pks` and `member_sig` values are fixed
 inputs, which the program checks against the commitment hash it computes. For `bls_hash.json5`, the program repeats the
@@ -22,6 +23,9 @@ legacy map's hashing and reduction steps with relic, which the library does not 
 anchors them.
 
 `bls_read.json5` records how the library reads key and signature bytes under each scheme, as `gen_read.cpp` describes.
+`bls_wrapper.json5` records how the release's BLS wrapper reads, writes and compares keys, signatures and secret keys
+under each scheme, as `gen_wrapper.cpp` describes. Its key and signature inputs come from the classes `gen_read.cpp`
+also draws, in `util/inputs.hpp`.
 
 ## Regenerating
 
