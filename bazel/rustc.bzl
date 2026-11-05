@@ -22,6 +22,7 @@ RUST_SHA256S = {
     "llvm-tools-1.99.1-x86_64-apple-darwin.tar.xz": "3112e92b03b1cca4264a30ca602948d31976cd45db7de2bc7900efa25a39a045",
     "rust-std-1.99.1-x86_64-apple-darwin.tar.xz": "484d5b88b424ddd29df196e1eb9420c8335bb5fac90a3c37140253345a8c65c4",
     "rustc-1.99.1-x86_64-apple-darwin.tar.xz": "203feef2c2165d7dda1f30ccf75590f72a6abc52ce259ed1c418de84a6887698",
+    "rust-std-1.99.1-x86_64-pc-windows-gnu.tar.xz": "b17e3bc962ff24b3bc47a750d838defed85b280746250e3a3ad029e6c1a29dd7",
     "cargo-1.99.1-x86_64-unknown-linux-gnu.tar.xz": "53f3521949404d595efb06a55c12c5658d4ed1c75566f33d3d514eaebe70bd8a",
     "clippy-1.99.1-x86_64-unknown-linux-gnu.tar.xz": "458339712a058e52cc4522ff9ef8b59cd1ea1340312216cd94194c464a3f6dc5",
     "llvm-tools-1.99.1-x86_64-unknown-linux-gnu.tar.xz": "8429c5117debfb45c22cf2f97712ef00e0e94976c96cf92f661974a458ca7e84",
@@ -35,5 +36,6 @@ BASELINE_TARGET_CPUS = {
     "aarch64-apple-darwin": "apple-m1",
     "aarch64-unknown-linux-gnu": "generic",
     "x86_64-apple-darwin": "penryn",
+    "x86_64-pc-windows-gnu": "x86-64",
     "x86_64-unknown-linux-gnu": "x86-64",
 }

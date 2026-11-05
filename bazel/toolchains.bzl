@@ -12,23 +12,39 @@ load("@rules_rust//rust/private:repositories.bzl", "rust_repository_set", "rust_
 # buildifier: disable=bzl-visibility
 load("@rules_rust//rust/private:repository_utils.bzl", "toolchain_repository_hub")
 load(":rustc.bzl", "BASELINE_TARGET_CPUS", "RUST_SHA256S", "RUST_VERSION")
-load(":workspace.bzl", "BUILD_PROFILES", "HOST_TRIPLES", "PROFILE_RUSTC_FLAGS", "RUST_EDITION", "TARGET_RUSTC_FLAGS")
+load(
+    ":workspace.bzl",
+    "BUILD_PROFILES",
+    "CROSS_TRIPLES",
+    "HOST_TRIPLES",
+    "PROFILE_RUSTC_FLAGS",
+    "RUST_EDITION",
+    "TARGET_RUSTC_FLAGS",
+)
+
+def _rustc_flags(triple, profile):
+    """Returns the flags a profile builds a target with."""
+    cargo_profile, workspace_flags = BUILD_PROFILES[profile]
+    if workspace_flags:
+        target_flags = TARGET_RUSTC_FLAGS[triple.split("-")[0]]
+    else:
+        target_flags = ["-Ctarget-cpu=" + BASELINE_TARGET_CPUS[triple]]
+    return target_flags + PROFILE_RUSTC_FLAGS[cargo_profile]
 
 def _rust_toolchains_impl(module_ctx):
-    # One set per supported host and profile. Toolchain flags reach every crate
-    # built for the target. An empty `rustfmt_version` drops rustfmt.
+    # One set per supported host and profile, with a toolchain for the host and
+    # each cross target. Toolchain flags reach every crate built for the
+    # target. An empty `rustfmt_version` drops rustfmt.
     toolchains = {}
-    for name, triple in HOST_TRIPLES.items():
-        for profile, (cargo_profile, workspace_flags) in BUILD_PROFILES.items():
-            if workspace_flags:
-                target_flags = TARGET_RUSTC_FLAGS[triple.split("-")[0]]
-            else:
-                target_flags = ["-Ctarget-cpu=" + BASELINE_TARGET_CPUS[triple]]
+    for name, host in HOST_TRIPLES.items():
+        targets = [host] + [triple for triple in CROSS_TRIPLES if triple != host]
+        for profile in BUILD_PROFILES:
             toolchains.update(rust_repository_set(
                 name = "{}_{}".format(name, profile),
                 edition = RUST_EDITION,
-                exec_triple = triple,
-                extra_rustc_flags = target_flags + PROFILE_RUSTC_FLAGS[cargo_profile],
+                exec_triple = host,
+                extra_rustc_flags = {triple: _rustc_flags(triple, profile) for triple in targets},
+                extra_target_triples = targets[1:],
                 rustfmt_version = "",
                 sha256s = RUST_SHA256S,
                 target_settings = [str(Label("//bazel:profile_" + profile))],

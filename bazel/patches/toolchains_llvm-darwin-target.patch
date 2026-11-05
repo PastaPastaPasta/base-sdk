@@ -1,0 +1,70 @@
+Key the Darwin flags on the target alone
+
+1.8.0 chose the Darwin link flags, the archive flags and the SDK's libc++
+only when both the exec and the target platform were Darwin. A Linux host
+targeting macOS then handed ld64.lld the ELF flags, which it refuses, and
+compiled against the LLVM distribution's own libc++ headers, which lack
+the __config_site a Darwin build needs. The object format and the C++
+library follow the target, so all of it is keyed on the target.
+
+1.8.0 also linked libtool, which those archive flags are for, on Darwin
+hosts alone. Every LLVM release ships llvm-libtool-darwin, so every host
+links it.
+
+diff --git a/toolchain/cc_toolchain_config.bzl b/toolchain/cc_toolchain_config.bzl
+index 20b6a53..f208e6f 100644
+--- a/toolchain/cc_toolchain_config.bzl
++++ b/toolchain/cc_toolchain_config.bzl
+@@ -360,10 +360,10 @@ def cc_toolchain_config(
+     stdlib_link_flags = []
+     stdlib_link_libs = []
+ 
+-    is_darwin_exec_and_target = exec_os == "darwin" and target_os == "darwin"
++    is_darwin_target = target_os == "darwin"
+ 
+     # Linker flags:
+-    if is_darwin_exec_and_target:
++    if is_darwin_target:
+         link_flags.extend([
+             "-headerpad_max_install_names",
+             "-fobjc-link-runtime",
+@@ -385,7 +385,7 @@ def cc_toolchain_config(
+     # Pre-installed libtool on macOS has -static as default, but llvm-libtool-darwin needs it
+     # explicitly. cc_common.create_link_variables does not automatically add this either if
+     # output_file arg to it is None.
+-    archive_flags = ["-static"] if is_darwin_exec_and_target else []
++    archive_flags = ["-static"] if is_darwin_target else []
+ 
+     # Flags related to C++ standard.
+     # The linker has no way of knowing if there are C++ objects; so we
+@@ -442,7 +442,7 @@ def cc_toolchain_config(
+               "probably not what you want. Explicitly set standard_libraries to libc++ to silence.")
+ 
+     # Darwin has a universal sysroot so the builtin can compile cross-arch.
+-    if stdlib == "builtin-libc++" and is_xcompile and not is_darwin_exec_and_target:
++    if stdlib == "builtin-libc++" and is_xcompile and not is_darwin_target:
+         stdlib = "stdc++"
+ 
+     # "dynamic-stdc++"[-<ver>] is libstdc++ linked dynamically rather than
+@@ -461,7 +461,7 @@ def cc_toolchain_config(
+             "-stdlib=libc++",
+         ])
+         system_includes.append(toolchain_builtin_include)
+-        if is_darwin_exec_and_target:
++        if is_darwin_target:
+             # On macOS, use the SDK's libc++ entirely (headers + linking).
+             # Clang's driver would otherwise auto-include the toolchain's
+             # bundled libc++ headers (the LLVM version we built), creating an
+diff --git a/toolchain/internal/common.bzl b/toolchain/internal/common.bzl
+--- a/toolchain/internal/common.bzl
++++ b/toolchain/internal/common.bzl
+@@ -269,7 +269,7 @@
+     return dict(tuples)
+ 
+ def toolchain_tools(os):
+     tools = dict(_toolchain_tools)
+-    if os == "darwin":
+-        tools.update(_toolchain_tools_darwin)
++    # Linked on every host, as each LLVM release ships llvm-libtool-darwin.
++    tools.update(_toolchain_tools_darwin)
+     return tools

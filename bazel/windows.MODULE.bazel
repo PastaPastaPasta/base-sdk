@@ -1,0 +1,31 @@
+# Windows targets build as Rust's `x86_64-pc-windows-gnu`, against msvcrt, the
+# GCC runtime and winpthreads from MSYS2's `mingw64` packages. GCC uses POSIX
+# threads there, so its libstdc++ needs no other threading library.
+
+msys2_sysroot = use_repo_rule("//bazel:windows.bzl", "msys2_sysroot")
+
+# MSYS2 drops packages after about two years, so these pins need a mirror
+# before then.
+msys2_sysroot(
+    name = "mingw_sysroot",
+    packages = {
+        "https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-crt-14.0.0.r495.g63ebe6cdb-1-any.pkg.tar.zst": "2a304ce7b1200dd7441af8ae38d978cead7c9ac620ed220913d4072502cf3a1e",
+        "https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-gcc-16.2.0-6-any.pkg.tar.zst": "f9a78b7f257984bc8a2b62d5f93f1af45b03d4b84afaf2eafc7d90c9b8c4568e",
+        "https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-headers-14.0.0.r495.g63ebe6cdb-1-any.pkg.tar.zst": "c8cffc339349a50978c0d3fd6d49e33e377165f20d7f360c999cc1622dde4626",
+        "https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-winpthreads-14.0.0.r495.g63ebe6cdb-1-any.pkg.tar.zst": "8162e51d99590742dc26638a20e92f870f9b010e1ab29efad78991b84bf8ed2b",
+    },
+)
+
+llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm")
+llvm.sysroot(
+    label = "@mingw_sysroot//mingw64:sysroot",
+    targets = ["windows-x86_64"],
+)
+
+# lld names a MinGW binary `.exe` and a DLL `.dll` whatever it is asked for,
+# and rules_cc 0.2.17 declares neither suffix for a Unix-style toolchain.
+single_version_override(
+    module_name = "rules_cc",
+    patch_strip = 1,
+    patches = ["//bazel/patches:rules_cc-mingw-artifact-names.patch"],
+)
