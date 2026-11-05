@@ -198,6 +198,37 @@ macro_rules! impl_type {
   };
 }
 
+/// Generates `BaseCodec` over the named fields of a struct, in the order
+/// listed.
+///
+/// A field written `field: limit` is a list read with
+/// [`decode_vec`](crate::codec::decode_vec), which refuses a count above
+/// `limit` before any entry is read. Every other field reads with its own
+/// `BaseCodec`, and every field encodes with its own `BaseCodec`.
+#[cfg(feature = "codec")]
+#[macro_export]
+macro_rules! impl_vec {
+  (@decode $data:ident) => {
+    $crate::codec::BaseCodec::decode($data)?
+  };
+  (@decode $data:ident $limit:expr) => {
+    $crate::codec::decode_vec($data, $limit)?
+  };
+  ($ty:ty, { $($field:ident $(: $limit:expr)?),+ $(,)? }) => {
+    impl $crate::codec::BaseCodec for $ty {
+      fn decode(data: &mut &[u8]) -> Result<Self, $crate::codec::DecodeError> {
+        Ok(Self {
+          $($field: $crate::impl_vec!(@decode data $($limit)?)),+
+        })
+      }
+
+      fn encode(&self, buf: &mut impl $crate::codec::EncodeBuf) {
+        $($crate::codec::BaseCodec::encode(&self.$field, buf);)+
+      }
+    }
+  };
+}
+
 /// Generates `BaseCodec` + `Encode` + `Decode` for a fixed-size byte newtype,
 /// expressed only through `from_bytes` / `as_bytes`.
 ///
@@ -532,6 +563,9 @@ macro_rules! dlgt_codec {
 
 #[cfg(all(test, feature = "codec"))]
 mod tests {
+  use crate::codec::{BaseCodec, DecodeError};
+  use crate::prelude::*;
+
   use hex_conservative::hex;
   use rstest::rstest;
 
@@ -557,5 +591,69 @@ mod tests {
 
     assert!(!paired.is_null());
     assert_eq!(paired.as_bytes(), &hex!("ab000001"));
+  }
+
+  #[derive(Debug, PartialEq)]
+  struct Bounded {
+    tag: u32,
+    items: Vec<u16>,
+    tail: Vec<u8>,
+  }
+
+  crate::impl_vec!(Bounded, { tag, items: 3, tail });
+
+  #[rstest]
+  fn impl_vec_reads_a_list_at_the_limit() {
+    let wire = hex!("07000000030100020003000109");
+    let mut cursor = &wire[..];
+    assert_eq!(
+      Bounded::decode(&mut cursor),
+      Ok(Bounded {
+        tag: 7,
+        items: vec![1, 2, 3],
+        tail: vec![9],
+      })
+    );
+    assert!(cursor.is_empty());
+  }
+
+  /// The count is refused before any entry is read, so a count with no
+  /// entries after it fails the same way.
+  #[rstest]
+  #[case::with_entries(&hex!("070000000401000200030004000109"))]
+  #[case::without_entries(&hex!("0700000004"))]
+  fn impl_vec_refuses_a_list_past_the_limit(#[case] wire: &[u8]) {
+    assert_eq!(
+      Bounded::decode(&mut &wire[..]),
+      Err(DecodeError::CompactSizeExceedsLimit { limit: 3, value: 4 })
+    );
+  }
+
+  #[rstest]
+  fn impl_vec_reads_an_unlimited_field_with_its_own_codec() {
+    let tail = hex!("050102030405");
+    let wire = [&hex!("0700000000")[..], &tail].concat();
+    assert_eq!(
+      Bounded::decode(&mut &wire[..]).map(|value| value.tail),
+      Vec::<u8>::decode(&mut &tail[..])
+    );
+  }
+
+  #[rstest]
+  fn impl_vec_encodes_field_for_field() {
+    let value = Bounded {
+      tag: 7,
+      items: vec![1, 2],
+      tail: vec![9],
+    };
+    let mut fields = Vec::new();
+    value.tag.encode(&mut fields);
+    value.items.encode(&mut fields);
+    value.tail.encode(&mut fields);
+
+    let mut buf = Vec::new();
+    value.encode(&mut buf);
+    assert_eq!(buf, fields);
+    assert_eq!(buf, hex!("0700000002010002000109"));
   }
 }
