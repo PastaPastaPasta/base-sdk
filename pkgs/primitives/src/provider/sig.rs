@@ -21,7 +21,7 @@ use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 #[cfg(feature = "serde")]
 use dash_types::serialize::hex as serde_hex;
 use dash_types::type_id::TypeId;
-use dash_types::{dlgt_codec, make_bytes, type_cvrt, CompactSize, Hashable, Numeric};
+use dash_types::{dlgt_codec, make_bytes, type_cvrt, Hashable, Numeric};
 #[cfg(feature = "serde")]
 use serde::de::Error as _;
 #[cfg(feature = "serde")]
@@ -36,27 +36,15 @@ make_bytes! {
 
 hash_impl!(EcdsaRecSigArray);
 
-/// Decodes a compact signature of 0 or 65 bytes.
-fn decode_compact(data: &mut &[u8]) -> Result<Option<EcdsaRecSigArray>, DecodeError> {
-  match CompactSize::decode(data)?.into_len(ECDSA_REC_SIG_LEN)? {
-    0 => Ok(None),
-    ECDSA_REC_SIG_LEN => EcdsaRecSigArray::decode(data).map(Some),
-    actual => Err(DecodeError::BadLen {
-      expected: vec![0, ECDSA_REC_SIG_LEN],
-      actual,
-    }),
-  }
-}
-
-/// The signature bytes, empty when unsigned.
-fn compact_image(sig: Option<&impl AsRef<[u8]>>) -> Vec<u8> {
-  sig.map(|s| s.as_ref().to_vec()).unwrap_or_default()
-}
-
 /// Hex form of a compact signature, empty when unsigned.
 #[cfg(feature = "serde")]
 pub(crate) mod compact_hex {
   use super::*;
+
+  /// The signature bytes, empty when unsigned.
+  fn compact_image(sig: Option<&impl AsRef<[u8]>>) -> Vec<u8> {
+    sig.map(|s| s.as_ref().to_vec()).unwrap_or_default()
+  }
 
   pub(crate) fn serialize<S: Serializer, T: AsRef<[u8]>>(sig: &Option<T>, serializer: S) -> Result<S::Ok, S::Error> {
     serde_hex::serialize(&compact_image(sig.as_ref()), serializer)
@@ -82,15 +70,15 @@ pub(crate) mod compact_hex {
   derive(::serde::Serialize, ::serde::Deserialize),
   serde(transparent)
 )]
-pub struct CollateralSig(#[cfg_attr(feature = "serde", serde(with = "compact_hex"))] Option<EcdsaRecSigArray>);
+pub struct CollateralSig(#[cfg_attr(feature = "serde", serde(with = "serde_hex"))] Vec<u8>);
 
 impl BaseCodec for CollateralSig {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    decode_compact(data).map(Self)
+    Vec::decode(data).map(Self)
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
-    compact_image(self.0.as_ref()).encode(buf);
+    self.0.encode(buf);
   }
 }
 
@@ -98,18 +86,23 @@ impl Hashable for CollateralSig {
   type Hash = Hash256;
 
   fn hash(&self) -> Self::Hash {
-    Hash256::from_lendian(sha256d::Hash::hash(&compact_image(self.0.as_ref())).to_byte_array())
+    Hash256::from_lendian(sha256d::Hash::hash(&self.0).to_byte_array())
   }
 }
 
 impl CollateralSig {
   pub(crate) fn new(sig: [u8; ECDSA_REC_SIG_LEN]) -> Self {
-    Self(Some(EcdsaRecSigArray::from_bytes(sig)))
+    Self(sig.to_vec())
   }
 
-  /// Borrows the signature, `None` when unsigned.
+  /// Borrows the signature, `None` when unsigned or not 65 bytes.
   pub fn as_bytes(&self) -> Option<&[u8; ECDSA_REC_SIG_LEN]> {
-    self.0.as_ref().map(EcdsaRecSigArray::as_bytes)
+    self.0.as_slice().try_into().ok()
+  }
+
+  /// Borrows the bytes as read, empty when unsigned.
+  pub fn as_slice(&self) -> &[u8] {
+    &self.0
   }
 }
 
@@ -120,15 +113,15 @@ impl CollateralSig {
   derive(::serde::Serialize, ::serde::Deserialize),
   serde(transparent)
 )]
-pub struct OwnerSig(#[cfg_attr(feature = "serde", serde(with = "compact_hex"))] Option<EcdsaRecSigArray>);
+pub struct OwnerSig(#[cfg_attr(feature = "serde", serde(with = "serde_hex"))] Vec<u8>);
 
 impl BaseCodec for OwnerSig {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
-    decode_compact(data).map(Self)
+    Vec::decode(data).map(Self)
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
-    compact_image(self.0.as_ref()).encode(buf);
+    self.0.encode(buf);
   }
 }
 
@@ -136,18 +129,23 @@ impl Hashable for OwnerSig {
   type Hash = Hash256;
 
   fn hash(&self) -> Self::Hash {
-    Hash256::from_lendian(sha256d::Hash::hash(&compact_image(self.0.as_ref())).to_byte_array())
+    Hash256::from_lendian(sha256d::Hash::hash(&self.0).to_byte_array())
   }
 }
 
 impl OwnerSig {
   pub(crate) fn new(sig: [u8; ECDSA_REC_SIG_LEN]) -> Self {
-    Self(Some(EcdsaRecSigArray::from_bytes(sig)))
+    Self(sig.to_vec())
   }
 
-  /// Borrows the signature, `None` when unsigned.
+  /// Borrows the signature, `None` when unsigned or not 65 bytes.
   pub fn as_bytes(&self) -> Option<&[u8; ECDSA_REC_SIG_LEN]> {
-    self.0.as_ref().map(EcdsaRecSigArray::as_bytes)
+    self.0.as_slice().try_into().ok()
+  }
+
+  /// Borrows the bytes as read, empty when unsigned.
+  pub fn as_slice(&self) -> &[u8] {
+    &self.0
   }
 }
 
@@ -314,6 +312,48 @@ mod tests {
     let mut buf = Vec::new();
     sig.encode(&mut buf);
     assert_eq!(buf, wire);
+  }
+
+  /// A signature of any length decodes and encodes back unchanged, through
+  /// the codec and through JSON; only 65 bytes give a compact signature.
+  #[rstest]
+  #[case::empty(0)]
+  #[case::one(1)]
+  #[case::short(64)]
+  #[case::compact(ECDSA_REC_SIG_LEN)]
+  #[case::long(66)]
+  #[case::wide_size(300)]
+  fn any_length_round_trips(#[case] len: usize) {
+    let mut wire = Vec::new();
+    vec![7_u8; len].encode(&mut wire);
+    let owner = OwnerSig::decode(&mut wire.as_slice()).unwrap();
+    let collateral = CollateralSig::decode(&mut wire.as_slice()).unwrap();
+    for (bytes, compact) in [
+      (owner.as_slice(), owner.as_bytes().is_some()),
+      (collateral.as_slice(), collateral.as_bytes().is_some()),
+    ] {
+      assert_eq!(bytes.len(), len);
+      assert_eq!(compact, len == ECDSA_REC_SIG_LEN);
+    }
+    let mut buf = Vec::new();
+    owner.encode(&mut buf);
+    collateral.encode(&mut buf);
+    assert_eq!(buf, [wire.clone(), wire].concat());
+    #[cfg(feature = "serde")]
+    {
+      dash_dev::assert_json_rt(&owner);
+      dash_dev::assert_json_rt(&collateral);
+    }
+  }
+
+  /// A signature hashes the bytes it holds without their size, as a
+  /// fixed-size compact signature of the same bytes hashes.
+  #[rstest]
+  fn hash_covers_the_bytes_held() {
+    let bytes = [9_u8; ECDSA_REC_SIG_LEN];
+    let fixed = EcdsaRecSigArray::from_bytes(bytes).hash();
+    assert_eq!(OwnerSig::new(bytes).hash(), fixed);
+    assert_eq!(CollateralSig::new(bytes).hash(), fixed);
   }
 
   #[rstest]
