@@ -12,6 +12,7 @@ use super::curve_consts::HALF_P;
 use super::error::BlsError;
 use super::group::{G1Affine, G2Affine, Point, G1, G2};
 use super::scalar::FR_BITS;
+use super::scheme_ctx::BlsSchemeKind;
 use super::scheme_ops::BlsScheme;
 use super::schemes::BlsScChia;
 use crate::prelude::*;
@@ -33,6 +34,8 @@ impl BlsScheme for BlsScChia {
   type InnerPk = G1Affine;
   type InnerSig = G2Affine;
   type Msg<'a> = [u8; 32];
+
+  const KIND: BlsSchemeKind = BlsSchemeKind::Legacy;
 
   /// Derive via draft-03 keygen, then range-check the scalar.
   fn sk_from_ikm(ikm: &[u8]) -> Result<Self::InnerSk, BlsError> {

@@ -10,6 +10,7 @@ use super::blst_ffi;
 use super::error::BlsError;
 use super::group::{G1Affine, G2Affine, Point, G1, G2};
 use super::scalar::{Fr, FR_BITS};
+use super::scheme_ctx::BlsSchemeKind;
 use super::schemes::BlsSchemeId;
 use super::{BlsDhBytes, BlsShareId};
 use crate::aes_cbc::{self, AES_BLOCK_LEN, AES_KEY_LEN};
@@ -49,6 +50,9 @@ pub trait BlsScheme: BlsSchemeId + Sealed + Sized {
   type InnerSig: Copy + Debug + PartialEq + Eq + Send + Sync;
   /// Hash-to-curve input accepted by signing and verification.
   type Msg<'a>: Copy + Send + Sync;
+
+  /// The scheme as a value.
+  const KIND: BlsSchemeKind;
 
   /// Derive a secret key from input keying material.
   ///

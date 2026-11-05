@@ -10,6 +10,7 @@ mod byte_bags;
 mod error;
 mod ies_bytes;
 mod public_hash;
+mod scheme_ctx;
 mod schemes;
 mod share_id;
 mod sig_id;
@@ -18,6 +19,7 @@ pub use byte_bags::{BlsDhBytes, BlsPkBytes, BlsSigBytes, BlsSkBytes, BLS_DH_LEN,
 pub use error::BlsError;
 pub use ies_bytes::{BlsIesBlobBytes, BlsIesMultiBytes, IV_SEED_LEN, MAX_IES_RECIPIENTS};
 pub use public_hash::{BlsPkHash, BLS_PK_HASH_LEN};
+pub use scheme_ctx::{BlsCtx, BlsSchemeKind};
 pub use schemes::{BlsScChia, BlsScIetf, BlsSchemeId};
 pub use share_id::{BlsShareId, BLS_ID_LEN};
 pub use sig_id::BlsSigId;

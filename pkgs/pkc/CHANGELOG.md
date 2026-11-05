@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- `BlsSchemeKind` and `BlsCtx`, which pick the legacy or basic BLS scheme at run time. They need no feature.
+  `BlsScheme::KIND` gives each scheme's `BlsSchemeKind`.
 - `BlsScheme::is_canonical_pk` and `BlsScheme::is_canonical_sig`, each scheme's rule for `is_canonical::<S>()`.
 - `BlsScheme::g1_bytes` and `BlsScheme::g2_bytes`, each scheme's byte layout of a point; `BlsScheme::pk_ietf_bytes`,
   the IETF compressed form of a G1 encoding in that layout, and `BlsScheme::sig_ietf_x_bytes`, the `x` of a G2

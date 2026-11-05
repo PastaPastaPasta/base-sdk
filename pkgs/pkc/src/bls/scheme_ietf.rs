@@ -8,6 +8,7 @@
 
 use super::error::BlsError;
 use super::group::{G1Affine, G2Affine, G1, G2};
+use super::scheme_ctx::BlsSchemeKind;
 use super::scheme_ops::{verify_ok, BlsScheme};
 use super::schemes::BlsScIetf;
 use super::sig_id::BlsSigId;
@@ -31,6 +32,8 @@ impl BlsScheme for BlsScIetf {
   type InnerPk = PublicKey;
   type InnerSig = Signature;
   type Msg<'a> = &'a [u8];
+
+  const KIND: BlsSchemeKind = BlsSchemeKind::Basic;
 
   /// Derive via draft-03 keygen.
   fn sk_from_ikm(ikm: &[u8]) -> Result<Self::InnerSk, BlsError> {
