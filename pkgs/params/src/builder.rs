@@ -460,8 +460,11 @@ impl ChainParamsBuilder {
         .and_then(|h| u32::try_from(h).ok())
         .map(BlockHeight::from_u32)
         .ok_or_else(|| ParamsError::ActivationHeightValue(arg.into()))?;
-      let deployment = BuriedDeployment::ALL
-        .into_iter()
+      let deployment = self
+        .release
+        .buried_deployments()
+        .iter()
+        .copied()
         .find(|d| d.test_activation_name() == Some(name))
         .ok_or_else(|| ParamsError::ActivationHeightName(arg.into()))?;
       let c = &mut setup.consensus;
@@ -481,6 +484,7 @@ impl ChainParamsBuilder {
         BuriedDeployment::V19 => c.v19_height = h,
         BuriedDeployment::V20 => c.v20_height = h,
         BuriedDeployment::MnRr => c.mn_rr_height = h,
+        BuriedDeployment::Ipv4Optional => c.ipv4_optional_height = h,
         BuriedDeployment::Dip0003 | BuriedDeployment::Dip0020 | BuriedDeployment::Withdrawals => {}
       }
     }

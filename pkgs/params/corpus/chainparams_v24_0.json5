@@ -1,10 +1,10 @@
-// Dash Core's chain parameters, v24.0 pin (v24.0.0-rc.5-156-g1cdab7d9033a), for dash-params' builder
+// Dash Core's chain parameters, v24.0 pin (v24.0.0), for dash-params' builder
 // equality test (node program BS5). Produced by Core, not written by hand:
 // contrib/node/bs5-chainparams in rust-dashcore builds chainparams_dump from a
-// controlled clean build of Core commit 1cdab7d9033a8d89f3b6e8723d9cd72f171f1dcd (tree 43e411024dc784a8c1d8e2f96953af79afb50a6e), the pin in
+// controlled clean build of Core commit 586c0ebb45dfb9b1f3c683cdaa5c1236a39e017e (tree 2498231c02280909060663db1fe038bac861dac4), the pin in
 // dash-oracle-sys/pins.txt, and runs each case through ClearArgs,
 // SetupChainParamsOptions, ParseParameters and SelectParams, then
-// AppInitMain's spork block. Dump binary sha256 e2daf9d87e908ed070c87fc0ecfef64b3a7b9e52cf488a62c8e4883647902597.
+// AppInitMain's spork block. Dump binary sha256 eb29834d2267d4d6efccde2e745a284ed5ef9518ccafa0e0ccd3302afd800a3a.
 // Every case but the "tool_only" ones was checked equal to the pinned
 // archive's oracle_chainparams_json (or its error text) by the same script.
 //
@@ -17,7 +17,7 @@
 // the refusal's text and, for a registered deviation, its quirk number
 // ("deviation"; 46: LLMQ sizes outside u16). core_version is dropped.
 {
- "core_version": "v24.0.0-rc.5-156-g1cdab7d9033a",
+ "core_version": "v24.0.0",
  "bases": {
   "main": {
    "params": {
@@ -116,6 +116,7 @@
      "V20Height": 1987776,
      "MN_RRHeight": 2128896,
      "WithdrawalsHeight": 2201472,
+     "IPv4OptionalHeight": 2147483647,
      "MinBIP9WarningHeight": 2203488,
      "nRuleChangeActivationThreshold": 1815,
      "nMinerConfirmationWindow": 2016,
@@ -326,7 +327,8 @@
      "v19": 1899072,
      "v20": 1987776,
      "mn_rr": 2128896,
-     "withdrawals": 2201472
+     "withdrawals": 2201472,
+     "ipv4_optional": 2147483647
     },
     "llmqs": [
      {
@@ -778,6 +780,7 @@
      "V20Height": 905100,
      "MN_RRHeight": 1066900,
      "WithdrawalsHeight": 1148500,
+     "IPv4OptionalHeight": 0,
      "MinBIP9WarningHeight": 1150516,
      "nRuleChangeActivationThreshold": 1512,
      "nMinerConfirmationWindow": 2016,
@@ -1005,7 +1008,8 @@
      "v19": 850100,
      "v20": 905100,
      "mn_rr": 1066900,
-     "withdrawals": 1148500
+     "withdrawals": 1148500,
+     "ipv4_optional": 0
     },
     "llmqs": [
      {
@@ -1458,6 +1462,7 @@
      "V20Height": 2,
      "MN_RRHeight": 2,
      "WithdrawalsHeight": 2,
+     "IPv4OptionalHeight": 0,
      "MinBIP9WarningHeight": 2018,
      "nRuleChangeActivationThreshold": 1512,
      "nMinerConfirmationWindow": 2016,
@@ -1717,7 +1722,8 @@
      "v19": 2,
      "v20": 2,
      "mn_rr": 2,
-     "withdrawals": 2
+     "withdrawals": 2,
+     "ipv4_optional": 0
     },
     "llmqs": [
      {
@@ -2207,6 +2213,7 @@
      "V20Height": 432,
      "MN_RRHeight": 432,
      "WithdrawalsHeight": 600,
+     "IPv4OptionalHeight": 2147483647,
      "MinBIP9WarningHeight": 0,
      "nRuleChangeActivationThreshold": 108,
      "nMinerConfirmationWindow": 144,
@@ -2430,7 +2437,8 @@
      "v19": 1,
      "v20": 432,
      "mn_rr": 432,
-     "withdrawals": 600
+     "withdrawals": 600,
+     "ipv4_optional": 2147483647
     },
     "llmqs": [
      {
@@ -4199,6 +4207,17 @@
     "params.consensus.MN_RRHeight": 2147483646,
     "ext.buriedDeployments.v20": 2147483646,
     "ext.buriedDeployments.mn_rr": 2147483646
+   }
+  },
+  {
+   "name": "extra/tah_ipv4_optional",
+   "chain": "regtest",
+   "args": [
+    "-testactivationheight=ipv4_optional@1002"
+   ],
+   "delta": {
+    "params.consensus.IPv4OptionalHeight": 1002,
+    "ext.buriedDeployments.ipv4_optional": 1002
    }
   },
   {

@@ -1,6 +1,6 @@
 //
 // Chain parameter vectors. Generated with the reference implementation
-// (dashpay/dash v24.0.0-rc.5, 8163290aa0).
+// (dashpay/dash v24.0.0, 938fba5028).
 //
 // Each entry is the output of the command above it, keyed by chain. The node
 // of each chain runs with an empty data directory and no connections, so it

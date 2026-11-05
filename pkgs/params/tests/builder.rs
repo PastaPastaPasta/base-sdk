@@ -156,6 +156,46 @@ fn activation_height_without_option_name_is_cores_error() {
   );
 }
 
+/// v24.0.0 adds `ipv4_optional` to the `-testactivationheight` names
+/// (chainparams.cpp:1089-1090); v23.1.8 has no such deployment.
+#[rstest]
+fn ipv4_optional_moves_at_v24_0_only() {
+  let p = build(regtest(Release::V24_0).activation_height(BuriedDeployment::Ipv4Optional, h(15)));
+  assert_eq!(p.consensus.ipv4_optional_height, h(15));
+  let err = regtest(Release::V23_1)
+    .activation_height(BuriedDeployment::Ipv4Optional, h(15))
+    .build()
+    .unwrap_err();
+  assert_eq!(
+    err.to_string(),
+    "Invalid name (ipv4_optional@15) for -testactivationheight=name@height."
+  );
+}
+
+/// At `Release::V23_1` the `ipv4_optional` height is zero on every network,
+/// so IPv4 primaries are never required.
+#[rstest]
+fn ipv4_optional_is_zero_at_v23_1(
+  #[values(Network::Main, Network::Testnet3, Network::Devnet, Network::Regtest)] network: Network,
+) {
+  let p = build(ChainParamsBuilder::new(network, Release::V23_1));
+  assert_eq!(p.consensus.ipv4_optional_height, h(0));
+  assert_eq!(p.consensus.deployment_height(BuriedDeployment::Ipv4Optional), h(0));
+}
+
+/// Each release lists a fixed prefix of `BuriedDeployment::ALL`, so a
+/// deployment appended there joins neither.
+#[rstest]
+fn buried_deployments_are_fixed_per_release() {
+  let v23_1 = Release::V23_1.buried_deployments();
+  assert_eq!(v23_1.len(), 15);
+  assert_eq!(v23_1.last(), Some(&BuriedDeployment::Withdrawals));
+  let v24_0 = Release::V24_0.buried_deployments();
+  assert_eq!(v24_0.len(), 16);
+  assert_eq!(v24_0.last(), Some(&BuriedDeployment::Ipv4Optional));
+  assert_eq!(&v24_0[..15], v23_1);
+}
+
 /// BL-31: Core's `ParseInt32` accepts negative `-dip3params`, `-budgetparams`
 /// and `-vbparams` heights; a budget start of -1 pays treasury at block 1,
 /// which no unsigned height expresses, so they are refused, never clamped.

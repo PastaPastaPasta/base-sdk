@@ -61,11 +61,13 @@ pub enum BuriedDeployment {
   MnRr,
   /// Credit withdrawal transactions.
   Withdrawals,
+  /// Masternode primary addresses need not be IPv4.
+  Ipv4Optional,
 }
 
 impl BuriedDeployment {
   /// Every buried deployment, in Core's `BuriedDeployment` order.
-  pub const ALL: [Self; 15] = [
+  pub const ALL: [Self; 16] = [
     Self::HeightInCoinbase,
     Self::Cltv,
     Self::DerSig,
@@ -81,6 +83,7 @@ impl BuriedDeployment {
     Self::V20,
     Self::MnRr,
     Self::Withdrawals,
+    Self::Ipv4Optional,
   ];
 
   /// Core's `DeploymentName`, as `getdeploymentinfo` reports it.
@@ -101,6 +104,7 @@ impl BuriedDeployment {
       Self::V20 => "v20",
       Self::MnRr => "mn_rr",
       Self::Withdrawals => "withdrawals",
+      Self::Ipv4Optional => "ipv4_optional",
     }
   }
 
@@ -120,6 +124,7 @@ impl BuriedDeployment {
       Self::V19 => Some("v19"),
       Self::V20 => Some("v20"),
       Self::MnRr => Some("mn_rr"),
+      Self::Ipv4Optional => Some("ipv4_optional"),
       Self::Dip0003 | Self::Dip0020 | Self::Withdrawals => None,
     }
   }
@@ -206,6 +211,9 @@ pub struct ConsensusParams {
   pub mn_rr_height: BlockHeight,
   /// Credit withdrawal activation height.
   pub withdrawals_height: BlockHeight,
+  /// Height from which masternode primary addresses need not be IPv4.
+  /// Zero at `Release::V23_1`, so IPv4 primaries are never required.
+  pub ipv4_optional_height: BlockHeight,
   /// Minimum height before BIP9 warning triggers.
   pub min_bip9_warning_height: BlockHeight,
   /// Threshold of blocks in a window that must
@@ -260,6 +268,9 @@ pub struct ConsensusParams {
 }
 
 impl ConsensusParams {
+  /// Activation height of a buried deployment that is not scheduled.
+  pub const NOT_SCHEDULED: BlockHeight = BlockHeight::from_u32(i32::MAX.unsigned_abs());
+
   /// Returns the activation height for a buried deployment.
   pub const fn deployment_height(&self, dep: BuriedDeployment) -> BlockHeight {
     match dep {
@@ -278,6 +289,7 @@ impl ConsensusParams {
       BuriedDeployment::V20 => self.v20_height,
       BuriedDeployment::MnRr => self.mn_rr_height,
       BuriedDeployment::Withdrawals => self.withdrawals_height,
+      BuriedDeployment::Ipv4Optional => self.ipv4_optional_height,
     }
   }
 

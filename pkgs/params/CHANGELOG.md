@@ -25,6 +25,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - `BRR_PERIODS_PERMILLE`, the masternode share of the block value in each block reward reallocation period.
+- `BuriedDeployment::Ipv4Optional` and `ConsensusParams::ipv4_optional_height`, from which masternode primary
+  addresses need not be IPv4. At `Release::V24_0` the height is 0 on testnet and devnets and not scheduled
+  (`ConsensusParams::NOT_SCHEDULED`) on mainnet and regtest, and regtest's `-testactivationheight` moves it as
+  `ipv4_optional`. At `Release::V23_1` the height is zero on every network, so IPv4 primaries are never required;
+  `Release::buried_deployments` omits the deployment there, and the name is refused.
 
 ### Changed
 
