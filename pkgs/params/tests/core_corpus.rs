@@ -17,7 +17,8 @@
 //! From rc.5 to v24.0.0 only the new buried deployment `ipv4_optional`
 //! moved, checked here against v24.0.0's `chainparams.cpp`: not scheduled on
 //! mainnet and regtest (:197, :839) and 0 on testnet and devnets (:409,
-//! :594). Its regtest `-testactivationheight` name is checked in
+//! :594). Its regtest `-testactivationheight` name (:1089-1090) is checked
+//! here by `extra/tah_ipv4_optional`, and its refusal at v23.1 in
 //! `tests/builder.rs`.
 //!
 //! From rc.4 to rc.5 these values moved, each checked here against rc.5's

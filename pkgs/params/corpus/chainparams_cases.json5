@@ -346,6 +346,7 @@
   ["extra/devnet_name_300", "devnet", ["-devnet=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"]],
   ["extra/limit_llmq_400", "regtest", ["-llmqtestparams=400:2"]],
   ["extra/limit_tah_max", "regtest", ["-testactivationheight=v20@2147483646", "-testactivationheight=mn_rr@2147483646"]],
+  ["extra/tah_ipv4_optional", "regtest", ["-testactivationheight=ipv4_optional@1002"]],
   ["extra/limit_llmq_odd", "regtest", ["-llmqtestparams=0:5"]],
   ["extra/limit_devnet_negative", "devnet", ["-highsubsidyfactor=-7", "-minimumdifficultyblocks=-1"]],
   ["extra/llmqtestparams_ignored_main", "main", ["-llmqtestparams=-1:2"]],

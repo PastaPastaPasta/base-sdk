@@ -4210,6 +4210,17 @@
    }
   },
   {
+   "name": "extra/tah_ipv4_optional",
+   "chain": "regtest",
+   "args": [
+    "-testactivationheight=ipv4_optional@1002"
+   ],
+   "delta": {
+    "params.consensus.IPv4OptionalHeight": 1002,
+    "ext.buriedDeployments.ipv4_optional": 1002
+   }
+  },
+  {
    "name": "extra/limit_llmq_odd",
    "chain": "regtest",
    "args": [
