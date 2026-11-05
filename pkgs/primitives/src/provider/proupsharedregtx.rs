@@ -7,17 +7,19 @@
 //! ProUpSharedRegTx shared registrar update payload (type 12).
 
 use super::share::MAX_SHARES;
-use super::SharedRegistrarSig;
+use super::{EcdsaRecSigArray, SharedRegistrarSig};
 use crate::codec::{decode_list, encode_list, impl_payload};
 use crate::prelude::*;
+use crate::sign::{sha256d, verify_compact_canonical};
 use crate::sptx::{InputsHash, ProTxInvalid};
 use crate::{hash_impl, TxHash};
 
 use dash_pkc::bls::BlsPkBytes;
+use dash_pkc::ecdsa::{EcdsaError, ECDSA_REC_SIG_LEN};
 use dash_script::PubKeyHash;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
-use dash_types::{impl_new, Checkable};
+use dash_types::{impl_new, Checkable, Signable};
 use getset::{CopyGetters, Getters};
 
 use core::fmt;
@@ -64,12 +66,38 @@ impl BaseCodec for ProUpSharedRegTx {
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
-    self.version.encode(buf);
-    self.pro_tx_hash.encode(buf);
-    self.pub_key_operator.encode(buf);
-    self.key_id_voting.encode(buf);
-    self.inputs_hash.encode(buf);
+    self.encode_unsigned(buf);
     encode_list(&self.sigs, buf);
+  }
+}
+
+/// The signature of a share owner replacing the keys of a shared
+/// masternode. It signs every field of the payload but the signatures, and
+/// depends on the context alone.
+impl Signable for SharedRegistrarSig {
+  type Key = PubKeyHash;
+  type Context = ProUpSharedRegTx;
+  type Error = EcdsaError;
+
+  fn payload(&self, ptx: &ProUpSharedRegTx) -> Vec<u8> {
+    let mut buf = Vec::new();
+    ptx.encode_unsigned(&mut buf);
+    sha256d(&buf).to_vec()
+  }
+
+  fn set_signature(&mut self, sig: &[u8], key: &PubKeyHash, ptx: &ProUpSharedRegTx) -> Result<(), EcdsaError> {
+    let sig = <[u8; ECDSA_REC_SIG_LEN]>::try_from(sig).map_err(|_| EcdsaError::InvalidSignature)?;
+    verify_compact_canonical(&self.payload(ptx), &sig, key)?;
+    *self = EcdsaRecSigArray::from_bytes(sig).into();
+    Ok(())
+  }
+
+  fn reset_signature(&mut self) {
+    *self = Self::default();
+  }
+
+  fn verify(&self, key: &PubKeyHash, ptx: &ProUpSharedRegTx) -> Option<EcdsaError> {
+    verify_compact_canonical(&self.payload(ptx), self.as_bytes(), key).err()
   }
 }
 
@@ -95,6 +123,15 @@ hash_impl!(ProUpSharedRegTx);
 impl ProUpSharedRegTx {
   /// The payload version `check` accepts.
   const CURRENT_VERSION: u16 = 1;
+
+  /// Writes every field but the signatures.
+  fn encode_unsigned(&self, buf: &mut impl EncodeBuf) {
+    self.version.encode(buf);
+    self.pro_tx_hash.encode(buf);
+    self.pub_key_operator.encode(buf);
+    self.key_id_voting.encode(buf);
+    self.inputs_hash.encode(buf);
+  }
 }
 
 impl fmt::Display for ProUpSharedRegTx {
@@ -107,6 +144,7 @@ impl fmt::Display for ProUpSharedRegTx {
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
+  use crate::sign::tests::consent_signs_the_payload;
   use crate::Transaction;
 
   use dash_dev::{assert_json_rt, check_sptx_raw, vec_from_hex};
@@ -140,6 +178,11 @@ mod tests {
     let raw = vec_from_hex(raw);
     assert_json_rt(&check_sptx_raw::<ProUpSharedRegTx>(&raw, txid));
     assert_eq!(Transaction::decode(&mut &raw[..]).unwrap().check(), None, "{txid}");
+  }
+
+  #[rstest]
+  fn shared_registrar_sig_signs_the_payload() {
+    consent_signs_the_payload::<SharedRegistrarSig>(&regtest(REGTEST[0].0));
   }
 
   /// The fields that `decoderawtransaction` of the reference implementation at
