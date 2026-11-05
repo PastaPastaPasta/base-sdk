@@ -15,6 +15,7 @@ bench = false
 [features]
 default = []
 std = [
+  "bitcoin_hashes/std",
   "dash-params/std",
   "dash-pkc/std",
   "dash-primitives/std",
@@ -38,6 +39,7 @@ portable = [
 
 [dependencies]
 bitcoin-consensus-encoding = { workspace = true, features = ["alloc"] }
+bitcoin_hashes = { workspace = true, features = ["alloc"] }
 cfg-if = "1"
 dash-num = { version = "0.2.0-beta", path = "../num", default-features = false, features = [
   "codec",

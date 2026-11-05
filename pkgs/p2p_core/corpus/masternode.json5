@@ -1,0 +1,305 @@
+//
+// Masternode message vectors. Generated with the reference implementation
+// (dashpay/dash v24.0.0, 938fba5028).
+//
+// Each section comes with the program used to generate the vectors.
+//
+// To run a program, move its `#include` lines to the top of
+// `src/test/net_tests.cpp` at the specified revision and paste the rest at
+// the end of the `net_tests` suite. Build it with `make -C src test/test_dash`
+// and run `./src/test/test_dash --run_test=net_tests/<name>`. The output
+// should match the section.
+//
+
+{
+/*
+#include <bls/bls.h>
+#include <evo/mnauth.h>
+
+BOOST_AUTO_TEST_CASE(mnauth_payloads)
+{
+    const bool legacy{bls::bls_legacy_scheme.exchange(false)};
+    CBLSSecretKey sk;
+    BOOST_REQUIRE(sk.SetHexStr("0303030303030303030303030303030303030303030303030303030303030303", false));
+    struct Case {
+        std::string label;
+        uint256 pro_reg_tx_hash;
+        CBLSSignature sig;
+    };
+    for (const auto& [label, pro_reg_tx_hash, sig] : std::vector<Case>{
+             {"null", uint256{}, CBLSSignature{}},
+             {"signed", uint256::ONE, sk.Sign(uint256::ONE, false)},
+             {"signed_hash", uint256S("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"),
+              sk.Sign(uint256::TWO, false)}}) {
+        CMNAuth mnauth;
+        mnauth.proRegTxHash = pro_reg_tx_hash;
+        mnauth.sig = sig;
+        const auto msg{CNetMsgMaker{PROTOCOL_VERSION}.Make(NetMsgType::MNAUTH, mnauth)};
+        CMNAuth read;
+        CDataStream{msg.data, SER_NETWORK, PROTOCOL_VERSION} >> read;
+        BOOST_REQUIRE(read.proRegTxHash == pro_reg_tx_hash && read.sig == sig);
+        std::printf("    \"%s\": {\n      \"raw\": \"%s\",\n      \"details\": {\n"
+                    "        \"pro_reg_tx_hash\": \"%s\",\n        \"sig\": \"%s\"\n      }\n    },\n",
+                    label.c_str(), HexStr(msg.data).c_str(), pro_reg_tx_hash.ToString().c_str(),
+                    HexStr(sig.ToBytes(false)).c_str());
+    }
+    bls::bls_legacy_scheme.store(legacy);
+}
+*/
+  "mnauth": {
+    "null": {
+      "raw": "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "details": {
+        "pro_reg_tx_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "sig": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    "signed": {
+      "raw": "0100000000000000000000000000000000000000000000000000000000000000b2d6206cbe3e39e74e3a42aab2912e66c988282bc51d6df7691e11fb796555045dbc8b4510f197e986882133c840cd81162c4e36505e3c05422c4cd199c2099f438742e0a2675b547ee6f86a573cee3315a6d157a54096f74c0561be165ac912",
+      "details": {
+        "pro_reg_tx_hash": "0000000000000000000000000000000000000000000000000000000000000001",
+        "sig": "b2d6206cbe3e39e74e3a42aab2912e66c988282bc51d6df7691e11fb796555045dbc8b4510f197e986882133c840cd81162c4e36505e3c05422c4cd199c2099f438742e0a2675b547ee6f86a573cee3315a6d157a54096f74c0561be165ac912"
+      }
+    },
+    "signed_hash": {
+      "raw": "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100904ee63be4fef3f12da8bc8e6d483cac54ff23f690bcbbc6c7f6cf63f084f37fac63944282dc4b1d67eb5fc579e4355e1839c411bccf9ddfb8351a425d8b7af14b50630986dd7a9da91293841b9c47adca2406c7c75a37230d2fa9b04044f040",
+      "details": {
+        "pro_reg_tx_hash": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+        "sig": "904ee63be4fef3f12da8bc8e6d483cac54ff23f690bcbbc6c7f6cf63f084f37fac63944282dc4b1d67eb5fc579e4355e1839c411bccf9ddfb8351a425d8b7af14b50630986dd7a9da91293841b9c47adca2406c7c75a37230d2fa9b04044f040"
+      }
+    },
+  },
+/*
+#include <key.h>
+#include <spork.h>
+
+BOOST_AUTO_TEST_CASE(spork_payloads)
+{
+    CKey key;
+    const std::vector<uint8_t> secret(32, 0x04);
+    key.Set(secret.begin(), secret.end(), true);
+    struct Case {
+        std::string label;
+        SporkId id;
+        SporkValue value;
+        int64_t time_signed;
+        bool sign;
+    };
+    for (const auto& [label, id, value, time_signed, sign] : std::vector<Case>{
+             {"unsigned", SPORK_2_INSTANTSEND_ENABLED, 0, 0, false},
+             {"signed", SPORK_19_CHAINLOCKS_ENABLED, 4070908800, 1700000000, true},
+             {"signed_wide", SPORK_INVALID, -2, 5000000000, true},
+             {"negative_time", SPORK_23_QUORUM_POSE, 1, -1700000000, true}}) {
+        CSporkMessage spork{id, value, NodeClock::time_point{std::chrono::seconds{time_signed}}};
+        if (sign) BOOST_REQUIRE(spork.Sign(key));
+        const auto msg{CNetMsgMaker{PROTOCOL_VERSION}.Make(NetMsgType::SPORK, spork)};
+        CSporkMessage read;
+        CDataStream{msg.data, SER_NETWORK, PROTOCOL_VERSION} >> read;
+        BOOST_REQUIRE(read.GetHash() == spork.GetHash());
+        // The signature follows its one-byte length at offset 20.
+        BOOST_REQUIRE_EQUAL(size_t{msg.data.at(20)}, msg.data.size() - 21);
+        std::printf("    \"%s\": {\n      \"raw\": \"%s\",\n      \"details\": {\n        \"spork_id\": %d,\n"
+                    "        \"value\": %lld,\n        \"time_signed\": %lld,\n        \"sig\": \"%s\"\n"
+                    "      }\n    },\n",
+                    label.c_str(), HexStr(msg.data).c_str(), static_cast<int>(id), (long long)value,
+                    (long long)time_signed, HexStr(Span{msg.data}.subspan(21)).c_str());
+    }
+}
+*/
+  "spork": {
+    "unsigned": {
+      "raw": "112700000000000000000000000000000000000000",
+      "details": {
+        "spork_id": 10001,
+        "value": 0,
+        "time_signed": 0,
+        "sig": ""
+      }
+    },
+    "signed": {
+      "raw": "222700008023a5f20000000000f1536500000000411f7298557e2bbc600820981975fdd0d90aa05f48cf062ab6cf0c1377aa4e3a1c552e3a05fb1a8912816b68295a1211ae3a2b0c386279c38d7231bf3e40a6d891a4",
+      "details": {
+        "spork_id": 10018,
+        "value": 4070908800,
+        "time_signed": 1700000000,
+        "sig": "1f7298557e2bbc600820981975fdd0d90aa05f48cf062ab6cf0c1377aa4e3a1c552e3a05fb1a8912816b68295a1211ae3a2b0c386279c38d7231bf3e40a6d891a4"
+      }
+    },
+    "signed_wide": {
+      "raw": "fffffffffeffffffffffffff00f2052a010000004120123b4bc6faa7357d402b25df5f8567e16c53fb9ee989c8685039b05c016e7e5e2fd0b58f0822138e18018ef25b457b11bb5d047de2f6e498f85420a2aa830fa2",
+      "details": {
+        "spork_id": -1,
+        "value": -2,
+        "time_signed": 5000000000,
+        "sig": "20123b4bc6faa7357d402b25df5f8567e16c53fb9ee989c8685039b05c016e7e5e2fd0b58f0822138e18018ef25b457b11bb5d047de2f6e498f85420a2aa830fa2"
+      }
+    },
+    "negative_time": {
+      "raw": "262700000100000000000000000fac9affffffff411f23f849572d5345ddc4e04e92ba6cb74c8c5039ec64c2690204d9417fce500510227aac53f13c5815e94b654c3aded290dd458caf8ff7808767efdc07ae7a86c9",
+      "details": {
+        "spork_id": 10022,
+        "value": 1,
+        "time_signed": -1700000000,
+        "sig": "1f23f849572d5345ddc4e04e92ba6cb74c8c5039ec64c2690204d9417fce500510227aac53f13c5815e94b654c3aded290dd458caf8ff7808767efdc07ae7a86c9"
+      }
+    },
+  },
+/*
+#include <key.h>
+#include <spork.h>
+
+BOOST_AUTO_TEST_CASE(spork_hashes)
+{
+    CKey key;
+    const std::vector<uint8_t> secret(32, 0x04);
+    key.Set(secret.begin(), secret.end(), true);
+    for (const bool sign : {false, true}) {
+        CSporkMessage spork{SPORK_21_QUORUM_ALL_CONNECTED, 1, NodeClock::time_point{std::chrono::seconds{2}}};
+        if (sign) BOOST_REQUIRE(spork.Sign(key));
+        const auto msg{CNetMsgMaker{PROTOCOL_VERSION}.Make(NetMsgType::SPORK, spork)};
+        std::printf("    { \"raw\": \"%s\", \"hash\": \"%s\" },\n", HexStr(msg.data).c_str(),
+                    spork.GetHash().ToString().c_str());
+    }
+}
+*/
+  // Each vector holds a `spork` payload and its hash.
+  "spork_hash": [
+    { "raw": "242700000100000000000000020000000000000000", "hash": "0039f5e1b0a11a4aca6bd17108414e42d92c794c3b7cfbdb43acbe2fa6550e3b" },
+    { "raw": "24270000010000000000000002000000000000004120dbb5bccd2b6e0fc43afc109df991902b7e5c4909b1c1421cd8a4dff8e248a5082c69283926117ac7f22ee7143f299cb7d4969b8a52aa6a5eaf2e31282b6befa5", "hash": "ceb69f2433c0f749085dbc9a523037439873c109495f89b6add1da44ae5bb0d4" },
+  ],
+/*
+#include <pubkey.h>
+#include <spork.h>
+
+BOOST_AUTO_TEST_CASE(spork_sig_len)
+{
+    for (const size_t len : {size_t{0}, size_t{CPubKey::COMPACT_SIGNATURE_SIZE},
+                             size_t{CPubKey::COMPACT_SIGNATURE_SIZE} + 1}) {
+        std::vector<unsigned char> raw;
+        CVectorWriter{SER_NETWORK, PROTOCOL_VERSION, raw, 0}
+            << SPORK_2_INSTANTSEND_ENABLED << SporkValue{1} << int64_t{2} << std::vector<unsigned char>(len, 0x30);
+        bool read{true};
+        try {
+            CSporkMessage spork;
+            CDataStream{raw, SER_NETWORK, PROTOCOL_VERSION} >> spork;
+        } catch (const std::ios_base::failure&) {
+            read = false;
+        }
+        std::printf("    { \"raw\": \"%s\", \"sig_len\": %zu, \"read\": %s },\n", HexStr(raw).c_str(), len,
+                    read ? "true" : "false");
+    }
+}
+*/
+  // Each vector holds a `spork` payload with a `sig_len`-byte signature, and
+  // whether the reference implementation reads it.
+  "spork_sig_len": [
+    { "raw": "112700000100000000000000020000000000000000", "sig_len": 0, "read": true },
+    { "raw": "1127000001000000000000000200000000000000413030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030", "sig_len": 65, "read": true },
+    { "raw": "112700000100000000000000020000000000000042303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030", "sig_len": 66, "read": false },
+  ],
+/*
+#include <bls/bls.h>
+#include <masternode/meta.h>
+
+BOOST_AUTO_TEST_CASE(platformban_payloads)
+{
+    CBLSSecretKey sk;
+    BOOST_REQUIRE(sk.SetHexStr("0505050505050505050505050505050505050505050505050505050505050505", false));
+    struct Case {
+        std::string label;
+        uint256 pro_tx_hash;
+        int32_t requested_height;
+        uint256 quorum_hash;
+        CBLSSignature sig;
+    };
+    for (const auto& [label, pro_tx_hash, requested_height, quorum_hash, sig] : std::vector<Case>{
+             {"null", uint256{}, 0, uint256{}, CBLSSignature{}},
+             {"signed", uint256::ONE, 1000, uint256::TWO, sk.Sign(uint256::ONE, false)},
+             {"max_height", uint256S("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"),
+              std::numeric_limits<int32_t>::max(), Params().GenesisBlock().GetHash(), sk.Sign(uint256::TWO, false)},
+             {"negative_height", uint256::TWO, -1, uint256::ONE, sk.Sign(uint256::ONE, false)}}) {
+        PlatformBanMessage ban;
+        ban.m_protx_hash = pro_tx_hash;
+        ban.m_requested_height = requested_height;
+        ban.m_quorum_hash = quorum_hash;
+        ban.m_signature = sig;
+        const auto msg{CNetMsgMaker{PROTOCOL_VERSION}.Make(NetMsgType::PLATFORMBAN, ban)};
+        PlatformBanMessage read;
+        CDataStream{msg.data, SER_NETWORK, PROTOCOL_VERSION} >> read;
+        BOOST_REQUIRE(read.GetHash() == ban.GetHash() && read.m_signature == sig);
+        std::printf("    \"%s\": {\n      \"raw\": \"%s\",\n      \"details\": {\n"
+                    "        \"pro_tx_hash\": \"%s\",\n        \"requested_height\": %d,\n"
+                    "        \"quorum_hash\": \"%s\",\n        \"sig\": \"%s\"\n      }\n    },\n",
+                    label.c_str(), HexStr(msg.data).c_str(), pro_tx_hash.ToString().c_str(), requested_height,
+                    quorum_hash.ToString().c_str(), HexStr(sig.ToBytes(false)).c_str());
+    }
+}
+*/
+  "platformban": {
+    "null": {
+      "raw": "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "details": {
+        "pro_tx_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "requested_height": 0,
+        "quorum_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "sig": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    "signed": {
+      "raw": "0100000000000000000000000000000000000000000000000000000000000000e80300000200000000000000000000000000000000000000000000000000000000000000813058aef9d01842697c37e671fd29af1cd250558e8637c610713798037e3e7135ce0ae33afc53480883fab28e6e9705117f90cadf2b7193439b5cd9adf15ed25be2906c420ad0fde43700becd3becd537bb79901fb3f180feb04cbce4dfa320",
+      "details": {
+        "pro_tx_hash": "0000000000000000000000000000000000000000000000000000000000000001",
+        "requested_height": 1000,
+        "quorum_hash": "0000000000000000000000000000000000000000000000000000000000000002",
+        "sig": "813058aef9d01842697c37e671fd29af1cd250558e8637c610713798037e3e7135ce0ae33afc53480883fab28e6e9705117f90cadf2b7193439b5cd9adf15ed25be2906c420ad0fde43700becd3becd537bb79901fb3f180feb04cbce4dfa320"
+      }
+    },
+    "max_height": {
+      "raw": "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100ffffff7f2e3df23eec5cd6a86edd509539028e2c3a3dc05315eb28f2baa43218ca080000a92ce651433643b040784af6c826381df546d8641e3960b0ba15880175f25e62de17b63082260de738a0ee08bd07a43307d8f334ece32da05066194e89568abc577779ae5e9a32d774e7e079a7dec5c5e63020a61d6498ce1fd8bf2451233228",
+      "details": {
+        "pro_tx_hash": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+        "requested_height": 2147483647,
+        "quorum_hash": "000008ca1832a4baf228eb1553c03d3a2c8e02399550dd6ea8d65cec3ef23d2e",
+        "sig": "a92ce651433643b040784af6c826381df546d8641e3960b0ba15880175f25e62de17b63082260de738a0ee08bd07a43307d8f334ece32da05066194e89568abc577779ae5e9a32d774e7e079a7dec5c5e63020a61d6498ce1fd8bf2451233228"
+      }
+    },
+    "negative_height": {
+      "raw": "0200000000000000000000000000000000000000000000000000000000000000ffffffff0100000000000000000000000000000000000000000000000000000000000000813058aef9d01842697c37e671fd29af1cd250558e8637c610713798037e3e7135ce0ae33afc53480883fab28e6e9705117f90cadf2b7193439b5cd9adf15ed25be2906c420ad0fde43700becd3becd537bb79901fb3f180feb04cbce4dfa320",
+      "details": {
+        "pro_tx_hash": "0000000000000000000000000000000000000000000000000000000000000002",
+        "requested_height": -1,
+        "quorum_hash": "0000000000000000000000000000000000000000000000000000000000000001",
+        "sig": "813058aef9d01842697c37e671fd29af1cd250558e8637c610713798037e3e7135ce0ae33afc53480883fab28e6e9705117f90cadf2b7193439b5cd9adf15ed25be2906c420ad0fde43700becd3becd537bb79901fb3f180feb04cbce4dfa320"
+      }
+    },
+  },
+/*
+#include <bls/bls.h>
+#include <masternode/meta.h>
+
+BOOST_AUTO_TEST_CASE(platformban_hashes)
+{
+    CBLSSecretKey sk;
+    BOOST_REQUIRE(sk.SetHexStr("0505050505050505050505050505050505050505050505050505050505050505", false));
+    for (const auto& sig : {CBLSSignature{}, sk.Sign(uint256::ONE, false)}) {
+        for (const int32_t requested_height : {1000, -1}) {
+            PlatformBanMessage ban;
+            ban.m_protx_hash = uint256::ONE;
+            ban.m_requested_height = requested_height;
+            ban.m_quorum_hash = uint256::TWO;
+            ban.m_signature = sig;
+            const auto msg{CNetMsgMaker{PROTOCOL_VERSION}.Make(NetMsgType::PLATFORMBAN, ban)};
+            std::printf("    { \"raw\": \"%s\", \"hash\": \"%s\" },\n", HexStr(msg.data).c_str(),
+                        ban.GetHash().ToString().c_str());
+        }
+    }
+}
+*/
+  // Each vector holds a `platformban` payload and its hash.
+  "platformban_hash": [
+    { "raw": "0100000000000000000000000000000000000000000000000000000000000000e80300000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000", "hash": "223b87091de1f69a063951ac10a9f036b091a939e175f6ef16f2da6ebdfd7017" },
+    { "raw": "0100000000000000000000000000000000000000000000000000000000000000ffffffff0200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000", "hash": "7838e63203a1815f8de2c1555e222245f4e1bbedd89a415438947cf51926a471" },
+    { "raw": "0100000000000000000000000000000000000000000000000000000000000000e80300000200000000000000000000000000000000000000000000000000000000000000813058aef9d01842697c37e671fd29af1cd250558e8637c610713798037e3e7135ce0ae33afc53480883fab28e6e9705117f90cadf2b7193439b5cd9adf15ed25be2906c420ad0fde43700becd3becd537bb79901fb3f180feb04cbce4dfa320", "hash": "223b87091de1f69a063951ac10a9f036b091a939e175f6ef16f2da6ebdfd7017" },
+    { "raw": "0100000000000000000000000000000000000000000000000000000000000000ffffffff0200000000000000000000000000000000000000000000000000000000000000813058aef9d01842697c37e671fd29af1cd250558e8637c610713798037e3e7135ce0ae33afc53480883fab28e6e9705117f90cadf2b7193439b5cd9adf15ed25be2906c420ad0fde43700becd3becd537bb79901fb3f180feb04cbce4dfa320", "hash": "7838e63203a1815f8de2c1555e222245f4e1bbedd89a415438947cf51926a471" },
+  ],
+}

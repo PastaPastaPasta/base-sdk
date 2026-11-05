@@ -460,6 +460,7 @@ name = "dash-p2p-core"
 version = "0.0.0"
 dependencies = [
  "bitcoin-consensus-encoding",
+ "bitcoin_hashes",
  "cfg-if",
  "dash-dev",
  "dash-num",
