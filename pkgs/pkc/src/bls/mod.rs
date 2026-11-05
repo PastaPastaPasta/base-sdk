@@ -40,6 +40,7 @@ cfg_if::cfg_if! {
     mod sig_threshold;
     mod wrap_codec;
     mod wrap_eager;
+    mod wrap_global;
     mod wrap_lazy;
     mod wrap_secret;
     mod wrap_value;
@@ -63,6 +64,7 @@ cfg_if::cfg_if! {
     pub use sig_basic::BlsSignature;
     pub use wrap_codec::{BlsPoint, BlsWire};
     pub use wrap_eager::{BlsEager, BlsEagerPk, BlsEagerSig};
+    pub use wrap_global::{BlsGlobal, BlsGlobalPk, BlsGlobalSig};
     pub use wrap_lazy::{BlsLazy, BlsLazyPk, BlsLazySig};
     pub use wrap_secret::BlsEagerSecretKey;
     pub use wrap_value::BlsValue;

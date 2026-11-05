@@ -23,6 +23,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `BlsEagerSecretKey`, which decodes a BLS secret key under a scheme picked at run time the same way, failing with
   `InvalidSecretKey`. It holds the key as `BlsSkBytes`, compares in constant time, redacts its `Debug` output and has
   no `Hash`. `to_bytes` returns `Zeroizing<[u8; 32]>`.
+- `BlsGlobal`, with the aliases `BlsGlobal{Pk,Sig}`, which keeps the bytes of a BLS field read under a `BlsCtx`. It
+  decodes without one, refusing only bytes canonical under neither scheme, and `get` decodes the field under one.
+  The field encodes as what `get` gives.
 - `BlsScheme::is_canonical_pk` and `BlsScheme::is_canonical_sig`, each scheme's rule for `is_canonical::<S>()`.
 - `BlsScheme::g1_bytes` and `BlsScheme::g2_bytes`, each scheme's byte layout of a point; `BlsScheme::pk_ietf_bytes`,
   the IETF compressed form of a G1 encoding in that layout, and `BlsScheme::sig_ietf_x_bytes`, the `x` of a G2
