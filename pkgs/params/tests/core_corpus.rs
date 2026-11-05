@@ -6,11 +6,13 @@
 
 //! Built chain parameters equal Dash Core's, case by case, at both pins.
 //!
-//! The corpora come from Core commits 938fba502824 (the v24.0.0 tag) and
-//! 350ce242a59c (v23.1.8 plus the oracle shim only: `src/test/oracle` and
-//! its Makefile lines). v23.1.8 keeps the blocks pruning keeps in a
-//! constant, so its corpus has no `ext.minBlocksToKeep`, and has no
-//! `ipv4_optional` buried deployment.
+//! The corpora come from Core commits 586c0ebb45df (v24.0.0, 938fba5028,
+//! plus the oracle and state-digest test hooks; the chain params, their
+//! options and the spork signer code differ from the tag only in hook
+//! functions) and 350ce242a59c (v23.1.8 plus the oracle shim only:
+//! `src/test/oracle` and its Makefile lines). v23.1.8 keeps the blocks
+//! pruning keeps in a constant, so its corpus has no `ext.minBlocksToKeep`,
+//! and has no `ipv4_optional` buried deployment.
 //!
 //! From rc.5 to v24.0.0 only the new buried deployment `ipv4_optional`
 //! moved, checked here against v24.0.0's `chainparams.cpp`: not scheduled on
@@ -326,6 +328,7 @@ fn dump(p: &ChainSetup) -> BTreeMap<String, Value> {
       out.put("ext.bech32PlatformHRP", p.platform_hrp.expect("v24 has a Platform HRP"));
       out.put("ext.MAX_LLMQ_SIZE", MAX_LLMQ_SIZE);
       out.put("ext.minBlocksToKeep", p.min_blocks_to_keep);
+      out.put("params.consensus.IPv4OptionalHeight", c.ipv4_optional_height.to_u32());
     }
   }
   let signers = &p.spork_signers;

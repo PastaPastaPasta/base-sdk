@@ -1,13 +1,12 @@
 // Dash Core's chain parameters, v24.0 pin (v24.0.0), for dash-params' builder
 // equality test (node program BS5). Produced by Core, not written by hand:
 // contrib/node/bs5-chainparams in rust-dashcore builds chainparams_dump from a
-// controlled clean build of Core commit 938fba502824b9d850b7c710601456dc3d71603e (tree 36748356538aa645ddd166e4bba8f854ac8a5b12), the v24.0 row
-// of contrib/node/bs5-chainparams/pins-v24.0.0.txt, and runs each case through ClearArgs,
+// controlled clean build of Core commit 586c0ebb45dfb9b1f3c683cdaa5c1236a39e017e (tree 2498231c02280909060663db1fe038bac861dac4), the pin in
+// dash-oracle-sys/pins.txt, and runs each case through ClearArgs,
 // SetupChainParamsOptions, ParseParameters and SelectParams, then
-// AppInitMain's spork block. Dump binary sha256 666d5d61d05034d0564af4661a15d2769972a08ad6d5adfe0a5d812b123ec5de.
-// Every case but the "tool_only" ones was checked equal to the
-// oracle_chainparams_json (or its error text) of the dash-oracle-sys/pins.txt
-// archive, v24.0.0-rc.5-171-g08700f95eac5, by the same script.
+// AppInitMain's spork block. Dump binary sha256 eb29834d2267d4d6efccde2e745a284ed5ef9518ccafa0e0ccd3302afd800a3a.
+// Every case but the "tool_only" ones was checked equal to the pinned
+// archive's oracle_chainparams_json (or its error text) by the same script.
 //
 // "bases" holds the full dump of each chain with no arguments: "params" is
 // the oracle's ChainParamsJson(), "ext" the CChainParams members it omits and
@@ -117,6 +116,7 @@
      "V20Height": 1987776,
      "MN_RRHeight": 2128896,
      "WithdrawalsHeight": 2201472,
+     "IPv4OptionalHeight": 2147483647,
      "MinBIP9WarningHeight": 2203488,
      "nRuleChangeActivationThreshold": 1815,
      "nMinerConfirmationWindow": 2016,
@@ -780,6 +780,7 @@
      "V20Height": 905100,
      "MN_RRHeight": 1066900,
      "WithdrawalsHeight": 1148500,
+     "IPv4OptionalHeight": 0,
      "MinBIP9WarningHeight": 1150516,
      "nRuleChangeActivationThreshold": 1512,
      "nMinerConfirmationWindow": 2016,
@@ -1461,6 +1462,7 @@
      "V20Height": 2,
      "MN_RRHeight": 2,
      "WithdrawalsHeight": 2,
+     "IPv4OptionalHeight": 0,
      "MinBIP9WarningHeight": 2018,
      "nRuleChangeActivationThreshold": 1512,
      "nMinerConfirmationWindow": 2016,
@@ -2211,6 +2213,7 @@
      "V20Height": 432,
      "MN_RRHeight": 432,
      "WithdrawalsHeight": 600,
+     "IPv4OptionalHeight": 2147483647,
      "MinBIP9WarningHeight": 0,
      "nRuleChangeActivationThreshold": 108,
      "nMinerConfirmationWindow": 144,
