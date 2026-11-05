@@ -150,6 +150,21 @@ impl BlsElem<G1, BLS_PK_LEN> {
   }
 }
 
+impl BlsElem<G2, BLS_SIG_LEN> {
+  /// The signature `PrivateKey::SignG2` leaves (`privatekey.cpp:294-317`)
+  /// for a hashed message and a secret key's stored bytes `k`, at most `r`:
+  /// the product, `BASIC` as relic's multiplication leaves it, with blst's
+  /// constant-time multiplication and compression, as
+  /// [`BlsElem::mul_secret_value`] gives a key (BS11a-3 D34).
+  pub(crate) fn sign_value(hashed: &G2, k: &[u8; 32]) -> BlsValue<G2, BLS_SIG_LEN> {
+    let mut scalar = blst_ffi::scalar_from_bendian(k);
+    let product = hashed.mul_scalar(&scalar.b, FR_BITS);
+    scalar.b.zeroize();
+    let basic = product.to_affine().compress();
+    Self::group(product, Coord::Basic).into_value(basic)
+  }
+}
+
 impl<K: BlsWirePoint<N>, const N: usize> Clone for BlsElem<K, N> {
   fn clone(&self) -> Self {
     Self(self.0.clone())
