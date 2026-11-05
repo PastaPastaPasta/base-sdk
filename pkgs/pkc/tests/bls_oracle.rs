@@ -25,7 +25,7 @@ use dash_dev::{arr_from_hex, vec_from_hex, Corpus};
 use dash_pkc::bls::core::{
   aggregate_public_keys_insecure, aggregate_public_keys_insecure_pair, aggregate_secret_keys_insecure,
   aggregate_signatures_insecure, aggregate_signatures_insecure_pair, aggregate_signatures_secure, dh_key_exchange,
-  ies_key, public_key, public_key_share, recover_signature, secret_key_share, serialize_hash_vector,
+  ies_key, public_key, public_key_share, recover_signature, secret_key_share, serialize_hash_vector, sign,
   sub_signatures_insecure, verify_insecure, verify_insecure_aggregated, verify_secure_aggregated, BlsIesBlobValue,
   BlsIesMultiBlobs, BlsPkElem, BlsPkValue, BlsSigElem, BlsSigValue, BlsSkValue, BlsVerdict,
 };
@@ -178,6 +178,14 @@ fn assert_sign<S: BlsScheme>(kind: BlsSchemeKind) {
       sig.to_bytes().to_lower_hex_string(),
       row.sig,
       "key {} msg {}",
+      row.key,
+      row.msg
+    );
+    let core = sign(&sk_value(&keys[row.key].sk, kind), &hash(&row.msg), kind);
+    assert_eq!(
+      valid_hex(&core, kind).as_ref(),
+      Some(&row.sig),
+      "bls::core: key {} msg {}",
       row.key,
       row.msg
     );
@@ -1003,7 +1011,13 @@ fn assert_steps(file: &str) -> usize {
           let obj = Obj::Pk(public_key(sk));
           (obj.status(), obj.bytes(flag), obj)
         }
-        "sign" => (0, vec_from_hex(&step.out), Obj::Sig(sig_value(&step.out, scheme))),
+        "sign" => {
+          let Obj::Sk(sk) = at(step.a) else {
+            panic!("{label}: operands");
+          };
+          let obj = Obj::Sig(sign(sk, &hash(need(step.msg.as_deref(), &label, "msg")), flag));
+          (obj.status(), obj.bytes(flag), obj)
+        }
         "add" | "neg" | "mul" => {
           let b = step.b.map(|_| at(step.b));
           let obj = elem_op(&label, &step.op, at(step.a), b, step.k.as_deref());
@@ -1326,6 +1340,14 @@ fn trailing_sig(raw: &str) -> String {
   raw[raw.len() - 2 * BLS_SIG_LEN..].to_owned()
 }
 
+/// `Sign` of a DKG message's hash with the member's operator key, under the
+/// basic flag: a signature verifies exactly when it is that signature.
+fn assert_operator_sign(label: &str, member: &Member, h: &str, raw: &str, ok: bool) {
+  let core = sign(&sk_value(&member.operator_sk, BASIC), &hash(h), BASIC);
+  let same = valid_hex(&core, BASIC) == Some(trailing_sig(raw));
+  assert_eq!(same, ok, "{label}: bls::core sign");
+}
+
 /// Whether a share fits a verification vector at a member's id; a share
 /// that is no secret key fits nothing.
 fn share_fits(vvec: &[BlsPublicKey<BlsScIetf>], id: &str, sk: &str) -> bool {
@@ -1348,6 +1370,7 @@ fn assert_dkg() {
   let c = corpus("dkg");
   assert_eq!(c.value::<String>("scheme"), "basic");
   let quorums: Vec<Quorum> = c.vectors("quorums");
+  let mut share_signs = 0;
   for q in &quorums {
     let label = &q.quorum_hash[..8];
     let op_pks: Vec<String> = q.members.iter().map(|m| m.operator_pk.clone()).collect();
@@ -1372,6 +1395,7 @@ fn assert_dkg() {
         &hash(&s.sign_hash),
         s.sig_ok,
       );
+      assert_operator_sign(&label, &q.members[s.member], &s.sign_hash, &s.raw, s.sig_ok);
     };
 
     let mut vvecs = BTreeMap::new();
@@ -1449,6 +1473,18 @@ fn assert_dkg() {
       let h = hash(&p.commitment_hash);
       let label_p = format!("{label}: premature commitment of {}", p.member);
       assert_dkg_sig(&label_p, &trailing_sig(&p.raw), &op_pks[p.member], &h, p.sig_ok);
+      assert_operator_sign(&label_p, &q.members[p.member], &p.commitment_hash, &p.raw, p.sig_ok);
+      // Signing with a share that fits gives a signature that verifies
+      // against its key, which is unique: the recorded one, if it verifies.
+      if let Some(share) = q.member_shares[p.member].as_ref().filter(|s| s.fits && p.share_ok) {
+        let core = sign(&sk_value(&share.sk, BASIC), &h, BASIC);
+        assert_eq!(
+          valid_hex(&core, BASIC).as_deref(),
+          Some(quorum_sig),
+          "{label_p}: bls::core sign"
+        );
+        share_signs += 1;
+      }
       let share_pk = BlsPublicKey::derive_share(&qrefs, &share_id(&q.members[p.member].pro_tx))
         .unwrap_or_else(|e| panic!("{e:?}"))
         .to_bytes()
@@ -1526,6 +1562,7 @@ fn assert_dkg() {
       assert_dkg_sig(&label, &r.sig, &f.quorum_pk, &hash(&r.sign_hash), r.ok);
     }
   }
+  assert!(share_signs > 0, "no premature commitment signed with a share");
 }
 
 // The files and their provenance.

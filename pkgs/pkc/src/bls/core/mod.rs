@@ -5,8 +5,8 @@
 //
 
 //! Core's BLS wrapper operations on its objects as Core holds them, on the
-//! calling thread alone: the three signature verifications, the aggregates,
-//! the threshold operations and `DHKeyExchange`.
+//! calling thread alone: signing, the three signature verifications, the
+//! aggregates, the threshold operations and `DHKeyExchange`.
 //!
 //! Unlike the typed API, these give Core's results where it refuses them:
 //! valid zero secret keys and valid infinities from aggregates, shares,
@@ -202,6 +202,14 @@ pub fn verify_secure_aggregated(
   aggregate_verify(flag, sig, &[sum], ::core::slice::from_ref(h))
 }
 
+/// The flag's hash of `h` to G2: the legacy map, or the basic suite's.
+fn hash_under(flag: BlsSchemeKind, h: &[u8; 32]) -> G2 {
+  match flag {
+    BlsSchemeKind::Legacy => chia_h2c::hash_to_g2(h),
+    BlsSchemeKind::Basic => hash_to_g2(h, DST_BASIC),
+  }
+}
+
 /// The scheme's `AggregateVerify` (its `Verify` for one key) over
 /// non-empty lists of equal length, Core's elements as `NativeVerify`
 /// pairs them.
@@ -223,11 +231,7 @@ fn aggregate_verify(flag: BlsSchemeKind, sig: G2Operand, pks: &[G1Operand], hs: 
   let mut pairs = Vec::with_capacity(pks.len() + 1);
   pairs.push((Operand::Group((-G1::generator()).to_affine()), sig));
   for (pk, h) in pks.iter().copied().zip(hs) {
-    let hashed = match flag {
-      BlsSchemeKind::Legacy => chia_h2c::hash_to_g2(h),
-      BlsSchemeKind::Basic => hash_to_g2(h, DST_BASIC),
-    };
-    pairs.push((pk, Operand::Group(hashed.to_affine())));
+    pairs.push((pk, Operand::Group(hash_under(flag, h).to_affine())));
   }
   native_verify(&pairs).into()
 }
@@ -322,6 +326,19 @@ pub fn public_key(sk: &BlsSkValue) -> BlsPkValue {
     }
     _ => BlsPkValue::invalid(),
   }
+}
+
+/// `CBLSSecretKey::Sign(hash, specificLegacyScheme)` (`bls.cpp:125-142`)
+/// under the sign flag `flag`, whatever scheme read the key: the flag's hash
+/// of `h` to G2 times the key, valid even when infinite (a valid zero key, a
+/// basic key equal to `r`), or the invalid signature for an invalid key. A
+/// valid key always holds key data, so Core's `catch` never runs here.
+pub fn sign(sk: &BlsSkValue, h: &[u8; 32], flag: BlsSchemeKind) -> BlsSigValue {
+  if !sk.is_valid() {
+    return BlsSigValue::invalid();
+  }
+  let (k, (), ()) = sk.parts();
+  BlsSigElem::sign_value(&hash_under(flag, h), k)
 }
 
 /// `CBLSSecretKey::MakeNewKey`: 32 random bytes until they decode as a
@@ -700,5 +717,45 @@ mod tests {
     assert_eq!(serialize_hash_vector(&vvec, kind), sha(&buf));
     let refs: Vec<&BlsPkValue> = vvec.iter().collect();
     assert_eq!(serialize_hash_vector(refs.iter().copied(), kind), sha(&buf));
+  }
+
+  /// The flag picks the hash whatever scheme read the key: the signature,
+  /// held `BASIC`, verifies under it, and not under the other flag.
+  #[rstest]
+  #[case::legacy(BlsSchemeKind::Legacy, BlsSchemeKind::Basic)]
+  #[case::basic(BlsSchemeKind::Basic, BlsSchemeKind::Legacy)]
+  fn sign_follows_the_flag(#[case] flag: BlsSchemeKind, #[case] other: BlsSchemeKind) {
+    let msg = [9u8; 32];
+    let [legacy, basic] =
+      [BlsSchemeKind::Legacy, BlsSchemeKind::Basic].map(|read| BlsSkValue::from_canonical(&[9; 32], read).unwrap());
+    let sig = sign(&legacy, &msg, flag);
+    assert_eq!(sig, sign(&basic, &msg, flag));
+    assert!(!BlsSigElem::from_impl(&sig).__shape().projc);
+    let pk = public_key(&legacy);
+    assert_eq!(verify_insecure(&sig, &pk, &msg, flag), BlsVerdict::Valid);
+    assert_eq!(verify_insecure(&sig, &pk, &msg, other), BlsVerdict::Invalid);
+  }
+
+  /// An invalid key signs the invalid signature; a valid zero key and a
+  /// basic key equal to `r` sign the valid infinity, held `BASIC`.
+  #[rstest]
+  #[case::legacy(BlsSchemeKind::Legacy)]
+  #[case::basic(BlsSchemeKind::Basic)]
+  fn sign_edge_keys(#[case] flag: BlsSchemeKind) {
+    let msg = [1u8; 32];
+    assert!(!sign(&BlsSkValue::invalid(), &msg, flag).is_valid());
+    let mut one = [0u8; 32];
+    one[31] = 1;
+    let r_less_one = hex!("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000000");
+    let r = hex!("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001");
+    let read = |bytes: &[u8; 32]| BlsSkValue::from_canonical(bytes, BlsSchemeKind::Basic).unwrap();
+    let zero = aggregate_secret_keys_insecure(&[&read(&one), &read(&r_less_one)]);
+    let infinity = BlsSigValue::from(BlsSigElem::default());
+    for sk in [zero, read(&r)] {
+      let sig = sign(&sk, &msg, flag);
+      assert!(sig.is_valid());
+      assert!(!BlsSigElem::from_impl(&sig).__shape().projc);
+      assert_eq!(sig.to_bytes(flag), infinity.to_bytes(flag));
+    }
   }
 }
