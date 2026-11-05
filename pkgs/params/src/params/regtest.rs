@@ -52,6 +52,7 @@ pub static PARAMS: ChainParams = ChainParams {
     v20_height: BlockHeight::from_u32(432),   // equals dip0003_height
     mn_rr_height: BlockHeight::from_u32(432), // equals v20_height
     withdrawals_height: BlockHeight::from_u32(600),
+    ipv4_optional_height: ConsensusParams::NOT_SCHEDULED,
     min_bip9_warning_height: BlockHeight::from_u32(0),
     rule_change_activation_threshold: 108, // 75% of 144
     miner_confirmation_window: 144,

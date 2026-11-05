@@ -62,7 +62,7 @@ struct Bip9 {
 }
 
 /// The buried deployments under the names `getdeploymentinfo` reports them
-/// under.
+/// under. It does not report [`BuriedDeployment::Ipv4Optional`].
 const BURIED: [(&str, BuriedDeployment); 15] = [
   ("bip34", BuriedDeployment::HeightInCoinbase),
   ("bip66", BuriedDeployment::DerSig),

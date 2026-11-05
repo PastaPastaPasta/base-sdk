@@ -7,8 +7,9 @@
 //! Dash Core releases whose chain parameters are known, and how the older
 //! one differs from the network tables.
 
-use crate::{Bip9Deployment, ChainParams, ChainTxData, Checkpoint, DeploymentPos, Network};
+use crate::{Bip9Deployment, BuriedDeployment, ChainParams, ChainTxData, Checkpoint, DeploymentPos, Network};
 
+use bitcoin_units::BlockHeight;
 use dash_num::{Arith256, Hash256};
 use dash_types::type_id::Unencodable;
 use hex_conservative::hex;
@@ -16,15 +17,15 @@ use hex_conservative::hex;
 /// A Dash Core release line whose chain parameters are known.
 ///
 /// Each variant stands for the pinned tag of its line: `V23_1` is v23.1.8
-/// and `V24_0` is v24.0.0-rc.5. The network tables hold `V24_0`; `V23_1`
-/// differs in the version-bits deployments, the spork signer model, the
-/// Platform address HRP, two policy fields, the sync anchors, the fixed
-/// seeds and the pruning values.
+/// and `V24_0` is v24.0.0. The network tables hold `V24_0`; `V23_1`
+/// differs in the version-bits and buried deployments, the spork signer
+/// model, the Platform address HRP, two policy fields, the sync anchors, the
+/// fixed seeds and the pruning values.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Unencodable)]
 pub enum Release {
   /// The v23.1 line (v23.1.8).
   V23_1,
-  /// The v24.0 line (v24.0.0-rc.5).
+  /// The v24.0 line (v24.0.0).
   V24_0,
 }
 
@@ -39,6 +40,19 @@ impl Release {
     match self {
       Self::V23_1 => &[DeploymentPos::TestDummy, DeploymentPos::V24],
       Self::V24_0 => &[DeploymentPos::TestDummy, DeploymentPos::V24, DeploymentPos::EvoShares],
+    }
+  }
+
+  /// Core's buried deployments, in `BuriedDeployment` order.
+  ///
+  /// v23.1.8 ends with `withdrawals` (consensus/params.h:37-39); v24.0.0
+  /// adds `ipv4_optional` (consensus/params.h:39-41). Each release takes a
+  /// fixed prefix of `BuriedDeployment::ALL`, so a deployment appended
+  /// there joins neither.
+  pub fn buried_deployments(self) -> &'static [BuriedDeployment] {
+    match self {
+      Self::V23_1 => &BuriedDeployment::ALL[..15],
+      Self::V24_0 => &BuriedDeployment::ALL[..16],
     }
   }
 
@@ -66,14 +80,16 @@ impl Release {
   /// the assumed mainnet size, the testnet and devnet prune height and the
   /// blocks pruning keeps. v23.1.8 has the earlier values
   /// (chainparams.cpp:221-222, :237, :336, :346-349, :420-421, :430, :509,
-  /// :519-522, :602; validation.h:92), and no `evo_shares`, whose slot here
-  /// never activates.
+  /// :519-522, :602; validation.h:92), no `evo_shares`, whose slot here
+  /// never activates, and no `ipv4_optional`, whose height here is zero, so
+  /// IPv4 primaries are never required.
   pub(crate) fn write_chain(self, network: Network, chain: &mut ChainParams) {
     if self == Self::V24_0 {
       return;
     }
     chain.min_blocks_to_keep = 288;
     let consensus = &mut chain.consensus;
+    consensus.ipv4_optional_height = BlockHeight::from_u32(0);
     let shares = &mut consensus.deployments.evo_shares;
     (shares.start_time, shares.timeout) = (Bip9Deployment::NEVER_ACTIVE, Bip9Deployment::NO_TIMEOUT);
     match network {

@@ -6,12 +6,17 @@
 
 //! Built chain parameters equal Dash Core's, case by case, at both pins.
 //!
-//! The corpora come from Core commits 1cdab7d9033a (v24.0.0-rc.5,
-//! 8163290aa0, plus the oracle and state-digest test hooks; the chain
-//! params, their options and the spork signer code differ from the tag only
-//! in hook functions) and 350ce242a59c (v23.1.8 plus the oracle shim only:
-//! `src/test/oracle` and its Makefile lines). v23.1.8 keeps the blocks
-//! pruning keeps in a constant, so its corpus has no `ext.minBlocksToKeep`.
+//! The corpora come from Core commits 938fba502824 (the v24.0.0 tag) and
+//! 350ce242a59c (v23.1.8 plus the oracle shim only: `src/test/oracle` and
+//! its Makefile lines). v23.1.8 keeps the blocks pruning keeps in a
+//! constant, so its corpus has no `ext.minBlocksToKeep`, and has no
+//! `ipv4_optional` buried deployment.
+//!
+//! From rc.5 to v24.0.0 only the new buried deployment `ipv4_optional`
+//! moved, checked here against v24.0.0's `chainparams.cpp`: not scheduled on
+//! mainnet and regtest (:197, :839) and 0 on testnet and devnets (:409,
+//! :594). Its regtest `-testactivationheight` name is checked in
+//! `tests/builder.rs`.
 //!
 //! From rc.4 to rc.5 these values moved, each checked here against rc.5's
 //! `chainparams.cpp`: mainnet's `v24` and `evo_shares` schedule (:213-214,
@@ -33,8 +38,8 @@
 use dash_dev::{Corpus, Value};
 use dash_num::Hash256;
 use dash_params::{
-  available_params, BuriedDeployment, ChainOption, ChainParams, ChainParamsBuilder, ChainSetup, LlmqParams, LlmqType,
-  Network, ParamsError, Release, MAX_LLMQ_SIZE,
+  available_params, ChainOption, ChainParams, ChainParamsBuilder, ChainSetup, LlmqParams, LlmqType, Network,
+  ParamsError, Release, MAX_LLMQ_SIZE,
 };
 use dash_pow::__deps::digest::Digest;
 use dash_pow::X11;
@@ -296,7 +301,7 @@ fn dump(p: &ChainSetup) -> BTreeMap<String, Value> {
     out.put(&format!("{path}.name"), d.name());
     out.put(&format!("{path}.gbt_force"), d.gbt_force());
   });
-  for d in BuriedDeployment::ALL {
+  for &d in p.release.buried_deployments() {
     out.put(
       &format!("ext.buriedDeployments.{}", d.name()),
       c.deployment_height(d).to_u32(),
