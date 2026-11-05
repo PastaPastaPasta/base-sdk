@@ -130,6 +130,7 @@ type_cvrt!(From<RecoverableSignature> for EcdsaRecSignature, |rec| {
 #[cfg(test)]
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
+  use crate::ecdsa::curve_consts::ORDER;
   use crate::ecdsa::tests::*;
   use crate::ecdsa::{
     Compression, EcdsaPublicKey, EcdsaRecSigBytes, EcdsaRecSignature, EcdsaSecretKey, EcdsaSigBytes, EcdsaSignature,
@@ -209,6 +210,46 @@ mod tests {
     assert_eq!(normalized.recovery_id(), alice_rec_sig.recovery_id());
     assert_eq!(normalized, alice_rec_sig);
     assert_eq!(EcdsaPublicKey::recover(&MSG, &normalized).unwrap(), alice_pk);
+  }
+
+  /// Half the curve order, rounded down, which is the largest low S.
+  fn half_order() -> [u8; 32] {
+    let mut half = [0u8; 32];
+    let mut carry = 0;
+    for (h, o) in half.iter_mut().zip(ORDER) {
+      *h = (carry << 7) | (o >> 1);
+      carry = o & 1;
+    }
+    half
+  }
+
+  /// A recoverable signature read from its 65 bytes tells a high S from its
+  /// low-S twin, at half the order and for a signature the library made.
+  /// Verification and recovery accept both, so a caller refusing malleable
+  /// signatures asks `is_low_s`.
+  #[rstest]
+  fn tells_high_s_from_its_low_s_twin(alice_pk: EcdsaPublicKey, alice_rec_sig: EcdsaRecSignature) {
+    let bytes = EcdsaRecSigBytes::from(alice_rec_sig).to_bytes();
+    let read = |s: &[u8; 32], recovery_id: u8| {
+      let mut out = bytes;
+      out[0] = 27 + (bytes[0] - 27) / 4 * 4 + recovery_id;
+      out[33..].copy_from_slice(s);
+      EcdsaRecSignature::try_from(EcdsaRecSigBytes::from_bytes(out).unwrap()).unwrap()
+    };
+    let id = alice_rec_sig.recovery_id();
+
+    let half = half_order();
+    assert!(read(&half, id).signature().is_low_s());
+    assert!(!read(&negate_scalar(&half), id).signature().is_low_s());
+
+    let low = read(&bytes[33..].try_into().unwrap(), id);
+    let high = read(&negate_scalar(&bytes[33..]), id ^ 1);
+    assert_eq!(low, alice_rec_sig);
+    assert!(low.signature().is_low_s());
+    assert!(!high.signature().is_low_s());
+    assert_eq!(high.normalize_s(), Some(low));
+    assert_eq!(alice_pk.verify_digest(&MSG, high), Ok(()));
+    assert_eq!(EcdsaPublicKey::recover(&MSG, &high).unwrap(), alice_pk);
   }
 
   #[rstest]
