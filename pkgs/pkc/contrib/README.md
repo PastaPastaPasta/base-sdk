@@ -1,7 +1,7 @@
 The programs here write the BLS corpora below in `pkgs/pkc/corpus` from a reference implementation release. Every value
-comes from the release's BLS library (dashbls, with relic) or from its own sources, namely its BLS wrapper,
-serialization and hashing, and commitment hash function, apart from fixed inputs at the top of each program and in
-`util/common.hpp`.
+comes from the release's BLS library (dashbls, with relic) or from its own sources, namely its BLS wrapper, BLS-IES
+encryption and AES, serialization and hashing, and commitment hash function, apart from fixed inputs at the top of each
+program and in `util/common.hpp`.
 
 | Corpus | Program |
 | --- | --- |
@@ -22,6 +22,10 @@ legacy map's hashing and reduction steps with relic, which the library does not 
 anchors them.
 
 `bls_read.json5` records how the library reads key and signature bytes under each scheme, as `gen_read.cpp` describes.
+
+`bls_ies.json5` records blobs keyed by each encoding of the shared point. The release's BLS-IES encryption keys each
+blob with the point's basic encoding, so `gen_ies.cpp` builds the blobs keyed by its legacy encoding from the release's
+key exchange, serialization and AES, which reproduce the release's blobs under the basic encoding.
 
 ## Regenerating
 

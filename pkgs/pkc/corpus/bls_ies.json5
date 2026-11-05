@@ -43,6 +43,70 @@
         "blob_lens": [252, 253],
         "image": "8efe1789d6476f60439e1168f588ea16652dc321279f05a805fbc63933e88ae9c175d6c6ab182e54af562e1a0dce41bb010101010101010101010101010101010101010101010101010101010101010102fca0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0fdfd00a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
       }
+    ],
+    "encrypted_basic": [
+      {
+        "recipients": [
+          {
+            "sk": "1b6b658fcfe1dd8a09b3e88a9b2863b8b490f0b646e9ffcbdeb571c8d7d8fc06",
+            "plaintext": "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0"
+          },
+          {
+            "sk": "67ad4451ccd9fc7ab3cc7c81d94867821c0de26903a8d3c59e1ef72a4f0500c1",
+            "plaintext": "c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1"
+          },
+          {
+            "sk": "48b037bf374e2e312378b0a962b2d2aa55fdbeb1e11fa8006c3e8c9641e33100",
+            "plaintext": "c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2"
+          }
+        ],
+        "image": "8efe1789d6476f60439e1168f588ea16652dc321279f05a805fbc63933e88ae9c175d6c6ab182e54af562e1a0dce41bb01010101010101010101010101010101010101010101010101010101010101010310784242895ebd214d3a87d8df32fbce5a2016e0b9fc6ae2f64d9cd7fbea5b46f908dee7b30561a7b5fd10bbaf43216d31e340b264cd6901a15ef53e12dd2a4be4fe9be0205aa721dc8f5ab5e9a42530a4d6431f743a6d60bb16f3865b60ec4ddb654336507ba06aecb8b337045841e185760a"
+      },
+      {
+        "recipients": [
+          {
+            "sk": "72f36040017ef5da9ebfefae2469da67ab7ff8a09e2f163f934c845397d6bd6d",
+            "plaintext": ""
+          },
+          {
+            "sk": "24ba49304ac867dd22b54df486f9ce3584f2ef94927cf2d84ad46ada169227f3",
+            "plaintext": "c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4"
+          }
+        ],
+        "image": "8efe1789d6476f60439e1168f588ea16652dc321279f05a805fbc63933e88ae9c175d6c6ab182e54af562e1a0dce41bb0101010101010101010101010101010101010101010101010101010101010101020030256333c8f1b472eab784791fcbb05f7ee598f89e03f01a4b146b3a8f328f0434fb208d3d83780c1598a508b11b28ef48"
+      }
+    ],
+    "encrypted_legacy": [
+      {
+        "recipients": [
+          {
+            "sk": "1b6b658fcfe1dd8a09b3e88a9b2863b8b490f0b646e9ffcbdeb571c8d7d8fc06",
+            "plaintext": "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0"
+          },
+          {
+            "sk": "67ad4451ccd9fc7ab3cc7c81d94867821c0de26903a8d3c59e1ef72a4f0500c1",
+            "plaintext": "c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1"
+          },
+          {
+            "sk": "48b037bf374e2e312378b0a962b2d2aa55fdbeb1e11fa8006c3e8c9641e33100",
+            "plaintext": "c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2"
+          }
+        ],
+        "image": "8efe1789d6476f60439e1168f588ea16652dc321279f05a805fbc63933e88ae9c175d6c6ab182e54af562e1a0dce41bb01010101010101010101010101010101010101010101010101010101010101010310033dab2bfad9f5dd35c7f7dafc2d8bb8209ae572126095a410df56b9615c606297218acea83dea3c954a64ac4cd412fdf840d690d8e7c5d7ad3d3f2200d3adcca64c170b0d5e47027cbd2ed21cd43f580874cdd6dba7dfe6b3af142bbff104853fc0f80c64cbc0be6030e50e316b20c372c6"
+      },
+      {
+        "recipients": [
+          {
+            "sk": "72f36040017ef5da9ebfefae2469da67ab7ff8a09e2f163f934c845397d6bd6d",
+            "plaintext": ""
+          },
+          {
+            "sk": "24ba49304ac867dd22b54df486f9ce3584f2ef94927cf2d84ad46ada169227f3",
+            "plaintext": "c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4"
+          }
+        ],
+        "image": "8efe1789d6476f60439e1168f588ea16652dc321279f05a805fbc63933e88ae9c175d6c6ab182e54af562e1a0dce41bb01010101010101010101010101010101010101010101010101010101010101010200307d0a7603f656e7d9cc8bec30be204e1c5520b43c33ad201834ac63f6b07199c2b0ebabe6c642d5ddbcd0a191bb862458"
+      }
     ]
   },
   "ietf": {
@@ -88,6 +152,70 @@
       {
         "blob_lens": [252, 253],
         "image": "aefe1789d6476f60439e1168f588ea16652dc321279f05a805fbc63933e88ae9c175d6c6ab182e54af562e1a0dce41bb010101010101010101010101010101010101010101010101010101010101010102fca0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0fdfd00a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      }
+    ],
+    "encrypted_basic": [
+      {
+        "recipients": [
+          {
+            "sk": "1b6b658fcfe1dd8a09b3e88a9b2863b8b490f0b646e9ffcbdeb571c8d7d8fc06",
+            "plaintext": "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0"
+          },
+          {
+            "sk": "67ad4451ccd9fc7ab3cc7c81d94867821c0de26903a8d3c59e1ef72a4f0500c1",
+            "plaintext": "c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1"
+          },
+          {
+            "sk": "48b037bf374e2e312378b0a962b2d2aa55fdbeb1e11fa8006c3e8c9641e33100",
+            "plaintext": "c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2"
+          }
+        ],
+        "image": "aefe1789d6476f60439e1168f588ea16652dc321279f05a805fbc63933e88ae9c175d6c6ab182e54af562e1a0dce41bb01010101010101010101010101010101010101010101010101010101010101010310784242895ebd214d3a87d8df32fbce5a2016e0b9fc6ae2f64d9cd7fbea5b46f908dee7b30561a7b5fd10bbaf43216d31e340b264cd6901a15ef53e12dd2a4be4fe9be0205aa721dc8f5ab5e9a42530a4d6431f743a6d60bb16f3865b60ec4ddb654336507ba06aecb8b337045841e185760a"
+      },
+      {
+        "recipients": [
+          {
+            "sk": "72f36040017ef5da9ebfefae2469da67ab7ff8a09e2f163f934c845397d6bd6d",
+            "plaintext": ""
+          },
+          {
+            "sk": "24ba49304ac867dd22b54df486f9ce3584f2ef94927cf2d84ad46ada169227f3",
+            "plaintext": "c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4"
+          }
+        ],
+        "image": "aefe1789d6476f60439e1168f588ea16652dc321279f05a805fbc63933e88ae9c175d6c6ab182e54af562e1a0dce41bb0101010101010101010101010101010101010101010101010101010101010101020030256333c8f1b472eab784791fcbb05f7ee598f89e03f01a4b146b3a8f328f0434fb208d3d83780c1598a508b11b28ef48"
+      }
+    ],
+    "encrypted_legacy": [
+      {
+        "recipients": [
+          {
+            "sk": "1b6b658fcfe1dd8a09b3e88a9b2863b8b490f0b646e9ffcbdeb571c8d7d8fc06",
+            "plaintext": "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0"
+          },
+          {
+            "sk": "67ad4451ccd9fc7ab3cc7c81d94867821c0de26903a8d3c59e1ef72a4f0500c1",
+            "plaintext": "c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1"
+          },
+          {
+            "sk": "48b037bf374e2e312378b0a962b2d2aa55fdbeb1e11fa8006c3e8c9641e33100",
+            "plaintext": "c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2"
+          }
+        ],
+        "image": "aefe1789d6476f60439e1168f588ea16652dc321279f05a805fbc63933e88ae9c175d6c6ab182e54af562e1a0dce41bb01010101010101010101010101010101010101010101010101010101010101010310033dab2bfad9f5dd35c7f7dafc2d8bb8209ae572126095a410df56b9615c606297218acea83dea3c954a64ac4cd412fdf840d690d8e7c5d7ad3d3f2200d3adcca64c170b0d5e47027cbd2ed21cd43f580874cdd6dba7dfe6b3af142bbff104853fc0f80c64cbc0be6030e50e316b20c372c6"
+      },
+      {
+        "recipients": [
+          {
+            "sk": "72f36040017ef5da9ebfefae2469da67ab7ff8a09e2f163f934c845397d6bd6d",
+            "plaintext": ""
+          },
+          {
+            "sk": "24ba49304ac867dd22b54df486f9ce3584f2ef94927cf2d84ad46ada169227f3",
+            "plaintext": "c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4"
+          }
+        ],
+        "image": "aefe1789d6476f60439e1168f588ea16652dc321279f05a805fbc63933e88ae9c175d6c6ab182e54af562e1a0dce41bb01010101010101010101010101010101010101010101010101010101010101010200307d0a7603f656e7d9cc8bec30be204e1c5520b43c33ad201834ac63f6b07199c2b0ebabe6c642d5ddbcd0a191bb862458"
       }
     ]
   }
