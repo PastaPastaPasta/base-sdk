@@ -7,18 +7,24 @@
 //! ProDisTx shared masternode dissolution payload (type 10).
 
 use super::share::MAX_SHARES;
-use super::DissolveSig;
+use super::{DissolveSig, EcdsaRecSigArray};
 use crate::codec::{decode_list, encode_list, impl_payload};
 use crate::prelude::*;
+use crate::sign::{sha256d, verify_compact_canonical, write_tx_header};
 use crate::sptx::ProTxInvalid;
-use crate::{hash_impl, TxHash};
+use crate::{hash_impl, Transaction, TxHash};
 
+use dash_pkc::ecdsa::{EcdsaError, ECDSA_REC_SIG_LEN};
+use dash_script::PubKeyHash;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
-use dash_types::{impl_new, Checkable};
+use dash_types::{impl_new, Checkable, Signable};
 use getset::{CopyGetters, Getters};
 
 use core::fmt;
+
+/// Prefix of the digest a `DissolveSig` signs.
+const PREFIX_STR: &str = "DashSharedMNDissolve";
 
 impl_new! {
 /// ProDisTx: dissolve a shared masternode (type 10).
@@ -62,6 +68,48 @@ impl BaseCodec for ProDisTx {
   }
 }
 
+/// The signature of a share owner dissolving a shared masternode.
+impl Signable for DissolveSig {
+  type Key = PubKeyHash;
+  type Context = (Transaction, ProDisTx);
+  type Error = EcdsaError;
+
+  fn payload(&self, (tx, ptx): &(Transaction, ProDisTx)) -> Vec<u8> {
+    let mut buf = Vec::new();
+    String::from(PREFIX_STR).encode(&mut buf);
+    ptx.version.encode(&mut buf);
+    write_tx_header(tx, &mut buf);
+    for input in tx.inputs() {
+      input.prevout().encode(&mut buf);
+    }
+    for input in tx.inputs() {
+      input.sequence().encode(&mut buf);
+    }
+    for output in tx.outputs() {
+      output.encode(&mut buf);
+    }
+    ptx.pro_tx_hash.encode(&mut buf);
+    ptx.actor_index.encode(&mut buf);
+    (ptx.sigs.len() as u8).encode(&mut buf);
+    sha256d(&buf).to_vec()
+  }
+
+  fn set_signature(&mut self, sig: &[u8], key: &PubKeyHash, ctx: &Self::Context) -> Result<(), EcdsaError> {
+    let sig = <[u8; ECDSA_REC_SIG_LEN]>::try_from(sig).map_err(|_| EcdsaError::InvalidSignature)?;
+    verify_compact_canonical(&self.payload(ctx), &sig, key)?;
+    *self = EcdsaRecSigArray::from_bytes(sig).into();
+    Ok(())
+  }
+
+  fn reset_signature(&mut self) {
+    *self = Self::default();
+  }
+
+  fn verify(&self, key: &PubKeyHash, ctx: &Self::Context) -> Option<EcdsaError> {
+    verify_compact_canonical(&self.payload(ctx), self.as_bytes(), key).err()
+  }
+}
+
 impl Checkable for ProDisTx {
   type Error = ProTxInvalid;
 
@@ -93,7 +141,7 @@ impl fmt::Display for ProDisTx {
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
-  use crate::Transaction;
+  use crate::sign::tests::consent_signs_the_payload;
 
   use dash_dev::{assert_json_rt, check_sptx_raw, vec_from_hex};
   use rstest::rstest;
@@ -130,6 +178,13 @@ mod tests {
     let raw = vec_from_hex(raw);
     assert_json_rt(&check_sptx_raw::<ProDisTx>(&raw, txid));
     assert_eq!(Transaction::decode(&mut &raw[..]).unwrap().check(), None, "{txid}");
+  }
+
+  #[rstest]
+  fn dissolve_sig_signs_the_payload() {
+    let (txid, raw) = REGTEST[0];
+    let tx = Transaction::decode(&mut &vec_from_hex(raw)[..]).unwrap();
+    consent_signs_the_payload::<DissolveSig>(&(tx, regtest(txid)));
   }
 
   /// The fields that `decoderawtransaction` of the reference implementation at

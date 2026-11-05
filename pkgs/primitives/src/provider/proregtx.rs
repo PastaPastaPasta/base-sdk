@@ -7,14 +7,16 @@
 //! ProRegTx registration payload (type 1).
 
 use super::share::{check_payout_version, check_payouts, check_shares, EVO_COLLATERAL, MAX_REWARD, REGULAR_COLLATERAL};
-use super::{CollateralShare, CollateralSig, JoinSig, OperatorKey, PayoutShare, ProTxVersion};
+use super::{CollateralShare, CollateralSig, EcdsaRecSigArray, JoinSig, OperatorKey, PayoutShare, ProTxVersion};
 use crate::codec::{decode_items, decode_list, encode_items, encode_list, impl_payload};
 use crate::prelude::*;
 use crate::provider::PlatformNodeId;
-use crate::sign::{message_digest, unsigned_digest, verify_compact};
+use crate::sign::{
+  message_digest, sha256d, unsigned_digest, verify_compact, verify_compact_canonical, write_tx_header,
+};
 use crate::sptx::{check_sptx_netinfo, InputsHash, MnType, ProTxInvalid, MAX_OPERATOR_REWARD};
 use crate::types::{NITrait, NetInfo, NetInfoV1, NetInfoV2};
-use crate::{hash_impl, TxHash};
+use crate::{hash_impl, Transaction, TxHash};
 
 use bitcoin_primitives::script::ScriptPubKeyBuf;
 use dash_num::Hash256;
@@ -28,6 +30,9 @@ use getset::{CopyGetters, Getters};
 use hex_conservative::DisplayHex;
 
 use core::fmt;
+
+/// Prefix of the digest a `JoinSig` signs.
+const PREFIX_STR: &str = "DashSharedMNReg";
 
 /// ProRegTx -- register a new masternode (type 1).
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
@@ -213,15 +218,7 @@ impl BaseCodec for ProRegTx {
     self.mode.encode(buf);
     self.collateral_hash.encode(buf);
     self.collateral_index.encode(buf);
-    // Branch on version to match the decode path. Validation
-    // guarantees the variant matches the version.
-    if self.version >= ProTxVersion::CoreV24 {
-      if let NetInfo::Extended(ext) = &self.net_info {
-        ext.encode(buf);
-      }
-    } else if let NetInfo::Legacy(svc) = &self.net_info {
-      svc.encode(buf);
-    }
+    self.encode_net_info(buf);
     self.key_id_owner.encode(buf);
     self.pub_key_operator.encode(buf);
     self.key_id_voting.encode(buf);
@@ -289,6 +286,62 @@ impl Signable for ProRegTx {
   fn verify(&self, key: &PubKeyHash, ctx: &AddrParams) -> Option<EcdsaError> {
     let sig = self.sig.as_bytes().ok_or(EcdsaError::InvalidSignature);
     sig.and_then(|sig| verify_compact(&self.payload(ctx), sig, key)).err()
+  }
+}
+
+/// The consent of a share owner to a shared registration.
+impl Signable for JoinSig {
+  type Key = PubKeyHash;
+  type Context = (Transaction, ProRegTx);
+  type Error = EcdsaError;
+
+  fn payload(&self, (tx, ptx): &(Transaction, ProRegTx)) -> Vec<u8> {
+    let mut prevouts = Vec::new();
+    let mut outputs = Vec::new();
+    for input in tx.inputs() {
+      input.prevout().encode(&mut prevouts);
+    }
+    for output in tx.outputs() {
+      output.encode(&mut outputs);
+    }
+
+    let mut buf = Vec::new();
+    String::from(PREFIX_STR).encode(&mut buf);
+    ptx.version.encode(&mut buf);
+    write_tx_header(tx, &mut buf);
+    sha256d(&prevouts).encode(&mut buf);
+    for input in tx.inputs() {
+      input.sequence().encode(&mut buf);
+    }
+    sha256d(&outputs).encode(&mut buf);
+    ptx.mn_type.to_base().encode(&mut buf);
+    ptx.mode.encode(&mut buf);
+    ptx.encode_net_info(&mut buf);
+    if ptx.mn_type == MnType::Evo {
+      ptx.platform_node_id.unwrap_or_default().encode(&mut buf);
+    }
+    ptx.key_id_voting.encode(&mut buf);
+    ptx.pub_key_operator.encode(&mut buf);
+    ptx.operator_reward.encode(&mut buf);
+    encode_list(&ptx.shares, &mut buf);
+    ptx.early_period_blocks.encode(&mut buf);
+    ptx.early_penalty.encode(&mut buf);
+    sha256d(&buf).to_vec()
+  }
+
+  fn set_signature(&mut self, sig: &[u8], key: &PubKeyHash, ctx: &Self::Context) -> Result<(), EcdsaError> {
+    let sig = <[u8; ECDSA_REC_SIG_LEN]>::try_from(sig).map_err(|_| EcdsaError::InvalidSignature)?;
+    verify_compact_canonical(&self.payload(ctx), &sig, key)?;
+    *self = EcdsaRecSigArray::from_bytes(sig).into();
+    Ok(())
+  }
+
+  fn reset_signature(&mut self) {
+    *self = Self::default();
+  }
+
+  fn verify(&self, key: &PubKeyHash, ctx: &Self::Context) -> Option<EcdsaError> {
+    verify_compact_canonical(&self.payload(ctx), self.as_bytes(), key).err()
   }
 }
 
@@ -439,6 +492,19 @@ impl ProRegTx {
     }
   }
 
+  /// Writes the network info in the layout `version` selects.
+  fn encode_net_info(&self, buf: &mut impl EncodeBuf) {
+    // Branch on version to match the decode path. Validation
+    // guarantees the variant matches the version.
+    if self.version >= ProTxVersion::CoreV24 {
+      if let NetInfo::Extended(ext) = &self.net_info {
+        ext.encode(buf);
+      }
+    } else if let NetInfo::Legacy(svc) = &self.net_info {
+      svc.encode(buf);
+    }
+  }
+
   /// Checks the collateral shares, or the owner payouts when unshared.
   fn check_owner_rewards(&self) -> Option<ProTxInvalid> {
     if !self.shares.is_empty() {
@@ -478,6 +544,7 @@ impl fmt::Display for ProRegTx {
 mod tests {
   use super::*;
   use crate::provider::share::tests::script;
+  use crate::sign::tests::consent_signs_the_payload;
   use crate::types::{AddrV2, NIEntry, NIError, NIPurpose, ServiceV2};
 
   use dash_dev::{
@@ -669,6 +736,13 @@ mod tests {
     let service = NIEntry::Service(ServiceV2::new(AddrV2::Ipv4([1, 2, 3, 4]), 11741));
     ptx.net_info = NetInfo::Extended(NetInfoV2::new(1, vec![(NIPurpose::CoreP2p, vec![service])]));
     ptx
+  }
+
+  #[rstest]
+  fn join_sig_signs_the_consent() {
+    let (_, raw) = REGTEST[2];
+    let tx = Transaction::decode(&mut &vec_from_hex(raw)[..]).unwrap();
+    consent_signs_the_payload::<JoinSig>(&(tx, shared()));
   }
 
   /// `share` with its refund script paying `key`.
