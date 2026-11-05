@@ -6,12 +6,14 @@
 
 //! Block relay messages.
 
-use crate::codec::codec_p2p;
+use super::headers::GetHeaders;
+use crate::codec::{codec_p2p, impl_p2p};
 use crate::prelude::*;
 use crate::version::ProtocolVersion;
 
-use dash_primitives::BlockHash;
+use dash_primitives::{hash_impl, BlockHash};
 use dash_types::type_id::TypeId;
+use dash_types::{impl_new, impl_vec};
 use getset::{CopyGetters, Getters};
 
 codec_p2p! {
@@ -30,7 +32,7 @@ pub struct SendCmpct {
 }
 }
 
-codec_p2p! {
+impl_new! {
 /// Requests the hashes of the blocks that follow a locator.
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -45,6 +47,15 @@ pub struct GetBlocks {
   #[getset(get_copy = "pub")]
   hash_stop: BlockHash,
 }
+}
+
+impl_vec!(GetBlocks, { version, locator_hashes: Self::MAX_LOCATOR_COUNT, hash_stop });
+impl_p2p!(GetBlocks);
+hash_impl!(GetBlocks);
+
+impl GetBlocks {
+  /// The most locator hashes a `getblocks` carries.
+  pub const MAX_LOCATOR_COUNT: usize = GetHeaders::MAX_LOCATOR_COUNT;
 }
 
 #[cfg(all(test, feature = "serde"))]

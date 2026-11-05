@@ -13,12 +13,12 @@ use crate::prelude::*;
 use dash_primitives::{hash_impl, AddrV2, ServiceV1};
 use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
-use dash_types::{impl_new, CompactSize, Numeric};
+use dash_types::{impl_new, impl_vec, CompactSize, Numeric};
 use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
-codec_p2p! {
+impl_new! {
 /// V1 address announcement carrying timestamped addresses.
 #[derive(Clone, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -27,6 +27,15 @@ pub struct Addr {
   #[getset(get = "pub")]
   addrs: Vec<TimestampedAddr>,
 }
+}
+
+impl_vec!(Addr, { addrs: Self::MAX_COUNT });
+impl_p2p!(Addr);
+hash_impl!(Addr);
+
+impl Addr {
+  /// The most addresses an `addr` carries.
+  pub const MAX_COUNT: usize = 1_000;
 }
 
 impl_new! {
@@ -81,7 +90,7 @@ impl fmt::Display for AddrV2Entry {
   }
 }
 
-codec_p2p! {
+impl_new! {
 /// BIP155 v2 address announcement.
 #[derive(Clone, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -90,6 +99,15 @@ pub struct AddrV2Msg {
   #[getset(get = "pub")]
   addrs: Vec<AddrV2Entry>,
 }
+}
+
+impl_vec!(AddrV2Msg, { addrs: Self::MAX_COUNT });
+impl_p2p!(AddrV2Msg);
+hash_impl!(AddrV2Msg);
+
+impl AddrV2Msg {
+  /// The most addresses an `addrv2` carries.
+  pub const MAX_COUNT: usize = Addr::MAX_COUNT;
 }
 
 codec_p2p! {
