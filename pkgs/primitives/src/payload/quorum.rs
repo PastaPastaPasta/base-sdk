@@ -8,10 +8,12 @@
 
 use crate::codec::impl_payload;
 use crate::hash_impl;
+use crate::prelude::*;
+use crate::sign::sha256d_hash;
 use crate::sptx::QuorumHash;
 use crate::support::DynBitset;
 
-use dash_num::make_hash;
+use dash_num::{make_hash, Hash256};
 use dash_params::LlmqType;
 use dash_pkc::bls::{BlsPkBytes, BlsSigBytes};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
@@ -118,6 +120,21 @@ impl BaseCodec for Commitment {
 hash_impl!(Commitment);
 
 impl Commitment {
+  /// The digest the quorum signature and the members' signature sign.
+  ///
+  /// It commits to the LLMQ type, the quorum hash, the valid members, the
+  /// quorum public key as the payload writes it and the verification vector
+  /// hash.
+  pub fn sig_hash(&self) -> Hash256 {
+    let mut buf = Vec::new();
+    self.llmq_type.encode(&mut buf);
+    self.quorum_hash.encode(&mut buf);
+    self.valid_members.encode(&mut buf);
+    self.quorum_public_key.encode(&mut buf);
+    self.quorum_vvec_hash.encode(&mut buf);
+    sha256d_hash(&buf)
+  }
+
   /// Returns true if this is an indexed commitment (version 2 or 4).
   #[inline]
   pub fn is_indexed(&self) -> bool {

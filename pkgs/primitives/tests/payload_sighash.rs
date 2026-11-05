@@ -13,7 +13,7 @@
 #![expect(clippy::panic, clippy::unwrap_used, reason = "test code")]
 
 use dash_dev::{arr_from_hex, vec_from_hex, Corpus};
-use dash_params::Network;
+use dash_params::{LlmqType, Network};
 use dash_pkc::bls::{BlsPkBytes, BlsPublicKey, BlsScChia, BlsScIetf, BlsScheme, BlsSigBytes, BlsSignature};
 use dash_primitives::{CollateralShare, ProTxVersion, SpecialPayload, Transaction};
 use dash_script::PubKeyHash;
@@ -47,6 +47,12 @@ struct Signer {
   operator_legacy: Option<bool>,
   /// Whether the share owners named in the payload signed it.
   shares: bool,
+  /// Whether the quorum named in the payload signed it.
+  commitment: bool,
+  /// LLMQ type of the signing quorum.
+  llmq_type: Option<u8>,
+  /// Public key of the signing quorum.
+  quorum: Option<String>,
 }
 
 impl Signer {
@@ -56,6 +62,13 @@ impl Signer {
       .iter()
       .map(|id| PubKeyHash::from_lendian(arr_from_hex(id)))
       .collect()
+  }
+
+  /// The key of the quorum of `llmq_type`, checked to be the one that
+  /// signed.
+  fn quorum(&self, llmq_type: LlmqType) -> BlsPkBytes {
+    assert_eq!(self.llmq_type, Some(llmq_type.to_base()));
+    BlsPkBytes::from_bytes(arr_from_hex(self.quorum.as_deref().unwrap()))
   }
 
   /// The operator key, and whether it is written under the legacy scheme.
@@ -143,6 +156,7 @@ fn check_signed(txid: &str, entry: &Entry) -> Option<(u16, u16)> {
     "regtest" => Network::Regtest,
     other => panic!("{txid}: unknown network {other}"),
   };
+
   let (version, signed) = match &payload {
     SpecialPayload::ProviderRegister(p) if signer.shares => {
       let owners = p.shares().iter().map(CollateralShare::key_id_owner).collect();
@@ -172,14 +186,42 @@ fn check_signed(txid: &str, entry: &Entry) -> Option<(u16, u16)> {
     }
     SpecialPayload::ProviderUpdateShare(p) => (p.version(), owner_signed(p, &signer.key_ids(), &())),
     SpecialPayload::ProviderUpdateSharedRegistrar(p) => (p.version(), consents_signed(p.sigs(), &signer.key_ids(), p)),
+    SpecialPayload::QuorumCommitment(p) if signer.commitment => {
+      let c = p.commitment();
+      let legacy = c.version() <= 2;
+      let signed = bls_signed(
+        &(c.quorum_public_key(), legacy),
+        &(c.quorum_sig(), legacy),
+        &c.sig_hash().to_lendian(),
+        false,
+      );
+      (c.version(), signed)
+    }
+    SpecialPayload::MnhfSignal(p) => {
+      let llmq_type = network.consensus().llmq_type_mnhf;
+      let digest = p.sig_hash(&tx, llmq_type).to_lendian();
+      let signed = bls_signed(&(signer.quorum(llmq_type), false), &(p.sig(), false), &digest, false);
+      (p.version().into(), signed)
+    }
+    SpecialPayload::AssetUnlock(p) => {
+      let llmq_type = network.consensus().llmq_type_platform;
+      let digest = p.sig_hash(&tx, llmq_type).to_lendian();
+      let signed = bls_signed(
+        &(signer.quorum(llmq_type), false),
+        &(p.quorum_sig(), false),
+        &digest,
+        false,
+      );
+      (p.version().into(), signed)
+    }
     _ => return None,
   };
   assert!(signed, "{txid} ({}): the signature does not verify", entry.source);
   Some((tx.tx_type().to_base(), version))
 }
 
-/// The signatures verify over the sign hash of every signed provider
-/// payload type, at every version.
+/// The signatures verify over the sign hash of every signed payload type,
+/// at every version.
 #[test]
 fn signatures_verify_over_sighash() {
   let shapes: BTreeSet<_> = corpus()
@@ -187,6 +229,7 @@ fn signatures_verify_over_sighash() {
     .filter_map(|(txid, entry)| check_signed(txid, entry))
     .collect();
   let protx = (1..=4).flat_map(|t| (1..=3).map(move |v| (t, v)));
-  let shared = [(10, 1), (11, 1), (12, 1)];
-  assert_eq!(shapes, protx.chain(shared).collect());
+  let commitments = (1..=4).map(|v| (6, v));
+  let others = [(7, 1), (9, 1), (9, 2), (10, 1), (11, 1), (12, 1)];
+  assert_eq!(shapes, protx.chain(commitments).chain(others).collect());
 }
