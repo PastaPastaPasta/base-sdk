@@ -117,6 +117,21 @@ jobs:
         uses: jlumbroso/free-disk-space@ceedf095f4ec1a097402bc6bd80831f2e1a6fde6 # v2.0.0
         with:
           large-packages: false
+          # The 4G swap file; peak use is ~7G of the runner's 16G memory.
+          swap-storage: true
+
+      # Some ubuntu-24.04 jobs land on a 72G runner (/dev/mapper/cow-root)
+      # instead of the usual 145G one. After the step above it has ~40G
+      # free, while a comb needs ~44G: the job then fails in lint_bazel's
+      # cquery, extracting the LLVM toolchain ("No space left on device").
+      # None of these trees is used by the comb, whose tools all come from
+      # the Nix devshell.
+      - name: Free the runtimes the comb never uses
+        run: |
+          df -h --output=size,used,avail /
+          sudo rm -rf "${AGENT_TOOLSDIRECTORY:?}" /usr/share/swift /usr/local/share/powershell \
+            /usr/local/share/chromium /opt/microsoft /opt/google /opt/az
+          df -h --output=size,used,avail /
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
