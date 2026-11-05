@@ -9,7 +9,7 @@
 #![expect(clippy::panic, clippy::unwrap_used, reason = "test code")]
 
 use dash_dev::{arr_from_hex, vec_from_hex, Corpus};
-use dash_params::Network;
+use dash_params::{LlmqType, Network};
 use dash_pkc::bls::{BlsPkBytes, BlsPublicKey, BlsScChia, BlsScIetf, BlsScheme, BlsSigBytes, BlsSignature};
 use dash_primitives::{CollateralShare, ProTxVersion, SpecialPayload, Transaction};
 use dash_script::PubKeyHash;
@@ -53,6 +53,10 @@ struct Signer {
   sig_scheme: Option<Scheme>,
   /// Whether the share owners named in the payload signed it.
   shares: bool,
+  /// Whether the quorum named in the payload signed it.
+  commitment: bool,
+  /// Public keys of the quorums at the payload's quorum hash, by LLMQ type.
+  quorums: BTreeMap<u8, String>,
 }
 
 impl Signer {
@@ -62,6 +66,11 @@ impl Signer {
       .iter()
       .map(|id| PubKeyHash::from_lendian(arr_from_hex(id)))
       .collect()
+  }
+
+  /// The key of the quorum of `llmq_type`.
+  fn quorum(&self, llmq_type: LlmqType) -> BlsPkBytes {
+    BlsPkBytes::from_bytes(arr_from_hex(&self.quorums[&llmq_type.to_base()]))
   }
 
   /// Whether the operator's `sig`, given with whether it is written under
@@ -91,9 +100,15 @@ fn regtest() -> BTreeMap<String, Entry> {
     key_ids: ids.iter().map(ToString::to_string).collect(),
     ..Signer::default()
   };
+  let quorum = |llmq_type: u8, key: &str| Signer {
+    quorums: BTreeMap::from([(llmq_type, key.to_string())]),
+    ..Signer::default()
+  };
   [
     // A version 3 registrar update.
     ("11394a49704f57a63ba119742074ce43e4fcb13d97eece242de7be94c263aad5", "feature_protx_version block 384", "03000300010bb3bcc0293303a7c33471fa9081b0f9ad87a5bfb1769f7059b1cfca08ef3ba3010000006a473044022055815478b33579ae4573755ee425f49bd09f9e9cfb07f17821810dc950597863022063e3a1b3082fd81ac040ce40058f6d56e0947f6113cab321c0bb292a4e9a1416012103090f1455503bddf1bdb7b6ae6dffafb7a66248551bfb592900ed7e8efd21d486feffffff014fdff505000000001976a9146ce2ac804158e51299b5bc017cedd10064231f8f88ac00000000e703000b641b8f63f4b8619cac88d532533ca7a64461a32e8669d90fdd4aaf0e92704f000091bea3a77f336a4c5df0c5fdbb1c5f6d33c04e2ed251d99359f0d5a80e46c4f7aa9077755d2cdae9ab5248f0c70d8f14a6ea9fa81746664db9fb2dd4996ee31622e61b15011976a9148a20a1b135db76136993a65494336ce82df8b6a988ac1027bef1be7238c10c0dfc48647a05acfe779b1323ffdd7c57641405f4a806c30c124120c13fec728c8b52c481a2d0b7e8b9556933206c7429818a4c072ced05ea1aadce365c9da7b6006a9c9278bf1da1416eb380eec900ff6e61775a162047d8193af9", owners(&["3adab6dfd8ba2e8f0023248f5b46278da6f4faef"])),
+    // A version 2 asset unlock.
+    ("ed6d78c04f2e9ba2f1c81536cde6885725448ae7083b7580b21031cf565590b8", "feature_asset_locks block 969", "03000900000190cff4050000000023210208757bbcd988510d37a86a8c703f9b57543fa343bcf5bd583d444f213b08df03ac000000009102210300000000000070110100c80300005eefda1aa736089dea8f24bc123625405d35aac52a27d4806aff193cf881055895c2eb3e11355fcbd86e5494ceb2d207e5e47d95a9da9b2d3d968c321935993773cd9cea6c831b43f2a09f92944fc62f11d29adb607774915e7dd26c01ecf912e9cd0e793ab66b5fb61145cd80e9830822d904d375562a705f35e65d9ceed33d", quorum(106, "928543a0364f3192a47407923e7ed2b19eb743af5c3f94b9bda198ec73fa316092482a8d3280a7ce58ac0748d86d1404")),
     // A share update.
     ("7c71f29451b4a09756b8664eb59592514bbd43395b43b4fe6878a762ada093c7", "feature_masternode_shares block 276", "03000b0001acebb7cbf7176bdf33fae143c11f82cb97659477e73dff20ba414ea2ec011970000000006a47304402202a35e0e5a5e2239346b7a2f211f3bc2063048c4a644a650821baa181c4bb79a3022001933d1764fcf337d44f38322a2866e541f6638dcf4e57d3e6cda8895f26f3e2012102fd12b3ea269e7ffa97c6d30ac236ea269819dad98216c4ad33b3f9aabfa025cdfeffffff0196dff505000000001976a91491e4b0a9c865845fc4ab401e475059af9cd0a5db88ac00000000a00100e49e985715484b5d76b8d96b710282712a73e744683f4987bd8e2bd10743574500001976a9143e7caaa99621cd878ed371726f4e459104e23dbc88aca3b3f94d0cd5851f4e7503297ca5212488f14ab89181a1a90fd59fed9df0afb541203a324a03e47ed3cda35b2e605dacfe87fcc7121e0657ff29785dd053addf72d04e38d407bb3869f9fe1dd8cd3e12b39cce7d12f69cb2e0c3c937fb2662349bd4", owners(&["5a71973a879b5cd702e4ebad0eb96244e84e0627", "c374c77db723510a2717e27c91033e1c9431342a"])),
     // A shared registrar update.
@@ -137,6 +152,16 @@ fn bls_verifies<V: BlsScheme>(key: &(BlsPkBytes, bool), sig: &(BlsSigBytes, bool
   match (bls_key::<V>(&key.0, key.1), bls_sig::<V>(&sig.0, sig.1)) {
     (Some(key), Some(sig)) => key.verify_digest(digest, &sig).is_ok(),
     _ => false,
+  }
+}
+
+/// Whether `sig` verifies over `digest` under `key`, each given with whether
+/// it is written and signed under the legacy scheme.
+fn bls_signed(key: &(BlsPkBytes, bool), sig: &(BlsSigBytes, bool), digest: &[u8]) -> bool {
+  if sig.1 {
+    bls_verifies::<BlsScChia>(key, sig, digest)
+  } else {
+    bls_verifies::<BlsScIetf>(key, sig, digest)
   }
 }
 
@@ -191,14 +216,36 @@ fn check_signed(txid: &str, entry: &Entry) -> Option<(u16, u16)> {
     }
     SpecialPayload::ProviderUpdateShare(p) => (p.version(), owner_signed(p, &signer.key_ids(), &())),
     SpecialPayload::ProviderUpdateSharedRegistrar(p) => (p.version(), consents_signed(p.sigs(), &signer.key_ids(), p)),
+    SpecialPayload::QuorumCommitment(p) if signer.commitment => {
+      let c = p.commitment();
+      let legacy = c.version() <= 2;
+      let signed = bls_signed(
+        &(c.quorum_public_key(), legacy),
+        &(c.quorum_sig(), legacy),
+        &c.sig_hash().to_lendian(),
+      );
+      (c.version(), signed)
+    }
+    SpecialPayload::MnhfSignal(p) => {
+      let llmq_type = network.consensus().llmq_type_mnhf;
+      let digest = p.sig_hash(&tx, llmq_type).to_lendian();
+      let signed = bls_signed(&(signer.quorum(llmq_type), false), &(p.sig(), false), &digest);
+      (p.version().into(), signed)
+    }
+    SpecialPayload::AssetUnlock(p) => {
+      let llmq_type = network.consensus().llmq_type_platform;
+      let digest = p.sig_hash(&tx, llmq_type).to_lendian();
+      let signed = bls_signed(&(signer.quorum(llmq_type), false), &(p.quorum_sig(), false), &digest);
+      (p.version().into(), signed)
+    }
     _ => return None,
   };
   assert!(signed, "{txid} ({}): the signature does not verify", entry.source);
   Some((tx.tx_type().to_base(), version))
 }
 
-/// The signatures verify over the sign hash of every signed provider
-/// payload type, at every version.
+/// The signatures verify over the sign hash of every signed payload type,
+/// at every version.
 #[test]
 fn signatures_verify_over_sighash() {
   let shapes: BTreeSet<_> = corpus()
@@ -207,6 +254,7 @@ fn signatures_verify_over_sighash() {
     .filter_map(|(txid, entry)| check_signed(&txid, &entry))
     .collect();
   let protx = (1..=4).flat_map(|t| (1..=3).map(move |v| (t, v)));
-  let shared = [(10, 1), (11, 1), (12, 1)];
-  assert_eq!(shapes, protx.chain(shared).collect());
+  let commitments = (1..=4).map(|v| (6, v));
+  let others = [(7, 1), (9, 1), (9, 2), (10, 1), (11, 1), (12, 1)];
+  assert_eq!(shapes, protx.chain(commitments).chain(others).collect());
 }
