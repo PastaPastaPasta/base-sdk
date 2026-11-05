@@ -185,25 +185,35 @@ pub trait BlsScheme: BlsSchemeId + Sealed + Sized {
     Ok(BlsDhBytes::from_bytes(Self::pk_to_bytes(&shared)))
   }
 
+  /// Serialize a Diffie-Hellman product in the 48-byte layout of scheme `T`.
+  ///
+  /// # Errors
+  ///
+  /// Returns `InvalidPublicKey` when the shared secret cannot be derived.
+  fn dh_bytes_as<T: BlsScheme>(sk: &Self::InnerSk, peer_pk: &Self::InnerPk) -> Result<BlsDhBytes, BlsError> {
+    let shared = Self::pk_to_g1(&Self::dh_exchange(sk, peer_pk)?)?;
+    Ok(BlsDhBytes::from_bytes(T::g1_bytes(&shared.to_affine())))
+  }
+
   /// Derive the BLS-IES symmetric key from a Diffie-Hellman shared key.
   ///
   /// The key is the leading 32 bytes of the shared point's serialization, so
-  /// it depends on the scheme and a blob is readable only by the scheme that
-  /// wrote it.
+  /// it depends on the layout the point is written in.
   fn ies_key(shared: &BlsDhBytes) -> Zeroizing<[u8; AES_KEY_LEN]> {
     let mut key = Zeroizing::new([0u8; AES_KEY_LEN]);
     key.copy_from_slice(&shared.as_bytes()[..AES_KEY_LEN]);
     key
   }
 
-  /// Seal one plaintext to a recipient under an ephemeral key and IV.
+  /// Seal one plaintext to a recipient under an ephemeral key and IV, keyed
+  /// by the leading 32 bytes of the shared point's encoding under scheme `T`.
   ///
   /// # Errors
   ///
   /// Returns `InvalidPlaintextLength` when the plaintext is empty or not a
   /// whole number of 16-byte blocks, or `InvalidPublicKey` when the shared
   /// secret cannot be derived.
-  fn ies_seal(
+  fn ies_seal_as<T: BlsScheme>(
     eph_sk: &Self::InnerSk,
     recipient: &Self::InnerPk,
     iv: &[u8; AES_BLOCK_LEN],
@@ -212,18 +222,20 @@ pub trait BlsScheme: BlsSchemeId + Sealed + Sized {
     if plaintext.is_empty() {
       return Err(BlsError::InvalidPlaintextLength);
     }
-    let key = Self::ies_key(&Self::dh_bytes(eph_sk, recipient)?);
+    let key = Self::ies_key(&Self::dh_bytes_as::<T>(eph_sk, recipient)?);
     aes_cbc::encrypt(&key, iv, plaintext).ok_or(BlsError::InvalidPlaintextLength)
   }
 
-  /// Open one ciphertext sealed to this key under an ephemeral key and IV.
+  /// Open one ciphertext sealed to this key under an ephemeral key and IV,
+  /// keyed by the leading 32 bytes of the shared point's encoding under
+  /// scheme `T`.
   ///
   /// # Errors
   ///
   /// Returns `InvalidCiphertextLength` when the ciphertext is empty or not a
   /// whole number of 16-byte blocks, or `InvalidPublicKey` when the shared
   /// secret cannot be derived.
-  fn ies_open(
+  fn ies_open_as<T: BlsScheme>(
     sk: &Self::InnerSk,
     eph_pk: &Self::InnerPk,
     iv: &[u8; AES_BLOCK_LEN],
@@ -232,7 +244,7 @@ pub trait BlsScheme: BlsSchemeId + Sealed + Sized {
     if ciphertext.is_empty() {
       return Err(BlsError::InvalidCiphertextLength);
     }
-    let key = Self::ies_key(&Self::dh_bytes(sk, eph_pk)?);
+    let key = Self::ies_key(&Self::dh_bytes_as::<T>(sk, eph_pk)?);
     aes_cbc::decrypt(&key, iv, ciphertext).ok_or(BlsError::InvalidCiphertextLength)
   }
 

@@ -20,10 +20,10 @@ extensions:
       - ["Bls", "Signature", "secure_verify_aggregates_message"]  # Verify w/ binding against rogue keys
       # Integrated Encryption Scheme
       - ["Bls", "SecretKey", "dh_exchange"]               # Derive shared secret
-      - ["Bls", "SecretKey", "ies_decrypt"]               # Decrypt blob
-      - ["Bls", "SecretKey", "ies_decrypt_multi"]         # Decrypt multi
-      - ["Bls", "PublicKey", "ies_encrypt"]               # Encrypt blob
-      - ["Bls", "PublicKey", "ies_encrypt_multi"]         # Encrypt multi
+      - ["Bls", "SecretKey", "ies_decrypt_as"]            # Decrypt blob
+      - ["Bls", "SecretKey", "ies_decrypt_multi_as"]      # Decrypt multi
+      - ["Bls", "PublicKey", "ies_encrypt_as"]            # Encrypt blob
+      - ["Bls", "PublicKey", "ies_encrypt_multi_as"]      # Encrypt multi
       # Key derivation
       - ["Bls", "SecretKey", "from_ikm"]                  # Run key material through a KDF
       # Scheme transform

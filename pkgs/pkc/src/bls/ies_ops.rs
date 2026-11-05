@@ -334,27 +334,36 @@ impl BlsIesMultiBytes {
 }
 
 impl<S: BlsScheme> BlsPublicKey<S> {
-  /// Encrypt one blob for this recipient.
+  /// Encrypt one blob for this recipient, keyed by the leading 32 bytes of
+  /// the shared point's encoding under scheme `T`.
   ///
-  /// The blob decrypts at recipient index 0. The scheme reaches the ciphertext
-  /// through the symmetric key, so a blob is readable only by the same scheme
-  /// that wrote it.
+  /// The blob decrypts at recipient index 0 through
+  /// [`ies_decrypt_as`](BlsSecretKey::ies_decrypt_as) with the same `T`.
+  /// Decrypting under another encoding can give other bytes, with no error.
   ///
   /// # Errors
   ///
   /// Returns `InvalidPlaintextLength` when the plaintext is empty or not a
   /// whole number of 16-byte blocks, or `InvalidPublicKey` when the shared
   /// secret cannot be derived.
-  pub fn ies_encrypt(&self, plaintext: &[u8], rng: &mut impl CryptoRng) -> Result<BlsIesBlob<S>, BlsError> {
+  pub fn ies_encrypt_as<T: BlsScheme>(
+    &self,
+    plaintext: &[u8],
+    rng: &mut impl CryptoRng,
+  ) -> Result<BlsIesBlob<S>, BlsError> {
     let (eph_sk, iv_seed) = ephemeral(rng)?;
-    self.ies_encrypt_with(&eph_sk, &iv_seed, plaintext)
+    self.ies_encrypt_with::<T>(&eph_sk, &iv_seed, plaintext)
   }
 
-  /// Encrypt one plaintext per recipient under a single ephemeral key.
+  /// Encrypt one plaintext per recipient under a single ephemeral key, each
+  /// keyed by the leading 32 bytes of its shared point's encoding under
+  /// scheme `T`.
   ///
   /// Recipient `i`'s blob takes the IV at index `i` of the seed's chain. Each
-  /// recipient gets its own plaintext, since a secret share is addressed to
-  /// one holder alone.
+  /// recipient gets its own plaintext. Each blob decrypts through
+  /// [`ies_decrypt_multi_as`](BlsSecretKey::ies_decrypt_multi_as) with the
+  /// same `T`. Decrypting under another encoding can give other bytes, with
+  /// no error.
   ///
   /// # Errors
   ///
@@ -362,37 +371,38 @@ impl<S: BlsScheme> BlsPublicKey<S> {
   /// `IndexTooLarge` above [`MAX_IES_RECIPIENTS`] recipients,
   /// `InvalidPlaintextLength` on an empty or misaligned plaintext, and
   /// `InvalidPublicKey` when a shared secret cannot be derived.
-  pub fn ies_encrypt_multi(
+  pub fn ies_encrypt_multi_as<T: BlsScheme>(
     recipients: &[&Self],
     plaintexts: &[&[u8]],
     rng: &mut impl CryptoRng,
   ) -> Result<BlsIesMulti<S>, BlsError> {
     let (eph_sk, iv_seed) = ephemeral(rng)?;
-    Self::ies_encrypt_multi_with(&eph_sk, &iv_seed, recipients, plaintexts)
+    Self::ies_encrypt_multi_with::<T>(&eph_sk, &iv_seed, recipients, plaintexts)
   }
 
-  /// [`ies_encrypt`](Self::ies_encrypt) over a caller-chosen ephemeral key.
+  /// [`ies_encrypt_as`](Self::ies_encrypt_as) over a caller-chosen ephemeral
+  /// key.
   ///
   /// # Errors
   ///
-  /// As [`ies_encrypt`](Self::ies_encrypt).
-  pub(crate) fn ies_encrypt_with(
+  /// As [`ies_encrypt_as`](Self::ies_encrypt_as).
+  pub(crate) fn ies_encrypt_with<T: BlsScheme>(
     &self,
     eph_sk: &BlsSecretKey<S>,
     iv_seed: &[u8; IV_SEED_LEN],
     plaintext: &[u8],
   ) -> Result<BlsIesBlob<S>, BlsError> {
-    let ciphertext = S::ies_seal(&eph_sk.0, &self.0, &iv_of(iv_seed), plaintext)?;
+    let ciphertext = S::ies_seal_as::<T>(&eph_sk.0, &self.0, &iv_of(iv_seed), plaintext)?;
     Ok(BlsIesBlob::new(eph_sk.public_key(), *iv_seed, ciphertext))
   }
 
-  /// [`ies_encrypt_multi`](Self::ies_encrypt_multi) over a caller-chosen
-  /// ephemeral key.
+  /// [`ies_encrypt_multi_as`](Self::ies_encrypt_multi_as) over a
+  /// caller-chosen ephemeral key.
   ///
   /// # Errors
   ///
-  /// As [`ies_encrypt_multi`](Self::ies_encrypt_multi).
-  pub(crate) fn ies_encrypt_multi_with(
+  /// As [`ies_encrypt_multi_as`](Self::ies_encrypt_multi_as).
+  pub(crate) fn ies_encrypt_multi_with<T: BlsScheme>(
     eph_sk: &BlsSecretKey<S>,
     iv_seed: &[u8; IV_SEED_LEN],
     recipients: &[&Self],
@@ -408,7 +418,7 @@ impl<S: BlsScheme> BlsPublicKey<S> {
     let mut chain = *iv_seed;
     let mut blobs = Vec::with_capacity(recipients.len());
     for (recipient, plaintext) in recipients.iter().zip(plaintexts) {
-      blobs.push(S::ies_seal(&eph_sk.0, &recipient.0, &iv_of(&chain), plaintext)?);
+      blobs.push(S::ies_seal_as::<T>(&eph_sk.0, &recipient.0, &iv_of(&chain), plaintext)?);
       chain = sha256d(&chain);
     }
 
@@ -417,19 +427,25 @@ impl<S: BlsScheme> BlsPublicKey<S> {
 }
 
 impl<S: BlsScheme> BlsSecretKey<S> {
-  /// Decrypt one BLS-IES blob.
+  /// Decrypt one BLS-IES blob, keyed by the leading 32 bytes of the shared
+  /// point's encoding under scheme `T`.
   ///
   /// `index` selects the IV in the seed's chain; 0 for a standalone blob, or
   /// the original recipient index for one lifted out of a multi-recipient
-  /// message.
+  /// message. A blob encrypted under another encoding can decrypt to other
+  /// bytes, with no error.
   ///
   /// # Errors
   ///
   /// Returns `IndexTooLarge` above [`MAX_IES_RECIPIENTS`],
   /// `InvalidCiphertextLength` on an empty or misaligned ciphertext, or
   /// `InvalidPublicKey` when the shared secret cannot be derived.
-  pub fn ies_decrypt(&self, blob: &BlsIesBlob<S>, index: usize) -> Result<Zeroizing<Vec<u8>>, BlsError> {
-    S::ies_open(
+  pub fn ies_decrypt_as<T: BlsScheme>(
+    &self,
+    blob: &BlsIesBlob<S>,
+    index: usize,
+  ) -> Result<Zeroizing<Vec<u8>>, BlsError> {
+    S::ies_open_as::<T>(
       &self.0,
       &blob.ephemeral_pk().0,
       &iv_at_index(blob.iv_seed(), index)?,
@@ -437,16 +453,24 @@ impl<S: BlsScheme> BlsSecretKey<S> {
     )
   }
 
-  /// Decrypt one recipient's blob out of a multi-recipient message.
+  /// Decrypt one recipient's blob out of a multi-recipient message, keyed by
+  /// the leading 32 bytes of the shared point's encoding under scheme `T`.
+  ///
+  /// A blob encrypted under another encoding can decrypt to other bytes, with
+  /// no error.
   ///
   /// # Errors
   ///
   /// Returns `IndexOutOfRange` when the message holds no blob at `index`,
-  /// and otherwise as [`ies_decrypt`](Self::ies_decrypt).
-  pub fn ies_decrypt_multi(&self, multi: &BlsIesMulti<S>, index: usize) -> Result<Zeroizing<Vec<u8>>, BlsError> {
+  /// and otherwise as [`ies_decrypt_as`](Self::ies_decrypt_as).
+  pub fn ies_decrypt_multi_as<T: BlsScheme>(
+    &self,
+    multi: &BlsIesMulti<S>,
+    index: usize,
+  ) -> Result<Zeroizing<Vec<u8>>, BlsError> {
     let ciphertext = multi.blobs().get(index).ok_or(BlsError::IndexOutOfRange)?;
 
-    S::ies_open(
+    S::ies_open_as::<T>(
       &self.0,
       &multi.ephemeral_pk().0,
       &iv_at_index(multi.iv_seed(), index)?,
@@ -554,11 +578,11 @@ mod tests {
     assertion(scheme);
   }
 
-  /// The scheme decides how the shared point is written and the key is that
-  /// encoding truncated, so the arms differ at the flag byte and nowhere
-  /// else.
+  /// The arms write one shared point in two encodings, which differ at the
+  /// flag byte and nowhere else, and a key read from each gives that arm's
+  /// ciphertext.
   #[rstest]
-  fn kdf_reads_the_scheme_own_encoding() {
+  fn shared_point_encodings_differ_at_the_flag_byte() {
     let legacy_kat = load_kat::<BlsScChia>("chia");
     let basic_kat = load_kat::<BlsScIetf>("ietf");
     let legacy_r = &legacy_kat.recipients[0];
@@ -577,14 +601,54 @@ mod tests {
 
     let blob = legacy_r
       .public_key::<BlsScChia>()
-      .ies_encrypt_with(&legacy_kat.eph_sk, &legacy_kat.iv_seed, &plaintext)
+      .ies_encrypt_with::<BlsScChia>(&legacy_kat.eph_sk, &legacy_kat.iv_seed, &plaintext)
       .unwrap();
     assert_eq!(blob.data(), vec_from_hex(&legacy_r.ciphertext));
+    let blob = basic_r
+      .public_key::<BlsScIetf>()
+      .ies_encrypt_with::<BlsScIetf>(&basic_kat.eph_sk, &basic_kat.iv_seed, &vec_from_hex(&basic_r.plaintext))
+      .unwrap();
+    assert_eq!(blob.data(), vec_from_hex(&basic_r.ciphertext));
     assert_ne!(
       vec_from_hex(&legacy_r.ciphertext),
       vec_from_hex(&basic_r.ciphertext),
       "the arms must differ"
     );
+  }
+
+  /// The key is the leading 32 bytes of the shared point's encoding under
+  /// `T`. Over the legacy keys, `T` legacy gives the legacy arm's ciphertexts
+  /// and `T` basic gives the basic arm's, and each decrypts to its plaintext
+  /// under its own `T` and to other bytes under the other.
+  #[rstest]
+  fn kdf_reads_the_chosen_encoding() {
+    let legacy_kat = load_kat::<BlsScChia>("chia");
+    let basic_kat = load_kat::<BlsScIetf>("ietf");
+    let pks: Vec<BlsPublicKey<BlsScChia>> = legacy_kat.recipients.iter().map(RecipientVec::public_key).collect();
+    let pk_refs: Vec<&BlsPublicKey<BlsScChia>> = pks.iter().collect();
+    let plaintexts: Vec<Vec<u8>> = legacy_kat
+      .recipients
+      .iter()
+      .map(|r| vec_from_hex(&r.plaintext))
+      .collect();
+    let pt_refs: Vec<&[u8]> = plaintexts.iter().map(Vec::as_slice).collect();
+    let (eph_sk, iv_seed) = (&legacy_kat.eph_sk, &legacy_kat.iv_seed);
+
+    let legacy = BlsPublicKey::ies_encrypt_multi_with::<BlsScChia>(eph_sk, iv_seed, &pk_refs, &pt_refs).unwrap();
+    let basic = BlsPublicKey::ies_encrypt_multi_with::<BlsScIetf>(eph_sk, iv_seed, &pk_refs, &pt_refs).unwrap();
+    assert_eq!(legacy, legacy_kat.message());
+    assert_eq!(basic.blobs(), basic_kat.message().blobs());
+
+    for (i, (r, plaintext)) in legacy_kat.recipients.iter().zip(&plaintexts).enumerate() {
+      let sk = r.secret_key::<BlsScChia>();
+      let blob = basic.to_blob(i).unwrap();
+      assert_eq!(*sk.ies_decrypt_multi_as::<BlsScIetf>(&basic, i).unwrap(), *plaintext);
+      assert_eq!(*sk.ies_decrypt_as::<BlsScIetf>(&blob, i).unwrap(), *plaintext);
+      assert_eq!(*sk.ies_decrypt_multi_as::<BlsScChia>(&legacy, i).unwrap(), *plaintext);
+      assert_ne!(*sk.ies_decrypt_multi_as::<BlsScChia>(&basic, i).unwrap(), *plaintext);
+      assert_ne!(*sk.ies_decrypt_as::<BlsScChia>(&blob, i).unwrap(), *plaintext);
+      assert_ne!(*sk.ies_decrypt_multi_as::<BlsScIetf>(&legacy, i).unwrap(), *plaintext);
+    }
   }
 
   fn assert_kat_encrypt<S: BlsScheme>(scheme: &str) {
@@ -594,12 +658,12 @@ mod tests {
     let plaintexts: Vec<Vec<u8>> = kat.recipients.iter().map(|r| vec_from_hex(&r.plaintext)).collect();
     let pt_refs: Vec<&[u8]> = plaintexts.iter().map(Vec::as_slice).collect();
 
-    let multi = BlsPublicKey::ies_encrypt_multi_with(&kat.eph_sk, &kat.iv_seed, &pk_refs, &pt_refs).unwrap();
+    let multi = BlsPublicKey::ies_encrypt_multi_with::<S>(&kat.eph_sk, &kat.iv_seed, &pk_refs, &pt_refs).unwrap();
     assert_eq!(multi, kat.message());
 
     // The single-recipient path is the same construction at index 0.
     let blob = pks[0]
-      .ies_encrypt_with(&kat.eph_sk, &kat.iv_seed, &plaintexts[0])
+      .ies_encrypt_with::<S>(&kat.eph_sk, &kat.iv_seed, &plaintexts[0])
       .unwrap();
     assert_eq!(blob, multi.to_blob(0).unwrap());
   }
@@ -618,12 +682,12 @@ mod tests {
     for (i, r) in kat.recipients.iter().enumerate() {
       let sk = r.secret_key::<S>();
       let plaintext = vec_from_hex(&r.plaintext);
-      assert_eq!(*sk.ies_decrypt_multi(&multi, i).unwrap(), plaintext);
+      assert_eq!(*sk.ies_decrypt_multi_as::<S>(&multi, i).unwrap(), plaintext);
 
       // A lifted blob keeps the shared seed, so it decrypts at the index it
       // was encrypted at and at no other.
       let blob = multi.to_blob(i).unwrap();
-      assert_eq!(*sk.ies_decrypt(&blob, i).unwrap(), plaintext);
+      assert_eq!(*sk.ies_decrypt_as::<S>(&blob, i).unwrap(), plaintext);
     }
   }
 
@@ -639,14 +703,40 @@ mod tests {
     let plaintext = [0x42u8; 32];
     let mut rng = UnwrapErr(SysRng);
 
-    let blob = sk.public_key().ies_encrypt(&plaintext, &mut rng).unwrap();
-    assert_eq!(*sk.ies_decrypt(&blob, 0).unwrap(), plaintext);
+    let blob = sk.public_key().ies_encrypt_as::<S>(&plaintext, &mut rng).unwrap();
+    assert_eq!(*sk.ies_decrypt_as::<S>(&blob, 0).unwrap(), plaintext);
   }
 
   #[rstest]
   #[case::chia(assert_encrypt_decrypt_roundtrip::<BlsScChia>)]
   #[case::ietf(assert_encrypt_decrypt_roundtrip::<BlsScIetf>)]
   fn encrypt_decrypt_roundtrip(#[case] assertion: fn()) {
+    assertion();
+  }
+
+  fn assert_chosen_encoding_roundtrip<S: BlsScheme, T: BlsScheme>() {
+    let sks: Vec<BlsSecretKey<S>> = (0..2).map(make_sk::<S>).collect();
+    let pks: Vec<BlsPublicKey<S>> = sks.iter().map(BlsSecretKey::public_key).collect();
+    let pk_refs: Vec<&BlsPublicKey<S>> = pks.iter().collect();
+    let plaintexts: Vec<Vec<u8>> = (0..2u8).map(|i| vec![i; 32]).collect();
+    let pt_refs: Vec<&[u8]> = plaintexts.iter().map(Vec::as_slice).collect();
+    let mut rng = UnwrapErr(SysRng);
+
+    let blob = pks[0].ies_encrypt_as::<T>(&plaintexts[0], &mut rng).unwrap();
+    assert_eq!(*sks[0].ies_decrypt_as::<T>(&blob, 0).unwrap(), plaintexts[0]);
+    assert_ne!(*sks[0].ies_decrypt_as::<S>(&blob, 0).unwrap(), plaintexts[0]);
+
+    let multi = BlsPublicKey::ies_encrypt_multi_as::<T>(&pk_refs, &pt_refs, &mut rng).unwrap();
+    for (i, (sk, plaintext)) in sks.iter().zip(&plaintexts).enumerate() {
+      assert_eq!(*sk.ies_decrypt_multi_as::<T>(&multi, i).unwrap(), *plaintext);
+      assert_ne!(*sk.ies_decrypt_multi_as::<S>(&multi, i).unwrap(), *plaintext);
+    }
+  }
+
+  #[rstest]
+  #[case::chia_as_ietf(assert_chosen_encoding_roundtrip::<BlsScChia, BlsScIetf>)]
+  #[case::ietf_as_chia(assert_chosen_encoding_roundtrip::<BlsScIetf, BlsScChia>)]
+  fn chosen_encoding_roundtrip(#[case] assertion: fn()) {
     assertion();
   }
 
@@ -658,10 +748,13 @@ mod tests {
     let pt_refs: Vec<&[u8]> = plaintexts.iter().map(Vec::as_slice).collect();
     let mut rng = UnwrapErr(SysRng);
 
-    let multi = BlsPublicKey::ies_encrypt_multi(&pk_refs, &pt_refs, &mut rng).unwrap();
+    let multi = BlsPublicKey::ies_encrypt_multi_as::<S>(&pk_refs, &pt_refs, &mut rng).unwrap();
     for (i, sk) in sks.iter().enumerate() {
-      assert_eq!(*sk.ies_decrypt_multi(&multi, i).unwrap(), plaintexts[i]);
-      assert_eq!(*sk.ies_decrypt(&multi.to_blob(i).unwrap(), i).unwrap(), plaintexts[i]);
+      assert_eq!(*sk.ies_decrypt_multi_as::<S>(&multi, i).unwrap(), plaintexts[i]);
+      assert_eq!(
+        *sk.ies_decrypt_as::<S>(&multi.to_blob(i).unwrap(), i).unwrap(),
+        plaintexts[i]
+      );
     }
   }
 
@@ -681,7 +774,8 @@ mod tests {
     let plaintext = [0x77u8; 16];
     let mut rng = UnwrapErr(SysRng);
 
-    let multi = BlsPublicKey::ies_encrypt_multi(&[&pk, &pk], &[&plaintext, &plaintext], &mut rng).unwrap();
+    let multi =
+      BlsPublicKey::ies_encrypt_multi_as::<BlsScIetf>(&[&pk, &pk], &[&plaintext, &plaintext], &mut rng).unwrap();
     assert_ne!(multi.blobs()[0], multi.blobs()[1]);
   }
 
@@ -691,8 +785,14 @@ mod tests {
     let plaintext = [0xddu8; 32];
     let mut rng = UnwrapErr(SysRng);
 
-    let blob = sk.public_key().ies_encrypt(&plaintext, &mut rng).unwrap();
-    assert_ne!(*make_sk::<BlsScIetf>(1).ies_decrypt(&blob, 0).unwrap(), plaintext);
+    let blob = sk
+      .public_key()
+      .ies_encrypt_as::<BlsScIetf>(&plaintext, &mut rng)
+      .unwrap();
+    assert_ne!(
+      *make_sk::<BlsScIetf>(1).ies_decrypt_as::<BlsScIetf>(&blob, 0).unwrap(),
+      plaintext
+    );
   }
 
   /// Decrypting at the wrong index picks the wrong IV, which corrupts the
@@ -705,7 +805,7 @@ mod tests {
     let sk = kat.recipients[1].secret_key::<BlsScIetf>();
 
     assert_ne!(
-      *sk.ies_decrypt(&multi.to_blob(1).unwrap(), 0).unwrap(),
+      *sk.ies_decrypt_as::<BlsScIetf>(&multi.to_blob(1).unwrap(), 0).unwrap(),
       vec_from_hex(&kat.recipients[1].plaintext)
     );
   }
@@ -721,11 +821,11 @@ mod tests {
     let mut rng = UnwrapErr(SysRng);
 
     assert_eq!(
-      pk.ies_encrypt(&plaintext, &mut rng).unwrap_err(),
+      pk.ies_encrypt_as::<BlsScIetf>(&plaintext, &mut rng).unwrap_err(),
       BlsError::InvalidPlaintextLength
     );
     assert_eq!(
-      BlsPublicKey::ies_encrypt_multi(&[&pk], &[plaintext.as_slice()], &mut rng).unwrap_err(),
+      BlsPublicKey::ies_encrypt_multi_as::<BlsScIetf>(&[&pk], &[plaintext.as_slice()], &mut rng).unwrap_err(),
       BlsError::InvalidPlaintextLength
     );
   }
@@ -746,7 +846,7 @@ mod tests {
     assert_eq!(
       kat.recipients[0]
         .secret_key::<BlsScIetf>()
-        .ies_decrypt(&blob, 0)
+        .ies_decrypt_as::<BlsScIetf>(&blob, 0)
         .unwrap_err(),
       BlsError::InvalidCiphertextLength
     );
@@ -759,9 +859,10 @@ mod tests {
     let sk = kat.recipients[0].secret_key::<BlsScIetf>();
     let blob = kat.message().to_blob(0).unwrap();
 
-    assert!(sk.ies_decrypt(&blob, MAX_IES_RECIPIENTS).is_ok());
+    assert!(sk.ies_decrypt_as::<BlsScIetf>(&blob, MAX_IES_RECIPIENTS).is_ok());
     assert_eq!(
-      sk.ies_decrypt(&blob, MAX_IES_RECIPIENTS + 1).unwrap_err(),
+      sk.ies_decrypt_as::<BlsScIetf>(&blob, MAX_IES_RECIPIENTS + 1)
+        .unwrap_err(),
       BlsError::IndexTooLarge
     );
   }
@@ -810,7 +911,7 @@ mod tests {
     let mut rng = UnwrapErr(SysRng);
 
     assert_eq!(
-      BlsPublicKey::ies_encrypt_multi(&[&pk, &pk], &[&plaintext[..]], &mut rng).unwrap_err(),
+      BlsPublicKey::ies_encrypt_multi_as::<BlsScIetf>(&[&pk, &pk], &[&plaintext[..]], &mut rng).unwrap_err(),
       BlsError::CountMismatch
     );
   }
@@ -821,8 +922,12 @@ mod tests {
     let plaintext = [0u8; 16];
     let mut rng = UnwrapErr(SysRng);
 
-    let multi = BlsPublicKey::ies_encrypt_multi(&[&sk.public_key()], &[&plaintext[..]], &mut rng).unwrap();
-    assert_eq!(sk.ies_decrypt_multi(&multi, 1).unwrap_err(), BlsError::IndexOutOfRange);
+    let multi =
+      BlsPublicKey::ies_encrypt_multi_as::<BlsScIetf>(&[&sk.public_key()], &[&plaintext[..]], &mut rng).unwrap();
+    assert_eq!(
+      sk.ies_decrypt_multi_as::<BlsScIetf>(&multi, 1).unwrap_err(),
+      BlsError::IndexOutOfRange
+    );
     assert!(multi.to_blob(1).is_none());
   }
 
@@ -895,7 +1000,7 @@ mod tests {
         let recovered = sk
           .to_scheme::<BlsScIetf>()
           .unwrap()
-          .ies_decrypt_multi(&legacy.to_scheme::<BlsScIetf>().unwrap(), 0)
+          .ies_decrypt_multi_as::<BlsScIetf>(&legacy.to_scheme::<BlsScIetf>().unwrap(), 0)
           .unwrap();
 
         assert_eq!(*recovered, vec_from_hex(&kat.recipients[0].plaintext));
