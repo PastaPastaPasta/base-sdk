@@ -94,6 +94,31 @@ class Gen:
   def sign(self, sk: bytes, msg: bytes) -> bytes:
     return self.must(o.SIGN, o.Sk(sk), o.Raw(msg))
 
+  def sign_flag(
+    self, keys: list[bytes], msg: bytes, legacy: bool
+  ) -> str | None:
+    """SIGN under `legacy` by the key, or by the keys' AggregateInsecure,
+    read under the scheme: the signature, or None where Core yields an
+    invalid one."""
+    script = o.Script(self.legacy)
+    if len(keys) == 1:
+      key = script.load(o.Sk(keys[0]))
+    else:
+      script.emit(o.AGGREGATE_SK, script.operand(sks(keys)))
+      key = script.regs - 1
+    script.emit(o.SIGN, bytes([key]) + msg, legacy)
+    records = self.p.run(script)
+    if any(status < 0 for status, _ in records[:-1]):
+      err = "a key does not load"
+      raise o.OracleError(err)
+    ret, out = records[-1]
+    if ret == o.OK:
+      return out.hex()
+    if ret == o.REJECT:
+      return None
+    err = f"sign returned {ret}"
+    raise o.OracleError(err)
+
   def verify(self, pk: bytes, sig: bytes, msg: bytes) -> bool:
     return self.holds(o.VERIFY, o.Sig(sig), o.Pk(pk), o.Raw(msg))
 
@@ -141,12 +166,29 @@ def sign_rows(g: Gen, tag: str) -> Row:
     check(flip_sign(pk, g.legacy), sig, msg, "negated key")
   check(bytes(48), bytes.fromhex(str(sign[0]["sig"])), msgs[0], "zero key")
   check(pks[0], bytes(96), msgs[0], "zero signature")
+
+  flags = []
+
+  def by_flag(parts: list[bytes], note: str) -> None:
+    for name, legacy in SCHEMES.items():
+      flags.append(
+        {"sks": [p.hex() for p in parts], "flag": name, "msg": msgs[0].hex(),
+         "sig": g.sign_flag(parts, msgs[0], legacy), "note": note}
+      )  # fmt: skip
+
+  rest = (R - int.from_bytes(keys[0], "big")).to_bytes(32, "big")
+  by_flag(keys[:1], "a key")
+  by_flag([bytes(32)], "zero bytes, an invalid key")
+  by_flag([keys[0], rest], "a valid zero key, a sum")
+  if not g.legacy:
+    by_flag([R.to_bytes(32, "big")], "a basic key equal to the order")
   return {
     "keys": [
       {"sk": sk.hex(), "pk": pk.hex()} for sk, pk in zip(keys, pks, strict=True)
     ],
     "sign": sign,
     "verify": verify,
+    "flags": flags,
   }
 
 

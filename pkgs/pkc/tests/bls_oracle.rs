@@ -163,6 +163,15 @@ struct VerifyRow {
   note: String,
 }
 
+#[derive(Deserialize)]
+struct FlagRow {
+  sks: Vec<String>,
+  flag: String,
+  msg: String,
+  sig: Option<String>,
+  note: String,
+}
+
 fn assert_sign<S: BlsScheme>(kind: BlsSchemeKind) {
   let c = corpus("sign").scope(scheme_name(kind));
   let keys = c.vectors::<KeyRow>("keys");
@@ -197,6 +206,23 @@ fn assert_sign<S: BlsScheme>(kind: BlsSchemeKind) {
       .zip(typed_sig::<S>(&row.sig))
       .map(|(pk, sig)| pk.verify_digest(&h, &sig).is_ok());
     assert_verdict(&row.note, core, pooled, row.ok);
+  }
+  // Sign under either flag, by a key read under the scheme or by a sum.
+  for row in c.vectors::<FlagRow>("flags") {
+    let parts = read_all(&row.sks, kind, sk_value);
+    let sk = match parts.as_slice() {
+      [one] => one.clone(),
+      _ => aggregate_secret_keys_insecure(&parts.iter().collect::<Vec<_>>()),
+    };
+    let flag = scheme_named(&row.flag);
+    let core = sign(&sk, &hash(&row.msg), flag);
+    assert_eq!(
+      valid_hex(&core, flag),
+      row.sig,
+      "bls::core: {} signs under {}",
+      row.note,
+      row.flag
+    );
   }
 }
 
