@@ -1,0 +1,309 @@
+//
+// BIP157 vectors. Generated with the reference implementation (dashpay/dash
+// v24.0.0-rc.3, 0364ed626e).
+//
+// Each section comes with the program used to generate the vectors.
+//
+// To run a program, paste it at the end of the `blockfilter_tests` suite in
+// `src/test/blockfilter_tests.cpp` at the specified revision, build it with
+// `make -C src test/test_dash` and run
+// `./src/test/test_dash --run_test=blockfilter_tests/<name>`. The output should
+// match the section.
+//
+// Every program uses the helpers in the first comment; paste them before it.
+//
+
+{
+/*
+static BlockFilter FilterOf(const std::vector<CScript>& scripts)
+{
+    CMutableTransaction tx;
+    for (const CScript& script : scripts) tx.vout.emplace_back(100, script);
+    CBlock block;
+    block.vtx.push_back(MakeTransactionRef(tx));
+    return BlockFilter(BlockFilterType::BASIC_FILTER, block, CBlockUndo{});
+}
+
+static const std::vector<CScript> FILTER_SCRIPTS{
+    CScript() << OP_DUP << OP_HASH160 << std::vector<unsigned char>(20, 1) << OP_EQUALVERIFY << OP_CHECKSIG,
+    CScript() << OP_HASH160 << std::vector<unsigned char>(20, 2) << OP_EQUAL,
+    CScript() << OP_1 << std::vector<unsigned char>(33, 3) << OP_1 << OP_CHECKMULTISIG,
+};
+*/
+/*
+BOOST_AUTO_TEST_CASE(getcf_payloads)
+{
+    const uint256 stop{uint256S("000008ca1832a4baf228eb1553c03d3a2c8e02399550dd6ea8d65cec3ef23d2e")};
+    const std::vector<std::tuple<std::string, uint8_t, uint32_t>> cases{
+        {"basic", 0, 0}, {"unknown_type", 0xff, std::numeric_limits<uint32_t>::max()}};
+    for (const char* msg : {"getcfilters", "getcfheaders"}) {
+        std::printf("  \"%s\": {\n", msg);
+        for (const auto& [label, filter_type, start_height] : cases) {
+            DataStream s{};
+            s << filter_type << start_height << stop;
+            std::printf("    \"%s\": {\n      \"raw\": \"%s\",\n      \"details\": {\n"
+                        "        \"filter_type\": %u,\n        \"start_height\": %u,\n"
+                        "        \"stop_hash\": \"%s\"\n      }\n    },\n",
+                        label.c_str(), HexStr(MakeUCharSpan(s)).c_str(), filter_type, start_height,
+                        stop.ToString().c_str());
+        }
+        std::printf("  },\n");
+    }
+    std::printf("  \"getcfcheckpt\": {\n");
+    for (const auto& [label, filter_type, start_height] : cases) {
+        DataStream s{};
+        s << filter_type << stop;
+        std::printf("    \"%s\": {\n      \"raw\": \"%s\",\n      \"details\": {\n"
+                    "        \"filter_type\": %u,\n        \"stop_hash\": \"%s\"\n      }\n    },\n",
+                    label.c_str(), HexStr(MakeUCharSpan(s)).c_str(), filter_type, stop.ToString().c_str());
+    }
+    std::printf("  },\n");
+}
+*/
+  "getcfilters": {
+    "basic": {
+      "raw": "00000000002e3df23eec5cd6a86edd509539028e2c3a3dc05315eb28f2baa43218ca080000",
+      "details": {
+        "filter_type": 0,
+        "start_height": 0,
+        "stop_hash": "000008ca1832a4baf228eb1553c03d3a2c8e02399550dd6ea8d65cec3ef23d2e"
+      }
+    },
+    "unknown_type": {
+      "raw": "ffffffffff2e3df23eec5cd6a86edd509539028e2c3a3dc05315eb28f2baa43218ca080000",
+      "details": {
+        "filter_type": 255,
+        "start_height": 4294967295,
+        "stop_hash": "000008ca1832a4baf228eb1553c03d3a2c8e02399550dd6ea8d65cec3ef23d2e"
+      }
+    },
+  },
+  "getcfheaders": {
+    "basic": {
+      "raw": "00000000002e3df23eec5cd6a86edd509539028e2c3a3dc05315eb28f2baa43218ca080000",
+      "details": {
+        "filter_type": 0,
+        "start_height": 0,
+        "stop_hash": "000008ca1832a4baf228eb1553c03d3a2c8e02399550dd6ea8d65cec3ef23d2e"
+      }
+    },
+    "unknown_type": {
+      "raw": "ffffffffff2e3df23eec5cd6a86edd509539028e2c3a3dc05315eb28f2baa43218ca080000",
+      "details": {
+        "filter_type": 255,
+        "start_height": 4294967295,
+        "stop_hash": "000008ca1832a4baf228eb1553c03d3a2c8e02399550dd6ea8d65cec3ef23d2e"
+      }
+    },
+  },
+  "getcfcheckpt": {
+    "basic": {
+      "raw": "002e3df23eec5cd6a86edd509539028e2c3a3dc05315eb28f2baa43218ca080000",
+      "details": {
+        "filter_type": 0,
+        "stop_hash": "000008ca1832a4baf228eb1553c03d3a2c8e02399550dd6ea8d65cec3ef23d2e"
+      }
+    },
+    "unknown_type": {
+      "raw": "ff2e3df23eec5cd6a86edd509539028e2c3a3dc05315eb28f2baa43218ca080000",
+      "details": {
+        "filter_type": 255,
+        "stop_hash": "000008ca1832a4baf228eb1553c03d3a2c8e02399550dd6ea8d65cec3ef23d2e"
+      }
+    },
+  },
+/*
+BOOST_AUTO_TEST_CASE(cfilter_payloads)
+{
+    for (const auto& [label, filter] : std::vector<std::pair<std::string, BlockFilter>>{
+             {"three", FilterOf(FILTER_SCRIPTS)},
+             {"one", FilterOf({FILTER_SCRIPTS[0]})},
+             {"empty", FilterOf({CScript() << OP_RETURN})}}) {
+        DataStream s{};
+        s << filter;
+        std::printf("    \"%s\": {\n      \"raw\": \"%s\",\n      \"details\": {\n"
+                    "        \"filter_type\": %u,\n        \"block_hash\": \"%s\",\n"
+                    "        \"filter\": \"%s\"\n      }\n    },\n",
+                    label.c_str(), HexStr(MakeUCharSpan(s)).c_str(), static_cast<uint8_t>(filter.GetFilterType()),
+                    filter.GetBlockHash().ToString().c_str(), HexStr(filter.GetEncodedFilter()).c_str());
+    }
+}
+*/
+  "cfilter": {
+    "three": {
+      "raw": "008328846180965bce56f61e015db62af562a611d85e5e721d854c8d97e47a3ea309032d4aa918b9eb5a0e",
+      "details": {
+        "filter_type": 0,
+        "block_hash": "a33e7ae4978d4c851d725e5ed811a662f52ab65d011ef656ce5b968061842883",
+        "filter": "032d4aa918b9eb5a0e"
+      }
+    },
+    "one": {
+      "raw": "008328846180965bce56f61e015db62af562a611d85e5e721d854c8d97e47a3ea304014575f0",
+      "details": {
+        "filter_type": 0,
+        "block_hash": "a33e7ae4978d4c851d725e5ed811a662f52ab65d011ef656ce5b968061842883",
+        "filter": "014575f0"
+      }
+    },
+    "empty": {
+      "raw": "008328846180965bce56f61e015db62af562a611d85e5e721d854c8d97e47a3ea30100",
+      "details": {
+        "filter_type": 0,
+        "block_hash": "a33e7ae4978d4c851d725e5ed811a662f52ab65d011ef656ce5b968061842883",
+        "filter": "00"
+      }
+    },
+  },
+/*
+BOOST_AUTO_TEST_CASE(cfilter_reads)
+{
+    const BlockFilter three{FilterOf(FILTER_SCRIPTS)};
+    std::vector<unsigned char> truncated{three.GetEncodedFilter()};
+    truncated.pop_back();
+    std::vector<unsigned char> excess{three.GetEncodedFilter()};
+    excess.push_back(0);
+    for (const auto& [filter_type, encoded] : std::vector<std::pair<uint8_t, std::vector<unsigned char>>>{
+             {0, three.GetEncodedFilter()},
+             {1, three.GetEncodedFilter()},
+             {0xff, three.GetEncodedFilter()},
+             {0, truncated},
+             {0, excess},
+             {0, {}},
+             {0, ParseHex("00")},
+             {0, ParseHex("0000")},
+             {0, ParseHex("fd0000")},
+             {0, ParseHex("fe01000002")},
+             {0, ParseHex("01000000")},
+             {0, ParseHex("010000")},
+             {0, ParseHex("0100000000")},
+             {0, ParseHex("017fffff")},
+             {0, ParseHex("01ffffff7fffff")},
+             {0, ParseHex("01ffffff7fffffe0")},
+             {0, ParseHex("01ffffffff")},
+             {0, ParseHex("0200000400")},
+             {0, ParseHex("02000004")},
+             {0, ParseHex("08" + std::string(40, '0'))},
+             {0, ParseHex("08" + std::string(38, '0'))}}) {
+        DataStream s{};
+        s << filter_type << uint256::ONE << encoded;
+        const std::string raw{HexStr(MakeUCharSpan(s))};
+        bool read{true};
+        try {
+            BlockFilter filter;
+            s >> filter;
+        } catch (const std::ios_base::failure&) {
+            read = false;
+        }
+        std::printf("    { \"raw\": \"%s\", \"read\": %s },\n", raw.c_str(), read ? "true" : "false");
+    }
+}
+*/
+  // This library reads every payload here, as raw bytes of any filter type.
+  // The reference reads only those marked `read: true`.
+  "cfilter_reads": [
+    { "raw": "00010000000000000000000000000000000000000000000000000000000000000009032d4aa918b9eb5a0e", "read": true },
+    { "raw": "01010000000000000000000000000000000000000000000000000000000000000009032d4aa918b9eb5a0e", "read": false },
+    { "raw": "ff010000000000000000000000000000000000000000000000000000000000000009032d4aa918b9eb5a0e", "read": false },
+    { "raw": "00010000000000000000000000000000000000000000000000000000000000000008032d4aa918b9eb5a", "read": false },
+    { "raw": "0001000000000000000000000000000000000000000000000000000000000000000a032d4aa918b9eb5a0e00", "read": false },
+    { "raw": "00010000000000000000000000000000000000000000000000000000000000000000", "read": false },
+    { "raw": "0001000000000000000000000000000000000000000000000000000000000000000100", "read": true },
+    { "raw": "000100000000000000000000000000000000000000000000000000000000000000020000", "read": false },
+    { "raw": "00010000000000000000000000000000000000000000000000000000000000000003fd0000", "read": false },
+    { "raw": "00010000000000000000000000000000000000000000000000000000000000000005fe01000002", "read": false },
+    { "raw": "0001000000000000000000000000000000000000000000000000000000000000000401000000", "read": true },
+    { "raw": "00010000000000000000000000000000000000000000000000000000000000000003010000", "read": false },
+    { "raw": "000100000000000000000000000000000000000000000000000000000000000000050100000000", "read": false },
+    { "raw": "00010000000000000000000000000000000000000000000000000000000000000004017fffff", "read": true },
+    { "raw": "0001000000000000000000000000000000000000000000000000000000000000000701ffffff7fffff", "read": true },
+    { "raw": "0001000000000000000000000000000000000000000000000000000000000000000801ffffff7fffffe0", "read": false },
+    { "raw": "0001000000000000000000000000000000000000000000000000000000000000000501ffffffff", "read": false },
+    { "raw": "000100000000000000000000000000000000000000000000000000000000000000050200000400", "read": false },
+    { "raw": "0001000000000000000000000000000000000000000000000000000000000000000402000004", "read": false },
+    { "raw": "00010000000000000000000000000000000000000000000000000000000000000015080000000000000000000000000000000000000000", "read": true },
+    { "raw": "000100000000000000000000000000000000000000000000000000000000000000140800000000000000000000000000000000000000", "read": false },
+  ],
+/*
+BOOST_AUTO_TEST_CASE(cfheaders_payloads)
+{
+    const BlockFilter three{FilterOf(FILTER_SCRIPTS)};
+    const BlockFilter one{FilterOf({FILTER_SCRIPTS[0]})};
+    const uint256 stop{one.GetBlockHash()};
+    const uint256 prev{three.ComputeHeader(uint256{})};
+    const auto print_hashes = [](const char* name, const std::vector<uint256>& hashes) {
+        std::printf("        \"%s\": [", name);
+        for (size_t i = 0; i < hashes.size(); ++i) {
+            std::printf("%s\n          \"%s\"", i ? "," : "", hashes[i].ToString().c_str());
+        }
+        std::printf("%s]\n      }\n    },\n", hashes.empty() ? "" : "\n        ");
+    };
+    std::printf("  \"cfheaders\": {\n");
+    for (const auto& [label, hashes] : std::vector<std::pair<std::string, std::vector<uint256>>>{
+             {"none", {}}, {"two", {three.GetHash(), one.GetHash()}}}) {
+        DataStream s{};
+        s << uint8_t{0} << stop << prev << hashes;
+        std::printf("    \"%s\": {\n      \"raw\": \"%s\",\n      \"details\": {\n"
+                    "        \"filter_type\": 0,\n        \"stop_hash\": \"%s\",\n"
+                    "        \"prev_filter_header\": \"%s\",\n",
+                    label.c_str(), HexStr(MakeUCharSpan(s)).c_str(), stop.ToString().c_str(), prev.ToString().c_str());
+        print_hashes("filter_hashes", hashes);
+    }
+    std::printf("  },\n  \"cfcheckpt\": {\n");
+    for (const auto& [label, headers] : std::vector<std::pair<std::string, std::vector<uint256>>>{
+             {"none", {}}, {"two", {prev, one.ComputeHeader(prev)}}}) {
+        DataStream s{};
+        s << uint8_t{0} << stop << headers;
+        std::printf("    \"%s\": {\n      \"raw\": \"%s\",\n      \"details\": {\n"
+                    "        \"filter_type\": 0,\n        \"stop_hash\": \"%s\",\n",
+                    label.c_str(), HexStr(MakeUCharSpan(s)).c_str(), stop.ToString().c_str());
+        print_hashes("filter_headers", headers);
+    }
+    std::printf("  },\n");
+}
+*/
+  "cfheaders": {
+    "none": {
+      "raw": "008328846180965bce56f61e015db62af562a611d85e5e721d854c8d97e47a3ea365d4f76f9e0058d13b0243556dfb53e2baa7b137ec9b28494ea109a196457fab00",
+      "details": {
+        "filter_type": 0,
+        "stop_hash": "a33e7ae4978d4c851d725e5ed811a662f52ab65d011ef656ce5b968061842883",
+        "prev_filter_header": "ab7f4596a109a14e49289bec37b1a7bae253fb6d5543023bd158009e6ff7d465",
+        "filter_hashes": []
+      }
+    },
+    "two": {
+      "raw": "008328846180965bce56f61e015db62af562a611d85e5e721d854c8d97e47a3ea365d4f76f9e0058d13b0243556dfb53e2baa7b137ec9b28494ea109a196457fab02f633cab7a9dbc92d2c03266a74d90537ab022f959ade74c7303f51278ccbc8437e72f870930c9edb5a3876e07779f5da251e080b1b9eb35e5fcfb2b525791a4d",
+      "details": {
+        "filter_type": 0,
+        "stop_hash": "a33e7ae4978d4c851d725e5ed811a662f52ab65d011ef656ce5b968061842883",
+        "prev_filter_header": "ab7f4596a109a14e49289bec37b1a7bae253fb6d5543023bd158009e6ff7d465",
+        "filter_hashes": [
+          "43c8cb8c27513f30c774de9a952f02ab3705d9746a26032c2dc9dba9b7ca33f6",
+          "4d1a7925b5b2cf5f5eb39e1b0b081e25daf57977e076385adb9e0c9370f8727e"
+        ]
+      }
+    },
+  },
+  "cfcheckpt": {
+    "none": {
+      "raw": "008328846180965bce56f61e015db62af562a611d85e5e721d854c8d97e47a3ea300",
+      "details": {
+        "filter_type": 0,
+        "stop_hash": "a33e7ae4978d4c851d725e5ed811a662f52ab65d011ef656ce5b968061842883",
+        "filter_headers": []
+      }
+    },
+    "two": {
+      "raw": "008328846180965bce56f61e015db62af562a611d85e5e721d854c8d97e47a3ea30265d4f76f9e0058d13b0243556dfb53e2baa7b137ec9b28494ea109a196457fab829bc982d210ac6555fa61baaa90e8259d46da2cda0fac8ff503d16eb8c90eee",
+      "details": {
+        "filter_type": 0,
+        "stop_hash": "a33e7ae4978d4c851d725e5ed811a662f52ab65d011ef656ce5b968061842883",
+        "filter_headers": [
+          "ab7f4596a109a14e49289bec37b1a7bae253fb6d5543023bd158009e6ff7d465",
+          "ee0ec9b86ed103f58fac0fda2cda469d25e890aaba61fa5565ac10d282c99b82"
+        ]
+      }
+    },
+  },
+}
