@@ -15,7 +15,7 @@
 use dash_dev::{arr_from_hex, vec_from_hex, Corpus};
 use dash_params::Network;
 use dash_pkc::bls::{BlsPkBytes, BlsPublicKey, BlsScChia, BlsScIetf, BlsScheme, BlsSigBytes, BlsSignature};
-use dash_primitives::{ProTxVersion, SpecialPayload, Transaction};
+use dash_primitives::{CollateralShare, ProTxVersion, SpecialPayload, Transaction};
 use dash_script::PubKeyHash;
 use dash_types::codec::BaseCodec;
 use dash_types::{Numeric, Signable};
@@ -45,6 +45,8 @@ struct Signer {
   operator: Option<String>,
   /// Whether the operator key is written under the legacy scheme.
   operator_legacy: Option<bool>,
+  /// Whether the share owners named in the payload signed it.
+  shares: bool,
 }
 
 impl Signer {
@@ -122,6 +124,12 @@ fn owner_signed<T: Signable<Key = PubKeyHash>>(payload: &T, keys: &BTreeSet<PubK
   keys.iter().any(|key| payload.verify(key, ctx).is_none())
 }
 
+/// Whether `sigs` is not empty and each verifies under one of `keys`. Which
+/// share each signature belongs to is not checked.
+fn consents_signed<T: Signable<Key = PubKeyHash>>(sigs: &[T], keys: &BTreeSet<PubKeyHash>, ctx: &T::Context) -> bool {
+  !sigs.is_empty() && sigs.iter().all(|sig| owner_signed(sig, keys, ctx))
+}
+
 /// Checks the signatures of one entry over its payload's sign hash.
 ///
 /// Returns the transaction type and the payload version, or `None` for a
@@ -136,22 +144,38 @@ fn check_signed(txid: &str, entry: &Entry) -> Option<(u16, u16)> {
     other => panic!("{txid}: unknown network {other}"),
   };
   let (version, signed) = match &payload {
-    SpecialPayload::ProviderRegister(p) if !signer.key_ids.is_empty() => {
-      (p.version(), owner_signed(p, &signer.key_ids(), network.addr()))
+    SpecialPayload::ProviderRegister(p) if signer.shares => {
+      let owners = p.shares().iter().map(CollateralShare::key_id_owner).collect();
+      (
+        p.version().to_base(),
+        consents_signed(p.join_sigs(), &owners, &(tx.clone(), p.clone())),
+      )
     }
+    SpecialPayload::ProviderRegister(p) => (
+      p.version().to_base(),
+      owner_signed(p, &signer.key_ids(), network.addr()),
+    ),
     SpecialPayload::ProviderUpdateService(p) => {
       let sig = (*p.sig().as_bytes(), p.version() == ProTxVersion::LegacyBls);
-      (p.version(), operator_signed(&signer.operator(), &sig, &p.payload(&())))
+      let signed = operator_signed(&signer.operator(), &sig, &p.payload(&()));
+      (p.version().to_base(), signed)
     }
-    SpecialPayload::ProviderUpdateRegistrar(p) => (p.version(), owner_signed(p, &signer.key_ids(), &())),
+    SpecialPayload::ProviderUpdateRegistrar(p) => (p.version().to_base(), owner_signed(p, &signer.key_ids(), &())),
     SpecialPayload::ProviderUpdateRevoke(p) => {
       let sig = (*p.sig().as_bytes(), p.version() == ProTxVersion::LegacyBls);
-      (p.version(), operator_signed(&signer.operator(), &sig, &p.payload(&())))
+      let signed = operator_signed(&signer.operator(), &sig, &p.payload(&()));
+      (p.version().to_base(), signed)
     }
+    SpecialPayload::ProviderDissolve(p) => {
+      let signed = consents_signed(p.sigs(), &signer.key_ids(), &(tx.clone(), p.clone()));
+      (p.version(), signed)
+    }
+    SpecialPayload::ProviderUpdateShare(p) => (p.version(), owner_signed(p, &signer.key_ids(), &())),
+    SpecialPayload::ProviderUpdateSharedRegistrar(p) => (p.version(), consents_signed(p.sigs(), &signer.key_ids(), p)),
     _ => return None,
   };
   assert!(signed, "{txid} ({}): the signature does not verify", entry.source);
-  Some((tx.tx_type().to_base(), version.to_base()))
+  Some((tx.tx_type().to_base(), version))
 }
 
 /// The signatures verify over the sign hash of every signed provider
@@ -163,5 +187,6 @@ fn signatures_verify_over_sighash() {
     .filter_map(|(txid, entry)| check_signed(txid, entry))
     .collect();
   let protx = (1..=4).flat_map(|t| (1..=3).map(move |v| (t, v)));
-  assert_eq!(shapes, protx.collect());
+  let shared = [(10, 1), (11, 1), (12, 1)];
+  assert_eq!(shapes, protx.chain(shared).collect());
 }
