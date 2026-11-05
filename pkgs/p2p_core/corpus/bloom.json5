@@ -1,0 +1,317 @@
+//
+// BIP37 vectors. Generated with the reference implementation (dashpay/dash
+// v24.0.0-rc.3, 0364ed626e).
+//
+// Each section comes with the program used to generate the vectors.
+//
+// To run a program, paste it at the end of the `bloom_tests` suite in
+// `src/test/bloom_tests.cpp` at the specified revision, build it with
+// `make -C src test/test_dash` and run
+// `./src/test/test_dash --run_test=bloom_tests/<name>`. The output should match
+// the section.
+//
+
+{
+/*
+BOOST_AUTO_TEST_CASE(filterload_payloads)
+{
+    const auto print = [](const char* label, const DataStream& payload) {
+        DataStream fields{payload};
+        std::vector<unsigned char> data;
+        uint32_t hash_funcs, tweak;
+        uint8_t flags;
+        fields >> data >> hash_funcs >> tweak >> flags;
+        std::printf("    \"%s\": {\n      \"raw\": \"%s\",\n      \"details\": {\n"
+                    "        \"filter\": \"%s\",\n        \"hash_funcs\": %u,\n"
+                    "        \"tweak\": %u,\n        \"flags\": %u\n      }\n    },\n",
+                    label, HexStr(MakeUCharSpan(payload)).c_str(), HexStr(data).c_str(), hash_funcs, tweak, flags);
+    };
+    const auto make = [](const CBloomFilter& filter) {
+        DataStream s{};
+        s << filter;
+        return s;
+    };
+    CBloomFilter all(3, 0.01, 0, BLOOM_UPDATE_ALL);
+    all.insert(ParseHex("99108ad8ed9bb6274d3980bab5a85c048f0950c8"));
+    all.insert(ParseHex("b5a2c786d9ef4658287ced5914b37a1b4aa32eee"));
+    print("update_all", make(all));
+    CBloomFilter p2pubkey(2, 0.001, 2147483649UL, BLOOM_UPDATE_P2PUBKEY_ONLY);
+    p2pubkey.insert(ParseHex("045b81f0017e2091e2edcd5eecf10d5bdd120a5514cb3ee65b8447ec18bfc4575c6d5bf415e54e03b1067934a0f0ba76b01c6b9ab227142ee1d543764b69d901e0"));
+    print("update_p2pubkey_only", make(p2pubkey));
+    print("empty", make(CBloomFilter{}));
+    // Hash function count past MAX_HASH_FUNCS and an undefined flag, which
+    // the deserializer reads as they are.
+    DataStream unchecked{};
+    unchecked << std::vector<unsigned char>{0xa5} << uint32_t{MAX_HASH_FUNCS + 1} << uint32_t{7} << uint8_t{0xff};
+    CBloomFilter read;
+    unchecked >> read;
+    print("unchecked", make(read));
+}
+*/
+  "filterload": {
+    "update_all": {
+      "raw": "0341449a050000000000000001",
+      "details": {
+        "filter": "41449a",
+        "hash_funcs": 5,
+        "tweak": 0,
+        "flags": 1
+      }
+    },
+    "update_p2pubkey_only": {
+      "raw": "03350c21080000000100008002",
+      "details": {
+        "filter": "350c21",
+        "hash_funcs": 8,
+        "tweak": 2147483649,
+        "flags": 2
+      }
+    },
+    "empty": {
+      "raw": "00000000000000000000",
+      "details": {
+        "filter": "",
+        "hash_funcs": 0,
+        "tweak": 0,
+        "flags": 0
+      }
+    },
+    // The reference reads this one; this library refuses its flags byte,
+    // 0xff, which is not a `BloomFlags`.
+    "unchecked": {
+      "raw": "01a53300000007000000ff",
+      "details": {
+        "filter": "a5",
+        "hash_funcs": 51,
+        "tweak": 7,
+        "flags": 255
+      }
+    },
+  },
+/*
+BOOST_AUTO_TEST_CASE(filterload_reads)
+{
+    const auto try_read = [](uint64_t size, size_t data_len, size_t tail) {
+        DataStream s{};
+        WriteCompactSize(s, size);
+        const std::string prefix{HexStr(MakeUCharSpan(s))};
+        s.write(MakeByteSpan(std::vector<unsigned char>(data_len + tail)));
+        const size_t len{s.size()};
+        bool read{true};
+        try {
+            CBloomFilter filter;
+            s >> filter;
+        } catch (const std::ios_base::failure&) {
+            read = false;
+        }
+        std::printf("    { \"prefix\": \"%s\", \"len\": %zu, \"read\": %s },\n", prefix.c_str(), len,
+                    read ? "true" : "false");
+    };
+    try_read(0, 0, 9);
+    try_read(0, 0, 8);
+    try_read(MAX_BLOOM_FILTER_SIZE, MAX_BLOOM_FILTER_SIZE, 9);
+    try_read(MAX_BLOOM_FILTER_SIZE, MAX_BLOOM_FILTER_SIZE, 8);
+    try_read(MAX_BLOOM_FILTER_SIZE + 1, MAX_BLOOM_FILTER_SIZE + 1, 9);
+    try_read(MAX_SIZE + 1, 0, 9);
+}
+*/
+  "filterload_reads": [
+    { "prefix": "00", "len": 10, "read": true },
+    { "prefix": "00", "len": 9, "read": false },
+    { "prefix": "fda08c", "len": 36012, "read": true },
+    { "prefix": "fda08c", "len": 36011, "read": false },
+    // This library reads this one; its bound is 4,000,000 bytes.
+    { "prefix": "fda18c", "len": 36013, "read": false },
+    { "prefix": "fe01000002", "len": 14, "read": false },
+  ],
+/*
+BOOST_AUTO_TEST_CASE(filteradd_payloads)
+{
+    for (const auto& [label, data] : std::vector<std::pair<std::string, std::vector<unsigned char>>>{
+             {"empty", {}},
+             {"key_id", ParseHex("99108ad8ed9bb6274d3980bab5a85c048f0950c8")},
+             {"outpoint", ParseHex("e2b8c1a39e5e0d8b3d5bb2b0ed34bf2d0b3a25c1a0b7cfe7b1d4ce4d7d8bfd0a01000000")}}) {
+        DataStream s{};
+        s << data;
+        std::printf("    \"%s\": {\n      \"raw\": \"%s\",\n      \"details\": {\n"
+                    "        \"data\": \"%s\"\n      }\n    },\n",
+                    label.c_str(), HexStr(MakeUCharSpan(s)).c_str(), HexStr(data).c_str());
+    }
+}
+*/
+  "filteradd": {
+    "empty": {
+      "raw": "00",
+      "details": {
+        "data": ""
+      }
+    },
+    "key_id": {
+      "raw": "1499108ad8ed9bb6274d3980bab5a85c048f0950c8",
+      "details": {
+        "data": "99108ad8ed9bb6274d3980bab5a85c048f0950c8"
+      }
+    },
+    "outpoint": {
+      "raw": "24e2b8c1a39e5e0d8b3d5bb2b0ed34bf2d0b3a25c1a0b7cfe7b1d4ce4d7d8bfd0a01000000",
+      "details": {
+        "data": "e2b8c1a39e5e0d8b3d5bb2b0ed34bf2d0b3a25c1a0b7cfe7b1d4ce4d7d8bfd0a01000000"
+      }
+    },
+  },
+/*
+BOOST_AUTO_TEST_CASE(filteradd_reads)
+{
+    const auto try_read = [](uint64_t size, size_t data_len) {
+        DataStream s{};
+        WriteCompactSize(s, size);
+        const std::string prefix{HexStr(MakeUCharSpan(s))};
+        s.write(MakeByteSpan(std::vector<unsigned char>(data_len)));
+        const size_t len{s.size()};
+        bool read{true};
+        try {
+            std::vector<unsigned char> data;
+            s >> LIMITED_VECTOR(data, MAX_SCRIPT_ELEMENT_SIZE);
+        } catch (const std::ios_base::failure&) {
+            read = false;
+        }
+        std::printf("    { \"prefix\": \"%s\", \"len\": %zu, \"read\": %s },\n", prefix.c_str(), len,
+                    read ? "true" : "false");
+    };
+    try_read(0, 0);
+    try_read(MAX_SCRIPT_ELEMENT_SIZE, MAX_SCRIPT_ELEMENT_SIZE);
+    try_read(MAX_SCRIPT_ELEMENT_SIZE, MAX_SCRIPT_ELEMENT_SIZE - 1);
+    try_read(MAX_SCRIPT_ELEMENT_SIZE + 1, MAX_SCRIPT_ELEMENT_SIZE + 1);
+    try_read(MAX_SIZE + 1, 0);
+}
+*/
+  "filteradd_reads": [
+    { "prefix": "00", "len": 1, "read": true },
+    { "prefix": "fd0802", "len": 523, "read": true },
+    { "prefix": "fd0802", "len": 522, "read": false },
+    // This library reads this one; its bound is 4,000,000 bytes.
+    { "prefix": "fd0902", "len": 524, "read": false },
+    { "prefix": "fe01000002", "len": 5, "read": false },
+  ],
+/*
+BOOST_AUTO_TEST_CASE(merkleblock_payloads)
+{
+    const auto print = [](const char* label, const CMerkleBlock& block) {
+        DataStream payload{};
+        payload << block;
+        DataStream tree{};
+        tree << block.txn;
+        uint32_t total;
+        std::vector<uint256> hashes;
+        std::vector<unsigned char> flags;
+        tree >> total >> hashes >> flags;
+        const CBlockHeader& h{block.header};
+        std::printf("    \"%s\": {\n      \"raw\": \"%s\",\n      \"details\": {\n"
+                    "        \"header\": {\n          \"version\": %d,\n          \"prevHash\": \"%s\",\n"
+                    "          \"merkleRoot\": \"%s\",\n          \"time\": %u,\n          \"bits\": %u,\n"
+                    "          \"nonce\": %u\n        },\n        \"tree\": {\n"
+                    "          \"total_transactions\": %u,\n          \"hashes\": [",
+                    label, HexStr(MakeUCharSpan(payload)).c_str(), h.nVersion, h.hashPrevBlock.ToString().c_str(),
+                    h.hashMerkleRoot.ToString().c_str(), h.nTime, h.nBits, h.nNonce, total);
+        for (size_t i = 0; i < hashes.size(); ++i) {
+            std::printf("%s\n            \"%s\"", i ? "," : "", hashes[i].ToString().c_str());
+        }
+        std::printf("%s],\n          \"flags\": \"%s\"\n        }\n      }\n    },\n",
+                    hashes.empty() ? "" : "\n          ", HexStr(flags).c_str());
+    };
+    const CBlock genesis{Params().GenesisBlock()};
+    print("genesis", CMerkleBlock(genesis, std::set<uint256>{genesis.vtx[0]->GetHash()}));
+    const CBlock block{getBlock13b8a()};
+    print("none", CMerkleBlock(block, std::set<uint256>{}));
+    print("last", CMerkleBlock(block, std::set<uint256>{block.vtx.back()->GetHash()}));
+    print("two", CMerkleBlock(block, std::set<uint256>{block.vtx[1]->GetHash(), block.vtx.back()->GetHash()}));
+}
+*/
+  "merkleblock": {
+    "genesis": {
+      "raw": "010000000000000000000000000000000000000000000000000000000000000000000000c762a6567f3cc092f0684bb62b7e00a84890b990f07cc71a6bb58d64b98e02e0022ddb52f0ff0f1ec23fb9010100000001c762a6567f3cc092f0684bb62b7e00a84890b990f07cc71a6bb58d64b98e02e00101",
+      "details": {
+        "header": {
+          "version": 1,
+          "prevHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "merkleRoot": "e0028eb9648db56b1ac77cf090b99048a8007e2bb64b68f092c03c7f56a662c7",
+          "time": 1390095618,
+          "bits": 504365040,
+          "nonce": 28917698
+        },
+        "tree": {
+          "total_transactions": 1,
+          "hashes": [
+            "e0028eb9648db56b1ac77cf090b99048a8007e2bb64b68f092c03c7f56a662c7"
+          ],
+          "flags": "01"
+        }
+      }
+    },
+    "none": {
+      "raw": "0100000090f0a9f110702f808219ebea1173056042a714bad51b916cb6800000000000005275289558f51c9966699404ae2294730c3c9f9bda53523ce50e9b95e558da2fdb261b4d4c86041b1ab1bf9309000000015275289558f51c9966699404ae2294730c3c9f9bda53523ce50e9b95e558da2f0100",
+      "details": {
+        "header": {
+          "version": 1,
+          "prevHash": "00000000000080b66c911bd5ba14a74260057311eaeb1982802f7010f1a9f090",
+          "merkleRoot": "2fda58e5959b0ee53c5253da9b9f3c0c739422ae04946966991cf55895287552",
+          "time": 1293625051,
+          "bits": 453281356,
+          "nonce": 2478813466
+        },
+        "tree": {
+          "total_transactions": 9,
+          "hashes": [
+            "2fda58e5959b0ee53c5253da9b9f3c0c739422ae04946966991cf55895287552"
+          ],
+          "flags": "00"
+        }
+      }
+    },
+    "last": {
+      "raw": "0100000090f0a9f110702f808219ebea1173056042a714bad51b916cb6800000000000005275289558f51c9966699404ae2294730c3c9f9bda53523ce50e9b95e558da2fdb261b4d4c86041b1ab1bf930900000002bc56aae9c0b9a19d49250c9bf9bf90b3c1ee3ac9096410a1eb179e1e92f90a66201f4587ec86b58297edc2dd32d6fcd998aa794308aac802a8af3be0e081d674013d",
+      "details": {
+        "header": {
+          "version": 1,
+          "prevHash": "00000000000080b66c911bd5ba14a74260057311eaeb1982802f7010f1a9f090",
+          "merkleRoot": "2fda58e5959b0ee53c5253da9b9f3c0c739422ae04946966991cf55895287552",
+          "time": 1293625051,
+          "bits": 453281356,
+          "nonce": 2478813466
+        },
+        "tree": {
+          "total_transactions": 9,
+          "hashes": [
+            "660af9921e9e17eba1106409c93aeec1b390bff99b0c25499da1b9c0e9aa56bc",
+            "74d681e0e03bafa802c8aa084379aa98d9fcd632ddc2ed9782b586ec87451f20"
+          ],
+          "flags": "3d"
+        }
+      }
+    },
+    "two": {
+      "raw": "0100000090f0a9f110702f808219ebea1173056042a714bad51b916cb6800000000000005275289558f51c9966699404ae2294730c3c9f9bda53523ce50e9b95e558da2fdb261b4d4c86041b1ab1bf930900000005a3f3ac605d5e4727f4ea72e9346a5d586f0231460fd52ad9895bc8240d871def076d0317ee70ee36cf396a9871ab3bf6f8e6d538d7f8a9062437dcb71c75fcf9522db339c186c1149843a4848990e6ddb9a6065f4bc1422af53f4bc86f1b084a89189ff0316cdc10511da71da757e553cada9f3b5b1434f3923673adb57d83ca201f4587ec86b58297edc2dd32d6fcd998aa794308aac802a8af3be0e081d674022f0f",
+      "details": {
+        "header": {
+          "version": 1,
+          "prevHash": "00000000000080b66c911bd5ba14a74260057311eaeb1982802f7010f1a9f090",
+          "merkleRoot": "2fda58e5959b0ee53c5253da9b9f3c0c739422ae04946966991cf55895287552",
+          "time": 1293625051,
+          "bits": 453281356,
+          "nonce": 2478813466
+        },
+        "tree": {
+          "total_transactions": 9,
+          "hashes": [
+            "ef1d870d24c85b89d92ad50f4631026f585d6a34e972eaf427475e5d60acf3a3",
+            "f9fc751cb7dc372406a9f8d738d5e6f8f63bab71986a39cf36ee70ee17036d07",
+            "4a081b6fc84b3ff52a42c14b5f06a6b9dde6908984a4439814c186c139b32d52",
+            "ca837db5ad733692f334145b3b9fdaca53e557a71da71d5110dc6c31f09f1889",
+            "74d681e0e03bafa802c8aa084379aa98d9fcd632ddc2ed9782b586ec87451f20"
+          ],
+          "flags": "2f0f"
+        }
+      }
+    },
+  },
+}
