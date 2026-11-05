@@ -1,0 +1,204 @@
+//
+// ChainLock and InstantSend lock vectors. Generated with the reference
+// implementation (dashpay/dash v24.0.0, 938fba5028).
+//
+// Each section comes with the program used to generate the vectors.
+//
+// To run a program, move its `#include` lines to the top of
+// `src/test/net_tests.cpp` at the specified revision and paste the rest at
+// the end of the `net_tests` suite. Build it with `make -C src test/test_dash`
+// and run `./src/test/test_dash --run_test=net_tests/<name>`. The output
+// should match the section.
+//
+
+{
+/*
+#include <bls/bls.h>
+#include <chainlock/chainlock.h>
+
+BOOST_AUTO_TEST_CASE(clsig_payloads)
+{
+    const bool legacy{bls::bls_legacy_scheme.exchange(false)};
+    CBLSSecretKey sk;
+    BOOST_REQUIRE(sk.SetHexStr("0101010101010101010101010101010101010101010101010101010101010101", false));
+    struct Case {
+        std::string label;
+        int32_t height;
+        uint256 block_hash;
+        CBLSSignature sig;
+    };
+    for (const auto& [label, height, block_hash, sig] : std::vector<Case>{
+             {"null", -1, uint256{}, CBLSSignature{}},
+             {"genesis", 0, Params().GenesisBlock().GetHash(), sk.Sign(uint256::ONE, false)},
+             {"max_height", std::numeric_limits<int32_t>::max(),
+              uint256S("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"),
+              sk.Sign(uint256::TWO, false)}}) {
+        const auto msg{CNetMsgMaker{PROTOCOL_VERSION}.Make(NetMsgType::CLSIG,
+                                                           chainlock::ChainLockSig{height, block_hash, sig})};
+        chainlock::ChainLockSig read;
+        CDataStream{msg.data, SER_NETWORK, PROTOCOL_VERSION} >> read;
+        BOOST_REQUIRE(read.getHeight() == height && read.getBlockHash() == block_hash && read.getSig() == sig);
+        std::printf("    \"%s\": {\n      \"raw\": \"%s\",\n      \"details\": {\n        \"height\": %d,\n"
+                    "        \"block_hash\": \"%s\",\n        \"sig\": \"%s\"\n      }\n    },\n",
+                    label.c_str(), HexStr(msg.data).c_str(), height, block_hash.ToString().c_str(),
+                    HexStr(sig.ToBytes(false)).c_str());
+    }
+    bls::bls_legacy_scheme.store(legacy);
+}
+*/
+  "clsig": {
+    "null": {
+      "raw": "ffffffff0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "details": {
+        "height": -1,
+        "block_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "sig": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    "genesis": {
+      "raw": "000000002e3df23eec5cd6a86edd509539028e2c3a3dc05315eb28f2baa43218ca080000a8f51d4aa2e5656c193ea3cc14c1ae464d7e4674619b0f6fb76c429817dea9d3dffc74a438c1fe5fc4590c03de94bae711b2b4afe1fad2fc3858013e295c5cc4b168443fb13652fa0513cfeae808dd54125a12af7c9eefe7955d7856a3572909",
+      "details": {
+        "height": 0,
+        "block_hash": "000008ca1832a4baf228eb1553c03d3a2c8e02399550dd6ea8d65cec3ef23d2e",
+        "sig": "a8f51d4aa2e5656c193ea3cc14c1ae464d7e4674619b0f6fb76c429817dea9d3dffc74a438c1fe5fc4590c03de94bae711b2b4afe1fad2fc3858013e295c5cc4b168443fb13652fa0513cfeae808dd54125a12af7c9eefe7955d7856a3572909"
+      }
+    },
+    "max_height": {
+      "raw": "ffffff7fffeeddccbbaa99887766554433221100ffeeddccbbaa9988776655443322110085d868bf084909a51630db09eb41c970b11e6a27dd1bbb2af1e511a67e6e68ca93364b6ed861decab01285ed556d76361627217469c4587176b80e92177d5a4fbe1e290db4cd7e9d68274bf5654f61624a8b7aae21920a6fd7cf5e87cc6e9b62",
+      "details": {
+        "height": 2147483647,
+        "block_hash": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+        "sig": "85d868bf084909a51630db09eb41c970b11e6a27dd1bbb2af1e511a67e6e68ca93364b6ed861decab01285ed556d76361627217469c4587176b80e92177d5a4fbe1e290db4cd7e9d68274bf5654f61624a8b7aae21920a6fd7cf5e87cc6e9b62"
+      }
+    },
+  },
+/*
+#include <bls/bls.h>
+#include <instantsend/lock.h>
+
+BOOST_AUTO_TEST_CASE(isdlock_payloads)
+{
+    CBLSSecretKey sk;
+    BOOST_REQUIRE(sk.SetHexStr("0202020202020202020202020202020202020202020202020202020202020202", false));
+    struct Case {
+        std::string label;
+        uint8_t version;
+        std::vector<COutPoint> inputs;
+        uint256 txid;
+        uint256 cycle_hash;
+        CBLSSignature sig;
+    };
+    const uint256 hash{uint256S("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")};
+    for (const auto& [label, version, inputs, txid, cycle_hash, sig] : std::vector<Case>{
+             {"one_input", 1, {COutPoint{uint256::ONE, 0}}, uint256::TWO, Params().GenesisBlock().GetHash(),
+              sk.Sign(uint256::ONE, false)},
+             {"three_inputs", 1,
+              {COutPoint{uint256::ONE, 1}, COutPoint{uint256::TWO, 0x01020304},
+               COutPoint{hash, std::numeric_limits<uint32_t>::max()}},
+              hash, uint256::ONE, sk.Sign(uint256::TWO, false)},
+             {"version_255_no_inputs", 255, {}, uint256{}, uint256{}, CBLSSignature{}}}) {
+        instantsend::InstantSendLock islock;
+        islock.nVersion = version;
+        islock.inputs = inputs;
+        islock.txid = txid;
+        islock.cycleHash = cycle_hash;
+        islock.sig.Set(sig, false);
+        const auto msg{CNetMsgMaker{PROTOCOL_VERSION}.Make(NetMsgType::ISDLOCK, islock)};
+        instantsend::InstantSendLock read;
+        CDataStream{msg.data, SER_NETWORK, PROTOCOL_VERSION} >> read;
+        BOOST_REQUIRE(::SerializeHash(read) == ::SerializeHash(islock));
+        std::printf("    \"%s\": {\n      \"raw\": \"%s\",\n      \"details\": {\n        \"version\": %u,\n"
+                    "        \"inputs\": [",
+                    label.c_str(), HexStr(msg.data).c_str(), version);
+        for (size_t i = 0; i < inputs.size(); ++i) {
+            std::printf("%s{ \"hash\": \"%s\", \"index\": %u }", i ? ", " : "",
+                        inputs[i].hash.ToString().c_str(), inputs[i].n);
+        }
+        std::printf("],\n        \"txid\": \"%s\",\n        \"cycle_hash\": \"%s\",\n        \"sig\": \"%s\"\n"
+                    "      }\n    },\n",
+                    txid.ToString().c_str(), cycle_hash.ToString().c_str(), HexStr(sig.ToBytes(false)).c_str());
+    }
+}
+*/
+  "isdlock": {
+    "one_input": {
+      "raw": "010101000000000000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000002e3df23eec5cd6a86edd509539028e2c3a3dc05315eb28f2baa43218ca080000a134f0be553b2a89c25549e2e07185f709a56f84779f686159d2d04de3023373733c64fbebe4e2c443d8464bd40f96150180bd3892be562661f1e7cab8d79a8f662d0fa1f3754c84989c3b538ff4bc4924a565c4211fac70c11dcc86328f754c",
+      "details": {
+        "version": 1,
+        "inputs": [{ "hash": "0000000000000000000000000000000000000000000000000000000000000001", "index": 0 }],
+        "txid": "0000000000000000000000000000000000000000000000000000000000000002",
+        "cycle_hash": "000008ca1832a4baf228eb1553c03d3a2c8e02399550dd6ea8d65cec3ef23d2e",
+        "sig": "a134f0be553b2a89c25549e2e07185f709a56f84779f686159d2d04de3023373733c64fbebe4e2c443d8464bd40f96150180bd3892be562661f1e7cab8d79a8f662d0fa1f3754c84989c3b538ff4bc4924a565c4211fac70c11dcc86328f754c"
+      }
+    },
+    "three_inputs": {
+      "raw": "0103010000000000000000000000000000000000000000000000000000000000000001000000020000000000000000000000000000000000000000000000000000000000000004030201ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100ffffffffffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100010000000000000000000000000000000000000000000000000000000000000084b9643e88f83627fe3c99a68482bf5d91b40fdc21ea07cadd652b981dbf8d2aa64f0fe4bd1245fb01deebfb3eada65e11743357cc9855e63594468986b7395f1fbe199b4d4aed9e95e71446b5f54a42a7b67ce5d4dc093e437def813c6bac94",
+      "details": {
+        "version": 1,
+        "inputs": [{ "hash": "0000000000000000000000000000000000000000000000000000000000000001", "index": 1 }, { "hash": "0000000000000000000000000000000000000000000000000000000000000002", "index": 16909060 }, { "hash": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff", "index": 4294967295 }],
+        "txid": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+        "cycle_hash": "0000000000000000000000000000000000000000000000000000000000000001",
+        "sig": "84b9643e88f83627fe3c99a68482bf5d91b40fdc21ea07cadd652b981dbf8d2aa64f0fe4bd1245fb01deebfb3eada65e11743357cc9855e63594468986b7395f1fbe199b4d4aed9e95e71446b5f54a42a7b67ce5d4dc093e437def813c6bac94"
+      }
+    },
+    "version_255_no_inputs": {
+      "raw": "ff0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "details": {
+        "version": 255,
+        "inputs": [],
+        "txid": "0000000000000000000000000000000000000000000000000000000000000000",
+        "cycle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "sig": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+  },
+/*
+#include <instantsend/lock.h>
+
+BOOST_AUTO_TEST_CASE(isdlock_input_limit)
+{
+    constexpr size_t max_inputs{instantsend::InstantSendLock::MAX_INPUTS};
+    for (const size_t count : {max_inputs, max_inputs + 1}) {
+        instantsend::InstantSendLock islock;
+        for (uint32_t i = 0; i < count; ++i) {
+            islock.inputs.emplace_back(uint256::ONE, i);
+        }
+        islock.txid = uint256::TWO;
+        const auto msg{CNetMsgMaker{PROTOCOL_VERSION}.Make(NetMsgType::ISDLOCK, islock)};
+        instantsend::InstantSendLock read;
+        CDataStream{msg.data, SER_NETWORK, PROTOCOL_VERSION} >> read;
+        BOOST_REQUIRE_EQUAL(read.inputs.size(), count);
+        std::printf("    {\n      \"max_inputs\": %zu,\n      \"version\": %u,\n      \"inputs\": %zu,\n"
+                    "      \"input_hash\": \"%s\",\n      \"txid\": \"%s\",\n      \"cycle_hash\": \"%s\",\n"
+                    "      \"size\": %zu,\n      \"hash\": \"%s\"\n    },\n",
+                    max_inputs, read.nVersion, count, uint256::ONE.ToString().c_str(), read.txid.ToString().c_str(),
+                    read.cycleHash.ToString().c_str(), msg.data.size(), ::SerializeHash(read).ToString().c_str());
+    }
+}
+*/
+  // Each vector describes a lock of `inputs` outpoints of `input_hash`, at
+  // indexes counting up from zero, and a zero signature. `size` and `hash`
+  // are the length and double SHA-256 of its payload.
+  "isdlock_input_limit": [
+    {
+      "max_inputs": 48780,
+      "version": 1,
+      "inputs": 48780,
+      "input_hash": "0000000000000000000000000000000000000000000000000000000000000001",
+      "txid": "0000000000000000000000000000000000000000000000000000000000000002",
+      "cycle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "size": 1756244,
+      "hash": "75def6b40177162fe7853302bf589da9cd8d34b33e6af8d1142fb05887a6fff5"
+    },
+    {
+      "max_inputs": 48780,
+      "version": 1,
+      "inputs": 48781,
+      "input_hash": "0000000000000000000000000000000000000000000000000000000000000001",
+      "txid": "0000000000000000000000000000000000000000000000000000000000000002",
+      "cycle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "size": 1756280,
+      "hash": "b8e8c1f912b2c4191acc82a3c8f8ead4f53dfd240b50ea9422af3c0f38588817"
+    },
+  ],
+}

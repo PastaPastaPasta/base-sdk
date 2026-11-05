@@ -10,6 +10,7 @@ mod addr;
 mod blocks;
 mod bloom;
 mod cfilter;
+mod chainlock;
 mod coinjoin;
 mod gov;
 mod headers;
@@ -34,6 +35,7 @@ pub use addr::{Addr, AddrV2Entry, AddrV2Msg, TimestampedAddr};
 pub use blocks::{GetBlocks, SendCmpct};
 pub use bloom::{BloomFlags, FilterAdd, FilterLoad, MerkleBlock, PartialMerkleTree, TxMerkleNode};
 pub use cfilter::{CFCheckpt, CFHeaders, CFilter, FilterHash, FilterHeader, GetCFCheckpt, GetCFHeaders, GetCFilters};
+pub use chainlock::{ClSig, IsdLock};
 pub use coinjoin::SendDsq;
 pub use gov::{GovSync, GovSyncStatusCount};
 pub use headers::{GetHeaders, Headers};
@@ -111,6 +113,10 @@ define_p2p! {
     GetCFCheckpt(GetCFCheckpt) => GETCFCHECKPT "getcfcheckpt" @ 26,
     /// BIP157: compact filter checkpoints.
     CFCheckpt(CFCheckpt) => CFCHECKPT "cfcheckpt" @ 27,
+    /// ChainLock signature.
+    ClSig(ClSig) => CLSIG "clsig" @ 160,
+    /// InstantSend deterministic lock.
+    IsdLock(IsdLock) => ISDLOCK "isdlock" @ 161,
   }
 
   parsed_empty {
@@ -183,10 +189,6 @@ define_p2p! {
     QGetData => QGETDATA "qgetdata" @ 158,
     /// LLMQ: quorum data.
     QData => QDATA "qdata" @ 159,
-    /// ChainLock signature.
-    ClSig => CLSIG "clsig" @ 160,
-    /// InstantSend deterministic lock.
-    IsdLock => ISDLOCK "isdlock" @ 161,
     /// Masternode authentication.
     MnAuth => MNAUTH "mnauth" @ 162,
     /// Request quorum rotation info.
