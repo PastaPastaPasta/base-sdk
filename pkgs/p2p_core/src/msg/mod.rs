@@ -16,6 +16,7 @@ mod gov;
 mod headers;
 mod headers2;
 mod inv;
+mod masternode;
 mod mn_list;
 mod ping;
 mod quorum_sigs;
@@ -41,6 +42,7 @@ pub use gov::{GovSync, GovSyncStatusCount};
 pub use headers::{GetHeaders, Headers};
 pub use headers2::{CompressedHeader, GetHeaders2, Headers2};
 pub use inv::{GetData, Inv, InvType, Inventory, NotFound};
+pub use masternode::{MnAuth, PlatformBan, Spork};
 pub use mn_list::{DeletedQuorum, GetMnListDiff, MnListDiff, MnListDiffPayload, QuorumClSig, SimplifiedMnListEntry};
 pub use ping::{Ping, Pong};
 pub use quorum_sigs::QSendRecSigs;
@@ -117,6 +119,12 @@ define_p2p! {
     ClSig(ClSig) => CLSIG "clsig" @ 160,
     /// InstantSend deterministic lock.
     IsdLock(IsdLock) => ISDLOCK "isdlock" @ 161,
+    /// Spork value.
+    Spork(Spork) => SPORK "spork" @ 128,
+    /// Masternode authentication.
+    MnAuth(MnAuth) => MNAUTH "mnauth" @ 162,
+    /// DIP-0031: platform ban.
+    PlatformBan(PlatformBan) => PLATFORMBAN "platformban" @ 168,
   }
 
   parsed_empty {
@@ -145,8 +153,6 @@ define_p2p! {
     GetBlockTxn => GETBLOCKTXN "getblocktxn" @ 10,
     /// Transaction.
     Tx => TX "tx" @ 21,
-    /// Spork broadcast/request.
-    Spork => SPORK "spork" @ 128,
     /// CoinJoin: accept denomination.
     Dsa => DSA "dsa" @ 131,
     /// CoinJoin: submit inputs.
@@ -189,14 +195,10 @@ define_p2p! {
     QGetData => QGETDATA "qgetdata" @ 158,
     /// LLMQ: quorum data.
     QData => QDATA "qdata" @ 159,
-    /// Masternode authentication.
-    MnAuth => MNAUTH "mnauth" @ 162,
     /// Request quorum rotation info.
     GetQrInfo => GETQRINFO "getqrinfo" @ 166,
     /// Quorum rotation info.
     QrInfo => QRINFO "qrinfo" @ 167,
-    /// DIP-0031: platform ban.
-    PlatformBan => PLATFORMBAN "platformban" @ 168,
   }
 
   stub_empty {
