@@ -84,6 +84,14 @@ ROWS: dict[str, list[tuple[str, str]]] = {
       "cb11eb2b4f2a5d2b4294e8c2965478f037dd36d90a0d4734c0e3e868a2f4d024",
       "A version 2 revocation under a legacy-encoded key.",
     ),
+    (
+      "a7a1e8a9ba4cb8fd7449437b10c70fa2d93ee30cf0c9c701d7943c5fc5209f82",
+      "A version 1 commitment.",
+    ),
+    (
+      "a1291b3f8f493717e74b46bc85e1ad2253f0272e2b61650da5276f9169a672e3",
+      "A version 2 commitment, of a rotating quorum.",
+    ),
   ],
   "test": [
     (
@@ -113,6 +121,22 @@ ROWS: dict[str, list[tuple[str, str]]] = {
     (
       "4e0f211850f44c55e26e45f6bc10a59d6c08fe91be544a8fac0f7ce6cf96ad06",
       "A version 3 revocation.",
+    ),
+    (
+      "5731301b95f76ea117fa780a2e775d0511a50bf7665c2dfee9985c62defda52d",
+      "A version 3 commitment.",
+    ),
+    (
+      "2cb9beea83f45880d183c31b9d834231bf0dd5e40bebd55675da4f6ac892dc2d",
+      "A version 4 commitment, of a rotating quorum.",
+    ),
+    (
+      "46a47fe65c9fd29e9379f3f74020df33dabb1d4095c8da6b1fa05e508b74a491",
+      "A hard fork signal.",
+    ),
+    (
+      "cb39c38505c359a653eb15106c9532104f24751d53f8e9abb76e3fb810a7d5b3",
+      "A version 1 asset unlock.",
     ),
     (
       "d0b92723bd36450c2fcb51ef0886818ad40a09c07115dd55bc659a2546fa54fd",

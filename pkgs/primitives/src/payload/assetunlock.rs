@@ -7,14 +7,21 @@
 //! AssetUnlock (type 9): Platform to L1.
 
 use crate::codec::codec_payload;
+use crate::sign::{llmq_sig_hash, request_id, tx_hash_with};
 use crate::sptx::QuorumHash;
+use crate::Transaction;
 
+use dash_num::Hash256;
+use dash_params::LlmqType;
 use dash_pkc::bls::BlsSigBytes;
 use dash_types::type_id::{TypeId, Unencodable};
 use dash_types::Checkable;
 use getset::CopyGetters;
 
 use core::fmt;
+
+/// Prefix of the request id of an asset unlock.
+const REQUEST_ID_PREFIX: &str = "plwdtx";
 
 codec_payload! {
 /// AssetUnlock: Platform-to-L1 (type 9).
@@ -69,6 +76,28 @@ impl Checkable for AssetUnlock {
     }
 
     None
+  }
+}
+
+impl AssetUnlock {
+  /// The id of the signing request, from the withdrawal index.
+  pub fn request_id(&self) -> Hash256 {
+    request_id(REQUEST_ID_PREFIX, &self.index)
+  }
+
+  /// The message hash the quorum signs for this payload carried by `tx`.
+  pub fn msg_hash(&self, tx: &Transaction) -> Hash256 {
+    let unsigned = Self {
+      quorum_sig: BlsSigBytes::default(),
+      ..self.clone()
+    };
+    tx_hash_with(tx, &unsigned)
+  }
+
+  /// The digest the signing quorum of `llmq_type` signs for this payload
+  /// carried by `tx`.
+  pub fn sig_hash(&self, tx: &Transaction, llmq_type: LlmqType) -> Hash256 {
+    llmq_sig_hash(llmq_type, &self.quorum_hash, &self.request_id(), &self.msg_hash(tx))
   }
 }
 
