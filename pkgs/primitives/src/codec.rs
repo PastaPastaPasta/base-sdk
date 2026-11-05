@@ -101,18 +101,7 @@ macro_rules! codec_base {
     $crate::codec_base!($name, $crate::__private::dash_types::MAX_SER_SIZE, { $($field),+ });
   };
   ($ty:ty, $max:expr, { $($field:ident),+ $(,)? }) => {
-    impl $crate::__private::dash_types::codec::BaseCodec for $ty {
-      fn decode(data: &mut &[u8]) -> Result<Self, $crate::__private::dash_types::codec::DecodeError> {
-        Ok(Self {
-          $($field: $crate::__private::dash_types::codec::BaseCodec::decode(data)?),+
-        })
-      }
-
-      fn encode(&self, buf: &mut impl $crate::__private::dash_types::codec::EncodeBuf) {
-        $($crate::__private::dash_types::codec::BaseCodec::encode(&self.$field, buf);)+
-      }
-    }
-
+    $crate::__private::dash_types::impl_vec!($ty, { $($field),+ });
     $crate::__private::dash_types::impl_type!($ty, $max);
   };
 }
