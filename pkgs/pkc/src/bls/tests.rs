@@ -85,6 +85,7 @@ pub const fn ietf_g1_encoding(mut chia: [u8; 48]) -> [u8; 48] {
 cfg_if! {
   if #[cfg(test)] {
     use super::group::G1Affine;
+    use super::scheme_ctx::BlsSchemeKind;
     use super::scheme_ops::BlsScheme;
     use super::schemes::BlsScChia;
 
@@ -162,6 +163,71 @@ cfg_if! {
     /// The `bls_read` vectors of one kind.
     pub fn read_vectors(kind: SerType) -> Vec<ReadVector> {
       Corpus::open(env!("CARGO_MANIFEST_DIR"), "bls_read").vectors(&kind.to_string())
+    }
+
+    /// The reference implementation's outcome for one eager `bls_wrapper`
+    /// read.
+    #[derive(Clone, Copy, Debug, Eq, PartialEq, ::serde::Deserialize)]
+    #[serde(rename_all = "lowercase")]
+    pub enum EagerOutcome {
+      Throw,
+      Invalid,
+      Valid,
+    }
+
+    /// One `bls_wrapper` input, its eager outcome under each scheme and, for
+    /// a valid outcome, the object's encoding under the other scheme.
+    #[derive(Debug, ::serde::Deserialize)]
+    pub struct EagerVector {
+      pub class: String,
+      #[serde(rename = "in")]
+      pub input: String,
+      legacy: EagerOutcome,
+      basic: EagerOutcome,
+      #[serde(default)]
+      legacy_to_basic: Option<String>,
+      #[serde(default)]
+      basic_to_legacy: Option<String>,
+    }
+
+    impl EagerVector {
+      pub fn outcome(&self, scheme: BlsSchemeKind) -> EagerOutcome {
+        if scheme.is_legacy() { self.legacy } else { self.basic }
+      }
+
+      /// The encoding under the other scheme of the valid object read under
+      /// `scheme`.
+      pub fn other(&self, scheme: BlsSchemeKind) -> Option<&str> {
+        if scheme.is_legacy() {
+          self.legacy_to_basic.as_deref()
+        } else {
+          self.basic_to_legacy.as_deref()
+        }
+      }
+    }
+
+    /// One `bls_wrapper` lazy input and its runs: a script, then the output
+    /// of each operation after the first.
+    #[derive(Debug, ::serde::Deserialize)]
+    pub struct LazyVector {
+      pub class: String,
+      #[serde(rename = "in")]
+      pub input: String,
+      pub runs: Vec<Vec<String>>,
+    }
+
+    /// Two lazy objects, each a class and a script, and whether `a == b`,
+    /// then what each writes.
+    #[derive(Debug, ::serde::Deserialize)]
+    pub struct PairVector {
+      pub a: (String, String),
+      pub b: (String, String),
+      pub eq: (bool, String, String),
+    }
+
+    /// A `bls_wrapper` section of one kind: pk, sig or sk.
+    pub fn wrapper_vectors<T: ::serde::de::DeserializeOwned>(kind: &str, section: &str) -> Vec<T> {
+      Corpus::open(env!("CARGO_MANIFEST_DIR"), "bls_wrapper").scope(kind).vectors(section)
     }
 
     /// Whether the legacy G1 encoding `b` holds an `x` with no point on the

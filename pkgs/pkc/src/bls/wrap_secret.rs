@@ -103,9 +103,10 @@ impl PartialEq for BlsEagerSecretKey {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::bls::tests::GROUP_ORDER;
+  use crate::bls::tests::{wrapper_vectors, EagerOutcome, EagerVector, GROUP_ORDER};
   use crate::prelude::*;
 
+  use dash_dev::arr_from_hex;
   use rstest::rstest;
 
   const LEGACY: BlsSchemeKind = BlsSchemeKind::Legacy;
@@ -148,5 +149,27 @@ mod tests {
     let c = BlsEagerSecretKey::decode(&order_with_last(0x01), BASIC);
     assert!(b != c && a == a.clone() && b != Ok(BlsEagerSecretKey::invalid()));
     assert!(a.is_ok_and(|sk| sk.is_valid() && !format!("{sk:?}").contains("5a5a")));
+  }
+
+  /// Every `bls_wrapper` secret key input reads as in the reference
+  /// implementation.
+  #[test]
+  fn eager_reads_match_reference() {
+    for v in wrapper_vectors::<EagerVector>("sk", "eager") {
+      let input: [u8; BLS_SK_LEN] = arr_from_hex(&v.input);
+      for scheme in [LEGACY, BASIC] {
+        let label = format!("sk {} {} {scheme:?}", v.class, v.input);
+        let expected = match v.outcome(scheme) {
+          EagerOutcome::Throw => Err(BlsError::InvalidSecretKey),
+          EagerOutcome::Invalid => Ok([0u8; BLS_SK_LEN]),
+          EagerOutcome::Valid => Ok(v.other(scheme).map_or([0u8; BLS_SK_LEN], arr_from_hex)),
+        };
+        let written = BlsEagerSecretKey::decode(&input, scheme).map(|sk| *sk.to_bytes());
+        assert_eq!(written, expected, "{label}");
+        if v.outcome(scheme) == EagerOutcome::Valid {
+          assert_eq!(written, Ok(input), "{label}");
+        }
+      }
+    }
   }
 }

@@ -108,9 +108,13 @@ impl<K: BlsWire<N>, const N: usize> PartialEq for BlsEager<K, N> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::bls::tests::{G1_OFF_SUBGROUP_CHIA, G1_OFF_SUBGROUP_IETF, G1_X_EQ_PRIME_CHIA};
+  use crate::bls::tests::{
+    wrapper_vectors, EagerOutcome, EagerVector, G1_OFF_SUBGROUP_CHIA, G1_OFF_SUBGROUP_IETF, G1_X_EQ_PRIME_CHIA,
+  };
   use crate::bls::BlsPoint;
+  use crate::prelude::*;
 
+  use dash_dev::arr_from_hex;
   use rstest::rstest;
 
   const LEGACY: BlsSchemeKind = BlsSchemeKind::Legacy;
@@ -154,5 +158,41 @@ mod tests {
     let mut identity = [0u8; BLS_SIG_LEN];
     identity[0] = 0xc0;
     assert_eq!(BlsEagerSig::decode(&identity, BASIC), Err(BlsError::InvalidSignature));
+  }
+
+  /// Every `bls_wrapper` key and signature input reads as in the reference
+  /// implementation: it fails, gives the invalid object, or gives an object
+  /// that writes the input under the scheme and the recorded encoding under
+  /// the other.
+  fn assert_eager_reads<K: BlsWire<N>, const N: usize>(kind: &str) {
+    for v in wrapper_vectors::<EagerVector>(kind, "eager") {
+      let input: [u8; N] = arr_from_hex(&v.input);
+      for scheme in [LEGACY, BASIC] {
+        let label = format!("{kind} {} {} {scheme:?}", v.class, v.input);
+        let outcome = v.outcome(scheme);
+        assert_eq!(v.other(scheme).is_some(), outcome == EagerOutcome::Valid, "{label}");
+        let expected = match outcome {
+          EagerOutcome::Throw => Err(K::INVALID),
+          EagerOutcome::Invalid => Ok((false, [0u8; N], [0u8; N])),
+          EagerOutcome::Valid => Ok((true, input, v.other(scheme).map_or([0u8; N], arr_from_hex))),
+        };
+        let decoded = BlsEager::<K, N>::decode(&input, scheme);
+        let written = decoded.map(|field| {
+          (
+            field.is_valid(),
+            field.to_bytes(scheme),
+            field.to_bytes(scheme.opposite()),
+          )
+        });
+        assert_eq!(written, expected, "{label}");
+      }
+    }
+  }
+
+  #[rstest]
+  #[case::pk(assert_eager_reads::<G1, BLS_PK_LEN>, "pk")]
+  #[case::sig(assert_eager_reads::<G2, BLS_SIG_LEN>, "sig")]
+  fn eager_reads_match_reference(#[case] assertion: fn(&str), #[case] kind: &str) {
+    assertion(kind);
   }
 }

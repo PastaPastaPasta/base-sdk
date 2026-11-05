@@ -226,9 +226,16 @@ impl<K: BlsWire<N>, const N: usize> PartialEq for BlsLazy<K, N> {
 }
 
 #[cfg(test)]
+#[expect(clippy::panic, reason = "test code")]
 mod tests {
   use super::*;
-  use crate::bls::tests::{G1_OFF_SUBGROUP_CHIA, G1_OFF_SUBGROUP_IETF};
+  use crate::bls::tests::{
+    wrapper_vectors, EagerOutcome, EagerVector, LazyVector, PairVector, G1_OFF_SUBGROUP_CHIA, G1_OFF_SUBGROUP_IETF,
+  };
+  use crate::prelude::*;
+
+  use dash_dev::arr_from_hex;
+  use rstest::rstest;
 
   const LEGACY: BlsSchemeKind = BlsSchemeKind::Legacy;
   const BASIC: BlsSchemeKind = BlsSchemeKind::Basic;
@@ -271,5 +278,188 @@ mod tests {
     let mut lazy = BlsLazyPk::new(LEGACY);
     assert_eq!(lazy.to_bytes_as(BASIC), [0u8; BLS_PK_LEN]);
     assert_eq!(lazy.scheme(), LEGACY);
+  }
+
+  /// Names for the bytes a lazy object read from one input writes, in the
+  /// order they are tried: zero, raw for the input, and XY for the object
+  /// the eager read under X gives, written under Y.
+  type Tags<const N: usize> = Vec<(String, [u8; N])>;
+
+  fn letter(scheme: BlsSchemeKind) -> &'static str {
+    if scheme.is_legacy() {
+      "L"
+    } else {
+      "B"
+    }
+  }
+
+  fn parse_scheme(letter: &str) -> BlsSchemeKind {
+    match letter {
+      "L" => LEGACY,
+      "B" => BASIC,
+      _ => panic!("not a scheme: {letter}"),
+    }
+  }
+
+  fn tags<const N: usize>(row: &EagerVector) -> Tags<N> {
+    let input: [u8; N] = arr_from_hex(&row.input);
+    let mut tags = vec![("zero".into(), [0u8; N]), ("raw".into(), input)];
+    for scheme in [LEGACY, BASIC] {
+      if let (EagerOutcome::Valid, Some(other)) = (row.outcome(scheme), row.other(scheme)) {
+        let x = letter(scheme);
+        tags.push((format!("{x}{x}"), input));
+        tags.push((format!("{x}{}", letter(scheme.opposite())), arr_from_hex(other)));
+      }
+    }
+    tags
+  }
+
+  fn tag<const N: usize>(bytes: &[u8; N], tags: &Tags<N>) -> String {
+    tags
+      .iter()
+      .find(|(_, value)| value == bytes)
+      .map_or_else(|| bytes.to_lower_hex_string(), |(name, _)| name.clone())
+  }
+
+  fn hash_of(bytes: &[u8]) -> Hash256 {
+    Hash256::from_lendian(Sha256d::hash(bytes).to_byte_array())
+  }
+
+  /// The first eager row of `class`, which the lazy runs and pairs read.
+  fn first_row<'a>(rows: &'a [EagerVector], class: &str) -> &'a EagerVector {
+    rows
+      .iter()
+      .find(|row| row.class == class)
+      .unwrap_or_else(|| panic!("no eager row of class {class}"))
+  }
+
+  /// The lazy object a script's first operation builds: unser:S reads the
+  /// input under S, new:S is the default object under S, and set:XY sets
+  /// the object a lazy read under X gives, with scheme Y.
+  fn construct<K: BlsWire<N>, const N: usize>(input: &[u8; N], op: &str) -> BlsLazy<K, N> {
+    match op.split_once(':') {
+      Some(("unser", s)) => BlsLazy::from_bytes(input, parse_scheme(s)),
+      Some(("new", s)) => BlsLazy::new(parse_scheme(s)),
+      Some(("set", xy)) if xy.len() == 2 => {
+        let (x, y) = xy.split_at(1);
+        let mut read = BlsLazy::<K, N>::from_bytes(input, parse_scheme(x));
+        BlsLazy::from_value(read.get(), parse_scheme(y))
+      }
+      _ => panic!("not a constructor: {op}"),
+    }
+  }
+
+  /// Runs one operation, giving its output as the corpus records it.
+  fn step<K: BlsWire<N>, const N: usize>(lazy: &mut BlsLazy<K, N>, op: &str, tags: &Tags<N>) -> String {
+    match op.split_once(':') {
+      Some(("ser", s)) => {
+        let pure = lazy.encoded_as(parse_scheme(s));
+        let bytes = lazy.to_bytes_as(parse_scheme(s));
+        assert_eq!(pure, bytes, "encoded_as");
+        return tag(&bytes, tags);
+      }
+      Some(("legacy", s)) => {
+        lazy.set_scheme(parse_scheme(s));
+        return "-".into();
+      }
+      _ => {}
+    }
+    match op {
+      "ser" => {
+        let pure = lazy.encoded();
+        let bytes = lazy.to_bytes();
+        assert_eq!(pure, bytes, "encoded");
+        tag(&bytes, tags)
+      }
+      "get" => {
+        let value = lazy.get();
+        if !value.is_valid() {
+          return "invalid".into();
+        }
+        let (legacy, basic) = (value.to_bytes(LEGACY), value.to_bytes(BASIC));
+        let named = |name: String, bytes: &[u8; N]| tags.iter().any(|(n, v)| *n == name && v == bytes);
+        ["L", "B"]
+          .into_iter()
+          .find(|x| named(format!("{x}L"), &legacy) && named(format!("{x}B"), &basic))
+          .map_or_else(
+            || format!("{}/{}", legacy.to_lower_hex_string(), basic.to_lower_hex_string()),
+            |x| format!("valid:{x}"),
+          )
+      }
+      "hash" => {
+        let hash = lazy.serialize_hash();
+        tags.iter().find(|(_, value)| hash_of(value) == hash).map_or_else(
+          || hash.as_bytes().to_lower_hex_string(),
+          |(name, _)| format!("h:{name}"),
+        )
+      }
+      "islegacy" => letter(lazy.scheme()).into(),
+      "copy" => {
+        *lazy = lazy.clone();
+        "-".into()
+      }
+      _ => panic!("not an operation: {op}"),
+    }
+  }
+
+  /// The lazy object a script builds, after all its operations.
+  fn prepare<K: BlsWire<N>, const N: usize>(input: &[u8; N], script: &str) -> BlsLazy<K, N> {
+    let mut ops = script.split(',');
+    let mut lazy = construct(input, ops.next().unwrap_or_default());
+    for op in ops {
+      step(&mut lazy, op, &Tags::new());
+    }
+    lazy
+  }
+
+  /// Every `bls_wrapper` lazy run gives the outputs the reference
+  /// implementation gives.
+  fn assert_lazy_runs<K: BlsWire<N>, const N: usize>(kind: &str) {
+    let rows = wrapper_vectors::<EagerVector>(kind, "eager");
+    for v in wrapper_vectors::<LazyVector>(kind, "lazy") {
+      let row = first_row(&rows, &v.class);
+      assert_eq!(row.input, v.input, "{kind} {}", v.class);
+      let (input, tags) = (arr_from_hex::<N>(&v.input), tags::<N>(row));
+      for run in &v.runs {
+        let label = format!("{kind} {} {run:?}", v.class);
+        let Some((script, outputs)) = run.split_first() else {
+          panic!("{label}: an empty run");
+        };
+        let mut ops = script.split(',');
+        let mut lazy = construct::<K, N>(&input, ops.next().unwrap_or_default());
+        let got: Vec<String> = ops.map(|op| step(&mut lazy, op, &tags)).collect();
+        assert_eq!(got, outputs, "{label}");
+      }
+    }
+  }
+
+  /// Every `bls_wrapper` pair compares as in the reference implementation,
+  /// in either order, and leaves both objects writing what it records.
+  fn assert_pairs<K: BlsWire<N>, const N: usize>(kind: &str) {
+    let rows = wrapper_vectors::<EagerVector>(kind, "eager");
+    for p in wrapper_vectors::<PairVector>(kind, "pairs") {
+      let (a, b) = (first_row(&rows, &p.a.0), first_row(&rows, &p.b.0));
+      let (a_in, b_in) = (arr_from_hex::<N>(&a.input), arr_from_hex::<N>(&b.input));
+      for a_first in [true, false] {
+        let mut x = prepare::<K, N>(&a_in, &p.a.1);
+        let mut y = prepare::<K, N>(&b_in, &p.b.1);
+        let eq = if a_first {
+          x.eq_decode(&mut y)
+        } else {
+          y.eq_decode(&mut x)
+        };
+        let got = (eq, step(&mut x, "ser", &tags(a)), step(&mut y, "ser", &tags(b)));
+        assert_eq!(got, p.eq, "{kind} {p:?}, a first: {a_first}");
+      }
+    }
+  }
+
+  #[rstest]
+  #[case::pk(assert_lazy_runs::<G1, BLS_PK_LEN>, "pk")]
+  #[case::sig(assert_lazy_runs::<G2, BLS_SIG_LEN>, "sig")]
+  #[case::pk_pairs(assert_pairs::<G1, BLS_PK_LEN>, "pk")]
+  #[case::sig_pairs(assert_pairs::<G2, BLS_SIG_LEN>, "sig")]
+  fn lazy_objects_match_reference(#[case] assertion: fn(&str), #[case] kind: &str) {
+    assertion(kind);
   }
 }

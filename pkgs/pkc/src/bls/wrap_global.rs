@@ -113,6 +113,11 @@ impl<K: BlsWire<N>, const N: usize> PartialEq for BlsGlobal<K, N> {
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
+  use crate::bls::tests::{wrapper_vectors, EagerOutcome, EagerVector};
+  use crate::prelude::*;
+
+  use dash_dev::arr_from_hex;
+  use rstest::rstest;
 
   #[test]
   fn zeros_are_invalid_under_both_contexts() {
@@ -148,5 +153,32 @@ mod tests {
     basic[0] = 0xa0;
     assert_eq!(field.to_bytes(BlsSchemeKind::Basic), basic);
     assert_eq!(BlsGlobalPk::decode(&basic), Err(BlsError::InvalidPublicKey));
+  }
+
+  /// Every `bls_wrapper` key and signature input decodes unless the eager
+  /// read fails under both schemes, and gives under each context what the
+  /// eager read under its scheme gives.
+  fn assert_global_reads<K: BlsWire<N>, const N: usize>(kind: &str) {
+    for v in wrapper_vectors::<EagerVector>(kind, "eager") {
+      let label = format!("{kind} {} {}", v.class, v.input);
+      let input: [u8; N] = arr_from_hex(&v.input);
+      let fails = v.outcome(BlsSchemeKind::Legacy) == EagerOutcome::Throw;
+      assert_eq!(v.outcome(BlsSchemeKind::Basic) == EagerOutcome::Throw, fails, "{label}");
+      let decoded = BlsGlobal::<K, N>::decode(&input);
+      assert_eq!(decoded.is_err(), fails, "{label}");
+      let Ok(global) = decoded else { continue };
+      for ctx in [BlsCtx::LEGACY, BlsCtx::BASIC] {
+        let field = global.get(ctx);
+        let eager = BlsEager::decode(&input, ctx.scheme());
+        assert_eq!(Ok(&field), eager.as_ref(), "{label} {ctx:?}");
+      }
+    }
+  }
+
+  #[rstest]
+  #[case::pk(assert_global_reads::<G1, BLS_PK_LEN>, "pk")]
+  #[case::sig(assert_global_reads::<G2, BLS_SIG_LEN>, "sig")]
+  fn global_reads_match_reference(#[case] assertion: fn(&str), #[case] kind: &str) {
+    assertion(kind);
   }
 }
