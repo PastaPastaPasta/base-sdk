@@ -11,6 +11,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `BlsSchemeKind` and `BlsCtx`, which pick the legacy or basic BLS scheme at run time. They need no feature.
   `BlsScheme::KIND` gives each scheme's `BlsSchemeKind`.
+- `BlsEager`, `BlsLazy`, `BlsValue` and `BlsPoint`, which decode BLS public keys and signatures under a scheme picked at
+  run time, as matching the reference implementation needs, with the aliases `BlsEager{Pk,Sig}` and `BlsLazy{Pk,Sig}`,
+  behind the `bls` feature. An eager field decodes to a valid object, to the invalid object, which encodes as zeros,
+  or fails with `InvalidPublicKey` or `InvalidSignature` when its bytes are canonical under neither scheme. A lazy
+  field keeps its bytes until `get`, and changes on `get` and on encoding under the other scheme; `encoded` and
+  `encoded_as` give the same bytes without the change. A valid legacy object may hold a point off the curve or outside
+  the subgroup. `BlsValue` converts to and from `BlsPublicKey<S>` and `BlsSignature<S>` through the encoding under
+  `S`, and a point off the curve or outside the subgroup converts in neither direction. The sealed trait
+  `BlsWire` names the kinds they take.
+- `BlsEagerSecretKey`, which decodes a BLS secret key under a scheme picked at run time the same way, failing with
+  `InvalidSecretKey`. It holds the key as `BlsSkBytes`, compares in constant time, redacts its `Debug` output and has
+  no `Hash`. `to_bytes` returns `Zeroizing<[u8; 32]>`.
 - `BlsScheme::is_canonical_pk` and `BlsScheme::is_canonical_sig`, each scheme's rule for `is_canonical::<S>()`.
 - `BlsScheme::g1_bytes` and `BlsScheme::g2_bytes`, each scheme's byte layout of a point; `BlsScheme::pk_ietf_bytes`,
   the IETF compressed form of a G1 encoding in that layout, and `BlsScheme::sig_ietf_x_bytes`, the `x` of a G2

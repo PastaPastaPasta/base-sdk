@@ -6,14 +6,12 @@
 
 //! Shared test fixtures and constants.
 
+pub(crate) use super::wrap_codec::GROUP_ORDER;
 use crate::prelude::*;
 pub(crate) use crate::tests::bls::{make_id, sequential_ids, test_ikm, test_msg};
 
 use cfg_if::cfg_if;
 use hex_conservative::hex;
-
-/// BLS12-381 scalar field order r, big-endian.
-pub const GROUP_ORDER: [u8; 32] = hex!("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001");
 
 /// Negate a scalar below the group order, as `order - s`.
 ///
