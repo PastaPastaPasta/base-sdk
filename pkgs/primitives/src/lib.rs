@@ -41,7 +41,7 @@ pub use codec::MAX_SPTX_PAYLOAD_SIZE;
 pub use gov::*;
 pub use payload::*;
 pub use provider::*;
-pub use sign::MESSAGE_MAGIC;
+pub use sign::{llmq_sig_hash, MESSAGE_MAGIC};
 pub use sptx::*;
 pub use support::{DynBitset, DynBitsetError, DynBitsetIterator, RevocationReason};
 pub use transaction::{
