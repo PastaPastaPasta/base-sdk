@@ -7,9 +7,11 @@
 //! Signature checks shared by the signed payloads.
 
 use crate::prelude::*;
-use crate::Transaction;
+use crate::{QuorumHash, Transaction};
 
 use bitcoin_hashes::sha256d;
+use dash_num::Hash256;
+use dash_params::LlmqType;
 use dash_pkc::bls::{BlsError, BlsPkBytes, BlsScheme, BlsSigBytes};
 use dash_pkc::ecdsa::{EcdsaError, EcdsaPublicKey, EcdsaRecSigBytes, EcdsaRecSignature, ECDSA_REC_SIG_LEN};
 use dash_script::PubKeyHash;
@@ -39,6 +41,40 @@ pub(crate) fn write_tx_header(tx: &Transaction, buf: &mut impl EncodeBuf) {
   tx.version().encode(buf);
   tx.tx_type().to_base().encode(buf);
   tx.lock_time().encode(buf);
+}
+
+/// The hash of `tx` with its extra payload replaced by `payload`.
+pub(crate) fn tx_hash_with(tx: &Transaction, payload: &impl BaseCodec) -> Hash256 {
+  let mut extra = Vec::new();
+  payload.encode(&mut extra);
+  let tx = Transaction::new(
+    tx.version(),
+    tx.tx_type(),
+    tx.inputs().clone(),
+    tx.outputs().clone(),
+    tx.lock_time(),
+    extra,
+  );
+  Hash256::from_lendian(tx.instance_hash().to_lendian())
+}
+
+/// The id of a quorum signing request, the hash of `prefix` and `n`.
+pub(crate) fn request_id(prefix: &str, n: &impl BaseCodec) -> Hash256 {
+  let mut buf = Vec::new();
+  String::from(prefix).encode(&mut buf);
+  n.encode(&mut buf);
+  Hash256::from_lendian(sha256d(&buf))
+}
+
+/// The digest a quorum of `llmq_type` signs for request `id` over the
+/// message hash `msg_hash`.
+pub fn llmq_sig_hash(llmq_type: LlmqType, quorum_hash: &QuorumHash, id: &Hash256, msg_hash: &Hash256) -> Hash256 {
+  let mut buf = Vec::new();
+  llmq_type.encode(&mut buf);
+  quorum_hash.encode(&mut buf);
+  id.encode(&mut buf);
+  msg_hash.encode(&mut buf);
+  Hash256::from_lendian(sha256d(&buf))
 }
 
 /// Digest signed for the message `msg`.

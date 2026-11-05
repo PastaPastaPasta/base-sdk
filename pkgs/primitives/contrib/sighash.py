@@ -115,6 +115,14 @@ ROWS: dict[str, list[tuple[str, str]]] = {
       "A version 3 revocation.",
     ),
     (
+      "46a47fe65c9fd29e9379f3f74020df33dabb1d4095c8da6b1fa05e508b74a491",
+      "A hard fork signal.",
+    ),
+    (
+      "cb39c38505c359a653eb15106c9532104f24751d53f8e9abb76e3fb810a7d5b3",
+      "A version 1 asset unlock.",
+    ),
+    (
       "d0b92723bd36450c2fcb51ef0886818ad40a09c07115dd55bc659a2546fa54fd",
       "A dissolution, signed by each share owner.",
     ),
