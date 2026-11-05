@@ -9,13 +9,15 @@
 use super::share::payee;
 use crate::codec::codec_payload;
 use crate::prelude::*;
+use crate::sign::{unsigned_digest, verify_compact_canonical};
 use crate::sptx::{InputsHash, ProTxInvalid};
 use crate::TxHash;
 
 use bitcoin_primitives::script::ScriptPubKeyBuf;
-use dash_pkc::ecdsa::ECDSA_REC_SIG_LEN;
+use dash_pkc::ecdsa::{EcdsaError, ECDSA_REC_SIG_LEN};
+use dash_script::PubKeyHash;
 use dash_types::type_id::TypeId;
-use dash_types::Checkable;
+use dash_types::{Checkable, Signable};
 use getset::{CopyGetters, Getters};
 
 use core::fmt;
@@ -46,6 +48,34 @@ pub struct ProUpShareTx {
   #[getset(get = "pub")]
   sig: Vec<u8>,
 }
+}
+
+impl Signable for ProUpShareTx {
+  type Key = PubKeyHash;
+  type Context = ();
+  type Error = EcdsaError;
+
+  fn payload(&self, _ctx: &()) -> Vec<u8> {
+    unsigned_digest(self, &self.sig).to_vec()
+  }
+
+  fn set_signature(&mut self, sig: &[u8], key: &PubKeyHash, _ctx: &()) -> Result<(), EcdsaError> {
+    let sig = <[u8; ECDSA_REC_SIG_LEN]>::try_from(sig).map_err(|_| EcdsaError::InvalidSignature)?;
+    verify_compact_canonical(&self.payload(&()), &sig, key)?;
+    self.sig = sig.to_vec();
+    Ok(())
+  }
+
+  fn reset_signature(&mut self) {
+    self.sig = Vec::new();
+  }
+
+  fn verify(&self, key: &PubKeyHash, _ctx: &()) -> Option<EcdsaError> {
+    let Ok(sig) = <&[u8; ECDSA_REC_SIG_LEN]>::try_from(self.sig.as_slice()) else {
+      return Some(EcdsaError::InvalidSignature);
+    };
+    verify_compact_canonical(&self.payload(&()), sig, key).err()
+  }
 }
 
 impl Checkable for ProUpShareTx {
@@ -81,6 +111,7 @@ impl fmt::Display for ProUpShareTx {
 mod tests {
   use super::*;
   use crate::provider::share::tests::script;
+  use crate::sign::tests::ecdsa_sign;
   use crate::Transaction;
 
   use dash_dev::{assert_json_rt, check_sptx_raw, vec_from_hex};
@@ -140,6 +171,24 @@ mod tests {
     assert_eq!(ptx.share_index, share_index, "shareIndex");
     assert_eq!(reward.as_deref(), Some(reward_address), "rewardAddress");
     assert_eq!(ptx.inputs_hash.to_string(), inputs_hash, "inputsHash");
+  }
+
+  /// The share owner's signature leaves the digest it signs unchanged and is
+  /// stored only under the owner's key.
+  #[rstest]
+  fn owner_signs_the_payload() {
+    let mut ptx = regtest("5b99ff072732404b4cb5efe2531da72fbcc40bb21cdf417897caddcebc0f3f18");
+    let digest = <[u8; 32]>::try_from(ptx.payload(&())).unwrap();
+    let (key, sig) = ecdsa_sign(1, &digest);
+    let (other, _) = ecdsa_sign(2, &digest);
+
+    assert_eq!(ptx.set_signature(&sig, &other, &()), Err(EcdsaError::VerifyFailed));
+    assert_eq!(ptx.set_signature(&sig, &key, &()), Ok(()));
+    assert_eq!(ptx.verify(&key, &()), None);
+    assert_eq!(ptx.payload(&()), digest);
+
+    ptx.reset_signature();
+    assert_eq!(ptx.verify(&key, &()), Some(EcdsaError::InvalidSignature));
   }
 
   #[rstest]

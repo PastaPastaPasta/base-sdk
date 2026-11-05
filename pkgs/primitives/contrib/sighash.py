@@ -95,6 +95,10 @@ ROWS: dict[str, list[tuple[str, str]]] = {
       "A version 3 registration of an Evo masternode.",
     ),
     (
+      "8699ef5afd141f7b02f170db4f4875468ace2f6c84c6889f3e0280633ba65f40",
+      "A version 3 registration with shares, signed by each share owner.",
+    ),
+    (
       "d0faa9b0748eb837f5d55f6aad7d3e83352cf69de161521e7fc37fda877ba098",
       "A version 3 service update.",
     ),
@@ -109,6 +113,10 @@ ROWS: dict[str, list[tuple[str, str]]] = {
     (
       "4e0f211850f44c55e26e45f6bc10a59d6c08fe91be544a8fac0f7ce6cf96ad06",
       "A version 3 revocation.",
+    ),
+    (
+      "d0b92723bd36450c2fcb51ef0886818ad40a09c07115dd55bc659a2546fa54fd",
+      "A dissolution, signed by each share owner.",
     ),
   ],
 }
