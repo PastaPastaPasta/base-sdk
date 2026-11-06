@@ -46,7 +46,7 @@ bitcoin-units = { workspace = true, features = ["alloc"] }
 dash-num = { version = "0.3.0-beta", path = "../num", default-features = false, features = [
   "codec",
 ] }
-dash-params = { version = "0.0.0", path = "../params", default-features = false, features = [
+dash-params = { version = "0.1.0-beta", path = "../params", default-features = false, features = [
   "codec",
 ] }
 dash-pkc = { version = "0.3.0-beta", path = "../pkc", default-features = false, features = [
