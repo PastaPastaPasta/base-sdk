@@ -501,19 +501,19 @@
           "REPO_MAPPING:rules_rust+,bazel_skylib bazel_skylib+",
           "REPO_MAPPING:rules_rust+,bazel_tools bazel_tools",
           "REPO_MAPPING:rules_rust+,rules_cc rules_cc+",
-          "FILE:@@//Cargo.lock 89a37d29d197377f2d4a421d6fd2fba773bc43212c788ef6bde1f234c6beadc0",
+          "FILE:@@//Cargo.lock a6d592b741d7375e41a8ce795f27daa72c5caf22a26b7900cd2458923c69ffb8",
           "FILE:@@//Cargo.toml e539b723544052ecd9ed9db32eba21c88a2e80207c10ea9ebf8e2e97f29e0ecd",
-          "FILE:@@//meta/bazel/Cargo.toml d22f745af6d1a1e53cf8b15a507b6a31dbaf18d0b23468519e36c273d509435e",
+          "FILE:@@//meta/bazel/Cargo.toml 9f62d8e092191fe5072fa2c0535a736e08a01d1e0f963e4fc7478d265f0350b6",
           "FILE:@@//pkgs/num/Cargo.toml c934b31ac1efe34a59f07032586465a64f5bc0dbbcebfe380acb4b69408889e6",
           "FILE:@@//pkgs/types/Cargo.toml 7c9d17d77e327bb7e916c5f0a578f2f49c222bc9034565157028d4892c6de2a7",
           "FILE:@@//pkgs/types/marker/Cargo.toml f942e6618c2cf5807e8186e69795f08a641bc25ca4fe7babb835c1970a181d26",
           "FILE:@@//meta/dev/Cargo.toml db4e3bedd329f762b0d1647d1e863f372317f139c7ff295f1db3d66bcda60ab4",
           "FILE:@@//pkgs/params/Cargo.toml 488a89e1806e2b6bd35b0882615d99d7593dcb833ba3ecd33d31b33dd880b5d3",
           "FILE:@@//pkgs/pow/Cargo.toml 3f33e4320c8dc8836ac9655cbadd5e9cacee225b30950e309f265a66d5c29512",
-          "FILE:@@//pkgs/primitives/Cargo.toml c055be0aa13d7c0c41942c75e17aa289845f58bb8cefe68460cbb67ff864d030",
-          "FILE:@@//pkgs/pkc/Cargo.toml 12d5865d6023487881be6990fb54afe9a2344248546c1685e4926cbf4edd048c",
-          "FILE:@@//pkgs/script/Cargo.toml 7dd66245e7a39070f92c5113c4ed00c497e847a7d4c2b50636ff01a1397a460a",
-          "FILE:@@//pkgs/p2p_core/Cargo.toml 57817c24f8ce0614c87ad5aa95c5ffde20c3699bd1388fef94316780d80082cd"
+          "FILE:@@//pkgs/primitives/Cargo.toml c30a64c6207abba475d22f2f954a1c94e1a25217e3c11fccda7350d81209a3e2",
+          "FILE:@@//pkgs/pkc/Cargo.toml 3c5f6c6ddc6bd91a7cc3719d98cfe9dd4fa7a5f0a34b0e96efae4c2771051e1e",
+          "FILE:@@//pkgs/script/Cargo.toml 70f9f7aa6424cad40b415d3baef937fdde0b699afa2031c7359867287f27521d",
+          "FILE:@@//pkgs/p2p_core/Cargo.toml 451bbb2fa63700c1b250cb6e4d3fc0d0a4c9812b8aa9ec2c81458e4507f8d872"
         ],
         "generatedRepoSpecs": {
           "crates": {

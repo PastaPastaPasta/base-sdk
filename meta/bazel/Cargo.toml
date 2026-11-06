@@ -23,7 +23,7 @@ dash-p2p-core = { version = "0.0.0", path = "../../pkgs/p2p_core", default-featu
 dash-params = { version = "0.0.0", path = "../../pkgs/params", default-features = false, features = [
   "full",
 ] }
-dash-pkc = { version = "0.2.0-beta", path = "../../pkgs/pkc", default-features = false, features = [
+dash-pkc = { version = "0.3.0-beta", path = "../../pkgs/pkc", default-features = false, features = [
   "full",
 ] }
 dash-pow = { version = "0.1.0-beta", path = "../../pkgs/pow", default-features = false, features = [

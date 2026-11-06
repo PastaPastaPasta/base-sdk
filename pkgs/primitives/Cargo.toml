@@ -49,7 +49,7 @@ dash-num = { version = "0.3.0-beta", path = "../num", default-features = false, 
 dash-params = { version = "0.0.0", path = "../params", default-features = false, features = [
   "codec",
 ] }
-dash-pkc = { version = "0.2.0-beta", path = "../pkc", default-features = false, features = [
+dash-pkc = { version = "0.3.0-beta", path = "../pkc", default-features = false, features = [
   "bls",
   "codec",
   "ecdsa",
