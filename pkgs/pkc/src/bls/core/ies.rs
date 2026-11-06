@@ -72,7 +72,6 @@ fn decrypt_blob(
 /// `CBLSIESEncryptedObject<CBLSSecretKey>::Decrypt`'s parse: the first 32
 /// plaintext bytes read as Core's `Unserialize` reads a secret key under
 /// `flag`, the opposite scheme's fallback included; later bytes are ignored.
-/// The key can be invalid: all-zero bytes, or `r` under the legacy flag.
 fn parse_secret_key(plaintext: &[u8], flag: BlsSchemeKind) -> Option<BlsSkValue> {
   let bytes: &[u8; BLS_SK_LEN] = plaintext.get(..BLS_SK_LEN)?.try_into().ok()?;
   BlsEager::decode(bytes, BlsSchemeSource::Version(flag))
