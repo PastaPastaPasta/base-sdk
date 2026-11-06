@@ -121,7 +121,7 @@ impl BaseCodec for TxOut {
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let raw = i64::decode(data)?;
     let value = SignedAmount::from_sat(raw).map_err(|_| DecodeError::InvalidValue {
-      expected: vec![SignedAmount::MAX_MONEY.to_sat().cast_unsigned()],
+      expected: vec![SignedAmount::MAX.to_sat().cast_unsigned()],
       actual: raw.cast_unsigned(),
     })?;
     Ok(Self {
@@ -527,7 +527,7 @@ pub(crate) mod tests {
   #[rstest]
   #[case::negative(&[-1], 0)]
   #[case::after_valid(&[1, -1], 1)]
-  #[case::total_in_range(&[SignedAmount::MAX_MONEY.to_sat(), -1], 1)]
+  #[case::total_in_range(&[SignedAmount::MAX.to_sat(), -1], 1)]
   fn check_negative_output(#[case] values: &[i64], #[case] index: usize) {
     let input = TxIn::new(
       OutPoint::new(TxHash::from_lendian([1; 32]), 0),
@@ -544,10 +544,10 @@ pub(crate) mod tests {
   }
 
   #[rstest]
-  #[case::lowest(-SignedAmount::MAX_MONEY.to_sat(), true)]
-  #[case::highest(SignedAmount::MAX_MONEY.to_sat(), true)]
-  #[case::below_range(-SignedAmount::MAX_MONEY.to_sat() - 1, false)]
-  #[case::above_range(SignedAmount::MAX_MONEY.to_sat() + 1, false)]
+  #[case::lowest(-SignedAmount::MAX.to_sat(), true)]
+  #[case::highest(SignedAmount::MAX.to_sat(), true)]
+  #[case::below_range(-SignedAmount::MAX.to_sat() - 1, false)]
+  #[case::above_range(SignedAmount::MAX.to_sat() + 1, false)]
   #[case::i64_min(i64::MIN, false)]
   #[case::i64_max(i64::MAX, false)]
   fn decode_output_value(#[case] value: i64, #[case] decodes: bool) {
