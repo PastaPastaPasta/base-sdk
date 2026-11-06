@@ -9,9 +9,23 @@ yanked = "deny"
 
 [bans]
 deny = [
+  # Harmonise on one hex encoding crate
   { crate = "hex-literal", reason = "use `hex_conservative` instead" },
+  # rust-bitcoin crates should never desync or tear between versions
+  { crate = "base58ck", deny-multiple-versions = true },
+  { crate = "bip324", deny-multiple-versions = true },
+  { crate = "bitcoin-bech32", deny-multiple-versions = true },
+  { crate = "bitcoin-consensus-encoding", deny-multiple-versions = true },
+  { crate = "bitcoin-crypto", deny-multiple-versions = true },
+  { crate = "bitcoin-primitives", deny-multiple-versions = true },
+  { crate = "bitcoin-units", deny-multiple-versions = true },
+  { crate = "bitcoin_hashes", deny-multiple-versions = true },
+  { crate = "hex-conservative", deny-multiple-versions = true },
 ]
 multiple-versions = "warn"
+skip = [
+  { crate = "bitcoin-internals", reason = "rust-bitcoin's latest releases have version tear" },
+]
 
 [licenses]
 allow = [
