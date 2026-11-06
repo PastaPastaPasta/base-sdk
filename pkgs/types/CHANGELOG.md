@@ -11,6 +11,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - `impl_new!`, which declares a struct with named fields and a `new` taking every field in declaration order.
+- `impl_vec!`, which generates `BaseCodec` over the named fields of a struct and reads a field written `field: limit`
+  with `codec::decode_vec`, refusing a count above `limit` before any entry is read.
 - A `get` accessor for `make_num!`-defined types, returning the inner integer.
 
 ### Changed

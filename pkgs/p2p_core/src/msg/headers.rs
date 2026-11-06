@@ -6,14 +6,14 @@
 
 //! Standard header messages.
 
-use crate::codec::{codec_p2p, impl_p2p};
+use crate::codec::impl_p2p;
 use crate::prelude::*;
 use crate::version::ProtocolVersion;
 
 use dash_primitives::{hash_impl, BlockHash, BlockHeader, MerkleRoot};
 use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
-use dash_types::{impl_new, CompactSize};
+use dash_types::{impl_new, impl_vec, CompactSize};
 use getset::{CopyGetters, Getters};
 
 /// Size of the smallest `headers` entry, an 80-byte header and a one-byte
@@ -30,7 +30,7 @@ pub(super) fn decode_count(data: &mut &[u8], max_count: usize, min_size: usize) 
   Ok(count)
 }
 
-codec_p2p! {
+impl_new! {
 /// Requests block headers starting from a locator.
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -45,6 +45,15 @@ pub struct GetHeaders {
   #[getset(get_copy = "pub")]
   hash_stop: BlockHash,
 }
+}
+
+impl_vec!(GetHeaders, { version, locator_hashes: Self::MAX_LOCATOR_COUNT, hash_stop });
+impl_p2p!(GetHeaders);
+hash_impl!(GetHeaders);
+
+impl GetHeaders {
+  /// The most locator hashes a `getheaders` carries.
+  pub const MAX_LOCATOR_COUNT: usize = 101;
 }
 
 impl_new! {
