@@ -107,7 +107,7 @@ mod tests {
   use dash_dev::{assert_json_rt, assert_serde_rt, check_sptx, check_sptx_raw, vec_from_hex, Corpus};
   use rstest::rstest;
 
-  const MAX: i64 = SignedAmount::MAX_MONEY.to_sat();
+  const MAX: i64 = SignedAmount::MAX.to_sat();
   const P2PKH: &str = "76a914000000000000000000000000000000000000000088ac";
   const P2SH: &str = "a914000000000000000000000000000000000000000087";
   const OP_TRUE: &str = "51";

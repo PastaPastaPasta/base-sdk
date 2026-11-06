@@ -67,7 +67,7 @@ name = "base58ck"
 version = "0.5.0"
 source = "git+https://github.com/rust-bitcoin/rust-bitcoin?rev=7ba35c7c1dd63892bfb9c9395bbd80e2ab5df516#7ba35c7c1dd63892bfb9c9395bbd80e2ab5df516"
 dependencies = [
- "bitcoin-internals",
+ "bitcoin-internals 0.7.0 (git+https://github.com/rust-bitcoin/rust-bitcoin?rev=7ba35c7c1dd63892bfb9c9395bbd80e2ab5df516)",
  "bitcoin_hashes",
 ]
 
@@ -76,10 +76,27 @@ name = "bitcoin-consensus-encoding"
 version = "1.2.0"
 source = "git+https://github.com/rust-bitcoin/rust-bitcoin?rev=7ba35c7c1dd63892bfb9c9395bbd80e2ab5df516#7ba35c7c1dd63892bfb9c9395bbd80e2ab5df516"
 dependencies = [
- "bitcoin-internals",
+ "bitcoin-internals 0.7.0 (git+https://github.com/rust-bitcoin/rust-bitcoin?rev=7ba35c7c1dd63892bfb9c9395bbd80e2ab5df516)",
  "hex-conservative",
  "serde",
 ]
+
+[[package]]
+name = "bitcoin-consensus-encoding"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9daa31138eb443d5751b207f3f64154e2bb09cd59960562ccc7a7112be38147f"
+dependencies = [
+ "bitcoin-internals 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hex-conservative",
+ "serde",
+]
+
+[[package]]
+name = "bitcoin-internals"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8bea3a9f0cfece4564e37cb49a38cc245ca5184719e50d7d0dda3268722c4e2"
 
 [[package]]
 name = "bitcoin-internals"
@@ -90,13 +107,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "bitcoin-internals"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3491249864b8cc929bf63e726045702ff1c1a39c990aef2d41bff0b42fee661"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "bitcoin-primitives"
 version = "0.103.1"
 source = "git+https://github.com/rust-bitcoin/rust-bitcoin?rev=7ba35c7c1dd63892bfb9c9395bbd80e2ab5df516#7ba35c7c1dd63892bfb9c9395bbd80e2ab5df516"
 dependencies = [
- "bitcoin-consensus-encoding",
- "bitcoin-internals",
- "bitcoin-units",
+ "bitcoin-consensus-encoding 1.2.0",
+ "bitcoin-internals 0.7.0 (git+https://github.com/rust-bitcoin/rust-bitcoin?rev=7ba35c7c1dd63892bfb9c9395bbd80e2ab5df516)",
+ "bitcoin-units 0.5.0",
  "bitcoin_hashes",
  "hex-conservative",
  "serde",
@@ -107,8 +133,19 @@ name = "bitcoin-units"
 version = "0.5.0"
 source = "git+https://github.com/rust-bitcoin/rust-bitcoin?rev=7ba35c7c1dd63892bfb9c9395bbd80e2ab5df516#7ba35c7c1dd63892bfb9c9395bbd80e2ab5df516"
 dependencies = [
- "bitcoin-consensus-encoding",
- "bitcoin-internals",
+ "bitcoin-consensus-encoding 1.2.0",
+ "bitcoin-internals 0.7.0 (git+https://github.com/rust-bitcoin/rust-bitcoin?rev=7ba35c7c1dd63892bfb9c9395bbd80e2ab5df516)",
+ "serde",
+]
+
+[[package]]
+name = "bitcoin-units"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e95f325c563b308c78fe6de36f46b359c1d326271082f0c0140fa4e1a854d26"
+dependencies = [
+ "bitcoin-consensus-encoding 1.3.0",
+ "bitcoin-internals 0.8.2",
  "serde",
 ]
 
@@ -117,8 +154,8 @@ name = "bitcoin_hashes"
 version = "1.2.0"
 source = "git+https://github.com/rust-bitcoin/rust-bitcoin?rev=7ba35c7c1dd63892bfb9c9395bbd80e2ab5df516#7ba35c7c1dd63892bfb9c9395bbd80e2ab5df516"
 dependencies = [
- "bitcoin-consensus-encoding",
- "bitcoin-internals",
+ "bitcoin-consensus-encoding 1.2.0",
+ "bitcoin-internals 0.7.0 (git+https://github.com/rust-bitcoin/rust-bitcoin?rev=7ba35c7c1dd63892bfb9c9395bbd80e2ab5df516)",
  "hex-conservative",
  "serde",
 ]
@@ -401,7 +438,7 @@ dependencies = [
 name = "dash-dev"
 version = "0.0.0"
 dependencies = [
- "bitcoin-consensus-encoding",
+ "bitcoin-consensus-encoding 1.2.0",
  "built",
  "cfg-if",
  "chrono",
@@ -444,8 +481,8 @@ name = "dash-num"
 version = "0.2.0-beta"
 dependencies = [
  "ambassador",
- "bitcoin-consensus-encoding",
- "bitcoin-internals",
+ "bitcoin-consensus-encoding 1.2.0",
+ "bitcoin-internals 0.7.0 (git+https://github.com/rust-bitcoin/rust-bitcoin?rev=7ba35c7c1dd63892bfb9c9395bbd80e2ab5df516)",
  "dash-dev",
  "dash-types",
  "delegate",
@@ -459,7 +496,7 @@ dependencies = [
 name = "dash-p2p-core"
 version = "0.0.0"
 dependencies = [
- "bitcoin-consensus-encoding",
+ "bitcoin-consensus-encoding 1.2.0",
  "cfg-if",
  "dash-dev",
  "dash-num",
@@ -479,7 +516,7 @@ dependencies = [
 name = "dash-params"
 version = "0.0.0"
 dependencies = [
- "bitcoin-units",
+ "bitcoin-units 0.7.0",
  "bitcoin_hashes",
  "dash-dev",
  "dash-num",
@@ -495,7 +532,7 @@ version = "0.2.0-beta"
 dependencies = [
  "aes",
  "base58ck",
- "bitcoin-consensus-encoding",
+ "bitcoin-consensus-encoding 1.2.0",
  "bitcoin_hashes",
  "blst",
  "cfg-if",
@@ -534,9 +571,9 @@ dependencies = [
 name = "dash-primitives"
 version = "0.0.0"
 dependencies = [
- "bitcoin-consensus-encoding",
+ "bitcoin-consensus-encoding 1.2.0",
  "bitcoin-primitives",
- "bitcoin-units",
+ "bitcoin-units 0.7.0",
  "bitcoin_hashes",
  "cfg-if",
  "dash-dev",
@@ -559,7 +596,7 @@ name = "dash-script"
 version = "0.0.0"
 dependencies = [
  "base58ck",
- "bitcoin-consensus-encoding",
+ "bitcoin-consensus-encoding 1.2.0",
  "dash-num",
  "dash-params",
  "dash-pkc",
@@ -574,7 +611,7 @@ name = "dash-types"
 version = "0.2.0-beta"
 dependencies = [
  "base58ck",
- "bitcoin-consensus-encoding",
+ "bitcoin-consensus-encoding 1.2.0",
  "bitcoin-primitives",
  "bitcoin_hashes",
  "cfg-if",
