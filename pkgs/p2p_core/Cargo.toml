@@ -39,7 +39,7 @@ portable = [
 [dependencies]
 bitcoin-consensus-encoding = { workspace = true, features = ["alloc"] }
 cfg-if = "1"
-dash-num = { version = "0.2.0-beta", path = "../num", default-features = false, features = [
+dash-num = { version = "0.3.0-beta", path = "../num", default-features = false, features = [
   "codec",
 ] }
 dash-pkc = { version = "0.2.0-beta", path = "../pkc", default-features = false, features = [

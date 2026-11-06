@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.0-beta] - 2026-11-07
+
+### Changed
+
+- Updated to `dash-types` 0.3.
+
 ## [0.2.0-beta] - 2026-10-20
 
 ### Added
@@ -41,6 +47,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Initial release.
 
-[unreleased]: https://github.com/dashpay/base-sdk/compare/dash-num-0.2.0-beta...HEAD
+[unreleased]: https://github.com/dashpay/base-sdk/compare/dash-num-0.3.0-beta...HEAD
+[0.3.0-beta]: https://github.com/dashpay/base-sdk/compare/dash-num-0.2.0-beta...dash-num-0.3.0-beta
 [0.2.0-beta]: https://github.com/dashpay/base-sdk/compare/dash-num-0.1.0-beta...dash-num-0.2.0-beta
 [0.1.0-beta]: https://github.com/dashpay/base-sdk/releases/tag/dash-num-0.1.0-beta

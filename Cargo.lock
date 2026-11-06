@@ -459,7 +459,7 @@ dependencies = [
 
 [[package]]
 name = "dash-num"
-version = "0.2.0-beta"
+version = "0.3.0-beta"
 dependencies = [
  "ambassador",
  "bitcoin-consensus-encoding",
