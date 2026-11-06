@@ -10,6 +10,10 @@
 // Built from rust-dashcore contrib/node/dde-probe/bs9 (seeds.rs cases,
 // make_corpus.py selection); judge source and binary hashes: judge.cpp 839f33e02b461825, binary 1e3f16d9f97227ba.
 // Payloads over 4 KiB are lists of hex and {"b": byte, "n": count} runs.
+// govobj_1599 and govobj_1600 (signatures of 97 and 200 bytes) are set by
+// hand to v24.0.0's refusal, a 96-byte signature bound added after the
+// judge's pin and the only change these cases see between the pin and
+// v24.0.0. A judge at the pin records them as read.
 {
  "cases": [
   {
@@ -2280,10 +2284,8 @@
   {
    "command": "govobj",
    "core": {
-    "consumed": 218,
-    "hash": "4d58b77996773ecf9e1a96c0859cb2fa387a54a3db2ae75221c368fc7f7acd47",
-    "ok": true,
-    "signHash": "55ba6ffd401c5fee8c032fb8c44eba90658991cbd820fb1bbc3d95e976acec04"
+    "class": "length_limit",
+    "ok": false
    },
    "name": "govobj_1599",
    "raw": "00000000000000000000000000000000000000000000000000000000000000000100000000f15365000000009999999999999999999999999999999999999999999999999999999999999999037b7b7b0100000066666666666666666666666666666666666666666666666666666666666666660200000061ababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab",
@@ -2293,10 +2295,8 @@
   {
    "command": "govobj",
    "core": {
-    "consumed": 321,
-    "hash": "bdf0ae6109c806c487a3387cf0109077ad3f72603799391109e963764ba567e0",
-    "ok": true,
-    "signHash": "55ba6ffd401c5fee8c032fb8c44eba90658991cbd820fb1bbc3d95e976acec04"
+    "class": "length_limit",
+    "ok": false
    },
    "name": "govobj_1600",
    "raw": "00000000000000000000000000000000000000000000000000000000000000000100000000f15365000000009999999999999999999999999999999999999999999999999999999999999999037b7b7b01000000666666666666666666666666666666666666666666666666666666666666666602000000c8abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab",
