@@ -82,7 +82,8 @@ pub(crate) use impl_payload;
 /// `Decode` over its fields, without `Hashable`.
 ///
 /// The `$ty, $max, { fields }` form generates the codec alone, for
-/// `codec_type!` and `codec_payload!` to build on.
+/// `codec_type!`, `codec_payload!` and types that declare themselves. A
+/// field written `field: limit` reads at most `limit` entries.
 #[macro_export]
 macro_rules! codec_base {
   (
@@ -100,8 +101,8 @@ macro_rules! codec_base {
 
     $crate::codec_base!($name, $crate::__private::dash_types::MAX_SER_SIZE, { $($field),+ });
   };
-  ($ty:ty, $max:expr, { $($field:ident),+ $(,)? }) => {
-    $crate::__private::dash_types::impl_vec!($ty, { $($field),+ });
+  ($ty:ty, $max:expr, { $($field:ident $(: $limit:expr)?),+ $(,)? }) => {
+    $crate::__private::dash_types::impl_vec!($ty, { $($field $(: $limit)?),+ });
     $crate::__private::dash_types::impl_type!($ty, $max);
   };
 }
