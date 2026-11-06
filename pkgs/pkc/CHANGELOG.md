@@ -21,18 +21,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   under an explicit `BlsCtx`.
 - `BlsValue::from_set_bytes_basic` decodes as Dash Core's `SetBytes` under the basic scheme, with no round trip, as Core
   reads governance and CoinJoin signatures.
+- `BlsSecretKey::recover_shares` and `BlsScheme::recover_sk_shares`, recovering a master secret key from threshold
+  shares by interpolation in the scalar field.
 - `BlsScheme::is_canonical_pk` and `BlsScheme::is_canonical_sig`, each scheme's rule for `is_canonical::<S>()`.
 - `BlsScheme::g1_bytes` and `BlsScheme::g2_bytes`, each scheme's byte layout of a point; `BlsScheme::pk_ietf_bytes`,
   the IETF compressed form of a G1 encoding in that layout, and `BlsScheme::sig_ietf_x_bytes`, the `x` of a G2
   encoding in the IETF compressed layout with the sign bit clear.
+- `BlsPublicKey::ies_encrypt_as`, `BlsPublicKey::ies_encrypt_multi_as`, `BlsSecretKey::ies_decrypt_as` and
+  `BlsSecretKey::ies_decrypt_multi_as`, which take the BLS-IES symmetric key from the leading 32 bytes of the shared
+  point's encoding under a scheme `T` the caller names, and `BlsScheme::dh_bytes_as`, `BlsScheme::ies_seal_as` and
+  `BlsScheme::ies_open_as` beneath them.
 
 ### Changed
 
+- `BlsPublicKey::ies_encrypt`, `BlsPublicKey::ies_encrypt_multi`, `BlsSecretKey::ies_decrypt` and
+  `BlsSecretKey::ies_decrypt_multi` take the BLS-IES symmetric key from the leading 32 bytes of the shared point's
+  basic encoding under both schemes, so under `BlsScChia` their ciphertexts differ from 0.2.0-beta's.
 - `BlsPkBytes::to::<BlsScChia>()` and `BlsPublicKey::<BlsScChia>::from_bytes` read `x = 0` with the sign bit set,
   (0, -2), as the reference implementation does.
 - `is_canonical::<BlsScChia>()` on `BlsPkBytes` and `BlsSigBytes` accepts legacy encodings of an `x` with no point on
   the curve, as the reference implementation does; for signatures, only with the sign bit clear. `to::<BlsScChia>()`
   still refuses them, having no point to return.
+
+### Removed
+
+- `BlsScheme::ies_seal` and `BlsScheme::ies_open`, in favour of their `_as` forms, which name the encoding the BLS-IES
+  symmetric key is read from. `BlsPublicKey::ies_encrypt`, `BlsPublicKey::ies_encrypt_multi`,
+  `BlsSecretKey::ies_decrypt` and `BlsSecretKey::ies_decrypt_multi` stay, as the `_as` forms with the basic scheme.
 
 ## [0.2.0-beta] - 2026-10-20
 

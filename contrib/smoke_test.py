@@ -78,6 +78,17 @@ TARGETS = [
   ("wasm32-unknown-unknown", "wasm", "wasm32"),
 ]
 
+# Platforms `//bazel` names, with the format, architecture and file suffix of
+# their binaries. Each probe is held to them, since a cross build that quietly
+# produced the host's binary would still exit 0. Mach-O versions are Bazel's.
+PLATFORMS = [
+  ("linux_arm64", "ELF", "arm64", ""),
+  ("linux_x86_64", "ELF", "x86_64", ""),
+  ("macos_arm64", "Mach-O", "arm64", ""),
+  ("macos_x86_64", "Mach-O", "x86_64", ""),
+  ("windows_x86_64", "PE", "x86_64", ".exe"),
+]
+
 
 @dataclass(frozen=True)
 class Kind:
@@ -192,6 +203,9 @@ class Builder:
       "rs": out / "hello.rs",
       "free": PROBES / "free.c",
     }
+    # The C probe greets through a library Bazel archives; the drivers here
+    # compile it alongside.
+    self.c_units = [str(self.src["c"]), str(PROBES / "greeting.c")]
     self.src["rs"].write_text(HELLO_RS, encoding="utf-8")
 
   def build(self, name: str, lang: str, argv: list[str]) -> Path | None:
@@ -221,7 +235,8 @@ class Builder:
       ("cpp", os.environ.get("CXX", "c++")),
       ("rs", "rustc"),
     ):
-      binary = self.build("host", lang, [compiler, str(self.src[lang])])
+      units = self.c_units if lang == "c" else [str(self.src[lang])]
+      binary = self.build("host", lang, [compiler, *units])
       if binary is not None:
         self.report.greets("host", lang, binary, want)
 
@@ -249,7 +264,7 @@ class Builder:
       rust = ["rustc", f"--target={triple}", rs]
     else:
       langs = [
-        ("c", [cc, str(self.src["c"])] if cc else None),
+        ("c", [cc, *self.c_units] if cc else None),
         ("cpp", [cxx, str(self.src["cpp"])] if cxx else None),
       ]
       rust = None
@@ -306,6 +321,27 @@ def host_kind() -> Kind:
   return Kind(fmt, machine)
 
 
+def _bazel_build(report: Report, name: str, cache: Path, *args: str) -> bool:
+  """Run `bazel build`, reporting a failure under `name`."""
+  try:
+    result = _run(
+      ["bazel", "build", *args],
+      cwd=cache.parent,
+      timeout=BAZEL_TIMEOUT,
+      # Matches the bazelisk cache 'bazel/mod.just' exports.
+      env={**os.environ, "BAZELISK_HOME": str(cache / "bazelisk")},
+    )
+  except (OSError, subprocess.TimeoutExpired) as exc:
+    report.add(name, "-", _unfinished(exc), ok=False)
+    return False
+  if result.returncode != 0:
+    report.add(name, "-", "build failed", ok=False)
+    for line in (result.stdout + result.stderr).splitlines()[-LOG_TAIL:]:
+      print(f"    {line}", file=sys.stderr)
+    return False
+  return True
+
+
 def bazel(report: Report, root: Path) -> None:
   """Build the probes with Bazel, then run what it built for the host."""
   if shutil.which("bazel") is None:
@@ -323,21 +359,7 @@ def bazel(report: Report, root: Path) -> None:
   }
   for stale in probes.values():
     stale.unlink(missing_ok=True)
-  try:
-    result = _run(
-      ["bazel", "build", "//contrib/probes/..."],
-      cwd=root,
-      timeout=BAZEL_TIMEOUT,
-      # Matches the bazelisk cache 'bazel/mod.just' exports.
-      env={**os.environ, "BAZELISK_HOME": str(cache / "bazelisk")},
-    )
-  except (OSError, subprocess.TimeoutExpired) as exc:
-    report.add("bazel host", "-", _unfinished(exc), ok=False)
-    return
-  if result.returncode != 0:
-    report.add("bazel host", "-", "build failed", ok=False)
-    for line in (result.stdout + result.stderr).splitlines()[-LOG_TAIL:]:
-      print(f"    {line}", file=sys.stderr)
+  if not _bazel_build(report, "bazel host", cache, "//contrib/probes/..."):
     return
 
   want = host_kind()
@@ -345,6 +367,8 @@ def bazel(report: Report, root: Path) -> None:
     want = Kind(want.fmt, want.arch, *macos_pins(root))
   for lang, probe in probes.items():
     report.greets("bazel host", lang, probe, want)
+
+  cross(report, cache, probes)
 
 
 def macos_pins(root: Path) -> tuple[str, str]:
@@ -357,6 +381,34 @@ def macos_pins(root: Path) -> tuple[str, str]:
     minos.group(1) if minos else "unpinned",
     sdk.group(1) if sdk else "unpinned",
   )
+
+
+def host_platform() -> str:
+  """Return the `//bazel` platform naming the host."""
+  kind = host_kind()
+  return f"{'macos' if kind.fmt == 'Mach-O' else 'linux'}_{kind.arch}"
+
+
+def cross(report: Report, cache: Path, probes: dict[str, Path]) -> None:
+  """Build every target for each other platform, holding the probes to it."""
+  pins = macos_pins(cache.parent)
+  for platform_name, fmt, arch, suffix in PLATFORMS:
+    if platform_name == host_platform():
+      continue
+    name = f"bazel {platform_name}"
+    built = {
+      lang: probe.with_name(probe.name + suffix)
+      for lang, probe in probes.items()
+    }
+    for probe in built.values():
+      probe.unlink(missing_ok=True)
+    if not _bazel_build(
+      report, name, cache, f"--platforms=//bazel:{platform_name}", "//..."
+    ):
+      continue
+    for lang, probe in built.items():
+      want = Kind(fmt, arch, *pins) if fmt == "Mach-O" else Kind(fmt, arch)
+      report.held(name, lang, probe, want)
 
 
 def main() -> int:

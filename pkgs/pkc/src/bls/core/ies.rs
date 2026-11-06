@@ -281,7 +281,7 @@ mod tests {
     let seed = [7u8; IV_SEED_LEN];
     let plain: [&[u8]; 3] = [&[1; 32], &[2; 16], &[3; 48]];
     let typed =
-      BlsPublicKey::<S>::ies_encrypt_multi_with(&eph, &seed, &pks.iter().collect::<Vec<_>>(), &plain).unwrap();
+      BlsPublicKey::ies_encrypt_multi_with::<BlsScIetf>(&eph, &seed, &pks.iter().collect::<Vec<_>>(), &plain).unwrap();
 
     let eph_value = BlsSkValue::from_canonical(&eph.to_bytes(), kind).unwrap();
     let pk_values: Vec<BlsPkValue> = pks

@@ -72,3 +72,28 @@ xcode_sdk = repository_rule(
     },
     doc = "Fetches a macOS SDK as a sysroot.",
 )
+
+def _conda_package_impl(rctx):
+    # A `.conda` package is a zip holding the payload as a zstd tarball.
+    rctx.download_and_extract(
+        url = rctx.attr.urls,
+        sha256 = rctx.attr.sha256,
+        type = "zip",
+        output = "conda",
+    )
+    for entry in rctx.path("conda").readdir():
+        if entry.basename.startswith("pkg-"):
+            rctx.extract(entry)
+    rctx.delete("conda")
+    rctx.file("BUILD.bazel", 'exports_files(glob(["lib/**"]))\n')
+
+    return rctx.repo_metadata(reproducible = True)
+
+conda_package = repository_rule(
+    implementation = _conda_package_impl,
+    attrs = {
+        "sha256": attr.string(mandatory = True),
+        "urls": attr.string_list(mandatory = True),
+    },
+    doc = "Fetches the payload of a conda-forge package.",
+)

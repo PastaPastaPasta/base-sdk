@@ -1,0 +1,32 @@
+Name MinGW executables .exe and shared libraries .dll
+
+lld names a MinGW binary <name>.exe whatever it was asked for, so an
+output declared without the suffix is never produced and the action
+fails. The artifact name patterns carry both suffixes when the target
+libc is mingw.
+
+diff --git a/cc/private/toolchain/unix_cc_toolchain_config.bzl b/cc/private/toolchain/unix_cc_toolchain_config.bzl
+index 5bc205e..23633e3 100644
+--- a/cc/private/toolchain/unix_cc_toolchain_config.bzl
++++ b/cc/private/toolchain/unix_cc_toolchain_config.bzl
+@@ -1830,6 +1830,20 @@ def _impl(ctx):
+                 extension = ".pcm",
+             ),
+         ]
++
++        if ctx.attr.target_libc == "mingw":
++            artifact_name_patterns += [
++                artifact_name_pattern(
++                    category_name = "executable",
++                    prefix = "",
++                    extension = ".exe",
++                ),
++                artifact_name_pattern(
++                    category_name = "dynamic_library",
++                    prefix = "",
++                    extension = ".dll",
++                ),
++            ]
+         features = [
+             cpp_modules_feature,
+             cpp_module_modmap_file_feature,

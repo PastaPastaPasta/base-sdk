@@ -49,10 +49,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-24.04
-          - ubuntu-24.04-arm
-          - macos-latest
+        include:
+          - os: ubuntu-24.04
+            platform: linux_x86_64
+          - os: ubuntu-24.04-arm
+            platform: linux_arm64
+          - os: macos-latest
+            platform: macos_arm64
 
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -85,16 +88,35 @@ jobs:
           url: ${{ vars.CACHE_BZL_URL }}
           auth: ${{ steps.cache_write.outputs.allowed == 'true' && secrets.CACHE_BZL_AUTH || '' }}
 
-      - name: Build every target
-        run: just zbuild
-
-      - name: Build every target with the release profile
-        run: just zbuild -c opt
-
-      - name: Build every target with the portable profiles
+      - name: Build debug and release (portable, native, ${{ matrix.platform }})
         run: |
           just zbuild --//bazel:portable
           just zbuild -c opt --//bazel:portable
+
+      - name: Build release (portable, cross, ${{ matrix.platform }})
+        env:
+          HOST_PLATFORM: ${{ matrix.platform }}
+        run: |
+          for platform in linux_arm64 linux_x86_64 macos_arm64 macos_x86_64 windows_x86_64; do
+            if [ "${platform}" != "${HOST_PLATFORM}" ]; then
+              just zbuild -c opt --//bazel:portable "--platforms=//bazel:${platform}"
+            fi
+          done
+
+      - name: Build debug and release (native, ${{ matrix.platform }})
+        run: |
+          just zbuild
+          just zbuild -c opt
+
+      - name: Build release (cross, ${{ matrix.platform }})
+        env:
+          HOST_PLATFORM: ${{ matrix.platform }}
+        run: |
+          for platform in linux_arm64 linux_x86_64 macos_arm64 macos_x86_64 windows_x86_64; do
+            if [ "${platform}" != "${HOST_PLATFORM}" ]; then
+              just zbuild -c opt "--platforms=//bazel:${platform}"
+            fi
+          done
 
       - name: Check the output root
         run: test -d .cache/bazel/install

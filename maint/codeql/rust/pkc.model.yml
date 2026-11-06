@@ -24,6 +24,10 @@ extensions:
       - ["Bls", "SecretKey", "ies_decrypt_multi"]         # Decrypt multi
       - ["Bls", "PublicKey", "ies_encrypt"]               # Encrypt blob
       - ["Bls", "PublicKey", "ies_encrypt_multi"]         # Encrypt multi
+      - ["Bls", "SecretKey", "ies_decrypt_as"]            # Decrypt blob
+      - ["Bls", "SecretKey", "ies_decrypt_multi_as"]      # Decrypt multi
+      - ["Bls", "PublicKey", "ies_encrypt_as"]            # Encrypt blob
+      - ["Bls", "PublicKey", "ies_encrypt_multi_as"]      # Encrypt multi
       # Key derivation
       - ["Bls", "SecretKey", "from_ikm"]                  # Run key material through a KDF
       # Scheme transform
@@ -41,6 +45,7 @@ extensions:
       - ["Bls", "PublicKey", "derive_share"]              # Get share from master keys
       - ["Bls", "Signature", "recover_shares"]            # Get signature
       - ["Bls", "PublicKey", "recover_shares"]            # Get master public key
+      - ["Bls", "SecretKey", "recover_shares"]            # Get master secret key
       # ECDSA
       # Compression
       - ["Ecdsa", "SecretKey", "is_compressed"]           # Form the derived key will take
