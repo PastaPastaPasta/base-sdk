@@ -56,7 +56,7 @@ dependencies = [
 
 [[package]]
 name = "dash-pow"
-version = "0.1.0-beta"
+version = "0.1.1-beta"
 dependencies = [
  "digest",
  "wide",

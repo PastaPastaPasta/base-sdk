@@ -10,7 +10,7 @@ This crate supplies the Proof of Work hash primitive for the Dash Base SDK.
 To import `dash-pow` to your project, add the following to the `[dependencies]` section in `Cargo.toml`
 
 ```toml
-dash-pow = "0.1.0-beta"
+dash-pow = "0.1.1-beta"
 ```
 
 To use an unpublished revision of this crate, identify the commit hash to pin against and use the following replacing

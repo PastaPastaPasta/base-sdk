@@ -64,7 +64,7 @@ dash-num = { version = "0.3.0-beta", path = "../../pkgs/num", default-features =
   "codec",
 ] }
 dash-params = { version = "0.0.0", path = "../../pkgs/params", default-features = false, optional = true }
-dash-pow = { version = "0.1.0-beta", path = "../../pkgs/pow", default-features = false, optional = true }
+dash-pow = { version = "0.1.1-beta", path = "../../pkgs/pow", default-features = false, optional = true }
 dash-primitives = { version = "0.0.0", path = "../../pkgs/primitives", default-features = false }
 dash-types = { version = "0.3.0-beta", path = "../../pkgs/types", default-features = false, features = [
   "codec",

@@ -1,6 +1,6 @@
 [package]
 name = "dash-pow"
-version = "0.1.0-beta"
+version = "0.1.1-beta"
 description = "Proof of Work hash primitive for the Dash Base SDK"
 keywords = ["base-sdk", "dash", "dashcore", "dashpay", "x11"]
 categories = [

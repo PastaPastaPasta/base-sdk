@@ -26,7 +26,7 @@ dash-params = { version = "0.0.0", path = "../../pkgs/params", default-features 
 dash-pkc = { version = "0.3.0-beta", path = "../../pkgs/pkc", default-features = false, features = [
   "full",
 ] }
-dash-pow = { version = "0.1.0-beta", path = "../../pkgs/pow", default-features = false, features = [
+dash-pow = { version = "0.1.1-beta", path = "../../pkgs/pow", default-features = false, features = [
   "full",
 ] }
 dash-primitives = { version = "0.0.0", path = "../../pkgs/primitives", default-features = false, features = [

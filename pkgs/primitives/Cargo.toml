@@ -54,7 +54,7 @@ dash-pkc = { version = "0.3.0-beta", path = "../pkc", default-features = false, 
   "codec",
   "ecdsa",
 ] }
-dash-pow = { version = "0.1.0-beta", path = "../pow", default-features = false }
+dash-pow = { version = "0.1.1-beta", path = "../pow", default-features = false }
 dash-script = { version = "0.0.0", path = "../script", default-features = false, features = [
   "codec",
 ] }
