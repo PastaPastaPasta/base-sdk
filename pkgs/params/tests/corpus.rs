@@ -62,7 +62,7 @@ struct Bip9 {
 }
 
 /// The buried deployments under the names `getdeploymentinfo` reports them
-/// under.
+/// under. It does not report [`BuriedDeployment::Ipv4Optional`].
 const BURIED: [(&str, BuriedDeployment); 15] = [
   ("bip34", BuriedDeployment::HeightInCoinbase),
   ("bip66", BuriedDeployment::DerSig),
@@ -146,6 +146,21 @@ fn deployments_match_vectors(#[case] network: Network) {
   let chain = network.chain();
   let infos = section::<DeploymentInfo>("deployments");
   assert_eq!(infos.get(chain.network_id), Some(&DeploymentInfo::from(chain)));
+}
+
+/// The `ipv4_optional` height is 0 on testnet and not scheduled (`i32::MAX`)
+/// on mainnet and regtest.
+#[rstest]
+#[case::mainnet(Network::Main, 2_147_483_647)]
+#[case::testnet(Network::Testnet3, 0)]
+#[case::regtest(Network::Regtest, 2_147_483_647)]
+fn ipv4_optional_heights(#[case] network: Network, #[case] height: u32) {
+  let consensus = network.consensus();
+  assert_eq!(consensus.ipv4_optional_height.to_u32(), height);
+  assert_eq!(
+    consensus.deployment_height(BuriedDeployment::Ipv4Optional).to_u32(),
+    height
+  );
 }
 
 #[rstest]

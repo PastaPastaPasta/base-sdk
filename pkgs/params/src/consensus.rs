@@ -61,6 +61,8 @@ pub enum BuriedDeployment {
   MnRr,
   /// Credit withdrawal transactions.
   Withdrawals,
+  /// Masternode primary addresses need not be IPv4.
+  Ipv4Optional,
 }
 
 /// Parameters that influence chain consensus.
@@ -142,6 +144,8 @@ pub struct ConsensusParams {
   pub mn_rr_height: BlockHeight,
   /// Credit withdrawal activation height.
   pub withdrawals_height: BlockHeight,
+  /// Height from which masternode primary addresses need not be IPv4.
+  pub ipv4_optional_height: BlockHeight,
   /// Minimum height before BIP9 warning triggers.
   pub min_bip9_warning_height: BlockHeight,
   /// Threshold of blocks in a window that must
@@ -188,6 +192,9 @@ pub struct ConsensusParams {
 }
 
 impl ConsensusParams {
+  /// Activation height of a buried deployment that is not scheduled.
+  pub const NOT_SCHEDULED: BlockHeight = BlockHeight::from_u32(i32::MAX.unsigned_abs());
+
   /// Returns the activation height for a buried deployment.
   pub const fn deployment_height(&self, dep: BuriedDeployment) -> BlockHeight {
     match dep {
@@ -206,6 +213,7 @@ impl ConsensusParams {
       BuriedDeployment::V20 => self.v20_height,
       BuriedDeployment::MnRr => self.mn_rr_height,
       BuriedDeployment::Withdrawals => self.withdrawals_height,
+      BuriedDeployment::Ipv4Optional => self.ipv4_optional_height,
     }
   }
 
