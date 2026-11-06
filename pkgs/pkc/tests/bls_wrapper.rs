@@ -286,9 +286,9 @@ fn outcome_table(#[case] check: fn()) {
   check();
 }
 
-/// Bytes with top bits `100` decode in both schemes, to opposite points, since
-/// the legacy sign bit is the basic compression flag. Both points share `x`,
-/// so their basic encodings differ in the sign bit alone.
+/// Bytes with top bits `100` decode under both flags. Written back in the
+/// basic encoding, the basic decode gives the input and the legacy decode
+/// gives the input with bit `0x20` of the first byte flipped.
 #[test]
 fn g1_100_decodes_to_opposite_points() {
   for row in eager_rows("pk").iter().filter(|row| row.class == "sub_100") {
