@@ -32,6 +32,7 @@ std = [
   "dash-num/std",
   "dash-types/std",
 ]
+
 codec = [
   "dash-num/codec",
   "dash-types/codec",

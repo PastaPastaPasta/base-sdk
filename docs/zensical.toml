@@ -32,6 +32,10 @@ nav = [
     { "Overview" = "num/README.md" },
     { "Changelog" = "num/changelog.md" },
   ] },
+  { "dash-params" = [
+    { "Overview" = "params/README.md" },
+    { "Changelog" = "params/changelog.md" },
+  ] },
   { "dash-pkc" = [
     { "Overview" = "pkc/README.md" },
     { "Changelog" = "pkc/changelog.md" },
