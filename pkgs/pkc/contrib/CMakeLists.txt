@@ -72,6 +72,8 @@ find_package(Boost REQUIRED CONFIG)
 add_library(
   release OBJECT
   "${DASH_SRC}/bls/bls.cpp"
+  "${DASH_SRC}/bls/bls_ies.cpp"
+  "${DASH_SRC}/crypto/aes.cpp"
   "${DASH_SRC}/crypto/sha256.cpp"
   "${DASH_SRC}/crypto/sha256_sse4.cpp"
   "${DASH_SRC}/support/cleanse.cpp"

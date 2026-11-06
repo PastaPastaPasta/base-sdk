@@ -385,9 +385,9 @@ mod tests {
   cfg_if! {
     if #[cfg(feature = "bls")] {
       use crate::bls::tests::RSEED;
-      use crate::bls::{BlsScChia, BlsScIetf, BlsScheme, BlsSecretKey};
+      use crate::bls::{BlsPublicKey, BlsScChia, BlsScIetf, BlsScheme, BlsSecretKey};
 
-      use dash_dev::{vec_from_hex, Corpus};
+      use dash_dev::{arr_from_hex, vec_from_hex, Corpus};
       use serde::Deserialize;
 
       #[derive(Deserialize)]
@@ -400,6 +400,18 @@ mod tests {
       struct MultiVec {
         blob_lens: Vec<usize>,
         image: String,
+      }
+
+      #[derive(Deserialize)]
+      struct EncryptedVec {
+        recipients: Vec<RecipientVec>,
+        image: String,
+      }
+
+      #[derive(Deserialize)]
+      struct RecipientVec {
+        sk: String,
+        plaintext: String,
       }
 
       fn assert_codec_vectors<S: BlsScheme>(scheme: &str) {
@@ -432,6 +444,77 @@ mod tests {
       #[case::ietf(assert_codec_vectors::<BlsScIetf>, "ietf")]
       fn codec_matches_the_reference(#[case] assertion: fn(&str), #[case] scheme: &str) {
         assertion(scheme);
+      }
+
+      /// Each list of encrypted sets keys its blobs with the leading 32 bytes
+      /// of the shared point's encoding under `T`, the basic one in
+      /// `encrypted_basic` and the legacy one in `encrypted_legacy`. Through
+      /// `T`, every blob decrypts to its plaintext and a set the crate can
+      /// encrypt comes out as the same image; through the other encoding `O`,
+      /// a blob decrypts to other bytes.
+      ///
+      /// The corpus records an empty blob for an empty plaintext, which the
+      /// crate neither writes nor decrypts.
+      fn assert_encrypted_vectors<S: BlsScheme, T: BlsScheme, O: BlsScheme>(scheme: &str, list: &str) {
+        let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "bls_ies").scope(scheme);
+        let eph_sk = BlsSecretKey::<S>::from_ikm(&RSEED[1]).unwrap();
+        let (mut decrypted, mut empty, mut reproduced) = (0, 0, 0);
+
+        for v in corpus.vectors::<EncryptedVec>(list) {
+          let image = vec_from_hex(&v.image);
+          let multi = BlsIesMultiBytes::decode(&mut image.as_slice()).unwrap().to::<S>().unwrap();
+          let sks: Vec<BlsSecretKey<S>> =
+            v.recipients.iter().map(|r| BlsSecretKey::from_bytes(&arr_from_hex(&r.sk)).unwrap()).collect();
+          let plaintexts: Vec<Vec<u8>> = v.recipients.iter().map(|r| vec_from_hex(&r.plaintext)).collect();
+          assert_eq!(multi.blobs().len(), sks.len());
+
+          for (i, (sk, plaintext)) in sks.iter().zip(&plaintexts).enumerate() {
+            let blob = multi.to_blob(i).unwrap();
+            if plaintext.is_empty() {
+              empty += 1;
+              assert!(blob.data().is_empty());
+              assert_eq!(
+                sk.ies_decrypt_multi_as::<T>(&multi, i).unwrap_err(),
+                BlsError::InvalidCiphertextLength
+              );
+              assert_eq!(sk.ies_decrypt_as::<T>(&blob, i).unwrap_err(), BlsError::InvalidCiphertextLength);
+            } else {
+              decrypted += 1;
+              assert_eq!(*sk.ies_decrypt_multi_as::<T>(&multi, i).unwrap(), *plaintext);
+              assert_eq!(*sk.ies_decrypt_as::<T>(&blob, i).unwrap(), *plaintext);
+              assert_ne!(*sk.ies_decrypt_multi_as::<O>(&multi, i).unwrap(), *plaintext);
+              assert_ne!(*sk.ies_decrypt_as::<O>(&blob, i).unwrap(), *plaintext);
+            }
+          }
+
+          let pks: Vec<BlsPublicKey<S>> = sks.iter().map(BlsSecretKey::public_key).collect();
+          let pk_refs: Vec<&BlsPublicKey<S>> = pks.iter().collect();
+          let pt_refs: Vec<&[u8]> = plaintexts.iter().map(Vec::as_slice).collect();
+          let ours = BlsPublicKey::ies_encrypt_multi_with::<T>(&eph_sk, &RSEED[1], &pk_refs, &pt_refs);
+          if plaintexts.iter().all(|p| !p.is_empty()) {
+            reproduced += 1;
+            let ours = ours.unwrap();
+            let blob = pks[0].ies_encrypt_with::<T>(&eph_sk, &RSEED[1], &plaintexts[0]).unwrap();
+            assert_eq!(Some(blob), ours.to_blob(0));
+            assert_eq!(BlsIesMultiBytes::from(&ours).to_bytes(), image);
+          } else {
+            assert_eq!(ours.unwrap_err(), BlsError::InvalidPlaintextLength);
+          }
+        }
+        assert_eq!((decrypted, empty, reproduced), (4, 1, 1), "every recorded blob is read");
+      }
+
+      #[rstest]
+      #[case::chia_as_ietf(assert_encrypted_vectors::<BlsScChia, BlsScIetf, BlsScChia>, "chia", "encrypted_basic")]
+      #[case::chia_as_chia(assert_encrypted_vectors::<BlsScChia, BlsScChia, BlsScIetf>, "chia", "encrypted_legacy")]
+      #[case::ietf_as_ietf(assert_encrypted_vectors::<BlsScIetf, BlsScIetf, BlsScChia>, "ietf", "encrypted_basic")]
+      #[case::ietf_as_chia(assert_encrypted_vectors::<BlsScIetf, BlsScChia, BlsScIetf>, "ietf", "encrypted_legacy")]
+      fn encrypted_blobs_match_the_reference(
+        #[case] assertion: fn(&str, &str),
+        #[case] scheme: &str,
+        #[case] list: &str,
+      ) {
+        assertion(scheme, list);
       }
     }
   }
