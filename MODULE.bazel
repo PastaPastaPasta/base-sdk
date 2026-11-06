@@ -13,6 +13,7 @@ include("//bazel:linux.MODULE.bazel")
 include("//bazel:llvm.MODULE.bazel")
 include("//bazel:rust.MODULE.bazel")
 include("//bazel:toolchains.MODULE.bazel")
+include("//bazel:windows.MODULE.bazel")
 
 # The workspace manifest brings in `dash-meta-bazel`, whose `full` features
 # decide the third-party graph `crate_universe` resolves. An unlisted triple
@@ -29,8 +30,28 @@ crate.from_cargo(
         "aarch64-apple-darwin",
         "aarch64-unknown-linux-gnu",
         "x86_64-apple-darwin",
+        # rules_rust has no windows-gnu platform, and both ABIs share its
+        # constraints, so this arm serves `x86_64-pc-windows-gnu` while no
+        # dependency picks crates by `target_env`; the graph lint holds it.
+        "x86_64-pc-windows-msvc",
         "x86_64-unknown-linux-gnu",
     ],
+)
+
+# cc-rs archives with `ar`. The Darwin toolchain names libtool instead, and a
+# Linux host has no `ar` for Mach-O, so these build scripts use LLVM's own.
+crate.annotation(
+    # Crate repositories see the root module by its canonical name only.
+    build_script_data = ["@@//bazel:llvm_ar"],
+    # rules_rust joins `AR` onto the execroot before expanding `${pwd}`, so
+    # the path is relative to the execroot.
+    build_script_env = {"AR": "external/$(rlocationpath @@//bazel:llvm_ar)"},
+    crate = "blst",
+)
+crate.annotation(
+    build_script_data = ["@@//bazel:llvm_ar"],
+    build_script_env = {"AR": "external/$(rlocationpath @@//bazel:llvm_ar)"},
+    crate = "secp256k1-sys",
 )
 use_repo(crate, "crates")
 

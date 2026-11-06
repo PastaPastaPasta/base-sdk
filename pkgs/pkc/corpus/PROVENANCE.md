@@ -138,7 +138,9 @@ the consensus oracle (its README, "Checking the upstream files", gives the class
   reachable (filler only), 24 inputs.
 - Checker: `python3 contrib/vectors/bls_oracle/check_upstream.py --probe <probe> --corpus-dir pkgs/pkc/corpus`.
 - Test: `src/bls/ies_bytes.rs`, `codec_matches_the_reference`.
-- `bls_ies.json5` sha256 `0f2845f5a7cefb693ff55c20961ba16e12f76c764772edaafba34dc6023d24ae`
+- `bls_ies.json5` sha256 `12a6709032234b71d552eaa0845e6721007e766ca4d1348d4cf79f69d9b41e8f`:
+  upstream `cf0cde8e`'s copy, the `1803db1fea17` values plus its unchecked `encrypted_basic` and `encrypted_legacy`
+  cases.
 
 ## bls_keygen.json5
 
@@ -234,7 +236,8 @@ the consensus oracle (its README, "Checking the upstream files", gives the class
   18 inputs.
 - Checker: `python3 contrib/vectors/bls_oracle/check_upstream.py --probe <probe> --corpus-dir pkgs/pkc/corpus`.
 - Test: `src/bls/sig_threshold.rs`, `recovery_matches_vectors`.
-- `bls_threshold.json5` sha256 `6073351b70ecfb01c4711a0749984182d02901a3fb20603a0b85c83636ec9995`
+- `bls_threshold.json5` sha256 `d5984810f546cccbf40670fbcda7d41ab6c035cdd6eb1a4a5c81a129421c7051`:
+  upstream `2b01bc2f`'s copy, the `ff3499594d2b` values plus its unchecked `recover_sk` cases.
 
 ## bls_read.json5
 

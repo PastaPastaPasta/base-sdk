@@ -11,10 +11,11 @@
 
 Checks out the `dash` submodule next to this script if it is not yet, and
 extracts the `src` tree of the release it pins into a build directory, with
-relic's CMake configuration template patched back in. There CMake builds the
+relic's CMake configuration template patched back in and two steps of the
+legacy map given external linkage for `gen_hash.cpp`. There CMake builds the
 release's BLS library and each `gen_*.cpp` program here, and the build is kept
-for later runs with the same compilers, flags and generator. The corpora are
-written only when every program succeeds.
+for later runs with the same compilers, flags, generator and patches. The
+corpora are written only when every program succeeds.
 
 Usage:
 
@@ -44,8 +45,11 @@ ROOT = HERE.parents[2]
 # The submodule pinned at the release the corpora are written from.
 SUBMODULE = HERE / "dash"
 
-# Restores relic's CMake configuration template, which the release omits.
-PATCH = HERE / "util" / "relic_conf.patch"
+# The patches applied to the release: relic's CMake configuration template,
+# which the release omits, and the legacy map's steps `gen_hash.cpp` runs.
+PATCHES = [
+  HERE / "util" / name for name in ("relic_conf.patch", "legacy_steps.patch")
+]
 
 # Where the corpora are written by default.
 CORPUS = HERE.parent / "corpus"
@@ -119,20 +123,22 @@ def build_dir(build: Path, pin: str) -> Path:
   """Return where *pin* is extracted and built under *build*.
 
   The name holds a digest of the environment CMake reads when it first
-  configures and of the compilers it finds there, so changing either, as a
-  new compiler does, builds again.
+  configures, of the compilers it finds there and of the patches, so changing
+  any of them, as a new compiler does, builds again.
   """
   env = [f"{n}={os.environ[n]}" for n in BUILD_ENV if os.environ.get(n)]
   for name, fallback in COMPILERS.items():
     command = (os.environ.get(name, "").split() or [fallback])[0]
     found = shutil.which(command)
     env.append(f"{name}:{Path(found).resolve() if found else command}")
+  for patch in PATCHES:
+    env.append(f"{patch.name}:{hashlib.sha256(patch.read_bytes()).hexdigest()}")
   digest = hashlib.sha256("\0".join(env).encode()).hexdigest()
   return build / f"{pin}-{digest[:12]}"
 
 
 def extract(pin: str, src: Path) -> None:
-  """Extract `src` of *pin* into *src* and patch relic's template back in.
+  """Extract `src` of *pin* into *src* and apply the patches.
 
   The tree is prepared under a temporary name and then renamed, so an
   existing *src* is always complete.
@@ -146,7 +152,8 @@ def extract(pin: str, src: Path) -> None:
     # The ceiling keeps git from finding the repository around the stage,
     # whose root the patch's paths would then be read against.
     env = {**os.environ, "GIT_CEILING_DIRECTORIES": str(stage.parent)}
-    run(["git", "apply", PATCH], cwd=stage, env=env)
+    for patch in PATCHES:
+      run(["git", "apply", patch], cwd=stage, env=env)
     (stage / "src").rename(src)
   finally:
     shutil.rmtree(stage, ignore_errors=True)

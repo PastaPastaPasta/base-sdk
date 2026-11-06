@@ -185,31 +185,35 @@ pub trait BlsScheme: BlsSchemeId + Sealed + Sized {
     Ok(BlsDhBytes::from_bytes(Self::pk_to_bytes(&shared)))
   }
 
-  /// Derive the BLS-IES symmetric key for `sk` and a peer key.
-  ///
-  /// The key is the leading 32 bytes of the Diffie-Hellman point's basic
-  /// serialization under either scheme: Core keys every blob with
-  /// `ToByteVector(false)` (`bls_ies.cpp:47-48,83-84,100-101`), so a blob
-  /// does not record the scheme that wrote it.
+  /// Serialize a Diffie-Hellman product in the 48-byte layout of scheme `T`.
   ///
   /// # Errors
   ///
   /// Returns `InvalidPublicKey` when the shared secret cannot be derived.
-  fn ies_key(sk: &Self::InnerSk, peer_pk: &Self::InnerPk) -> Result<Zeroizing<[u8; AES_KEY_LEN]>, BlsError> {
+  fn dh_bytes_as<T: BlsScheme>(sk: &Self::InnerSk, peer_pk: &Self::InnerPk) -> Result<BlsDhBytes, BlsError> {
     let shared = Self::pk_to_g1(&Self::dh_exchange(sk, peer_pk)?)?;
-    let mut key = Zeroizing::new([0u8; AES_KEY_LEN]);
-    key.copy_from_slice(&shared.to_affine().compress()[..AES_KEY_LEN]);
-    Ok(key)
+    Ok(BlsDhBytes::from_bytes(T::g1_bytes(&shared.to_affine())))
   }
 
-  /// Seal one plaintext to a recipient under an ephemeral key and IV.
+  /// Derive the BLS-IES symmetric key from a Diffie-Hellman shared key.
+  ///
+  /// The key is the leading 32 bytes of the shared point's serialization, so
+  /// it depends on the layout the point is written in.
+  fn ies_key(shared: &BlsDhBytes) -> Zeroizing<[u8; AES_KEY_LEN]> {
+    let mut key = Zeroizing::new([0u8; AES_KEY_LEN]);
+    key.copy_from_slice(&shared.as_bytes()[..AES_KEY_LEN]);
+    key
+  }
+
+  /// Seal one plaintext to a recipient under an ephemeral key and IV, keyed
+  /// by the leading 32 bytes of the shared point's encoding under scheme `T`.
   ///
   /// # Errors
   ///
   /// Returns `InvalidPlaintextLength` when the plaintext is empty or not a
   /// whole number of 16-byte blocks, or `InvalidPublicKey` when the shared
   /// secret cannot be derived.
-  fn ies_seal(
+  fn ies_seal_as<T: BlsScheme>(
     eph_sk: &Self::InnerSk,
     recipient: &Self::InnerPk,
     iv: &[u8; AES_BLOCK_LEN],
@@ -218,18 +222,20 @@ pub trait BlsScheme: BlsSchemeId + Sealed + Sized {
     if plaintext.is_empty() {
       return Err(BlsError::InvalidPlaintextLength);
     }
-    let key = Self::ies_key(eph_sk, recipient)?;
+    let key = Self::ies_key(&Self::dh_bytes_as::<T>(eph_sk, recipient)?);
     aes_cbc::encrypt(&key, iv, plaintext).ok_or(BlsError::InvalidPlaintextLength)
   }
 
-  /// Open one ciphertext sealed to this key under an ephemeral key and IV.
+  /// Open one ciphertext sealed to this key under an ephemeral key and IV,
+  /// keyed by the leading 32 bytes of the shared point's encoding under
+  /// scheme `T`.
   ///
   /// # Errors
   ///
   /// Returns `InvalidCiphertextLength` when the ciphertext is empty or not a
   /// whole number of 16-byte blocks, or `InvalidPublicKey` when the shared
   /// secret cannot be derived.
-  fn ies_open(
+  fn ies_open_as<T: BlsScheme>(
     sk: &Self::InnerSk,
     eph_pk: &Self::InnerPk,
     iv: &[u8; AES_BLOCK_LEN],
@@ -238,7 +244,7 @@ pub trait BlsScheme: BlsSchemeId + Sealed + Sized {
     if ciphertext.is_empty() {
       return Err(BlsError::InvalidCiphertextLength);
     }
-    let key = Self::ies_key(sk, eph_pk)?;
+    let key = Self::ies_key(&Self::dh_bytes_as::<T>(sk, eph_pk)?);
     aes_cbc::decrypt(&key, iv, ciphertext).ok_or(BlsError::InvalidCiphertextLength)
   }
 
@@ -617,6 +623,45 @@ pub trait BlsScheme: BlsSchemeId + Sealed + Sized {
     Self::g1_to_pk(recovered)
   }
 
+  /// Recover a master secret key from threshold shares by interpolation.
+  ///
+  /// The scalar counterpart of [`Self::recover_pk_shares`], over the field
+  /// secret keys live in.
+  ///
+  /// # Errors
+  ///
+  /// Returns `InsufficientShares` when fewer than two shares are given,
+  /// `CountMismatch` when `ids` and `sks` differ in length,
+  /// `ZeroScalar`/`DuplicateShareId` on bad ids, or `InvalidSecretKey`
+  /// when the recovered scalar is zero.
+  fn recover_sk_shares(ids: &[&BlsShareId], sks: &[&Self::InnerSk]) -> Result<Self::InnerSk, BlsError> {
+    if sks.len() < 2 {
+      return Err(BlsError::InsufficientShares);
+    }
+    // ids and sks are paired. A length mismatch would silently truncate
+    // the interpolation in interpolate_fr and yield a wrong key.
+    if ids.len() != sks.len() {
+      return Err(BlsError::CountMismatch);
+    }
+
+    let reduced = reduce_share_ids(ids)?;
+    let mut scalars = Zeroizing::new(Vec::with_capacity(sks.len()));
+    for sk in sks {
+      let bytes = Self::sk_to_bytes(sk);
+      let mut scalar = blst_ffi::scalar_from_bendian(&bytes);
+      scalars.push(Fr::from(&scalar));
+      scalar.b.zeroize();
+    }
+
+    let mut recovered = interpolate_fr(&reduced, &scalars);
+    let mut out_scalar = blst::blst_scalar::from(&recovered);
+    let out_bytes = Zeroizing::new(blst_ffi::bendian_from_scalar(&out_scalar));
+    out_scalar.b.zeroize();
+    recovered.zeroize();
+
+    Self::sk_from_bytes(&out_bytes)
+  }
+
   /// Derive a public key share from the master verification vector.
   ///
   /// # Errors
@@ -834,6 +879,22 @@ fn interpolate_g1(ids: &[Fr], points: &[G1]) -> G1 {
     // Convert Fr coefficient to scalar for point multiplication.
     let scalar = blst::blst_scalar::from(&coeffs[i]);
     result += points[i].mul_scalar(&scalar.b, FR_BITS);
+  }
+  result
+}
+
+/// Recover a scalar from shares via Lagrange interpolation at x=0.
+///
+/// The field counterpart of [`interpolate_g1`], over the scalars secret
+/// keys live in. Same coefficients, no point multiplication.
+fn interpolate_fr(ids: &[Fr], scalars: &[Fr]) -> Fr {
+  let mut coeffs = Zeroizing::new(compute_lagrange_coeffs(ids));
+
+  let mut result = Fr::default();
+  for (coeff, scalar) in coeffs.iter_mut().zip(scalars) {
+    let mut term = *coeff * *scalar;
+    result += term;
+    term.zeroize();
   }
   result
 }

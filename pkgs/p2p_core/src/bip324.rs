@@ -192,4 +192,35 @@ mod tests {
       }
     }
   }
+
+  #[derive(Deserialize)]
+  struct RecvVector {
+    byte: u8,
+    #[serde(rename = "type")]
+    ty: Option<String>,
+    size: Option<usize>,
+  }
+
+  /// Each first byte, before a long-form `ping` type and an 8-byte payload,
+  /// gives the type and payload the vectors hold. A byte the vectors type as
+  /// empty, or not at all, is refused as an unknown short ID.
+  #[rstest]
+  fn split_v2_matches_recv_vectors() {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "transport");
+    let vectors = corpus.vectors::<RecvVector>("v2_recv");
+    assert_eq!(vectors.len(), 256);
+    for (i, v) in vectors.into_iter().enumerate() {
+      assert_eq!(usize::from(v.byte), i);
+      let contents = [&[v.byte][..], CommandString::PING.as_bytes(), &[0x07; 8]].concat();
+      let split = split_v2(&contents);
+      match (v.ty.as_deref(), v.size) {
+        (Some(ty), Some(size)) if !ty.is_empty() => {
+          let msg = split.unwrap();
+          assert_eq!(msg.command(), CommandString::from_static(ty), "{i}");
+          assert_eq!(msg.payload(), &contents[contents.len() - size..], "{i}");
+        }
+        _ => assert_eq!(split, Err(P2pDecodeError::UnknownShortId { id: v.byte }), "{i}"),
+      }
+    }
+  }
 }

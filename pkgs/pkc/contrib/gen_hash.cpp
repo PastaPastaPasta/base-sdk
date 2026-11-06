@@ -10,6 +10,11 @@
 
 #include <dashbls/legacy.hpp>
 
+// The legacy map's encoding of a field element and its cofactor
+// multiplication, which util/legacy_steps.patch gives external linkage.
+void ep2_sw_encode(ep2_t p, fp2_t t);
+void ep2_mul_cof_b12(ep2_t r, ep2_t p);
+
 using namespace corpus;
 
 namespace {
@@ -29,7 +34,7 @@ constexpr std::array<Tag, 4> kTags = {{
 
 /**
  * Repeats the legacy map's hashing of one tag, which the library does not
- * expose.
+ * expose; ExpectSteps checks it, but for which pair of tags comes first.
  *
  * @return SHA-256(msg || tag || 0) || SHA-256(msg || tag || 1).
  */
@@ -75,6 +80,45 @@ bls::G2Element MapLegacy(const Bytes& msg)
   return out;
 }
 
+/**
+ * Stops the program unless the legacy map's own steps, run on @p fps, the
+ * field elements of the tags in order, give @p point, the library's map of
+ * the message: the encodings of (t00, t01) and (t10, t11), their sum and its
+ * cofactor multiple. The sum is the same whichever pair comes first, so that
+ * order is not checked.
+ */
+void ExpectSteps(const std::array<Bytes, kTags.size()>& fps, const bls::G2Element& point)
+{
+  fp2_t t0;
+  fp2_t t1;
+  ep2_t p0;
+  ep2_t p1;
+  fp2_null(t0);
+  fp2_null(t1);
+  ep2_null(p0);
+  ep2_null(p1);
+  fp2_new(t0);
+  fp2_new(t1);
+  ep2_new(p0);
+  ep2_new(p1);
+  fp_read_bin(t0[0], fps.at(0).data(), fps.at(0).size());
+  fp_read_bin(t0[1], fps.at(1).data(), fps.at(1).size());
+  fp_read_bin(t1[0], fps.at(2).data(), fps.at(2).size());
+  fp_read_bin(t1[1], fps.at(3).data(), fps.at(3).size());
+  ep2_sw_encode(p0, t0);
+  ep2_sw_encode(p1, t1);
+  ep2_add(p0, p0, p1);
+  ep2_mul_cof_b12(p1, p0);
+  const bool held = bls::G2Element::FromNative(p1) == point;
+  ep2_free(p1);
+  ep2_free(p0);
+  fp2_free(t1);
+  fp2_free(t0);
+  if (!held) {
+    throw std::logic_error("the library disagrees, its map is not the steps' point");
+  }
+}
+
 /** Writes the corpus to stdout, returning the exit code. */
 int WriteCorpus()
 {
@@ -92,10 +136,13 @@ int WriteCorpus()
     for (size_t i = 0; i < kTags.size(); ++i) {
       row.Set(std::string(kTags.at(i).name) + "_hash", Json::Str(Hex(hashes.at(i))));
     }
+    std::array<Bytes, kTags.size()> fps;
     for (size_t i = 0; i < kTags.size(); ++i) {
-      row.Set(std::string(kTags.at(i).name) + "_fp", Json::Str(Hex(ToField(hashes.at(i)))));
+      fps.at(i) = ToField(hashes.at(i));
+      row.Set(std::string(kTags.at(i).name) + "_fp", Json::Str(Hex(fps.at(i))));
     }
     const auto point = MapLegacy(msg);
+    ExpectSteps(fps, point);
     row.Set("hash_to_g2_legacy", Json::Str(SigHex(point, /*legacy=*/true)));
     row.Set("hash_to_g2_uncomp", Json::Str(SigHex(point, /*legacy=*/false)));
   }

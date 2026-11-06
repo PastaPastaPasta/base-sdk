@@ -280,7 +280,7 @@ fn ies_encrypt_n<S: BlsScheme>(bencher: Bencher, n: usize) {
 
   bencher
     .counter(ItemsCount::new(n))
-    .bench_local(|| pk.ies_encrypt(&plaintext, &mut rng));
+    .bench_local(|| pk.ies_encrypt_as::<S>(&plaintext, &mut rng));
 }
 
 /// Opening one blob, paying for a DH exchange.
@@ -288,9 +288,14 @@ fn ies_encrypt_n<S: BlsScheme>(bencher: Bencher, n: usize) {
 fn ies_decrypt_n<S: BlsScheme>(bencher: Bencher, n: usize) {
   let sk = BlsSecretKey::<S>::from_ikm(&test_ikm(1)).unwrap();
   let plaintext = vec![0x42u8; n * 16];
-  let blob = sk.public_key().ies_encrypt(&plaintext, &mut UnwrapErr(SysRng)).unwrap();
+  let blob = sk
+    .public_key()
+    .ies_encrypt_as::<S>(&plaintext, &mut UnwrapErr(SysRng))
+    .unwrap();
 
-  bencher.counter(ItemsCount::new(n)).bench(|| sk.ies_decrypt(&blob, 0));
+  bencher
+    .counter(ItemsCount::new(n))
+    .bench(|| sk.ies_decrypt_as::<S>(&blob, 0));
 }
 
 /// Sealing one 32-byte share to each of `n` recipients.
@@ -306,7 +311,7 @@ fn ies_encrypt_multi_n<S: BlsScheme>(bencher: Bencher, n: usize) {
 
   bencher
     .counter(ItemsCount::new(n))
-    .bench_local(|| BlsPublicKey::<S>::ies_encrypt_multi(&pk_refs, &pt_refs, &mut rng));
+    .bench_local(|| BlsPublicKey::ies_encrypt_multi_as::<S>(&pk_refs, &pt_refs, &mut rng));
 }
 
 /// IETF-only BLS operations.

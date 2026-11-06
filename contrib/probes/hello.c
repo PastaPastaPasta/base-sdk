@@ -14,14 +14,16 @@
 #error "no system interface is known for this target"
 #endif
 
-static const char greeting[] = "Hello, world!\n";
+#include <string.h>
+
+#include "greeting.h"
 
 #if defined(_WIN32)
-static int say(const char* text, DWORD length)
+static int say(const char* text, size_t length)
 {
   HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
   DWORD written = 0;
-  return out != INVALID_HANDLE_VALUE && WriteFile(out, text, length, &written, NULL) &&
+  return out != INVALID_HANDLE_VALUE && WriteFile(out, text, (DWORD)length, &written, NULL) &&
     written == length;
 }
 #elif defined(__APPLE__)
@@ -62,5 +64,6 @@ static int say(const char* text, size_t length)
 
 int main(void)
 {
-  return say(greeting, sizeof(greeting) - 1) ? 0 : 1;
+  const char* text = greeting();
+  return say(text, strlen(text)) ? 0 : 1;
 }
