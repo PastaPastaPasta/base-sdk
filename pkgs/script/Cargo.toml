@@ -54,7 +54,7 @@ bitcoin-consensus-encoding = { workspace = true, optional = true, features = [
 dash-num = { version = "0.2.0-beta", path = "../num", optional = true, default-features = false }
 dash-params = { version = "0.0.0", path = "../params", optional = true, default-features = false }
 dash-pkc = { version = "0.2.0-beta", path = "../pkc", optional = true, default-features = false }
-dash-types = { version = "0.2.0-beta", path = "../types", default-features = false }
+dash-types = { version = "0.3.0-beta", path = "../types", default-features = false }
 serde = { workspace = true, features = [
   "derive",
   "alloc",

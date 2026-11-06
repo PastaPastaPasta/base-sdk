@@ -36,7 +36,7 @@ full = [
 bitcoin_hashes = { workspace = true, features = ["alloc"] }
 bitcoin-units = { workspace = true, features = ["alloc"] }
 dash-num = { version = "0.2.0-beta", path = "../num", default-features = false }
-dash-types = { version = "0.2.0-beta", path = "../types", default-features = false }
+dash-types = { version = "0.3.0-beta", path = "../types", default-features = false }
 hex-conservative = { workspace = true }
 
 [dev-dependencies]
