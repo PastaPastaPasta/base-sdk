@@ -12,6 +12,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - `BRR_PERIODS_PERMILLE`, the masternode share of the block value in each block reward reallocation period.
+- **`BuriedDeployment::Ipv4Optional` and `ConsensusParams::ipv4_optional_height`**, from which masternode primary
+  addresses need not be IPv4. As in the reference implementation v24.0.0, the height is 0 on testnet and not scheduled
+  (`ConsensusParams::NOT_SCHEDULED`) on mainnet and regtest.
 
 ### Changed
 
