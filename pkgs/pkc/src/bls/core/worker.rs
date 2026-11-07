@@ -18,6 +18,8 @@ use super::{
 use crate::bls::{BlsSchemeKind, BlsValue, BlsWire};
 use crate::prelude::*;
 
+#[cfg(feature = "codec")]
+use dash_types::type_id::Unencodable;
 use rand_core::CryptoRng;
 
 /// `CONTRIBUTION_VERIFY_BATCH_SIZE` (`bls/bls_worker.h:105`).
@@ -123,7 +125,7 @@ fn verify_share(id: &[u8; 32], vvec: &[BlsPkValue], share: &BlsSkValue) -> bool 
   pk.is_valid() && pk.core_eq(&public_key(share))
 }
 
-/// `CBLSWorker::AsyncVerifyContributionShare` (`bls_worker.cpp:721-745`):
+/// `CBLSWorker::AsyncVerifyContributionShare` (`bls_worker.cpp:752-776`):
 /// `false` for a missing vector or one [`verify_vector`] refuses.
 pub fn verify_contribution_share(
   for_id: &[u8; 32],
@@ -134,31 +136,55 @@ pub fn verify_contribution_share(
   vvec.is_some_and(|vvec| verify_vector(&vvec.iter().collect::<Vec<_>>(), flag) && verify_share(for_id, vvec, share))
 }
 
-/// `CBLSWorker::VerifyContributionShares` (`bls_worker.cpp:686-719`,
+/// [`verify_contribution_shares`]'s answer.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "codec", derive(Unencodable))]
+pub struct ContributionVerdicts {
+  /// One answer per contribution.
+  pub verdicts: Vec<bool>,
+  /// Whether [`verify_verification_vectors`] refused the vectors, so each
+  /// contribution was checked alone. Core logs this under `LLMQ_DKG`.
+  pub individually: bool,
+}
+
+/// `CBLSWorker::VerifyContributionShares` (`bls_worker.cpp:688-736`,
 /// `ContributionVerifier` `:388-588`): one answer per contribution.
 ///
-/// All `false` when [`verify_verification_vectors`] fails. Otherwise, when
-/// `aggregated`, each batch of [`CONTRIBUTION_VERIFY_BATCH_SIZE`] is checked
-/// as the sum of its vectors against the sum of its shares; a batch whose
-/// vectors are empty is all `false`, and a batch that fails is checked one
-/// by one. Without `aggregated`, every contribution is checked alone.
+/// When [`verify_verification_vectors`] fails, each contribution is checked
+/// alone by [`verify_contribution_share`]. Otherwise, when `aggregated`,
+/// each batch of [`CONTRIBUTION_VERIFY_BATCH_SIZE`] is checked as the sum
+/// of its vectors against the sum of its shares; a batch whose vectors are
+/// empty is all `false`, and a batch that fails is checked one by one.
+/// Without `aggregated`, every contribution is checked alone.
 ///
 /// Callers pass valid shares: this function answers all `false` for a
 /// batch holding an invalid one, and for `vvecs` and `shares` of different
-/// lengths.
+/// lengths, which Core does not check.
 pub fn verify_contribution_shares(
   for_id: &[u8; 32],
   vvecs: &[Option<&[BlsPkValue]>],
   shares: &[&BlsSkValue],
   aggregated: bool,
   flag: BlsSchemeKind,
-) -> Vec<bool> {
-  if vvecs.len() != shares.len() || !verify_verification_vectors(vvecs, flag) {
-    return vec![false; vvecs.len()];
-  }
-  let Some(vvecs) = vvecs.iter().copied().collect::<Option<Vec<&[BlsPkValue]>>>() else {
-    return vec![false; vvecs.len()];
+) -> ContributionVerdicts {
+  let verdicts = |verdicts: Vec<bool>| ContributionVerdicts {
+    verdicts,
+    individually: false,
   };
+  if vvecs.len() != shares.len() {
+    return verdicts(vec![false; vvecs.len()]);
+  }
+  if !verify_verification_vectors(vvecs, flag) {
+    return ContributionVerdicts {
+      verdicts: vvecs
+        .iter()
+        .zip(shares)
+        .map(|(vvec, share)| verify_contribution_share(for_id, *vvec, share, flag))
+        .collect(),
+      individually: true,
+    };
+  }
+  let vvecs: Vec<&[BlsPkValue]> = vvecs.iter().copied().flatten().collect();
   let one_by_one = |vvecs: &[&[BlsPkValue]], shares: &[&BlsSkValue]| -> Vec<bool> {
     vvecs
       .iter()
@@ -167,7 +193,7 @@ pub fn verify_contribution_shares(
       .collect()
   };
   if !aggregated {
-    return one_by_one(&vvecs, shares);
+    return verdicts(one_by_one(&vvecs, shares));
   }
   let mut results = Vec::with_capacity(vvecs.len());
   for (vvecs, shares) in vvecs
@@ -184,7 +210,7 @@ pub fn verify_contribution_shares(
       results.extend(one_by_one(vvecs, shares));
     }
   }
-  results
+  verdicts(results)
 }
 
 /// `CBLSWorker::GenerateContributions` (`bls_worker.cpp:78-118`): `t`
@@ -244,7 +270,7 @@ mod tests {
     for aggregated in [false, true] {
       let refs: Vec<&BlsSkValue> = shares.iter().collect();
       assert_eq!(
-        verify_contribution_shares(&id, &vvecs, &refs, aggregated, flag),
+        verify_contribution_shares(&id, &vvecs, &refs, aggregated, flag).verdicts,
         vec![true; 10]
       );
     }
@@ -257,24 +283,77 @@ mod tests {
     let mut want = vec![true; 10];
     want[9] = false;
     for aggregated in [false, true] {
-      assert_eq!(verify_contribution_shares(&id, &vvecs, &refs, aggregated, flag), want);
+      assert_eq!(
+        verify_contribution_shares(&id, &vvecs, &refs, aggregated, flag).verdicts,
+        want
+      );
     }
-    // A missing vector fails them all.
+    // A missing vector fails alone.
     let mut missing = vvecs.clone();
     missing[3] = None;
-    assert_eq!(
-      verify_contribution_shares(&id, &missing, &refs, true, flag),
-      vec![false; 10]
-    );
+    want[3] = false;
+    for aggregated in [false, true] {
+      assert_eq!(
+        verify_contribution_shares(&id, &missing, &refs, aggregated, flag).verdicts,
+        want
+      );
+    }
     assert!(!verify_contribution_share(&id, None, &shares[0], flag));
     // Unequal spans fail them all.
     for aggregated in [false, true] {
       assert_eq!(
-        verify_contribution_shares(&id, &vvecs, &refs[..9], aggregated, flag),
+        verify_contribution_shares(&id, &vvecs, &refs[..9], aggregated, flag).verdicts,
         vec![false; 10]
       );
     }
-    assert!(verify_contribution_shares(&id, &[], &[], true, flag).is_empty());
+    assert!(verify_contribution_shares(&id, &[], &[], true, flag)
+      .verdicts
+      .is_empty());
+  }
+
+  /// Ids 1 to `n` as Core's tests write them, `WriteLE64` into a `uint256`.
+  fn le64_ids(n: u64) -> Vec<[u8; 32]> {
+    (1..=n)
+      .map(|i| {
+        let mut id = [0u8; 32];
+        id[..8].copy_from_slice(&i.to_le_bytes());
+        id
+      })
+      .collect()
+  }
+
+  /// Core's `FuncVerifyContributionSharesDuplicateCoefficient`
+  /// (`test/bls_tests.cpp`, rc.5 #7965): dealer 0 takes dealer 1's first
+  /// coefficient and keeps its share, so dealer 0 alone fails.
+  #[rstest]
+  fn shared_coefficient_fails_only_its_dealer(
+    #[values(BlsSchemeKind::Legacy, BlsSchemeKind::Basic)] flag: BlsSchemeKind,
+    #[values(false, true)] aggregated: bool,
+  ) {
+    let ids = le64_ids(4);
+    let mut rng = UnwrapErr(SysRng);
+    let mut dealers: Vec<(Vec<BlsPkValue>, Vec<BlsSkValue>)> = (0..3)
+      .map(|_| generate_contributions(2, &ids, &mut rng).unwrap())
+      .collect();
+    let shares: Vec<BlsSkValue> = dealers.iter().map(|(_, s)| s[0].clone()).collect();
+    let refs: Vec<&BlsSkValue> = shares.iter().collect();
+    let vvecs: Vec<Option<&[BlsPkValue]>> = dealers.iter().map(|(v, _)| Some(v.as_slice())).collect();
+    assert_eq!(
+      verify_contribution_shares(&ids[0], &vvecs, &refs, aggregated, flag),
+      ContributionVerdicts {
+        verdicts: vec![true; 3],
+        individually: false,
+      }
+    );
+    dealers[0].0[0] = dealers[1].0[0].clone();
+    let vvecs: Vec<Option<&[BlsPkValue]>> = dealers.iter().map(|(v, _)| Some(v.as_slice())).collect();
+    assert_eq!(
+      verify_contribution_shares(&ids[0], &vvecs, &refs, aggregated, flag),
+      ContributionVerdicts {
+        verdicts: vec![false, true, true],
+        individually: true,
+      }
+    );
   }
 
   /// An invalid share makes its batch's sum invalid, so the whole batch is
@@ -287,7 +366,7 @@ mod tests {
     let mut shares: Vec<BlsSkValue> = dealers.iter().map(|(_, s)| s[0].clone()).collect();
     shares[1] = BlsSkValue::invalid();
     let refs: Vec<&BlsSkValue> = shares.iter().collect();
-    let got = verify_contribution_shares(&ids(10)[0], &vvecs, &refs, true, flag);
+    let got = verify_contribution_shares(&ids(10)[0], &vvecs, &refs, true, flag).verdicts;
     assert_eq!(got, [vec![false; 8], vec![true; 2]].concat());
   }
 
