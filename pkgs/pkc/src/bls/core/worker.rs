@@ -317,7 +317,7 @@ mod tests {
   use super::*;
 
   use getrandom::SysRng;
-  use rand_core::UnwrapErr;
+  use rand_core::{TryCryptoRng, TryRng, UnwrapErr};
   use rstest::rstest;
 
   fn ids(n: u8) -> Vec<[u8; 32]> {
@@ -418,6 +418,56 @@ mod tests {
       &shares,
       &mut rng
     ));
+    let mut longer = dealers[1].0.clone();
+    longer.push(dealers[2].0[0].clone());
+    assert!(!verify_weighted_batch(
+      &id,
+      &[vvecs[0], &longer, vvecs[2]],
+      &shares,
+      &mut rng
+    ));
+    // At the id -1 the vector (P, P) gives the infinite key share, which the
+    // invalid share's element would match.
+    let minus_one = hex_conservative::hex!("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000000");
+    let infinite = [vvecs[0][0].clone(), vvecs[0][0].clone()];
+    assert!(!verify_weighted_batch(&minus_one, &[&infinite], &[&invalid], &mut rng));
+  }
+
+  /// A [`TestRng`] counting its draws.
+  struct CountingRng(usize, TestRng);
+
+  impl TryRng for CountingRng {
+    type Error = ::core::convert::Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+      self.1.try_next_u32()
+    }
+
+    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+      self.1.try_next_u64()
+    }
+
+    fn try_fill_bytes(&mut self, dst: &mut [u8]) -> Result<(), Self::Error> {
+      self.0 += 1;
+      self.1.try_fill_bytes(dst)
+    }
+  }
+
+  impl TryCryptoRng for CountingRng {}
+
+  /// Only the weighted batches draw from `rng`, one weight per dealer.
+  #[test]
+  fn weights_are_drawn_only_when_aggregated() {
+    let flag = BlsSchemeKind::Basic;
+    let dealers = dkg(10, 2);
+    let vvecs: Vec<Option<&[BlsPkValue]>> = dealers.iter().map(|(v, _)| Some(v.as_slice())).collect();
+    let shares: Vec<&BlsSkValue> = dealers.iter().map(|(_, s)| &s[0]).collect();
+    for (aggregated, draws) in [(false, 0), (true, 10)] {
+      let mut rng = CountingRng(0, TestRng(5));
+      let got = verify_contribution_shares(&ids(10)[0], &vvecs, &shares, aggregated, flag, &mut rng);
+      assert_eq!(got.verdicts, vec![true; 10]);
+      assert_eq!(rng.0, draws, "aggregated {aggregated}");
+    }
   }
 
   /// Ids 1 to `n` as Core's tests write them, `WriteLE64` into a `uint256`.
