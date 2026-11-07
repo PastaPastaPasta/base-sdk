@@ -76,9 +76,9 @@ pub use super::elem::BlsShape;
 pub use aggregate::{
   aggregate_public_keys_insecure, aggregate_public_keys_insecure_pair, aggregate_secret_keys_insecure,
   aggregate_secret_keys_insecure_pair, aggregate_signatures_insecure, aggregate_signatures_insecure_pair,
-  aggregate_signatures_secure, sub_signatures_insecure,
+  aggregate_signatures_secure, mul_public_key_insecure, mul_signature_insecure, sub_signatures_insecure,
 };
-pub use batch::BlsBatchVerifier;
+pub use batch::{make_batch_verification_weight, BlsBatchVerifier};
 pub use ies::{BlsIesBlobValue, BlsIesMultiBlobs};
 pub use threshold::{public_key_share, recover_signature, secret_key_share};
 pub use worker::{
@@ -371,6 +371,34 @@ mod tests {
       BlsValue::from_canonical(&pk, kind).unwrap(),
     )
   }
+
+  /// A seeded stream for tests, splitmix64.
+  pub(super) struct TestRng(pub(super) u64);
+
+  impl rand_core::TryRng for TestRng {
+    type Error = ::core::convert::Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+      Ok((self.try_next_u64()? >> 32) as u32)
+    }
+
+    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+      self.0 = self.0.wrapping_add(0x9e37_79b9_7f4a_7c15);
+      let mut z = self.0;
+      z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+      z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+      Ok(z ^ (z >> 31))
+    }
+
+    fn try_fill_bytes(&mut self, dst: &mut [u8]) -> Result<(), Self::Error> {
+      for chunk in dst.chunks_mut(8) {
+        chunk.copy_from_slice(&self.try_next_u64()?.to_le_bytes()[..chunk.len()]);
+      }
+      Ok(())
+    }
+  }
+
+  impl rand_core::TryCryptoRng for TestRng {}
 
   /// [`values`] in the scheme `kind` decodes.
   pub(super) fn values_of(seed: u8, msg: &[u8; 32], kind: BlsSchemeKind) -> (BlsSigValue, BlsPkValue) {

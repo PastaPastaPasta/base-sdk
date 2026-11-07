@@ -8,13 +8,29 @@
 
 use super::{
   aggregate_public_keys_insecure, aggregate_signatures_insecure, verify_insecure, verify_insecure_aggregated,
-  BlsPkValue, BlsSigValue, BlsVerdict,
+  BlsPkValue, BlsSigValue, BlsSkValue, BlsVerdict,
 };
-use crate::bls::BlsSchemeKind;
+use crate::bls::{BlsSchemeKind, BlsValue, BLS_SK_LEN};
 use crate::prelude::*;
 
 #[cfg(feature = "codec")]
 use dash_types::type_id::Unencodable;
+use rand_core::CryptoRng;
+use zeroize::Zeroizing;
+
+/// `MakeBatchVerificationWeight(rng, N)` (`bls_batchverifier.h:16-27`): a
+/// key whose low `N` bytes are the first `N` of a 32-byte draw from `rng`,
+/// drawn again while all zero. `N` is 1 to 16, as Core asserts.
+pub fn make_batch_verification_weight<const N: usize>(rng: &mut impl CryptoRng) -> BlsSkValue {
+  const { assert!(N > 0 && N <= 16) };
+  let mut draw = Zeroizing::new([0u8; 32]);
+  let mut bytes = Zeroizing::new([0u8; BLS_SK_LEN]);
+  while bytes.iter().all(|b| *b == 0) {
+    rng.fill_bytes(draw.as_mut());
+    bytes[BLS_SK_LEN - N..].copy_from_slice(&draw[..N]);
+  }
+  BlsSkValue::from_canonical(&bytes, BlsSchemeKind::Basic).unwrap_or_else(BlsValue::invalid)
+}
 
 /// A pushed message.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -237,11 +253,63 @@ impl<S: Ord + Clone, M: Ord + Clone> BlsBatchVerifier<S, M> {
 #[cfg(test)]
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
+  use super::super::tests::TestRng;
   use super::*;
   use crate::bls::tests::G1_OFF_SUBGROUP_CHIA;
   use crate::bls::{BlsScChia, BlsScIetf, BlsScheme, BlsSecretKey};
 
+  use rand_core::{Rng, TryCryptoRng, TryRng};
   use rstest::rstest;
+
+  /// A [`TestRng`] whose first `.0` draws are all zero.
+  struct ZeroDraws(usize, TestRng);
+
+  impl TryRng for ZeroDraws {
+    type Error = ::core::convert::Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+      self.1.try_next_u32()
+    }
+
+    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+      self.1.try_next_u64()
+    }
+
+    fn try_fill_bytes(&mut self, dst: &mut [u8]) -> Result<(), Self::Error> {
+      if self.0 == 0 {
+        return self.1.try_fill_bytes(dst);
+      }
+      self.0 -= 1;
+      dst.fill(0);
+      Ok(())
+    }
+  }
+
+  impl TryCryptoRng for ZeroDraws {}
+
+  /// `MakeBatchVerificationWeight` (`bls_batchverifier.h:16-27`): the
+  /// first `N` bytes of a 32-byte draw as the key's low bytes, drawn again
+  /// while all zero.
+  #[test]
+  fn batch_verification_weights() {
+    let flag = BlsSchemeKind::Basic;
+    let mut draw = [0u8; 32];
+    TestRng(7).fill_bytes(&mut draw);
+    let w = make_batch_verification_weight::<8>(&mut TestRng(7));
+    assert!(w.is_valid());
+    assert_eq!(w.to_bytes(flag)[..24], [0u8; 24]);
+    assert_eq!(w.to_bytes(flag)[24..], draw[..8]);
+    let w = make_batch_verification_weight::<16>(&mut TestRng(7));
+    assert_eq!(w.to_bytes(flag)[..16], [0u8; 16]);
+    assert_eq!(w.to_bytes(flag)[16..], draw[..16]);
+    let w = make_batch_verification_weight::<1>(&mut ZeroDraws(3, TestRng(7)));
+    assert_eq!(w.to_bytes(flag)[..31], [0u8; 31]);
+    assert_eq!(w.to_bytes(flag)[31], draw[0]);
+    let mut rng = TestRng(1);
+    let a = make_batch_verification_weight::<16>(&mut rng);
+    let b = make_batch_verification_weight::<16>(&mut rng);
+    assert_ne!(a.to_bytes(flag), b.to_bytes(flag));
+  }
 
   /// A message of `test/bls_tests.cpp`'s `AddMessage`: a fresh key's
   /// signature of `uint256(hash)`, or another key's when invalid.
