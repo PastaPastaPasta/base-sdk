@@ -87,6 +87,28 @@ pub fn sub_signatures_insecure(a: &BlsSigValue, b: &BlsSigValue) -> BlsSigValue 
   BlsSigElem::from_impl(a).add(&BlsSigElem::from_impl(b).neg()).into()
 }
 
+/// `CBLSPublicKey::MulInsecure(factor)` (`bls.cpp:208-213`): `pk` times
+/// `factor`, or the invalid key when either is invalid. Variable-time in
+/// `factor`, as Core's `operator*`.
+pub fn mul_public_key_insecure(pk: &BlsPkValue, factor: &BlsSkValue) -> BlsPkValue {
+  if !pk.is_valid() || !factor.is_valid() {
+    return BlsPkValue::invalid();
+  }
+  let (k, (), ()) = factor.parts();
+  BlsPkElem::from_impl(pk).mul(k).into()
+}
+
+/// `CBLSSignature::MulInsecure(factor)` (`bls.cpp:303-308`): `sig` times
+/// `factor`, or the invalid signature when either is invalid.
+/// Variable-time in `factor`, as Core's `operator*`.
+pub fn mul_signature_insecure(sig: &BlsSigValue, factor: &BlsSkValue) -> BlsSigValue {
+  if !sig.is_valid() || !factor.is_valid() {
+    return BlsSigValue::invalid();
+  }
+  let (k, (), ()) = factor.parts();
+  BlsSigElem::from_impl(sig).mul(k).into()
+}
+
 /// `CBLSSignature::AggregateSecure(sigs, pks, hash)` under the flag
 /// (`bls.cpp:257-287`), `CoreMPL::AggregateSecure` (`schemes.cpp:194-223`).
 ///
@@ -119,7 +141,8 @@ pub fn aggregate_signatures_secure(sigs: &[&BlsSigValue], pks: &[&BlsPkValue], f
 #[cfg(test)]
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
-  use super::super::tests::{values, values_of};
+  use super::super::tests::{values, values_of, TestRng};
+  use super::super::{make_batch_verification_weight, verify_insecure};
   use super::*;
   use crate::bls::tests::{negate_scalar, G1_OFF_SUBGROUP_CHIA, G2_OFF_SUBGROUP_CHIA, GROUP_ORDER};
   use crate::bls::{BlsPublicKey, BlsScChia, BlsScIetf, BlsScheme, BlsSecretKey, BlsSignature, BlsValue};
@@ -357,5 +380,31 @@ mod tests {
       BlsValue::from(BlsSigElem::from_impl(&secure)).to_bytes(LEGACY),
       secure.to_bytes(LEGACY)
     );
+  }
+
+  /// `MulInsecure` (`bls.cpp:208-213,303-308`): the element times the key,
+  /// and a signature and its key times one weight still verify; the
+  /// invalid value when either operand is invalid.
+  #[rstest]
+  #[case::legacy(LEGACY)]
+  #[case::basic(BASIC)]
+  fn mul_insecure(#[case] kind: BlsSchemeKind) {
+    let msg = [3u8; 32];
+    let (sig, pk) = values_of(1, &msg, kind);
+    let mut two = [0u8; 32];
+    two[31] = 2;
+    let two = BlsSkValue::from_canonical(&two, BASIC).unwrap();
+    let pk2 = mul_public_key_insecure(&pk, &two);
+    assert!(pk2.is_valid() && pk2.core_eq(&aggregate_public_keys_insecure_pair(&pk, &pk)));
+    let sig2 = mul_signature_insecure(&sig, &two);
+    assert!(sig2.is_valid() && sig2.core_eq(&aggregate_signatures_insecure_pair(&sig, &sig)));
+    let w = make_batch_verification_weight::<16>(&mut TestRng(3));
+    let (wsig, wpk) = (mul_signature_insecure(&sig, &w), mul_public_key_insecure(&pk, &w));
+    assert!(verify_insecure(&wsig, &wpk, &msg, kind).is_valid());
+    assert!(!verify_insecure(&wsig, &pk, &msg, kind).is_valid());
+    assert!(!mul_public_key_insecure(&pk, &BlsSkValue::invalid()).is_valid());
+    assert!(!mul_public_key_insecure(&BlsPkValue::invalid(), &w).is_valid());
+    assert!(!mul_signature_insecure(&sig, &BlsSkValue::invalid()).is_valid());
+    assert!(!mul_signature_insecure(&BlsSigValue::invalid(), &w).is_valid());
   }
 }
