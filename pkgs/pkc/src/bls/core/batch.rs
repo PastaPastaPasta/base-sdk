@@ -7,8 +7,8 @@
 //! Core's `CBLSBatchVerifier` (`bls/bls_batchverifier.h`).
 
 use super::{
-  aggregate_public_keys_insecure, aggregate_signatures_insecure, verify_insecure, verify_insecure_aggregated,
-  BlsPkValue, BlsSigValue, BlsSkValue, BlsVerdict,
+  aggregate_public_keys_insecure, aggregate_signatures_insecure, mul_public_key_insecure, mul_signature_insecure,
+  verify_insecure, verify_insecure_aggregated, BlsPkValue, BlsSigValue, BlsSkValue, BlsVerdict,
 };
 use crate::bls::{BlsSchemeKind, BlsValue, BLS_SK_LEN};
 use crate::prelude::*;
@@ -39,10 +39,16 @@ struct Message {
   hash: [u8; 32],
   sig: BlsSigValue,
   pk: BlsPkValue,
+  /// `sig` and `pk` times one [`make_batch_verification_weight`].
+  weighted_sig: BlsSigValue,
+  weighted_pk: BlsPkValue,
 }
 
 /// `CBLSBatchVerifier<SourceId, MessageId>`: signatures checked as one
 /// aggregate, then per source and per message when the aggregate fails.
+///
+/// The aggregates take each signature and its key times one 16-byte weight
+/// drawn at push; the per-message fallback checks them unweighted.
 ///
 /// Message hashes are `uint256`s in their stored order, which Core's maps
 /// order as these arrays order. Core reads the process-wide scheme flag at
@@ -77,20 +83,34 @@ impl<S: Ord + Clone, M: Ord + Clone> BlsBatchVerifier<S, M> {
     }
   }
 
-  /// `PushMessage`. A repeated message id keeps its first message, and the
-  /// source still lists it. When the sub-batch size is reached, the
-  /// messages are verified and cleared.
+  /// `PushMessage`. A repeated message id keeps its first message and
+  /// weight, and the source still lists it. A new message's weight is drawn
+  /// from `rng`. When the sub-batch size is reached, the messages are
+  /// verified and cleared.
   ///
   /// Core asserts that both objects are valid; here an invalid one is not
   /// pushed and the call returns `false`.
-  pub fn push_message(&mut self, source: S, id: M, hash: [u8; 32], sig: &BlsSigValue, pk: &BlsPkValue) -> bool {
+  pub fn push_message(
+    &mut self,
+    source: S,
+    id: M,
+    hash: [u8; 32],
+    sig: &BlsSigValue,
+    pk: &BlsPkValue,
+    rng: &mut impl CryptoRng,
+  ) -> bool {
     if !sig.is_valid() || !pk.is_valid() {
       return false;
     }
-    self.messages.entry(id.clone()).or_insert_with(|| Message {
-      hash,
-      sig: sig.clone(),
-      pk: pk.clone(),
+    self.messages.entry(id.clone()).or_insert_with(|| {
+      let weight = make_batch_verification_weight::<16>(rng);
+      Message {
+        hash,
+        sig: sig.clone(),
+        pk: pk.clone(),
+        weighted_sig: mul_signature_insecure(sig, &weight),
+        weighted_pk: mul_public_key_insecure(pk, &weight),
+      }
     });
     self.by_source.entry(source).or_default().push(id);
     if self.sub_batch_size != 0 && self.messages.len() >= self.sub_batch_size {
@@ -190,8 +210,8 @@ impl<S: Ord + Clone, M: Ord + Clone> BlsBatchVerifier<S, M> {
     }
   }
 
-  /// `VerifyBatchInsecure`: the keys aggregated per hash, skipping message
-  /// ids already taken, and every signature aggregated.
+  /// `VerifyBatchInsecure`: the weighted keys aggregated per hash, skipping
+  /// message ids already taken, and every weighted signature aggregated.
   fn verify_batch_insecure(&self, by_hash: &BTreeMap<[u8; 32], Vec<&M>>) -> BlsVerdict {
     let mut sigs = Vec::new();
     let mut hashes = Vec::new();
@@ -204,8 +224,8 @@ impl<S: Ord + Clone, M: Ord + Clone> BlsBatchVerifier<S, M> {
           continue;
         }
         let msg = &self.messages[*id];
-        sigs.push(&msg.sig);
-        keys.push(&msg.pk);
+        sigs.push(&msg.weighted_sig);
+        keys.push(&msg.weighted_pk);
       }
       let agg = aggregate_public_keys_insecure(&keys);
       if !agg.is_valid() {
@@ -222,7 +242,7 @@ impl<S: Ord + Clone, M: Ord + Clone> BlsBatchVerifier<S, M> {
   }
 
   /// `VerifyBatchSecure`: rounds taking the last message of each hash until
-  /// none is left.
+  /// none is left, each round's weighted signatures checked as one.
   fn verify_batch_secure(&self, mut by_hash: BTreeMap<[u8; 32], Vec<&M>>) -> BlsVerdict {
     while !by_hash.is_empty() {
       let mut sigs = Vec::new();
@@ -234,8 +254,8 @@ impl<S: Ord + Clone, M: Ord + Clone> BlsBatchVerifier<S, M> {
           if dups.insert(id) {
             let msg = &self.messages[id];
             hashes.push(*hash);
-            pks.push(&msg.pk);
-            sigs.push(&msg.sig);
+            pks.push(&msg.weighted_pk);
+            sigs.push(&msg.weighted_sig);
           }
         }
         !ids.is_empty()
@@ -254,6 +274,7 @@ impl<S: Ord + Clone, M: Ord + Clone> BlsBatchVerifier<S, M> {
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::super::tests::TestRng;
+  use super::super::{aggregate_signatures_insecure_pair, sub_signatures_insecure};
   use super::*;
   use crate::bls::tests::G1_OFF_SUBGROUP_CHIA;
   use crate::bls::{BlsScChia, BlsScIetf, BlsScheme, BlsSecretKey};
@@ -322,16 +343,17 @@ mod tests {
     valid: bool,
   }
 
+  fn key<S: BlsScheme>(seed: u32) -> BlsSecretKey<S> {
+    let mut ikm = [0u8; 32];
+    ikm[..4].copy_from_slice(&seed.to_le_bytes());
+    BlsSecretKey::<S>::from_ikm(&ikm).unwrap()
+  }
+
   fn add<S: BlsScheme>(msgs: &mut Vec<Msg>, source: u32, id: u32, hash: u8, valid: bool, kind: BlsSchemeKind) {
     let mut h = [0u8; 32];
     h[0] = hash;
-    let key = |seed: u32| {
-      let mut ikm = [0u8; 32];
-      ikm[..4].copy_from_slice(&seed.to_le_bytes());
-      BlsSecretKey::<S>::from_ikm(&ikm).unwrap()
-    };
-    let sk = key(2 * id);
-    let signer = if valid { key(2 * id) } else { key(2 * id + 1) };
+    let sk = key::<S>(2 * id);
+    let signer = if valid { key::<S>(2 * id) } else { key::<S>(2 * id + 1) };
     msgs.push(Msg {
       source,
       id,
@@ -342,14 +364,45 @@ mod tests {
     });
   }
 
+  /// `test/bls_tests.cpp`'s `AddCancellingMessages` (v24.0.0 #8016): two
+  /// messages whose signatures are off by one error signature, added to the
+  /// first and subtracted from the second. With `same_key` the second is
+  /// signed with the first's key.
+  fn add_cancelling<S: BlsScheme>(
+    msgs: &mut Vec<Msg>,
+    first: (u32, u32, u8),
+    second: (u32, u32, u8),
+    same_key: bool,
+    kind: BlsSchemeKind,
+  ) {
+    add::<S>(msgs, first.0, first.1, first.2, true, kind);
+    add::<S>(msgs, second.0, second.1, second.2, true, kind);
+    let n = msgs.len();
+    let (head, tail) = msgs.split_at_mut(n - 1);
+    let (m1, m2) = (&mut head[n - 2], &mut tail[0]);
+    if same_key {
+      let sk = key::<S>(2 * first.1);
+      m2.pk = m1.pk.clone();
+      m2.sig = BlsSigValue::from_canonical(&sk.sign_digest(&m2.hash).to_bytes(), kind).unwrap();
+    }
+    let mut one = [0u8; 32];
+    one[0] = 1;
+    let error = BlsSigValue::from_canonical(&key::<S>(u32::MAX).sign_digest(&one).to_bytes(), kind).unwrap();
+    m1.sig = aggregate_signatures_insecure_pair(&m1.sig, &error);
+    m2.sig = sub_signatures_insecure(&m2.sig, &error);
+    m1.valid = false;
+    m2.valid = false;
+  }
+
   /// `test/bls_tests.cpp`'s `Verify`: the bad sources are the invalid
   /// messages' sources, and the bad messages the invalid messages with the
   /// per-message fallback, none without.
   fn check(msgs: &[Msg], kind: BlsSchemeKind) {
     for (secure, per_message) in [(false, false), (true, false), (false, true), (true, true)] {
+      let mut rng = TestRng(1);
       let mut verifier = BlsBatchVerifier::new(secure, per_message, 0, kind);
       for m in msgs {
-        assert!(verifier.push_message(m.source, m.id, m.hash, &m.sig, &m.pk));
+        assert!(verifier.push_message(m.source, m.id, m.hash, &m.sig, &m.pk, &mut rng));
       }
       let all_valid = msgs.iter().all(|m| m.valid);
       assert_eq!(verifier.verify().is_valid(), all_valid);
@@ -369,7 +422,7 @@ mod tests {
     }
   }
 
-  /// Core's `FuncBatchVerifier` (`test/bls_tests.cpp:323-372`).
+  /// Core's `FuncBatchVerifier` (`test/bls_tests.cpp`, v24.0.0 #8016).
   fn func_batch_verifier<S: BlsScheme>(kind: BlsSchemeKind) {
     let mut msgs = Vec::new();
     for i in 1..=3 {
@@ -394,6 +447,16 @@ mod tests {
     check(&msgs, kind);
     add::<S>(&mut msgs, 1, 7, 1, false, kind);
     check(&msgs, kind);
+
+    msgs.clear();
+    add::<S>(&mut msgs, 1, 1, 1, true, kind);
+    add_cancelling::<S>(&mut msgs, (2, 2, 2), (2, 3, 3), false, kind);
+    check(&msgs, kind);
+
+    msgs.clear();
+    add::<S>(&mut msgs, 1, 1, 1, true, kind);
+    add_cancelling::<S>(&mut msgs, (2, 2, 2), (3, 3, 2), true, kind);
+    check(&msgs, kind);
   }
 
   #[rstest]
@@ -411,9 +474,10 @@ mod tests {
     let mut msgs = Vec::new();
     add::<BlsScIetf>(&mut msgs, 1, 1, 1, true, kind);
     add::<BlsScIetf>(&mut msgs, 2, 2, 2, false, kind);
+    let mut rng = TestRng(1);
     let mut verifier = BlsBatchVerifier::new(false, true, 0, kind);
-    verifier.push_message(1, 1u32, msgs[0].hash, &msgs[0].sig, &msgs[0].pk);
-    verifier.push_message(2, 1u32, msgs[1].hash, &msgs[1].sig, &msgs[1].pk);
+    verifier.push_message(1, 1u32, msgs[0].hash, &msgs[0].sig, &msgs[0].pk, &mut rng);
+    verifier.push_message(2, 1u32, msgs[1].hash, &msgs[1].sig, &msgs[1].pk, &mut rng);
     assert_eq!(verifier.verify(), BlsVerdict::Valid);
     assert!(verifier.bad_sources().is_empty());
   }
@@ -426,12 +490,13 @@ mod tests {
     let mut msgs = Vec::new();
     add::<BlsScIetf>(&mut msgs, 1, 1, 1, false, kind);
     add::<BlsScIetf>(&mut msgs, 2, 2, 2, true, kind);
+    let mut rng = TestRng(1);
     let mut verifier = BlsBatchVerifier::new(false, true, 2, kind);
-    assert!(!verifier.push_message(1, 1u32, msgs[0].hash, &BlsSigValue::invalid(), &msgs[0].pk));
-    assert!(verifier.push_message(1, 1u32, msgs[0].hash, &msgs[0].sig, &msgs[0].pk));
+    assert!(!verifier.push_message(1, 1u32, msgs[0].hash, &BlsSigValue::invalid(), &msgs[0].pk, &mut rng));
+    assert!(verifier.push_message(1, 1u32, msgs[0].hash, &msgs[0].sig, &msgs[0].pk, &mut rng));
     assert_eq!(verifier.unique_source_count(), 1);
     assert!(verifier.bad_sources().is_empty());
-    assert!(verifier.push_message(2, 2u32, msgs[1].hash, &msgs[1].sig, &msgs[1].pk));
+    assert!(verifier.push_message(2, 2u32, msgs[1].hash, &msgs[1].sig, &msgs[1].pk, &mut rng));
     assert_eq!(verifier.unique_source_count(), 0);
     assert_eq!(verifier.bad_sources(), &BTreeSet::from([1]));
     assert_eq!(verifier.bad_messages(), &BTreeSet::from([1]));
@@ -461,9 +526,10 @@ mod tests {
   #[case::secure(true)]
   fn exotic_keys_are_answered(#[case] secure: bool) {
     let msgs = exotic_messages();
+    let mut rng = TestRng(1);
     let mut verifier = BlsBatchVerifier::new(secure, true, 0, BlsSchemeKind::Legacy);
     for m in &msgs {
-      assert!(verifier.push_message(m.source, m.id, m.hash, &m.sig, &m.pk));
+      assert!(verifier.push_message(m.source, m.id, m.hash, &m.sig, &m.pk, &mut rng));
     }
     assert_eq!(verifier.verify(), BlsVerdict::Invalid);
     assert_eq!(verifier.bad_sources(), &BTreeSet::from([2]));
