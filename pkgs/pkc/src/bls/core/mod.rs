@@ -146,7 +146,7 @@ pub fn verify_insecure(sig: &BlsSigValue, pk: &BlsPkValue, h: &[u8; 32], flag: B
 }
 
 /// `CBLSSignature::VerifyInsecureAggregated(pks, hs)` under the verify
-/// flag. Core asserts non-empty lists of equal length (`bls.cpp:319`); the
+/// flag. Core asserts non-empty lists of equal length (`bls.cpp:333`); the
 /// port answers `Invalid` there.
 pub fn verify_insecure_aggregated(
   sig: &BlsSigValue,
@@ -239,7 +239,7 @@ fn aggregate_verify(flag: BlsSchemeKind, sig: G2Operand, pks: &[G1Operand], hs: 
 
 /// The BLS-IES symmetric key for `sk` and a peer key: the product
 /// `DHKeyExchange` forms, serialized basic and cut to 32 bytes, as Core's IES
-/// code takes it under either scheme (`bls.cpp:208-220`,
+/// code takes it under either scheme (`bls.cpp:215-227`,
 /// `bls_ies.cpp:43-48,79-84,96-101`).
 ///
 /// `None` when either value is invalid. A basic key equal to `r` gives the
@@ -258,7 +258,7 @@ pub fn ies_key(sk: &BlsSkValue, pk: &BlsPkValue) -> Option<Zeroizing<[u8; 32]>> 
   Some(key)
 }
 
-/// `CBLSPublicKey::DHKeyExchange(sk, pk)` (`bls.cpp:208-220`) into `out`:
+/// `CBLSPublicKey::DHKeyExchange(sk, pk)` (`bls.cpp:215-227`) into `out`:
 /// `false` with `out` invalid and its element kept when either value is
 /// invalid; otherwise `out` is the product with `sk`'s stored bytes, valid
 /// even when infinite (a basic key equal to `r`). It does not depend on the
@@ -445,7 +445,7 @@ mod tests {
 
   /// Core checks the wrappers before pairing: an object invalidated in
   /// place keeps an element that would verify and still gives false. Core
-  /// asserts non-empty lists of equal length (`bls.cpp:319`); the port
+  /// asserts non-empty lists of equal length (`bls.cpp:333`); the port
   /// answers `Invalid` there, for more keys than hashes and for an empty
   /// list with a valid infinite signature, whose pairings alone would pass.
   #[rstest]
