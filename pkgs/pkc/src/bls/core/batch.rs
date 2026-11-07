@@ -282,33 +282,36 @@ mod tests {
   use rand_core::{Rng, TryCryptoRng, TryRng};
   use rstest::rstest;
 
-  /// A [`TestRng`] whose first `.0` draws are all zero.
-  struct ZeroDraws(usize, TestRng);
+  /// A [`TestRng`] whose first `.0` draws are `.1` zeros then `0xff`s, not
+  /// taken from the stream.
+  struct ZeroDraws(usize, usize, TestRng);
 
   impl TryRng for ZeroDraws {
     type Error = ::core::convert::Infallible;
 
     fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
-      self.1.try_next_u32()
+      self.2.try_next_u32()
     }
 
     fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
-      self.1.try_next_u64()
+      self.2.try_next_u64()
     }
 
     fn try_fill_bytes(&mut self, dst: &mut [u8]) -> Result<(), Self::Error> {
       if self.0 == 0 {
-        return self.1.try_fill_bytes(dst);
+        return self.2.try_fill_bytes(dst);
       }
       self.0 -= 1;
-      dst.fill(0);
+      let head = self.1.min(dst.len());
+      dst[..head].fill(0);
+      dst[head..].fill(0xff);
       Ok(())
     }
   }
 
   impl TryCryptoRng for ZeroDraws {}
 
-  /// `MakeBatchVerificationWeight` (`bls_batchverifier.h:16-27`): the
+  /// `MakeBatchVerificationWeight` (`bls_batchverifier.h:18-27`): the
   /// first `N` bytes of a 32-byte draw as the key's low bytes, drawn again
   /// while all zero.
   #[test]
@@ -323,9 +326,12 @@ mod tests {
     let w = make_batch_verification_weight::<16>(&mut TestRng(7));
     assert_eq!(w.to_bytes(flag)[..16], [0u8; 16]);
     assert_eq!(w.to_bytes(flag)[16..], draw[..16]);
-    let w = make_batch_verification_weight::<1>(&mut ZeroDraws(3, TestRng(7)));
+    let w = make_batch_verification_weight::<1>(&mut ZeroDraws(3, 32, TestRng(7)));
     assert_eq!(w.to_bytes(flag)[..31], [0u8; 31]);
     assert_eq!(w.to_bytes(flag)[31], draw[0]);
+    // A draw is refused when the key's bytes are zero, though its tail is not.
+    let w = make_batch_verification_weight::<8>(&mut ZeroDraws(2, 8, TestRng(7)));
+    assert_eq!(w.to_bytes(flag)[24..], draw[..8]);
     let mut rng = TestRng(1);
     let a = make_batch_verification_weight::<16>(&mut rng);
     let b = make_batch_verification_weight::<16>(&mut rng);
@@ -519,7 +525,7 @@ mod tests {
   /// Core's insecure batch adds the keys under each hash and verifies the
   /// aggregate; its secure batch verifies one message per hash in each
   /// round; either falls back per source, then per message
-  /// (`bls_batchverifier.h:71-119,146-228`). The key outside the subgroup
+  /// (`bls_batchverifier.h:97-146,161-255`). The key outside the subgroup
   /// is paired through the engine at each step.
   #[rstest]
   #[case::insecure(false)]

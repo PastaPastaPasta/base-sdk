@@ -407,4 +407,20 @@ mod tests {
     assert!(!mul_signature_insecure(&sig, &BlsSkValue::invalid()).is_valid());
     assert!(!mul_signature_insecure(&BlsSigValue::invalid(), &w).is_valid());
   }
+
+  /// `MulInsecure` on legacy-decoded points outside the subgroup gives a
+  /// valid wrapper holding relic's product, as Core leaves `fValid` set.
+  #[test]
+  fn mul_insecure_off_subgroup() {
+    let w = make_batch_verification_weight::<16>(&mut TestRng(4));
+    let (k, (), ()) = w.parts();
+    let pk = BlsPkValue::from_canonical(&G1_OFF_SUBGROUP_CHIA, LEGACY).unwrap();
+    let got = mul_public_key_insecure(&pk, &w);
+    assert!(got.is_valid() && BlsPkElem::from_impl(&got).__is_relic());
+    assert!(BlsPkElem::from_impl(&got).core_eq(&BlsPkElem::from_impl(&pk).mul(k)));
+    let sig = BlsSigValue::from_canonical(&G2_OFF_SUBGROUP_CHIA, LEGACY).unwrap();
+    let got = mul_signature_insecure(&sig, &w);
+    assert!(got.is_valid() && BlsSigElem::from_impl(&got).__is_relic());
+    assert!(BlsSigElem::from_impl(&got).core_eq(&BlsSigElem::from_impl(&sig).mul(k)));
+  }
 }
