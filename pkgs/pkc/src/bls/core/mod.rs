@@ -83,8 +83,9 @@ pub use ies::{BlsIesBlobValue, BlsIesMultiBlobs};
 pub use threshold::{public_key_share, recover_signature, secret_key_share};
 pub use worker::{
   aggregate_public_keys, aggregate_secret_keys, aggregate_signatures, build_pub_key_share,
-  build_quorum_verification_vector, generate_contributions, verify_contribution_share, verify_contribution_shares,
-  verify_vector, verify_verification_vectors, ContributionVerdicts, CONTRIBUTION_VERIFY_BATCH_SIZE,
+  build_quorum_verification_vector, find_verification_vectors_with_shared_coefficients, generate_contributions,
+  verify_contribution_share, verify_contribution_shares, verify_vector, verify_verification_vectors,
+  ContributionVerdicts, CONTRIBUTION_VERIFY_BATCH_SIZE,
 };
 
 /// A secret key as Core's wrapper holds it.
