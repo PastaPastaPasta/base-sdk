@@ -12,8 +12,9 @@
 //! networks.
 
 use super::{
-  aggregate_public_keys_insecure_pair, aggregate_secret_keys_insecure_pair, aggregate_signatures_insecure_pair,
-  make_new_key, public_key, public_key_share, secret_key_share, BlsPkValue, BlsSigValue, BlsSkValue,
+  aggregate_public_keys_insecure, aggregate_public_keys_insecure_pair, aggregate_secret_keys_insecure_pair,
+  aggregate_signatures_insecure_pair, make_batch_verification_weight, make_new_key, mul_public_key_insecure,
+  public_key, public_key_share, secret_key_share, BlsPkValue, BlsSigValue, BlsSkValue,
 };
 use crate::bls::{BlsSchemeKind, BlsValue, BlsWire};
 use crate::prelude::*;
@@ -136,6 +137,49 @@ pub fn verify_contribution_share(
   vvec.is_some_and(|vvec| verify_vector(&vvec.iter().collect::<Vec<_>>(), flag) && verify_share(for_id, vvec, share))
 }
 
+/// `ContributionVerifier::VerifyWeightedBatch` (`bls_worker.cpp:497-540`):
+/// each share's public key and each coefficient of its vector are
+/// multiplied by one 8-byte weight from `rng`, and the vectors are summed
+/// element-wise. The batch passes when the sum's key share for `for_id`
+/// equals the sum of the weighted keys.
+///
+/// `false` for an empty vector, an invalid share, a vector of another
+/// length than the first, or an invalid coefficient or partial sum.
+fn verify_weighted_batch(
+  for_id: &[u8; 32],
+  vvecs: &[&[BlsPkValue]],
+  shares: &[&BlsSkValue],
+  rng: &mut impl CryptoRng,
+) -> bool {
+  let mut sum: Vec<BlsPkValue> = Vec::new();
+  let mut pks = Vec::with_capacity(shares.len());
+  for (vvec, share) in vvecs.iter().zip(shares) {
+    if vvec.is_empty() || !share.is_valid() || (!sum.is_empty() && vvec.len() != sum.len()) {
+      return false;
+    }
+    let weight = make_batch_verification_weight::<8>(rng);
+    pks.push(mul_public_key_insecure(&public_key(share), &weight));
+    let first = sum.is_empty();
+    for (j, coefficient) in vvec.iter().enumerate() {
+      if !coefficient.is_valid() {
+        return false;
+      }
+      let coefficient = mul_public_key_insecure(coefficient, &weight);
+      if first {
+        sum.push(coefficient);
+      } else {
+        sum[j] = aggregate_public_keys_insecure_pair(&sum[j], &coefficient);
+      }
+      if !sum[j].is_valid() {
+        return false;
+      }
+    }
+  }
+  let mut expected = BlsPkValue::invalid();
+  public_key_share(&mut expected, &sum.iter().collect::<Vec<_>>(), for_id)
+    && expected.core_eq(&aggregate_public_keys_insecure(&pks.iter().collect::<Vec<_>>()))
+}
+
 /// [`verify_contribution_shares`]'s answer.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "codec", derive(Unencodable))]
@@ -152,20 +196,21 @@ pub struct ContributionVerdicts {
 ///
 /// When [`verify_verification_vectors`] fails, each contribution is checked
 /// alone by [`verify_contribution_share`]. Otherwise, when `aggregated`,
-/// each batch of [`CONTRIBUTION_VERIFY_BATCH_SIZE`] is checked as the sum
-/// of its vectors against the sum of its shares; a batch whose vectors are
-/// empty is all `false`, and a batch that fails is checked one by one.
-/// Without `aggregated`, every contribution is checked alone.
+/// each batch of [`CONTRIBUTION_VERIFY_BATCH_SIZE`] is checked by weighted
+/// sums with weights from `rng`, and a batch that fails is checked one by
+/// one. Without `aggregated`, every contribution is checked alone.
 ///
-/// Callers pass valid shares: this function answers all `false` for a
-/// batch holding an invalid one, and for `vvecs` and `shares` of different
-/// lengths, which Core does not check.
+/// The weighting is sound only for points in the subgroup, so callers that
+/// may hold vectors decoded under the legacy scheme pass `aggregated =
+/// false`, as Core's header states. `vvecs` and `shares` of different
+/// lengths give all `false`, which Core does not check.
 pub fn verify_contribution_shares(
   for_id: &[u8; 32],
   vvecs: &[Option<&[BlsPkValue]>],
   shares: &[&BlsSkValue],
   aggregated: bool,
   flag: BlsSchemeKind,
+  rng: &mut impl CryptoRng,
 ) -> ContributionVerdicts {
   let verdicts = |verdicts: Vec<bool>| ContributionVerdicts {
     verdicts,
@@ -200,11 +245,7 @@ pub fn verify_contribution_shares(
     .chunks(CONTRIBUTION_VERIFY_BATCH_SIZE)
     .zip(shares.chunks(CONTRIBUTION_VERIFY_BATCH_SIZE))
   {
-    let vvec = sum_vectors(vvecs);
-    let share = sync_aggregate(shares, aggregate_secret_keys_insecure_pair).unwrap_or_else(BlsSkValue::invalid);
-    if vvec.is_empty() || !share.is_valid() {
-      results.extend(core::iter::repeat_n(false, vvecs.len()));
-    } else if verify_share(for_id, &vvec, &share) {
+    if verify_weighted_batch(for_id, vvecs, shares, rng) {
       results.extend(core::iter::repeat_n(true, vvecs.len()));
     } else {
       results.extend(one_by_one(vvecs, shares));
@@ -239,6 +280,7 @@ pub fn generate_contributions(
 #[cfg(test)]
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
+  use super::super::tests::TestRng;
   use super::*;
 
   use getrandom::SysRng;
@@ -270,7 +312,7 @@ mod tests {
     for aggregated in [false, true] {
       let refs: Vec<&BlsSkValue> = shares.iter().collect();
       assert_eq!(
-        verify_contribution_shares(&id, &vvecs, &refs, aggregated, flag).verdicts,
+        verify_contribution_shares(&id, &vvecs, &refs, aggregated, flag, &mut TestRng(1)).verdicts,
         vec![true; 10]
       );
     }
@@ -284,7 +326,7 @@ mod tests {
     want[9] = false;
     for aggregated in [false, true] {
       assert_eq!(
-        verify_contribution_shares(&id, &vvecs, &refs, aggregated, flag).verdicts,
+        verify_contribution_shares(&id, &vvecs, &refs, aggregated, flag, &mut TestRng(1)).verdicts,
         want
       );
     }
@@ -294,7 +336,7 @@ mod tests {
     want[3] = false;
     for aggregated in [false, true] {
       assert_eq!(
-        verify_contribution_shares(&id, &missing, &refs, aggregated, flag).verdicts,
+        verify_contribution_shares(&id, &missing, &refs, aggregated, flag, &mut TestRng(1)).verdicts,
         want
       );
     }
@@ -302,13 +344,47 @@ mod tests {
     // Unequal spans fail them all.
     for aggregated in [false, true] {
       assert_eq!(
-        verify_contribution_shares(&id, &vvecs, &refs[..9], aggregated, flag).verdicts,
+        verify_contribution_shares(&id, &vvecs, &refs[..9], aggregated, flag, &mut TestRng(1)).verdicts,
         vec![false; 10]
       );
     }
-    assert!(verify_contribution_shares(&id, &[], &[], true, flag)
-      .verdicts
-      .is_empty());
+    let empty = verify_contribution_shares(&id, &[], &[], true, flag, &mut TestRng(1));
+    assert!(empty.verdicts.is_empty() && !empty.individually);
+  }
+
+  /// `VerifyWeightedBatch` refuses an empty vector, an invalid share, a
+  /// vector of another length and an invalid coefficient.
+  #[test]
+  fn weighted_batch_refusals() {
+    let dealers = dkg(3, 2);
+    let id = ids(3)[0];
+    let vvecs: Vec<&[BlsPkValue]> = dealers.iter().map(|(v, _)| v.as_slice()).collect();
+    let shares: Vec<&BlsSkValue> = dealers.iter().map(|(_, s)| &s[0]).collect();
+    let mut rng = TestRng(2);
+    assert!(verify_weighted_batch(&id, &vvecs, &shares, &mut rng));
+    assert!(verify_weighted_batch(&id, &vvecs[..1], &shares[..1], &mut rng));
+    let invalid = BlsSkValue::invalid();
+    assert!(!verify_weighted_batch(
+      &id,
+      &vvecs,
+      &[shares[0], &invalid, shares[2]],
+      &mut rng
+    ));
+    assert!(!verify_weighted_batch(
+      &id,
+      &[vvecs[0], &vvecs[1][..1], vvecs[2]],
+      &shares,
+      &mut rng
+    ));
+    assert!(!verify_weighted_batch(&id, &[&[], &[], &[]], &shares, &mut rng));
+    let mut bad = dealers[1].0.clone();
+    bad[1] = BlsPkValue::invalid();
+    assert!(!verify_weighted_batch(
+      &id,
+      &[vvecs[0], &bad, vvecs[2]],
+      &shares,
+      &mut rng
+    ));
   }
 
   /// Ids 1 to `n` as Core's tests write them, `WriteLE64` into a `uint256`.
@@ -339,7 +415,7 @@ mod tests {
     let refs: Vec<&BlsSkValue> = shares.iter().collect();
     let vvecs: Vec<Option<&[BlsPkValue]>> = dealers.iter().map(|(v, _)| Some(v.as_slice())).collect();
     assert_eq!(
-      verify_contribution_shares(&ids[0], &vvecs, &refs, aggregated, flag),
+      verify_contribution_shares(&ids[0], &vvecs, &refs, aggregated, flag, &mut TestRng(1)),
       ContributionVerdicts {
         verdicts: vec![true; 3],
         individually: false,
@@ -348,7 +424,7 @@ mod tests {
     dealers[0].0[0] = dealers[1].0[0].clone();
     let vvecs: Vec<Option<&[BlsPkValue]>> = dealers.iter().map(|(v, _)| Some(v.as_slice())).collect();
     assert_eq!(
-      verify_contribution_shares(&ids[0], &vvecs, &refs, aggregated, flag),
+      verify_contribution_shares(&ids[0], &vvecs, &refs, aggregated, flag, &mut TestRng(1)),
       ContributionVerdicts {
         verdicts: vec![false, true, true],
         individually: true,
@@ -356,18 +432,43 @@ mod tests {
     );
   }
 
-  /// An invalid share makes its batch's sum invalid, so the whole batch is
-  /// `false`; other batches are checked as usual.
-  #[test]
-  fn invalid_share_fails_its_batch() {
-    let flag = BlsSchemeKind::Basic;
-    let dealers = dkg(10, 2);
+  /// Core's `FuncVerifyContributionSharesHonest` (`test/bls_tests.cpp`,
+  /// v24.0.0 #8016): ten dealers of threshold 6 over two batches. A wrong
+  /// share fails alone. Two shares swapped within a batch fail both, and an
+  /// invalid share fails alone.
+  #[rstest]
+  #[case::legacy(BlsSchemeKind::Legacy)]
+  #[case::basic(BlsSchemeKind::Basic)]
+  fn cores_contribution_shares_test(#[case] flag: BlsSchemeKind) {
+    let n = CONTRIBUTION_VERIFY_BATCH_SIZE + 2;
+    let ids = le64_ids(n as u64);
+    let mut rng = UnwrapErr(SysRng);
+    let dealers: Vec<(Vec<BlsPkValue>, Vec<BlsSkValue>)> = (0..n)
+      .map(|_| generate_contributions(6, &ids, &mut rng).unwrap())
+      .collect();
     let vvecs: Vec<Option<&[BlsPkValue]>> = dealers.iter().map(|(v, _)| Some(v.as_slice())).collect();
-    let mut shares: Vec<BlsSkValue> = dealers.iter().map(|(_, s)| s[0].clone()).collect();
-    shares[1] = BlsSkValue::invalid();
-    let refs: Vec<&BlsSkValue> = shares.iter().collect();
-    let got = verify_contribution_shares(&ids(10)[0], &vvecs, &refs, true, flag).verdicts;
-    assert_eq!(got, [vec![false; 8], vec![true; 2]].concat());
+    let shares: Vec<BlsSkValue> = dealers.iter().map(|(_, s)| s[0].clone()).collect();
+    let check = |shares: &[BlsSkValue], aggregated: bool, bad: &[usize]| {
+      let refs: Vec<&BlsSkValue> = shares.iter().collect();
+      let want: Vec<bool> = (0..n).map(|i| !bad.contains(&i)).collect();
+      assert_eq!(
+        verify_contribution_shares(&ids[0], &vvecs, &refs, aggregated, flag, &mut TestRng(1)).verdicts,
+        want,
+        "aggregated {aggregated} bad {bad:?}"
+      );
+    };
+    let mut corrupted = shares.clone();
+    corrupted[3] = make_new_key(&mut rng);
+    for aggregated in [true, false] {
+      check(&shares, aggregated, &[]);
+      check(&corrupted, aggregated, &[3]);
+    }
+    let mut swapped = shares.clone();
+    swapped.swap(1, 2);
+    let mut missing = shares.clone();
+    missing[5] = BlsSkValue::invalid();
+    check(&swapped, true, &[1, 2]);
+    check(&missing, true, &[5]);
   }
 
   /// The quorum vector is the dealers' element-wise sum; its key share for
