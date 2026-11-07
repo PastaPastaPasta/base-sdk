@@ -61,9 +61,7 @@ pub(crate) fn tx_hash_with(tx: &Transaction, payload: &impl BaseCodec) -> Hash25
     tx.lock_time(),
     extra,
   );
-  let mut image = Vec::new();
-  tx.encode(&mut image);
-  sha256d_hash(&image)
+  Hash256::from_lendian(tx.instance_hash().to_lendian())
 }
 
 /// The id of a quorum signing request, the hash of `prefix` and `n`.
