@@ -101,7 +101,7 @@ impl BlsElem<G1, BLS_PK_LEN> {
     }
   }
 
-  /// The wrapper `DHKeyExchange` leaves (`bls.cpp:208-220`) for a secret
+  /// The wrapper `DHKeyExchange` leaves (`bls.cpp:215-227`) for a secret
   /// key's stored bytes `k`, at most `r` as [`Self::mul_secret`] needs:
   /// that product with [`Self::secret_basic`]'s bytes, so that on a Group
   /// element only blst's constant-time code sees the secret multiple.
@@ -447,9 +447,9 @@ macro_rules! impl_elem {
       /// `bn_read_bin`), always `BASIC`. Core reduces k modulo r first
       /// unless it fits a digit.
       ///
-      /// Variable-time on every element, so for public scalars only; a
-      /// secret key's product is the crate's `mul_secret_value` (BS11a-3
-      /// D34).
+      /// Variable-time on every element, so for public scalars and Core's
+      /// single-use batch weights only; a secret key's product is the
+      /// crate's `mul_secret_value` (BS11a-3 D34).
       #[must_use]
       pub fn mul(&self, k: &[u8; 32]) -> Self {
         let k = Bn::from_bendian(k);

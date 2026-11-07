@@ -60,7 +60,7 @@ pub fn aggregate_public_keys_insecure_pair(a: &BlsPkValue, b: &BlsPkValue) -> Bl
   aggregate_public_keys_insecure(&[a, b])
 }
 
-/// `CBLSSignature::AggregateInsecure(Span)` (`bls.cpp:233-255`): the
+/// `CBLSSignature::AggregateInsecure(Span)` (`bls.cpp:240-262`): the
 /// invalid signature for an empty span, otherwise the valid sum from the
 /// default element in order of every signature's element whatever its
 /// validity (`schemes.cpp:176-183`). The sum is valid even when infinite.
@@ -68,7 +68,7 @@ pub fn aggregate_signatures_insecure(sigs: &[&BlsSigValue]) -> BlsSigValue {
   BlsSigElem::aggregate_insecure(sigs.iter().copied()).map_or_else(BlsSigValue::invalid, Into::into)
 }
 
-/// `CBLSSignature::AggregateInsecure(o)` (`bls.cpp:222-231`): the span sum
+/// `CBLSSignature::AggregateInsecure(o)` (`bls.cpp:229-238`): the span sum
 /// of `[a, b]`, or the invalid signature when either is invalid.
 pub fn aggregate_signatures_insecure_pair(a: &BlsSigValue, b: &BlsSigValue) -> BlsSigValue {
   if !a.is_valid() || !b.is_valid() {
@@ -77,7 +77,7 @@ pub fn aggregate_signatures_insecure_pair(a: &BlsSigValue, b: &BlsSigValue) -> B
   aggregate_signatures_insecure(&[a, b])
 }
 
-/// `CBLSSignature::SubInsecure(o)` (`bls.cpp:289-294`): `a + (-b)` with `a`
+/// `CBLSSignature::SubInsecure(o)` (`bls.cpp:296-301`): `a + (-b)` with `a`
 /// as the first operand, valid even when infinite, or the invalid signature
 /// when either is invalid.
 pub fn sub_signatures_insecure(a: &BlsSigValue, b: &BlsSigValue) -> BlsSigValue {
@@ -110,7 +110,7 @@ pub fn mul_signature_insecure(sig: &BlsSigValue, factor: &BlsSkValue) -> BlsSigV
 }
 
 /// `CBLSSignature::AggregateSecure(sigs, pks, hash)` under the flag
-/// (`bls.cpp:257-287`), `CoreMPL::AggregateSecure` (`schemes.cpp:194-223`).
+/// (`bls.cpp:264-294`), `CoreMPL::AggregateSecure` (`schemes.cpp:194-223`).
 ///
 /// The invalid signature for empty or unequal spans. No validity is tested:
 /// each object takes part with its element. The pairs are sorted by the

@@ -18,7 +18,7 @@ use dash_types::type_id::Unencodable;
 use rand_core::CryptoRng;
 use zeroize::Zeroizing;
 
-/// `MakeBatchVerificationWeight(rng, N)` (`bls_batchverifier.h:16-27`): a
+/// `MakeBatchVerificationWeight(rng, N)` (`bls_batchverifier.h:18-27`): a
 /// key whose low `N` bytes are the first `N` of a 32-byte draw from `rng`,
 /// drawn again while all zero. `N` is 1 to 16, as Core asserts.
 pub fn make_batch_verification_weight<const N: usize>(rng: &mut impl CryptoRng) -> BlsSkValue {

@@ -26,7 +26,7 @@ use rand_core::CryptoRng;
 /// `CONTRIBUTION_VERIFY_BATCH_SIZE` (`bls/bls_worker.h:105`).
 pub const CONTRIBUTION_VERIFY_BATCH_SIZE: usize = 8;
 
-/// `VerifyVectorHelper` (`bls_worker.cpp:15-27`): every object valid and no
+/// `VerifyVectorHelper` (`bls_worker.cpp:20-32`): every object valid and no
 /// two with the same `GetHash()` under `flag`.
 pub fn verify_vector<K: BlsWire<N>, const N: usize>(values: &[&BlsValue<K, N>], flag: BlsSchemeKind) -> bool {
   let mut hashes = BTreeSet::new();
@@ -35,7 +35,7 @@ pub fn verify_vector<K: BlsWire<N>, const N: usize>(values: &[&BlsValue<K, N>], 
     .all(|v| v.is_valid() && hashes.insert(v.serialize_hash(flag)))
 }
 
-/// `VerifyVerificationVectors` (`bls_worker.cpp:752-773`): every vector
+/// `VerifyVerificationVectors` (`bls_worker.cpp:783-805`): every vector
 /// present and as long as the first, every key valid, and no `GetHash()`
 /// repeated across them all.
 pub fn verify_verification_vectors(vvecs: &[Option<&[BlsPkValue]>], flag: BlsSchemeKind) -> bool {
@@ -52,10 +52,11 @@ pub fn verify_verification_vectors(vvecs: &[Option<&[BlsPkValue]>], flag: BlsSch
 }
 
 /// `CBLSWorker::FindVerificationVectorsWithSharedCoefficients`
-/// (`bls_worker.cpp:807-824`): the indexes of the vectors holding a
-/// coefficient whose `GetHash()` under `flag` an earlier vector holds, and
-/// of that earlier vector. Missing vectors are skipped, and a repeat inside
-/// one vector is not marked.
+/// (`bls_worker.cpp:807-824`): the indexes of the vectors sharing a
+/// coefficient's `GetHash()` under `flag` with another vector.
+///
+/// Missing vectors are skipped, and a repeat inside one vector is not
+/// marked.
 pub fn find_verification_vectors_with_shared_coefficients(
   vvecs: &[Option<&[BlsPkValue]>],
   flag: BlsSchemeKind,
@@ -81,7 +82,7 @@ fn sync_aggregate<T: Clone>(values: &[&T], pair: impl Fn(&T, &T) -> T) -> Option
   Some(rest.iter().fold((*first).clone(), |acc, v| pair(&acc, v)))
 }
 
-/// `AsyncAggregateHelper` (`bls_worker.cpp:615-628`): invalid when empty,
+/// `AsyncAggregateHelper` (`bls_worker.cpp:616-632`): invalid when empty,
 /// when an object is invalid, or, with `reject_duplicates`, when
 /// [`verify_vector`] fails; otherwise the sum in input order.
 fn aggregate_helper<K: BlsWire<N>, const N: usize>(
@@ -128,7 +129,7 @@ fn sum_vectors(vvecs: &[&[BlsPkValue]]) -> Vec<BlsPkValue> {
     .collect()
 }
 
-/// `CBLSWorker::BuildQuorumVerificationVector` (`bls_worker.cpp:590-605`):
+/// `CBLSWorker::BuildQuorumVerificationVector` (`bls_worker.cpp:587-601`):
 /// `None` when there is no vector or [`verify_verification_vectors`] fails,
 /// otherwise the element-wise sums.
 pub fn build_quorum_verification_vector(
@@ -142,7 +143,7 @@ pub fn build_quorum_verification_vector(
   Some(sum_vectors(&vvecs))
 }
 
-/// `CBLSWorker::BuildPubKeyShare` (`bls_worker.cpp:679-684`): the key share
+/// `CBLSWorker::BuildPubKeyShare` (`bls_worker.cpp:681-686`): the key share
 /// for `id`, invalid when `PublicKeyShare` fails.
 pub fn build_pub_key_share(vvec: &[BlsPkValue], id: &[u8; 32]) -> BlsPkValue {
   let mut share = BlsPkValue::invalid();
@@ -168,11 +169,12 @@ pub fn verify_contribution_share(
   vvec.is_some_and(|vvec| verify_vector(&vvec.iter().collect::<Vec<_>>(), flag) && verify_share(for_id, vvec, share))
 }
 
-/// `ContributionVerifier::VerifyWeightedBatch` (`bls_worker.cpp:497-540`):
-/// each share's public key and each coefficient of its vector are
-/// multiplied by one 8-byte weight from `rng`, and the vectors are summed
-/// element-wise. The batch passes when the sum's key share for `for_id`
-/// equals the sum of the weighted keys.
+/// `ContributionVerifier::VerifyWeightedBatch` (`bls_worker.cpp:500-540`):
+/// whether the key share for `for_id` of the weighted vectors' sum equals
+/// the sum of the shares' weighted public keys.
+///
+/// Each share's public key and each coefficient of its vector are
+/// multiplied by one 8-byte weight from `rng`.
 ///
 /// `false` for an empty vector, an invalid share, a vector of another
 /// length than the first, or an invalid coefficient or partial sum.
@@ -223,7 +225,7 @@ pub struct ContributionVerdicts {
 }
 
 /// `CBLSWorker::VerifyContributionShares` (`bls_worker.cpp:688-736`,
-/// `ContributionVerifier` `:388-588`): one answer per contribution.
+/// `ContributionVerifier` `:394-585`): one answer per contribution.
 ///
 /// When [`verify_verification_vectors`] fails, each contribution is checked
 /// alone by [`verify_contribution_share`]. Otherwise, when `aggregated`,
@@ -232,9 +234,9 @@ pub struct ContributionVerdicts {
 /// one. Without `aggregated`, every contribution is checked alone.
 ///
 /// The weighting is sound only for points in the subgroup, so callers that
-/// may hold vectors decoded under the legacy scheme pass `aggregated =
-/// false`, as Core's header states. `vvecs` and `shares` of different
-/// lengths give all `false`, which Core does not check.
+/// may hold vectors decoded under the legacy scheme pass
+/// `aggregated = false`, as Core's header states. `vvecs` and `shares` of
+/// different lengths give all `false`, which Core does not check.
 pub fn verify_contribution_shares(
   for_id: &[u8; 32],
   vvecs: &[Option<&[BlsPkValue]>],
@@ -285,7 +287,7 @@ pub fn verify_contribution_shares(
   verdicts(results)
 }
 
-/// `CBLSWorker::GenerateContributions` (`bls_worker.cpp:78-118`): `t`
+/// `CBLSWorker::GenerateContributions` (`bls_worker.cpp:78-117`): `t`
 /// fresh coefficients, their public keys as the verification vector, and
 /// each id's secret share; `None` when a share fails, as it does for every
 /// id when `t` is below 2.
