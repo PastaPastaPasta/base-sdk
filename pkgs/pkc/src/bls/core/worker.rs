@@ -51,6 +51,29 @@ pub fn verify_verification_vectors(vvecs: &[Option<&[BlsPkValue]>], flag: BlsSch
   })
 }
 
+/// `CBLSWorker::FindVerificationVectorsWithSharedCoefficients`
+/// (`bls_worker.cpp:807-824`): the indexes of the vectors holding a
+/// coefficient whose `GetHash()` under `flag` an earlier vector holds, and
+/// of that earlier vector. Missing vectors are skipped, and a repeat inside
+/// one vector is not marked.
+pub fn find_verification_vectors_with_shared_coefficients(
+  vvecs: &[Option<&[BlsPkValue]>],
+  flag: BlsSchemeKind,
+) -> BTreeSet<usize> {
+  let mut owners = BTreeMap::new();
+  let mut shared = BTreeSet::new();
+  for (i, vvec) in vvecs.iter().enumerate() {
+    for coefficient in vvec.unwrap_or_default() {
+      let owner = *owners.entry(coefficient.serialize_hash(flag)).or_insert(i);
+      if owner != i {
+        shared.insert(owner);
+        shared.insert(i);
+      }
+    }
+  }
+  shared
+}
+
 /// `Aggregator::SyncAggregate`: the first object, then each later one added
 /// by the pair `AggregateInsecure`.
 fn sync_aggregate<T: Clone>(values: &[&T], pair: impl Fn(&T, &T) -> T) -> Option<T> {
@@ -58,32 +81,40 @@ fn sync_aggregate<T: Clone>(values: &[&T], pair: impl Fn(&T, &T) -> T) -> Option
   Some(rest.iter().fold((*first).clone(), |acc, v| pair(&acc, v)))
 }
 
-/// `AsyncAggregateHelper` (`bls_worker.cpp:619-635`): invalid when empty or
-/// when [`verify_vector`] fails, otherwise the sum in input order.
+/// `AsyncAggregateHelper` (`bls_worker.cpp:615-628`): invalid when empty,
+/// when an object is invalid, or, with `reject_duplicates`, when
+/// [`verify_vector`] fails; otherwise the sum in input order.
 fn aggregate_helper<K: BlsWire<N>, const N: usize>(
   values: &[&BlsValue<K, N>],
   flag: BlsSchemeKind,
+  reject_duplicates: bool,
   pair: impl Fn(&BlsValue<K, N>, &BlsValue<K, N>) -> BlsValue<K, N>,
 ) -> BlsValue<K, N> {
-  if !verify_vector(values, flag) {
+  let valid = if reject_duplicates {
+    verify_vector(values, flag)
+  } else {
+    values.iter().all(|v| v.is_valid())
+  };
+  if !valid {
     return BlsValue::invalid();
   }
   sync_aggregate(values, pair).unwrap_or_else(BlsValue::invalid)
 }
 
-/// `CBLSWorker::AggregateSecretKeys`.
+/// `CBLSWorker::AggregateSecretKeys` (`bls_worker.cpp:634-641`): equal keys
+/// are summed, so `flag` does not change the result.
 pub fn aggregate_secret_keys(values: &[&BlsSkValue], flag: BlsSchemeKind) -> BlsSkValue {
-  aggregate_helper(values, flag, aggregate_secret_keys_insecure_pair)
+  aggregate_helper(values, flag, false, aggregate_secret_keys_insecure_pair)
 }
 
 /// `CBLSWorker::AggregatePublicKeys`.
 pub fn aggregate_public_keys(values: &[&BlsPkValue], flag: BlsSchemeKind) -> BlsPkValue {
-  aggregate_helper(values, flag, aggregate_public_keys_insecure_pair)
+  aggregate_helper(values, flag, true, aggregate_public_keys_insecure_pair)
 }
 
 /// `CBLSWorker::AggregateSigs`.
 pub fn aggregate_signatures(values: &[&BlsSigValue], flag: BlsSchemeKind) -> BlsSigValue {
-  aggregate_helper(values, flag, aggregate_signatures_insecure_pair)
+  aggregate_helper(values, flag, true, aggregate_signatures_insecure_pair)
 }
 
 /// `VectorAggregator`: the element-wise sums of vectors of one length.
@@ -471,6 +502,94 @@ mod tests {
     check(&missing, true, &[5]);
   }
 
+  /// Core's `FuncVerifyContributionSharesDuplicateCoefficient` checks of
+  /// `FindVerificationVectorsWithSharedCoefficients` (v24.0.0 #8016). A
+  /// copied coefficient or a copied contribution marks both vectors. A
+  /// missing vector is skipped, and a repeat inside one vector is not marked.
+  #[rstest]
+  #[case::legacy(BlsSchemeKind::Legacy)]
+  #[case::basic(BlsSchemeKind::Basic)]
+  fn vectors_sharing_coefficients(#[case] flag: BlsSchemeKind) {
+    let ids = le64_ids(4);
+    let mut rng = UnwrapErr(SysRng);
+    let mut dealers: Vec<(Vec<BlsPkValue>, Vec<BlsSkValue>)> = (0..3)
+      .map(|_| generate_contributions(2, &ids, &mut rng).unwrap())
+      .collect();
+    let vvecs =
+      |d: &[(Vec<BlsPkValue>, Vec<BlsSkValue>)]| -> Vec<Vec<BlsPkValue>> { d.iter().map(|(v, _)| v.clone()).collect() };
+    let some = |v: &[Vec<BlsPkValue>]| -> Vec<Option<Vec<BlsPkValue>>> { v.iter().cloned().map(Some).collect() };
+    let find = |v: &[Option<Vec<BlsPkValue>>]| {
+      let refs: Vec<Option<&[BlsPkValue]>> = v.iter().map(Option::as_deref).collect();
+      find_verification_vectors_with_shared_coefficients(&refs, flag)
+    };
+    assert!(find(&some(&vvecs(&dealers))).is_empty());
+    dealers[0].0[0] = dealers[1].0[0].clone();
+    assert_eq!(find(&some(&vvecs(&dealers))), BTreeSet::from([0, 1]));
+
+    dealers[0] = dealers[1].clone();
+    let copied = vvecs(&dealers);
+    let refs: Vec<Option<&[BlsPkValue]>> = copied.iter().map(|v| Some(v.as_slice())).collect();
+    let shares: Vec<&BlsSkValue> = dealers.iter().map(|(_, s)| &s[0]).collect();
+    assert_eq!(
+      verify_contribution_shares(&ids[0], &refs, &shares, true, flag, &mut TestRng(1)).verdicts,
+      vec![true; 3]
+    );
+    assert!(build_quorum_verification_vector(&refs, flag).is_none());
+    assert_eq!(find(&some(&copied)), BTreeSet::from([0, 1]));
+    assert!(build_quorum_verification_vector(&refs[2..], flag).is_some());
+
+    let distinct = [Some(copied[1].clone()), None, Some(copied[2].clone())];
+    assert!(find(&distinct).is_empty());
+    let k = copied[2][0].clone();
+    let repeated = [Some(vec![k.clone(), k]), Some(copied[1].clone())];
+    assert!(find(&repeated).is_empty());
+    let shared = [
+      None,
+      Some(copied[1].clone()),
+      Some(vec![copied[2][0].clone(), copied[1][1].clone()]),
+    ];
+    assert_eq!(find(&shared), BTreeSet::from([1, 2]));
+  }
+
+  /// Core's `FuncAggregateCollidingContributionShares`
+  /// (`test/bls_tests.cpp`, v24.0.0 #8016): at the id -1 two dealers'
+  /// polynomials agree, so they deal the member equal shares. Each verifies,
+  /// and the member's summed share matches the quorum vector.
+  #[rstest]
+  #[case::legacy(BlsSchemeKind::Legacy)]
+  #[case::basic(BlsSchemeKind::Basic)]
+  fn equal_secret_shares_aggregate(#[case] flag: BlsSchemeKind) {
+    let id = hex_conservative::hex!("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000000");
+    let mut rng = UnwrapErr(SysRng);
+    let mut polys: Vec<Vec<BlsSkValue>> = (0..2)
+      .map(|_| vec![make_new_key(&mut rng), make_new_key(&mut rng)])
+      .collect();
+    let mut share1 = BlsSkValue::invalid();
+    assert!(secret_key_share(&mut share1, &polys[1].iter().collect::<Vec<_>>(), &id));
+    let b1 = make_new_key(&mut rng);
+    polys.push(vec![aggregate_secret_keys_insecure_pair(&share1, &b1), b1]);
+    let vvecs: Vec<Vec<BlsPkValue>> = polys.iter().map(|p| p.iter().map(public_key).collect()).collect();
+    let shares: Vec<BlsSkValue> = polys
+      .iter()
+      .map(|p| {
+        let mut share = BlsSkValue::invalid();
+        assert!(secret_key_share(&mut share, &p.iter().collect::<Vec<_>>(), &id));
+        share
+      })
+      .collect();
+    assert_eq!(shares[1], shares[2]);
+    let vvecs: Vec<Option<&[BlsPkValue]>> = vvecs.iter().map(|v| Some(v.as_slice())).collect();
+    let refs: Vec<&BlsSkValue> = shares.iter().collect();
+    assert_eq!(
+      verify_contribution_shares(&id, &vvecs, &refs, true, flag, &mut TestRng(1)).verdicts,
+      vec![true; 3]
+    );
+    let quorum = build_quorum_verification_vector(&vvecs, flag).unwrap();
+    let sk = aggregate_secret_keys(&refs, flag);
+    assert!(sk.is_valid());
+    assert!(public_key(&sk).core_eq(&build_pub_key_share(&quorum, &id)));
+  }
+
   /// The quorum vector is the dealers' element-wise sum; its key share for
   /// a member is the public key of the member's summed shares.
   #[test]
@@ -507,6 +626,16 @@ mod tests {
     ));
     let sigs: [&BlsSigValue; 0] = [];
     assert!(!aggregate_signatures(&sigs, flag).is_valid());
+    let (sig, _) = super::super::tests::values_of(1, &[1u8; 32], flag);
+    assert!(aggregate_signatures(&[&sig], flag).is_valid());
+    assert!(!aggregate_signatures(&[&sig, &sig], flag).is_valid());
+    // Secret keys are summed though equal, and refused only when invalid.
+    let sk = &dealers[0].1[0];
+    let twice = aggregate_secret_keys(&[sk, sk], flag);
+    assert!(twice.is_valid());
+    assert_eq!(twice, aggregate_secret_keys_insecure_pair(sk, sk));
+    assert!(!aggregate_secret_keys(&[sk, &BlsSkValue::invalid()], flag).is_valid());
+    assert!(!aggregate_secret_keys(&[], flag).is_valid());
   }
 
   /// A vector repeating an object is refused before the share is checked,
