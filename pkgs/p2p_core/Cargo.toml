@@ -31,7 +31,6 @@ serde = [
 ]
 full = ["std", "serde"]
 portable = [
-  "dash-params/portable",
   "dash-pkc/portable",
   "dash-primitives/portable",
   "dash-script/portable",
