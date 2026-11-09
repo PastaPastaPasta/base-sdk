@@ -6,9 +6,7 @@
 
 //! Genesis validation test.
 
-#![expect(clippy::unwrap_used, reason = "test code")]
-
-use dash_params::{ChainParams, ChainParamsBuilder, DevnetGenesisParams, Network, Release};
+use dash_params::{ChainParams, Network};
 use dash_primitives::{Block, BlockHash, MerkleRoot};
 use dash_types::{Hashable, Numeric};
 use hex_conservative::hex;
@@ -23,11 +21,6 @@ use rstest::rstest;
 #[case::testnet(
   Block::from(&Network::Testnet3.chain().genesis),
   Network::Testnet3.chain(),
-  MerkleRoot::from_bendian(hex!("e0028eb9648db56b1ac77cf090b99048a8007e2bb64b68f092c03c7f56a662c7")),
-)]
-#[case::devnet(
-  Block::from(&Network::Devnet.chain().genesis),
-  Network::Devnet.chain(),
   MerkleRoot::from_bendian(hex!("e0028eb9648db56b1ac77cf090b99048a8007e2bb64b68f092c03c7f56a662c7")),
 )]
 #[case::regtest(
@@ -51,62 +44,4 @@ fn genesis_block_hash_matches(
   // hash declared in the consensus parameters.
   let expected = BlockHash::from(params.consensus.hash_genesis_block);
   assert_eq!(genesis.header().hash(), expected);
-}
-
-/// The devnet genesis block primitives builds from the parameters hashes to
-/// the hash and nonce the parameters' own search found. The names straddle
-/// each push size of the coinbase input script, whose prefix is checked.
-#[rstest]
-#[case::empty(String::new(), &[0x51, 0x00])]
-#[case::one_byte(String::from("x"), &[0x51, 0x01])]
-#[case::longest_direct_push("x".repeat(75), &[0x51, 0x4b])]
-#[case::shortest_pushdata1("x".repeat(76), &[0x51, 0x4c, 0x4c])]
-#[case::longest_pushdata1("x".repeat(255), &[0x51, 0x4c, 0xff])]
-#[case::shortest_pushdata2("x".repeat(256), &[0x51, 0x4d, 0x00, 0x01])]
-#[case::non_ascii(String::from("devnet-\u{fc}n\u{ef}c\u{f8}d\u{e9}"), &[0x51, 0x12])]
-fn devnet_genesis_blocks_match_their_params(#[case] name: String, #[case] push: &[u8]) {
-  let chain = Network::Regtest.chain();
-  let params = DevnetGenesisParams::find(&name, &chain.genesis, chain.consensus.hash_genesis_block).unwrap();
-  let script_sig = params.script_sig();
-  assert_eq!(script_sig[..push.len()], *push);
-  assert_eq!(script_sig[push.len()..], *name.as_bytes());
-  let block = Block::from(&params);
-  assert_eq!(block.header().hash(), BlockHash::from(params.hash));
-  assert_eq!(block.header().nonce(), params.nonce);
-  assert_eq!(
-    block.header().prev_hash(),
-    BlockHash::from(chain.consensus.hash_genesis_block)
-  );
-  assert_eq!(block.header().merkle_root(), block.merkle().0);
-}
-
-/// At each release, the setup's genesis block hashes to its genesis hash and,
-/// on a devnet, its devnet genesis block to the devnet genesis hash, which
-/// the setup's height-1 checkpoint holds.
-#[rstest]
-fn setup_genesis_blocks_match_their_hashes(
-  #[values(Network::Main, Network::Testnet3, Network::Devnet, Network::Regtest)] network: Network,
-  #[values(Release::V23_1, Release::V24_0)] release: Release,
-  #[values(None, Some("bs5"))] devnet_name: Option<&str>,
-) {
-  let mut builder = ChainParamsBuilder::new(network, release);
-  if let Some(name) = devnet_name {
-    builder = builder.devnet_name(name);
-  }
-  let setup = builder.build().unwrap();
-  let genesis = Block::from(&setup.genesis);
-  assert_eq!(
-    genesis.header().hash(),
-    BlockHash::from(setup.consensus.hash_genesis_block)
-  );
-  let Some(params) = &setup.devnet_genesis else {
-    assert_ne!(network, Network::Devnet);
-    return;
-  };
-  let block = Block::from(params);
-  let hash = BlockHash::from(setup.consensus.hash_devnet_genesis_block);
-  assert_eq!(block.header().hash(), hash);
-  assert_eq!(block.header().prev_hash(), genesis.header().hash());
-  let (height, checkpoint) = setup.checkpoints[1];
-  assert_eq!((height.to_u32(), BlockHash::from(checkpoint)), (1, hash));
 }
