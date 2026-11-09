@@ -19,7 +19,7 @@ use crate::error::P2pDecodeError;
 use crate::prelude::*;
 
 use dash_num::Hash256;
-use dash_params::{LlmqType, MAX_LLMQ_SIZE};
+use dash_params::LlmqType;
 use dash_pkc::bls::BlsSigBytes;
 use dash_primitives::{hash_impl, DynBitset, QuorumHash};
 use dash_types::codec::{read_bytes, BaseCodec, DecodeError, EncodeBuf};
@@ -27,8 +27,13 @@ use dash_types::type_id::TypeId;
 use dash_types::{impl_new, CompactSize, Numeric};
 use getset::{CopyGetters, Getters};
 
+/// Core's `MAX_LLMQ_SIZE`, the largest quorum the signing protocol supports
+/// (`llmq/params.h` at v24.0.0).
+const MAX_LLMQ_SIZE: u16 = 400;
+
 /// Core's `MAX_MSGS_TOTAL_BATCHED_SIGS`, the largest quorum: the most shares
-/// one inventory, batch or `qbsigs` message holds.
+/// one inventory, batch or `qbsigs` message holds (`llmq/signing_shares.h` at
+/// v24.0.0).
 pub const MAX_BATCHED_SIGS: usize = MAX_LLMQ_SIZE as usize;
 
 /// Core's `MAX_MSGS_CNT_QSIGSESANN`, the most announcements in a `qsigsesann`.
