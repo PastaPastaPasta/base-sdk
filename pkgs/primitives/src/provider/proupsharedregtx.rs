@@ -7,7 +7,8 @@
 //! ProUpSharedRegTx shared registrar update payload (type 12).
 
 use super::share::MAX_SHARES;
-use super::SharedRegistrarSig;
+use super::sig::is_valid_operator_key;
+use super::{ProTxVersion, SharedRegistrarSig};
 use crate::codec::{decode_list, encode_list, impl_payload};
 use crate::prelude::*;
 use crate::sptx::{InputsHash, ProTxInvalid};
@@ -80,7 +81,8 @@ impl Checkable for ProUpSharedRegTx {
     if self.version != Self::CURRENT_VERSION {
       return Some(ProTxInvalid::BadSharedRegistrarVersion { version: self.version });
     }
-    if self.pub_key_operator.is_null() || self.key_id_voting.is_null() {
+    // The operator key is a basic-scheme key.
+    if !is_valid_operator_key(ProTxVersion::BasicBls, &self.pub_key_operator) || self.key_id_voting.is_null() {
       return Some(ProTxInvalid::NullKey);
     }
     if self.sigs.is_empty() || self.sigs.len() > MAX_SHARES {
@@ -107,6 +109,7 @@ impl fmt::Display for ProUpSharedRegTx {
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
+  use crate::provider::sig::tests::KeyEdit;
   use crate::Transaction;
 
   use dash_dev::{assert_json_rt, check_sptx_raw, vec_from_hex};
@@ -192,6 +195,21 @@ mod tests {
     regtest("29196a972de7740f436463bc9fae319921bfacb296868c2a429c99796228c261")
   }
 
+  /// The operator key is read under the basic scheme.
+  #[rstest]
+  #[case::valid(KeyEdit::Kept, None)]
+  #[case::null(KeyEdit::Null, Some(ProTxInvalid::NullKey))]
+  #[case::off_curve(KeyEdit::OffCurve, Some(ProTxInvalid::NullKey))]
+  #[case::off_subgroup(KeyEdit::OffSubgroup, Some(ProTxInvalid::NullKey))]
+  #[case::infinity(KeyEdit::Infinity, Some(ProTxInvalid::NullKey))]
+  #[case::top_bit_cleared(KeyEdit::TopBitCleared, Some(ProTxInvalid::NullKey))]
+  #[case::basic_only(KeyEdit::BasicOnly, None)]
+  fn operator_key(#[case] edit: KeyEdit, #[case] expected: Option<ProTxInvalid>) {
+    let mut ptx = update();
+    ptx.pub_key_operator = edit.apply(ptx.pub_key_operator);
+    assert_eq!(ptx.check(), expected);
+  }
+
   fn null_operator(ptx: &mut ProUpSharedRegTx) {
     ptx.pub_key_operator = BlsPkBytes::default();
   }
@@ -206,7 +224,6 @@ mod tests {
     |ptx: &mut ProUpSharedRegTx| ptx.sigs.resize(9, ptx.sigs[0]),
     Some(ProTxInvalid::BadSharedRegistrarSigCount { count: 9 })
   )]
-  #[case::null_operator(null_operator, Some(ProTxInvalid::NullKey))]
   #[case::null_voting(
     |ptx: &mut ProUpSharedRegTx| ptx.key_id_voting = PubKeyHash::default(),
     Some(ProTxInvalid::NullKey)

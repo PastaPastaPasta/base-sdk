@@ -7,6 +7,7 @@
 //! ProUpRegTx registrar-update payload (type 3).
 
 use super::share::{check_payout_version, check_payouts, MAX_REWARD};
+use super::sig::is_valid_operator_key;
 use super::{OwnerSig, PayoutShare, ProTxVersion};
 use crate::codec::{decode_list, encode_list, impl_payload};
 use crate::prelude::*;
@@ -141,7 +142,7 @@ impl Checkable for ProUpRegTx {
       return Some(e);
     }
 
-    if self.pub_key_operator.is_null() {
+    if !is_valid_operator_key(self.version, &self.pub_key_operator) {
       return Some(ProTxInvalid::NullKey);
     }
     if self.key_id_voting.is_null() {
@@ -196,6 +197,7 @@ impl fmt::Display for ProUpRegTx {
 mod tests {
   use super::*;
   use crate::provider::share::tests::script;
+  use crate::provider::sig::tests::{subgroup_key, KeyEdit};
 
   use dash_dev::{assert_json_rt, assert_serde_rt, check_sptx, check_sptx_raw, vec_from_hex, Corpus};
   use dash_script::Recipient;
@@ -245,6 +247,40 @@ mod tests {
   /// A regtest update with eight payouts.
   fn update() -> ProUpRegTx {
     regtest("e7cb375dc4fbb47d60490f298538d8f48adc11e9af8619963d39923234cac08e")
+  }
+
+  /// From version 2 the operator key is read under the basic scheme.
+  #[rstest]
+  #[case::valid(KeyEdit::Kept, None)]
+  #[case::null(KeyEdit::Null, Some(ProTxInvalid::NullKey))]
+  #[case::off_curve(KeyEdit::OffCurve, Some(ProTxInvalid::NullKey))]
+  #[case::off_subgroup(KeyEdit::OffSubgroup, Some(ProTxInvalid::NullKey))]
+  #[case::infinity(KeyEdit::Infinity, Some(ProTxInvalid::NullKey))]
+  #[case::top_bit_cleared(KeyEdit::TopBitCleared, Some(ProTxInvalid::NullKey))]
+  #[case::basic_only(KeyEdit::BasicOnly, None)]
+  fn operator_key(
+    #[values(basic_bls(), update())] mut ptx: ProUpRegTx,
+    #[case] edit: KeyEdit,
+    #[case] expected: Option<ProTxInvalid>,
+  ) {
+    ptx.pub_key_operator = edit.apply(ptx.pub_key_operator);
+    assert_eq!(ptx.check(), expected);
+  }
+
+  /// At version 1 the operator key is read under the legacy scheme.
+  #[rstest]
+  #[case::valid(KeyEdit::Kept, None)]
+  #[case::null(KeyEdit::Null, Some(ProTxInvalid::NullKey))]
+  #[case::off_curve(KeyEdit::OffCurve, None)]
+  #[case::off_subgroup(KeyEdit::OffSubgroup, None)]
+  #[case::infinity(KeyEdit::Infinity, Some(ProTxInvalid::NullKey))]
+  #[case::top_bit_cleared(KeyEdit::TopBitCleared, None)]
+  #[case::basic_only(KeyEdit::BasicOnly, Some(ProTxInvalid::NullKey))]
+  fn operator_key_legacy(#[case] edit: KeyEdit, #[case] expected: Option<ProTxInvalid>) {
+    let mut ptx = basic_bls();
+    ptx.version = ProTxVersion::LegacyBls;
+    ptx.pub_key_operator = edit.apply(subgroup_key());
+    assert_eq!(ptx.check(), expected);
   }
 
   /// The first payout of `ptx` paid to `key` instead.
