@@ -64,7 +64,30 @@ mod tests {
   use crate::{CommandString, P2pMsg};
 
   use dash_dev::{assert_serde_rt, check_wire, Corpus};
+  use dash_primitives::{Block, Transaction};
   use rstest::rstest;
+
+  #[rstest]
+  fn corpus_block() {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "blocks");
+    let items = corpus.entries::<Block>("block", |raw, details, label| {
+      check_wire(raw, details, label);
+      let decoded = P2pMsg::decode_payload(&CommandString::BLOCK, raw);
+      assert_eq!(decoded, Ok(P2pMsg::Block(details.clone())), "{label}: dispatch");
+    });
+    assert_serde_rt("block", &items);
+  }
+
+  #[rstest]
+  fn corpus_tx() {
+    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "blocks");
+    let items = corpus.entries::<Transaction>("tx", |raw, details, label| {
+      check_wire(raw, details, label);
+      let decoded = P2pMsg::decode_payload(&CommandString::TX, raw);
+      assert_eq!(decoded, Ok(P2pMsg::Tx(details.clone())), "{label}: dispatch");
+    });
+    assert_serde_rt("tx", &items);
+  }
 
   #[rstest]
   fn corpus_sendcmpct() {

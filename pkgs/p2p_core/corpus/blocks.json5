@@ -1,10 +1,10 @@
 //
-// Block relay vectors. Generated with the reference
-// implementation (dashpay/dash v24.0.0-rc.3, 0364ed626e).
+// Block relay vectors. The sendcmpct and getblocks sections use the
+// reference implementation (dashpay/dash v24.0.0-rc.3, 0364ed626e).
 //
 // Each section comes with the program used to generate the vectors.
 //
-// To run a program, paste it at the end of the `net_tests` suite in
+// To run either program, paste it at the end of the test suite in
 // `src/test/net_tests.cpp` at the specified revision, build it with
 // `make -C src test/test_dash` and run
 // `./src/test/test_dash --run_test=net_tests/<name>`. The output should match
@@ -95,5 +95,117 @@ BOOST_AUTO_TEST_CASE(getblocks_payloads)
         "hash_stop": "000008ca1832a4baf228eb1553c03d3a2c8e02399550dd6ea8d65cec3ef23d2e"
       }
     },
+  },
+//
+// Block and transaction vectors. Generated with the reference
+// implementation (dashpay/dash v24.0.0, 938fba5028).
+//
+// Each section comes with the program used to generate the vectors.
+//
+// To run a program, move its `#include` lines to the top of
+// `src/test/blockencodings_tests.cpp` at the specified revision and paste the
+// rest at the end of the `blockencodings_tests` suite. Build it with
+// `make -C src test/test_dash` and run
+// `./src/test/test_dash --run_test=blockencodings_tests/<name>` with
+// `--log_level=nothing --report_level=no`. The output should match the
+// section. Run each program on its own, since their helper definitions
+// overlap.
+//
+/*
+#include <iostream>
+#include <tinyformat.h>
+#include <util/strencodings.h>
+
+static CMutableTransaction CorpusTx(int i) {
+    CMutableTransaction tx;
+    tx.nVersion = i + 1;
+    tx.nLockTime = 17 + i;
+    tx.vin.emplace_back(COutPoint(uint256::ONE, 3 + i), CScript{} << OP_TRUE, 42 + i);
+    tx.vout.emplace_back(1234 + i, CScript{} << OP_RETURN);
+    return tx;
+}
+static std::string CorpusTxJson(int i) {
+    return strprintf("{\"version\":%d,\"txType\":0,\"inputs\":[{\"prevout\":{\"hash\":\"%s\",\"index\":%d},\"scriptSig\":\"51\",\"sequence\":%d}],\"outputs\":[{\"value\":%d,\"scriptPubKey\":\"6a\"}],\"lockTime\":%d,\"extraPayload\":\"\"}",
+                     i + 1, uint256::ONE.ToString(), 3 + i, 42 + i, 1234 + i, 17 + i);
+}
+static CBlockHeader CorpusHeader() {
+    CBlockHeader h;
+    h.nVersion = 4;
+    h.hashPrevBlock = uint256::ONE;
+    h.hashMerkleRoot = uint256::TWO;
+    h.nTime = 123456789;
+    h.nBits = 0x207fffff;
+    h.nNonce = 12345;
+    return h;
+}
+static std::string CorpusHeaderJson() {
+    return strprintf("{\"version\":4,\"prevHash\":\"%s\",\"merkleRoot\":\"%s\",\"time\":123456789,\"bits\":545259519,\"nonce\":12345}", uint256::ONE.ToString(), uint256::TWO.ToString());
+}
+
+BOOST_AUTO_TEST_CASE(corpus_block_payloads)
+{
+    std::cout << strprintf("  \"block\": {\n");
+    for (int i = 0; i < 2; ++i) {
+        DataStream wire;
+        CBlock block;
+        static_cast<CBlockHeader&>(block) = CorpusHeader();
+        for (int j = 0; j <= i; ++j) block.vtx.push_back(MakeTransactionRef(CorpusTx(j)));
+        wire << block;
+        const auto details = strprintf("{\"header\":%s,\"transactions\":[%s%s]}", CorpusHeaderJson(), CorpusTxJson(0), i ? "," + CorpusTxJson(1) : "");
+        std::cout << strprintf("    \"case%d\": {\"raw\":\"%s\",\"details\":%s}%s\n", i, HexStr(wire), details, i == 1 ? "" : ",");
+    }
+    std::cout << strprintf("  },\n");
+}
+*/
+  "block": {
+    "case0": {"raw":"040000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000015cd5b07ffff7f203930000001010000000101000000000000000000000000000000000000000000000000000000000000000300000001512a00000001d204000000000000016a11000000","details":{"header":{"version":4,"prevHash":"0000000000000000000000000000000000000000000000000000000000000001","merkleRoot":"0000000000000000000000000000000000000000000000000000000000000002","time":123456789,"bits":545259519,"nonce":12345},"transactions":[{"version":1,"txType":0,"inputs":[{"prevout":{"hash":"0000000000000000000000000000000000000000000000000000000000000001","index":3},"scriptSig":"51","sequence":42}],"outputs":[{"value":1234,"scriptPubKey":"6a"}],"lockTime":17,"extraPayload":""}]}},
+    "case1": {"raw":"040000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000015cd5b07ffff7f203930000002010000000101000000000000000000000000000000000000000000000000000000000000000300000001512a00000001d204000000000000016a11000000020000000101000000000000000000000000000000000000000000000000000000000000000400000001512b00000001d304000000000000016a12000000","details":{"header":{"version":4,"prevHash":"0000000000000000000000000000000000000000000000000000000000000001","merkleRoot":"0000000000000000000000000000000000000000000000000000000000000002","time":123456789,"bits":545259519,"nonce":12345},"transactions":[{"version":1,"txType":0,"inputs":[{"prevout":{"hash":"0000000000000000000000000000000000000000000000000000000000000001","index":3},"scriptSig":"51","sequence":42}],"outputs":[{"value":1234,"scriptPubKey":"6a"}],"lockTime":17,"extraPayload":""},{"version":2,"txType":0,"inputs":[{"prevout":{"hash":"0000000000000000000000000000000000000000000000000000000000000001","index":4},"scriptSig":"51","sequence":43}],"outputs":[{"value":1235,"scriptPubKey":"6a"}],"lockTime":18,"extraPayload":""}]}}
+  },
+/*
+#include <iostream>
+#include <tinyformat.h>
+#include <util/strencodings.h>
+
+static CMutableTransaction CorpusTx(int i) {
+    CMutableTransaction tx;
+    tx.nVersion = i + 1;
+    tx.nLockTime = 17 + i;
+    tx.vin.emplace_back(COutPoint(uint256::ONE, 3 + i), CScript{} << OP_TRUE, 42 + i);
+    tx.vout.emplace_back(1234 + i, CScript{} << OP_RETURN);
+    return tx;
+}
+static std::string CorpusTxJson(int i) {
+    return strprintf("{\"version\":%d,\"txType\":0,\"inputs\":[{\"prevout\":{\"hash\":\"%s\",\"index\":%d},\"scriptSig\":\"51\",\"sequence\":%d}],\"outputs\":[{\"value\":%d,\"scriptPubKey\":\"6a\"}],\"lockTime\":%d,\"extraPayload\":\"\"}",
+                     i + 1, uint256::ONE.ToString(), 3 + i, 42 + i, 1234 + i, 17 + i);
+}
+static CBlockHeader CorpusHeader() {
+    CBlockHeader h;
+    h.nVersion = 4;
+    h.hashPrevBlock = uint256::ONE;
+    h.hashMerkleRoot = uint256::TWO;
+    h.nTime = 123456789;
+    h.nBits = 0x207fffff;
+    h.nNonce = 12345;
+    return h;
+}
+static std::string CorpusHeaderJson() {
+    return strprintf("{\"version\":4,\"prevHash\":\"%s\",\"merkleRoot\":\"%s\",\"time\":123456789,\"bits\":545259519,\"nonce\":12345}", uint256::ONE.ToString(), uint256::TWO.ToString());
+}
+
+BOOST_AUTO_TEST_CASE(corpus_tx_payloads)
+{
+    std::cout << strprintf("  \"tx\": {\n");
+    for (int i = 0; i < 2; ++i) {
+        DataStream wire;
+        wire << CorpusTx(i);
+        const auto details = CorpusTxJson(i);
+        std::cout << strprintf("    \"case%d\": {\"raw\":\"%s\",\"details\":%s}%s\n", i, HexStr(wire), details, i == 1 ? "" : ",");
+    }
+    std::cout << strprintf("  },\n");
+}
+*/
+  "tx": {
+    "case0": {"raw":"010000000101000000000000000000000000000000000000000000000000000000000000000300000001512a00000001d204000000000000016a11000000","details":{"version":1,"txType":0,"inputs":[{"prevout":{"hash":"0000000000000000000000000000000000000000000000000000000000000001","index":3},"scriptSig":"51","sequence":42}],"outputs":[{"value":1234,"scriptPubKey":"6a"}],"lockTime":17,"extraPayload":""}},
+    "case1": {"raw":"020000000101000000000000000000000000000000000000000000000000000000000000000400000001512b00000001d304000000000000016a12000000","details":{"version":2,"txType":0,"inputs":[{"prevout":{"hash":"0000000000000000000000000000000000000000000000000000000000000001","index":4},"scriptSig":"51","sequence":43}],"outputs":[{"value":1235,"scriptPubKey":"6a"}],"lockTime":18,"extraPayload":""}}
   },
 }

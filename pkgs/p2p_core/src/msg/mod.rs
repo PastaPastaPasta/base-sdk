@@ -29,7 +29,7 @@ use crate::short_id::ShortId;
 use crate::version::ProtocolVersion;
 
 use bitcoin_consensus_encoding as encoding;
-use dash_primitives::{GovObject, GovVote};
+use dash_primitives::{Block, GovObject, GovVote, Transaction};
 use dash_types::type_id::Unencodable;
 
 pub use addr::{Addr, AddrV2Entry, AddrV2Msg, TimestampedAddr};
@@ -71,6 +71,10 @@ define_p2p! {
     GetHeaders(GetHeaders) => GETHEADERS "getheaders" @ 12,
     /// Request block hashes.
     GetBlocks(GetBlocks) => GETBLOCKS "getblocks" @ 9,
+    /// Block data.
+    Block(Block) => BLOCK "block" @ 2,
+    /// Transaction.
+    Tx(Transaction) => TX "tx" @ 21,
     /// Block headers.
     Headers(Headers) => HEADERS "headers" @ 13,
     /// Request compressed block headers.
@@ -143,16 +147,12 @@ define_p2p! {
   }
 
   stub {
-    /// Block data.
-    Block => BLOCK "block" @ 2,
     /// BIP152: compact block transactions.
     BlockTxn => BLOCKTXN "blocktxn" @ 3,
     /// BIP152: compact block.
     CmpctBlock => CMPCTBLOCK "cmpctblock" @ 4,
     /// BIP152: request compact block transactions.
     GetBlockTxn => GETBLOCKTXN "getblocktxn" @ 10,
-    /// Transaction.
-    Tx => TX "tx" @ 21,
     /// CoinJoin: accept denomination.
     Dsa => DSA "dsa" @ 131,
     /// CoinJoin: submit inputs.
