@@ -35,6 +35,10 @@ pub struct ClSig {
 
 impl_new! {
 /// A deterministic InstantSend lock on a transaction.
+///
+/// The inputs are read as at most [`MAX_INPUTS`](Self::MAX_INPUTS)
+/// outpoints, so a longer list fails before its outpoints are read. `new`
+/// takes a longer list too, which then fails to decode.
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct IsdLock {

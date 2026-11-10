@@ -35,6 +35,10 @@ pub struct MnAuth {
 
 impl_new! {
 /// A spork value.
+///
+/// The signature is read as at most [`MAX_SIG_LEN`](Self::MAX_SIG_LEN)
+/// bytes, so a longer one fails before its bytes are read. `new` takes a
+/// longer signature too, which then fails to decode.
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct Spork {
