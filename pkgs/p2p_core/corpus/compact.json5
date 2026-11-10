@@ -1,0 +1,515 @@
+//
+// BIP152 compact block vectors. Generated with the reference implementation
+// (dashpay/dash v24.0.0, 938fba5028).
+//
+// Each section comes with the program used to generate the vectors.
+//
+// To run a program, move its `#include` lines to the top of
+// `src/test/blockencodings_tests.cpp` at the specified revision and paste the
+// rest at the end of the `blockencodings_tests` suite. Build it with
+// `make -C src test/test_dash` and run
+// `./src/test/test_dash --run_test=blockencodings_tests/<name>` with
+// `--log_level=nothing --report_level=no`. The output should match the
+// section. Run each program on its own, since their helper definitions
+// overlap.
+//
+
+{
+/*
+#include <iostream>
+#include <tinyformat.h>
+#include <util/strencodings.h>
+
+static CMutableTransaction CorpusTx(int i) {
+    CMutableTransaction tx;
+    tx.nVersion = i + 1;
+    tx.nLockTime = 17 + i;
+    tx.vin.emplace_back(COutPoint(uint256::ONE, 3 + i), CScript{} << OP_TRUE, 42 + i);
+    tx.vout.emplace_back(1234 + i, CScript{} << OP_RETURN);
+    return tx;
+}
+static std::string CorpusTxJson(int i) {
+    return strprintf("{\"version\":%d,\"txType\":0,\"inputs\":[{\"prevout\":{\"hash\":\"%s\",\"index\":%d},\"scriptSig\":\"51\",\"sequence\":%d}],\"outputs\":[{\"value\":%d,\"scriptPubKey\":\"6a\"}],\"lockTime\":%d,\"extraPayload\":\"\"}",
+                     i + 1, uint256::ONE.ToString(), 3 + i, 42 + i, 1234 + i, 17 + i);
+}
+static CBlockHeader CorpusHeader() {
+    CBlockHeader h;
+    h.nVersion = 4;
+    h.hashPrevBlock = uint256::ONE;
+    h.hashMerkleRoot = uint256::TWO;
+    h.nTime = 123456789;
+    h.nBits = 0x207fffff;
+    h.nNonce = 12345;
+    return h;
+}
+static std::string CorpusHeaderJson() {
+    return strprintf("{\"version\":4,\"prevHash\":\"%s\",\"merkleRoot\":\"%s\",\"time\":123456789,\"bits\":545259519,\"nonce\":12345}", uint256::ONE.ToString(), uint256::TWO.ToString());
+}
+
+BOOST_AUTO_TEST_CASE(corpus_short_tx_id_payloads)
+{
+    std::cout << strprintf("  \"short_tx_id\": {\n");
+    for (const uint64_t id : {uint64_t{0}, uint64_t{0x123456789abc}, uint64_t{0xffffffffffff}}) {
+        DataStream wire;
+        wire << Using<CustomUintFormatter<6>>(id);
+        std::cout << strprintf("    \"%llu\": {\"raw\":\"%s\",\"details\":{\"bytes\":\"%s\"}}%s\n", (unsigned long long)id, HexStr(wire), HexStr(wire), id == 0xffffffffffff ? "" : ",");
+    }
+    std::cout << strprintf("  },\n");
+}
+*/
+  "short_tx_id": {
+    "0": {"raw":"000000000000","details":{"bytes":"000000000000"}},
+    "20015998343868": {"raw":"bc9a78563412","details":{"bytes":"bc9a78563412"}},
+    "281474976710655": {"raw":"ffffffffffff","details":{"bytes":"ffffffffffff"}}
+  },
+/*
+#include <iostream>
+#include <tinyformat.h>
+#include <util/strencodings.h>
+
+static CMutableTransaction CorpusTx(int i) {
+    CMutableTransaction tx;
+    tx.nVersion = i + 1;
+    tx.nLockTime = 17 + i;
+    tx.vin.emplace_back(COutPoint(uint256::ONE, 3 + i), CScript{} << OP_TRUE, 42 + i);
+    tx.vout.emplace_back(1234 + i, CScript{} << OP_RETURN);
+    return tx;
+}
+static std::string CorpusTxJson(int i) {
+    return strprintf("{\"version\":%d,\"txType\":0,\"inputs\":[{\"prevout\":{\"hash\":\"%s\",\"index\":%d},\"scriptSig\":\"51\",\"sequence\":%d}],\"outputs\":[{\"value\":%d,\"scriptPubKey\":\"6a\"}],\"lockTime\":%d,\"extraPayload\":\"\"}",
+                     i + 1, uint256::ONE.ToString(), 3 + i, 42 + i, 1234 + i, 17 + i);
+}
+static CBlockHeader CorpusHeader() {
+    CBlockHeader h;
+    h.nVersion = 4;
+    h.hashPrevBlock = uint256::ONE;
+    h.hashMerkleRoot = uint256::TWO;
+    h.nTime = 123456789;
+    h.nBits = 0x207fffff;
+    h.nNonce = 12345;
+    return h;
+}
+static std::string CorpusHeaderJson() {
+    return strprintf("{\"version\":4,\"prevHash\":\"%s\",\"merkleRoot\":\"%s\",\"time\":123456789,\"bits\":545259519,\"nonce\":12345}", uint256::ONE.ToString(), uint256::TWO.ToString());
+}
+
+BOOST_AUTO_TEST_CASE(corpus_prefilled_payloads)
+{
+    std::cout << strprintf("  \"prefilled\": {\n");
+    for (const uint16_t index : {uint16_t{0}, uint16_t{253}, uint16_t{65535}}) {
+        DataStream wire;
+        wire << PrefilledTransaction{index, MakeTransactionRef(CorpusTx(0))};
+        std::cout << strprintf("    \"%u\": {\"raw\":\"%s\",\"details\":{\"index\":%u,\"tx\":%s}}%s\n", index, HexStr(wire), index, CorpusTxJson(0), index == 65535 ? "" : ",");
+    }
+    std::cout << strprintf("  },\n");
+}
+*/
+  "prefilled": {
+    "0": {"raw":"00010000000101000000000000000000000000000000000000000000000000000000000000000300000001512a00000001d204000000000000016a11000000","details":{"index":0,"tx":{"version":1,"txType":0,"inputs":[{"prevout":{"hash":"0000000000000000000000000000000000000000000000000000000000000001","index":3},"scriptSig":"51","sequence":42}],"outputs":[{"value":1234,"scriptPubKey":"6a"}],"lockTime":17,"extraPayload":""}}},
+    "253": {"raw":"fdfd00010000000101000000000000000000000000000000000000000000000000000000000000000300000001512a00000001d204000000000000016a11000000","details":{"index":253,"tx":{"version":1,"txType":0,"inputs":[{"prevout":{"hash":"0000000000000000000000000000000000000000000000000000000000000001","index":3},"scriptSig":"51","sequence":42}],"outputs":[{"value":1234,"scriptPubKey":"6a"}],"lockTime":17,"extraPayload":""}}},
+    "65535": {"raw":"fdffff010000000101000000000000000000000000000000000000000000000000000000000000000300000001512a00000001d204000000000000016a11000000","details":{"index":65535,"tx":{"version":1,"txType":0,"inputs":[{"prevout":{"hash":"0000000000000000000000000000000000000000000000000000000000000001","index":3},"scriptSig":"51","sequence":42}],"outputs":[{"value":1234,"scriptPubKey":"6a"}],"lockTime":17,"extraPayload":""}}}
+  },
+/*
+#include <iostream>
+#include <tinyformat.h>
+#include <util/strencodings.h>
+
+static CMutableTransaction CorpusTx(int i) {
+    CMutableTransaction tx;
+    tx.nVersion = i + 1;
+    tx.nLockTime = 17 + i;
+    tx.vin.emplace_back(COutPoint(uint256::ONE, 3 + i), CScript{} << OP_TRUE, 42 + i);
+    tx.vout.emplace_back(1234 + i, CScript{} << OP_RETURN);
+    return tx;
+}
+static std::string CorpusTxJson(int i) {
+    return strprintf("{\"version\":%d,\"txType\":0,\"inputs\":[{\"prevout\":{\"hash\":\"%s\",\"index\":%d},\"scriptSig\":\"51\",\"sequence\":%d}],\"outputs\":[{\"value\":%d,\"scriptPubKey\":\"6a\"}],\"lockTime\":%d,\"extraPayload\":\"\"}",
+                     i + 1, uint256::ONE.ToString(), 3 + i, 42 + i, 1234 + i, 17 + i);
+}
+static CBlockHeader CorpusHeader() {
+    CBlockHeader h;
+    h.nVersion = 4;
+    h.hashPrevBlock = uint256::ONE;
+    h.hashMerkleRoot = uint256::TWO;
+    h.nTime = 123456789;
+    h.nBits = 0x207fffff;
+    h.nNonce = 12345;
+    return h;
+}
+static std::string CorpusHeaderJson() {
+    return strprintf("{\"version\":4,\"prevHash\":\"%s\",\"merkleRoot\":\"%s\",\"time\":123456789,\"bits\":545259519,\"nonce\":12345}", uint256::ONE.ToString(), uint256::TWO.ToString());
+}
+
+BOOST_AUTO_TEST_CASE(corpus_cmpctblock_payloads)
+{
+    std::cout << strprintf("  \"cmpctblock\": {\n");
+    for (int count = 0; count <= 2; ++count) {
+        DataStream wire;
+        wire << CorpusHeader() << uint64_t{0x0102030405060708};
+        WriteCompactSize(wire, count);
+        std::string ids;
+        for (int i = 0; i < count; ++i) {
+            uint64_t id{uint64_t{0x123456789abc} + i};
+            DataStream encoded;
+            encoded << Using<CustomUintFormatter<6>>(id);
+            wire << Using<CustomUintFormatter<6>>(id);
+            ids += (ids.empty() ? "" : ",") + strprintf("{\"bytes\":\"%s\"}", HexStr(encoded));
+        }
+        std::vector<PrefilledTransaction> prefilled;
+        std::string full{"[]"};
+        if (count) {
+            prefilled = {{253, MakeTransactionRef(CorpusTx(0))}, {65535, MakeTransactionRef(CorpusTx(1))}};
+            full = strprintf("[{\"index\":253,\"tx\":%s},{\"index\":65535,\"tx\":%s}]", CorpusTxJson(0), CorpusTxJson(1));
+        }
+        wire << prefilled;
+        CBlockHeaderAndShortTxIDs read;
+        DataStream copy{wire};
+        copy >> read;
+        std::cout << strprintf("    \"count%d\": {\"raw\":\"%s\",\"details\":{\"header\":%s,\"nonce\":\"72623859790382856\",\"short_ids\":[%s],\"prefilled\":%s}}%s\n", count, HexStr(wire), CorpusHeaderJson(), ids, full, count == 2 ? "" : ",");
+    }
+    std::cout << strprintf("  },\n");
+}
+*/
+  "cmpctblock": {
+    "count0": {"raw":"040000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000015cd5b07ffff7f203930000008070605040302010000","details":{"header":{"version":4,"prevHash":"0000000000000000000000000000000000000000000000000000000000000001","merkleRoot":"0000000000000000000000000000000000000000000000000000000000000002","time":123456789,"bits":545259519,"nonce":12345},"nonce":"72623859790382856","short_ids":[],"prefilled":[]}},
+    "count1": {"raw":"040000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000015cd5b07ffff7f2039300000080706050403020101bc9a7856341202fdfd00010000000101000000000000000000000000000000000000000000000000000000000000000300000001512a00000001d204000000000000016a11000000fdffff020000000101000000000000000000000000000000000000000000000000000000000000000400000001512b00000001d304000000000000016a12000000","details":{"header":{"version":4,"prevHash":"0000000000000000000000000000000000000000000000000000000000000001","merkleRoot":"0000000000000000000000000000000000000000000000000000000000000002","time":123456789,"bits":545259519,"nonce":12345},"nonce":"72623859790382856","short_ids":[{"bytes":"bc9a78563412"}],"prefilled":[{"index":253,"tx":{"version":1,"txType":0,"inputs":[{"prevout":{"hash":"0000000000000000000000000000000000000000000000000000000000000001","index":3},"scriptSig":"51","sequence":42}],"outputs":[{"value":1234,"scriptPubKey":"6a"}],"lockTime":17,"extraPayload":""}},{"index":65535,"tx":{"version":2,"txType":0,"inputs":[{"prevout":{"hash":"0000000000000000000000000000000000000000000000000000000000000001","index":4},"scriptSig":"51","sequence":43}],"outputs":[{"value":1235,"scriptPubKey":"6a"}],"lockTime":18,"extraPayload":""}}]}},
+    "count2": {"raw":"040000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000015cd5b07ffff7f2039300000080706050403020102bc9a78563412bd9a7856341202fdfd00010000000101000000000000000000000000000000000000000000000000000000000000000300000001512a00000001d204000000000000016a11000000fdffff020000000101000000000000000000000000000000000000000000000000000000000000000400000001512b00000001d304000000000000016a12000000","details":{"header":{"version":4,"prevHash":"0000000000000000000000000000000000000000000000000000000000000001","merkleRoot":"0000000000000000000000000000000000000000000000000000000000000002","time":123456789,"bits":545259519,"nonce":12345},"nonce":"72623859790382856","short_ids":[{"bytes":"bc9a78563412"},{"bytes":"bd9a78563412"}],"prefilled":[{"index":253,"tx":{"version":1,"txType":0,"inputs":[{"prevout":{"hash":"0000000000000000000000000000000000000000000000000000000000000001","index":3},"scriptSig":"51","sequence":42}],"outputs":[{"value":1234,"scriptPubKey":"6a"}],"lockTime":17,"extraPayload":""}},{"index":65535,"tx":{"version":2,"txType":0,"inputs":[{"prevout":{"hash":"0000000000000000000000000000000000000000000000000000000000000001","index":4},"scriptSig":"51","sequence":43}],"outputs":[{"value":1235,"scriptPubKey":"6a"}],"lockTime":18,"extraPayload":""}}]}}
+  },
+/*
+#include <iostream>
+#include <tinyformat.h>
+#include <util/strencodings.h>
+
+static CMutableTransaction CorpusTx(int i) {
+    CMutableTransaction tx;
+    tx.nVersion = i + 1;
+    tx.nLockTime = 17 + i;
+    tx.vin.emplace_back(COutPoint(uint256::ONE, 3 + i), CScript{} << OP_TRUE, 42 + i);
+    tx.vout.emplace_back(1234 + i, CScript{} << OP_RETURN);
+    return tx;
+}
+static std::string CorpusTxJson(int i) {
+    return strprintf("{\"version\":%d,\"txType\":0,\"inputs\":[{\"prevout\":{\"hash\":\"%s\",\"index\":%d},\"scriptSig\":\"51\",\"sequence\":%d}],\"outputs\":[{\"value\":%d,\"scriptPubKey\":\"6a\"}],\"lockTime\":%d,\"extraPayload\":\"\"}",
+                     i + 1, uint256::ONE.ToString(), 3 + i, 42 + i, 1234 + i, 17 + i);
+}
+static CBlockHeader CorpusHeader() {
+    CBlockHeader h;
+    h.nVersion = 4;
+    h.hashPrevBlock = uint256::ONE;
+    h.hashMerkleRoot = uint256::TWO;
+    h.nTime = 123456789;
+    h.nBits = 0x207fffff;
+    h.nNonce = 12345;
+    return h;
+}
+static std::string CorpusHeaderJson() {
+    return strprintf("{\"version\":4,\"prevHash\":\"%s\",\"merkleRoot\":\"%s\",\"time\":123456789,\"bits\":545259519,\"nonce\":12345}", uint256::ONE.ToString(), uint256::TWO.ToString());
+}
+
+BOOST_AUTO_TEST_CASE(corpus_getblocktxn_payloads)
+{
+    std::cout << strprintf("  \"getblocktxn\": {\n");
+    const std::vector<std::vector<uint16_t>> lists{{}, {0, 2, 253, 65535}, {65535}};
+    for (size_t i = 0; i < lists.size(); ++i) {
+        BlockTransactionsRequest req;
+        req.blockhash = uint256::TWO;
+        req.indexes = lists[i];
+        DataStream wire;
+        wire << req;
+        std::string indexes;
+        for (const auto index : req.indexes) indexes += (indexes.empty() ? "" : ",") + std::to_string(index);
+        std::cout << strprintf("    \"case%zu\": {\"raw\":\"%s\",\"details\":{\"block_hash\":\"%s\",\"indexes\":[%s]}}%s\n", i, HexStr(wire), req.blockhash.ToString(), indexes, i == 2 ? "" : ",");
+    }
+    std::cout << strprintf("  },\n");
+}
+*/
+  "getblocktxn": {
+    "case0": {"raw":"020000000000000000000000000000000000000000000000000000000000000000","details":{"block_hash":"0000000000000000000000000000000000000000000000000000000000000002","indexes":[]}},
+    "case1": {"raw":"0200000000000000000000000000000000000000000000000000000000000000040001fafd01ff","details":{"block_hash":"0000000000000000000000000000000000000000000000000000000000000002","indexes":[0,2,253,65535]}},
+    "case2": {"raw":"020000000000000000000000000000000000000000000000000000000000000001fdffff","details":{"block_hash":"0000000000000000000000000000000000000000000000000000000000000002","indexes":[65535]}}
+  },
+/*
+#include <iostream>
+#include <tinyformat.h>
+#include <util/strencodings.h>
+
+static CMutableTransaction CorpusTx(int i) {
+    CMutableTransaction tx;
+    tx.nVersion = i + 1;
+    tx.nLockTime = 17 + i;
+    tx.vin.emplace_back(COutPoint(uint256::ONE, 3 + i), CScript{} << OP_TRUE, 42 + i);
+    tx.vout.emplace_back(1234 + i, CScript{} << OP_RETURN);
+    return tx;
+}
+static std::string CorpusTxJson(int i) {
+    return strprintf("{\"version\":%d,\"txType\":0,\"inputs\":[{\"prevout\":{\"hash\":\"%s\",\"index\":%d},\"scriptSig\":\"51\",\"sequence\":%d}],\"outputs\":[{\"value\":%d,\"scriptPubKey\":\"6a\"}],\"lockTime\":%d,\"extraPayload\":\"\"}",
+                     i + 1, uint256::ONE.ToString(), 3 + i, 42 + i, 1234 + i, 17 + i);
+}
+static CBlockHeader CorpusHeader() {
+    CBlockHeader h;
+    h.nVersion = 4;
+    h.hashPrevBlock = uint256::ONE;
+    h.hashMerkleRoot = uint256::TWO;
+    h.nTime = 123456789;
+    h.nBits = 0x207fffff;
+    h.nNonce = 12345;
+    return h;
+}
+static std::string CorpusHeaderJson() {
+    return strprintf("{\"version\":4,\"prevHash\":\"%s\",\"merkleRoot\":\"%s\",\"time\":123456789,\"bits\":545259519,\"nonce\":12345}", uint256::ONE.ToString(), uint256::TWO.ToString());
+}
+
+BOOST_AUTO_TEST_CASE(corpus_blocktxn_payloads)
+{
+    std::cout << strprintf("  \"blocktxn\": {\n");
+    for (int count = 0; count <= 2; ++count) {
+        BlockTransactions msg;
+        msg.blockhash = uint256::ONE;
+        std::string txs;
+        for (int i = 0; i < count; ++i) {
+            msg.txn.push_back(MakeTransactionRef(CorpusTx(i)));
+            txs += (txs.empty() ? "" : ",") + CorpusTxJson(i);
+        }
+        DataStream wire;
+        wire << msg;
+        std::cout << strprintf("    \"count%d\": {\"raw\":\"%s\",\"details\":{\"block_hash\":\"%s\",\"transactions\":[%s]}}%s\n", count, HexStr(wire), msg.blockhash.ToString(), txs, count == 2 ? "" : ",");
+    }
+    std::cout << strprintf("  },\n");
+}
+*/
+  "blocktxn": {
+    "count0": {"raw":"010000000000000000000000000000000000000000000000000000000000000000","details":{"block_hash":"0000000000000000000000000000000000000000000000000000000000000001","transactions":[]}},
+    "count1": {"raw":"010000000000000000000000000000000000000000000000000000000000000001010000000101000000000000000000000000000000000000000000000000000000000000000300000001512a00000001d204000000000000016a11000000","details":{"block_hash":"0000000000000000000000000000000000000000000000000000000000000001","transactions":[{"version":1,"txType":0,"inputs":[{"prevout":{"hash":"0000000000000000000000000000000000000000000000000000000000000001","index":3},"scriptSig":"51","sequence":42}],"outputs":[{"value":1234,"scriptPubKey":"6a"}],"lockTime":17,"extraPayload":""}]}},
+    "count2": {"raw":"010000000000000000000000000000000000000000000000000000000000000002010000000101000000000000000000000000000000000000000000000000000000000000000300000001512a00000001d204000000000000016a11000000020000000101000000000000000000000000000000000000000000000000000000000000000400000001512b00000001d304000000000000016a12000000","details":{"block_hash":"0000000000000000000000000000000000000000000000000000000000000001","transactions":[{"version":1,"txType":0,"inputs":[{"prevout":{"hash":"0000000000000000000000000000000000000000000000000000000000000001","index":3},"scriptSig":"51","sequence":42}],"outputs":[{"value":1234,"scriptPubKey":"6a"}],"lockTime":17,"extraPayload":""},{"version":2,"txType":0,"inputs":[{"prevout":{"hash":"0000000000000000000000000000000000000000000000000000000000000001","index":4},"scriptSig":"51","sequence":43}],"outputs":[{"value":1235,"scriptPubKey":"6a"}],"lockTime":18,"extraPayload":""}]}}
+  },
+/*
+#include <iostream>
+#include <tinyformat.h>
+#include <util/strencodings.h>
+
+static CMutableTransaction CorpusTx(int i) {
+    CMutableTransaction tx;
+    tx.nVersion = i + 1;
+    tx.nLockTime = 17 + i;
+    tx.vin.emplace_back(COutPoint(uint256::ONE, 3 + i), CScript{} << OP_TRUE, 42 + i);
+    tx.vout.emplace_back(1234 + i, CScript{} << OP_RETURN);
+    return tx;
+}
+static std::string CorpusTxJson(int i) {
+    return strprintf("{\"version\":%d,\"txType\":0,\"inputs\":[{\"prevout\":{\"hash\":\"%s\",\"index\":%d},\"scriptSig\":\"51\",\"sequence\":%d}],\"outputs\":[{\"value\":%d,\"scriptPubKey\":\"6a\"}],\"lockTime\":%d,\"extraPayload\":\"\"}",
+                     i + 1, uint256::ONE.ToString(), 3 + i, 42 + i, 1234 + i, 17 + i);
+}
+static CBlockHeader CorpusHeader() {
+    CBlockHeader h;
+    h.nVersion = 4;
+    h.hashPrevBlock = uint256::ONE;
+    h.hashMerkleRoot = uint256::TWO;
+    h.nTime = 123456789;
+    h.nBits = 0x207fffff;
+    h.nNonce = 12345;
+    return h;
+}
+static std::string CorpusHeaderJson() {
+    return strprintf("{\"version\":4,\"prevHash\":\"%s\",\"merkleRoot\":\"%s\",\"time\":123456789,\"bits\":545259519,\"nonce\":12345}", uint256::ONE.ToString(), uint256::TWO.ToString());
+}
+
+BOOST_AUTO_TEST_CASE(corpus_prefilled_index_limit_payloads)
+{
+    std::cout << strprintf("  \"prefilled_index_limit\": [\n");
+    for (uint64_t index : {65535, 65536}) {
+        DataStream wire;
+        WriteCompactSize(wire, index);
+        wire << CorpusTx(0);
+        const std::string raw = HexStr(wire);
+        bool accepted{true};
+        try { PrefilledTransaction read; wire >> read; } catch (const std::ios_base::failure&) { accepted = false; }
+        std::cout << strprintf("    {\"index\":%llu,\"raw\":\"%s\",\"accepted\":%s}%s\n", (unsigned long long)index, raw, accepted ? "true" : "false", index == 65536 ? "" : ",");
+    }
+    std::cout << strprintf("  ],\n");
+}
+*/
+  "prefilled_index_limit": [
+    {"index":65535,"raw":"fdffff010000000101000000000000000000000000000000000000000000000000000000000000000300000001512a00000001d204000000000000016a11000000","accepted":true},
+    {"index":65536,"raw":"fe00000100010000000101000000000000000000000000000000000000000000000000000000000000000300000001512a00000001d204000000000000016a11000000","accepted":false}
+  ],
+/*
+#include <iostream>
+#include <tinyformat.h>
+#include <util/strencodings.h>
+
+static CMutableTransaction CorpusTx(int i) {
+    CMutableTransaction tx;
+    tx.nVersion = i + 1;
+    tx.nLockTime = 17 + i;
+    tx.vin.emplace_back(COutPoint(uint256::ONE, 3 + i), CScript{} << OP_TRUE, 42 + i);
+    tx.vout.emplace_back(1234 + i, CScript{} << OP_RETURN);
+    return tx;
+}
+static std::string CorpusTxJson(int i) {
+    return strprintf("{\"version\":%d,\"txType\":0,\"inputs\":[{\"prevout\":{\"hash\":\"%s\",\"index\":%d},\"scriptSig\":\"51\",\"sequence\":%d}],\"outputs\":[{\"value\":%d,\"scriptPubKey\":\"6a\"}],\"lockTime\":%d,\"extraPayload\":\"\"}",
+                     i + 1, uint256::ONE.ToString(), 3 + i, 42 + i, 1234 + i, 17 + i);
+}
+static CBlockHeader CorpusHeader() {
+    CBlockHeader h;
+    h.nVersion = 4;
+    h.hashPrevBlock = uint256::ONE;
+    h.hashMerkleRoot = uint256::TWO;
+    h.nTime = 123456789;
+    h.nBits = 0x207fffff;
+    h.nNonce = 12345;
+    return h;
+}
+static std::string CorpusHeaderJson() {
+    return strprintf("{\"version\":4,\"prevHash\":\"%s\",\"merkleRoot\":\"%s\",\"time\":123456789,\"bits\":545259519,\"nonce\":12345}", uint256::ONE.ToString(), uint256::TWO.ToString());
+}
+
+BOOST_AUTO_TEST_CASE(corpus_differential_index_limit_payloads)
+{
+    std::cout << strprintf("  \"differential_index_limit\": [\n");
+    const std::vector<std::vector<uint64_t>> lists{{65535}, {65536}, {65534, 0}, {65535, 0}, {2, 65533}};
+    for (size_t i = 0; i < lists.size(); ++i) {
+        DataStream wire;
+        wire << uint256::TWO;
+        WriteCompactSize(wire, lists[i].size());
+        uint64_t sum{0};
+        for (const auto diff : lists[i]) { WriteCompactSize(wire, diff); sum += diff + 1; }
+        const std::string raw = HexStr(wire);
+        bool accepted{true};
+        try { BlockTransactionsRequest read; wire >> read; } catch (const std::ios_base::failure&) { accepted = false; }
+        std::cout << strprintf("    {\"sum\":%llu,\"raw\":\"%s\",\"accepted\":%s}%s\n", (unsigned long long)(sum - 1), raw, accepted ? "true" : "false", i == lists.size() - 1 ? "" : ",");
+    }
+    std::cout << strprintf("  ],\n");
+}
+*/
+  "differential_index_limit": [
+    {"sum":65535,"raw":"020000000000000000000000000000000000000000000000000000000000000001fdffff","accepted":true},
+    {"sum":65536,"raw":"020000000000000000000000000000000000000000000000000000000000000001fe00000100","accepted":false},
+    {"sum":65535,"raw":"020000000000000000000000000000000000000000000000000000000000000002fdfeff00","accepted":true},
+    {"sum":65536,"raw":"020000000000000000000000000000000000000000000000000000000000000002fdffff00","accepted":false},
+    {"sum":65536,"raw":"02000000000000000000000000000000000000000000000000000000000000000202fdfdff","accepted":false}
+  ],
+/*
+#include <iostream>
+#include <tinyformat.h>
+#include <util/strencodings.h>
+
+static CMutableTransaction CorpusTx(int i) {
+    CMutableTransaction tx;
+    tx.nVersion = i + 1;
+    tx.nLockTime = 17 + i;
+    tx.vin.emplace_back(COutPoint(uint256::ONE, 3 + i), CScript{} << OP_TRUE, 42 + i);
+    tx.vout.emplace_back(1234 + i, CScript{} << OP_RETURN);
+    return tx;
+}
+static std::string CorpusTxJson(int i) {
+    return strprintf("{\"version\":%d,\"txType\":0,\"inputs\":[{\"prevout\":{\"hash\":\"%s\",\"index\":%d},\"scriptSig\":\"51\",\"sequence\":%d}],\"outputs\":[{\"value\":%d,\"scriptPubKey\":\"6a\"}],\"lockTime\":%d,\"extraPayload\":\"\"}",
+                     i + 1, uint256::ONE.ToString(), 3 + i, 42 + i, 1234 + i, 17 + i);
+}
+static CBlockHeader CorpusHeader() {
+    CBlockHeader h;
+    h.nVersion = 4;
+    h.hashPrevBlock = uint256::ONE;
+    h.hashMerkleRoot = uint256::TWO;
+    h.nTime = 123456789;
+    h.nBits = 0x207fffff;
+    h.nNonce = 12345;
+    return h;
+}
+static std::string CorpusHeaderJson() {
+    return strprintf("{\"version\":4,\"prevHash\":\"%s\",\"merkleRoot\":\"%s\",\"time\":123456789,\"bits\":545259519,\"nonce\":12345}", uint256::ONE.ToString(), uint256::TWO.ToString());
+}
+
+#include <hash.h>
+
+BOOST_AUTO_TEST_CASE(corpus_combined_count_limit_payloads)
+{
+    std::cout << strprintf("  \"combined_count_limit\": [\n");
+    const std::vector<std::pair<size_t, size_t>> counts{{65535, 0}, {65536, 0}, {65534, 1}, {65535, 1}, {0, 65535}, {0, 65536}};
+    for (size_t i = 0; i < counts.size(); ++i) {
+        const auto [shorts, full] = counts[i];
+        DataStream wire;
+        wire << CorpusHeader() << uint64_t{0x0102030405060708};
+        WriteCompactSize(wire, shorts);
+        for (size_t j = 0; j < shorts; ++j) { uint64_t id{0x123456789abc}; wire << Using<CustomUintFormatter<6>>(id); }
+        wire << std::vector<PrefilledTransaction>(full, PrefilledTransaction{0, MakeTransactionRef(CorpusTx(0))});
+        const size_t size = wire.size();
+        const auto hash = Hash(wire);
+        bool accepted{true};
+        try { CBlockHeaderAndShortTxIDs read; wire >> read; } catch (const std::ios_base::failure&) { accepted = false; }
+        std::cout << strprintf("    {\"shorts\":%zu,\"full\":%zu,\"size\":%zu,\"hash\":\"%s\",\"accepted\":%s}%s\n", shorts, full, size, hash.ToString(), accepted ? "true" : "false", i == counts.size() - 1 ? "" : ",");
+    }
+    std::cout << strprintf("  ],\n");
+}
+*/
+  "combined_count_limit": [
+    {"shorts":65535,"full":0,"size":393302,"hash":"bcc5bd12ea94a061bddf4aaf69f7d585a19b832377b82cb480f36a55d7f16ae4","accepted":true},
+    {"shorts":65536,"full":0,"size":393310,"hash":"7ceb7e8760c287ea4a686579681c10f7b0919453d27fd810b230ed1bd64c7075","accepted":false},
+    {"shorts":65534,"full":1,"size":393359,"hash":"17f1501ff09ade72ef515b7bbca6d004e553fc54ed5e1a599738e2831f610b66","accepted":true},
+    {"shorts":65535,"full":1,"size":393365,"hash":"bf9c1df426524f7736c35d53b0b871b06ef277c556e1b31f44943d8acb6e8958","accepted":false},
+    {"shorts":0,"full":65535,"size":4128797,"hash":"6f93a6f3145007b6f2b4d9615849d0102a4a3a0103c34cc6b2c2ee6cd5480b64","accepted":true},
+    {"shorts":0,"full":65536,"size":4128862,"hash":"980224762ce458ea6c47c434c8eb54d17c1d8aae31ce238ba6b9f6565add49db","accepted":false}
+  ],
+/*
+#include <iostream>
+#include <tinyformat.h>
+#include <util/strencodings.h>
+
+static CMutableTransaction CorpusTx(int i) {
+    CMutableTransaction tx;
+    tx.nVersion = i + 1;
+    tx.nLockTime = 17 + i;
+    tx.vin.emplace_back(COutPoint(uint256::ONE, 3 + i), CScript{} << OP_TRUE, 42 + i);
+    tx.vout.emplace_back(1234 + i, CScript{} << OP_RETURN);
+    return tx;
+}
+static std::string CorpusTxJson(int i) {
+    return strprintf("{\"version\":%d,\"txType\":0,\"inputs\":[{\"prevout\":{\"hash\":\"%s\",\"index\":%d},\"scriptSig\":\"51\",\"sequence\":%d}],\"outputs\":[{\"value\":%d,\"scriptPubKey\":\"6a\"}],\"lockTime\":%d,\"extraPayload\":\"\"}",
+                     i + 1, uint256::ONE.ToString(), 3 + i, 42 + i, 1234 + i, 17 + i);
+}
+static CBlockHeader CorpusHeader() {
+    CBlockHeader h;
+    h.nVersion = 4;
+    h.hashPrevBlock = uint256::ONE;
+    h.hashMerkleRoot = uint256::TWO;
+    h.nTime = 123456789;
+    h.nBits = 0x207fffff;
+    h.nNonce = 12345;
+    return h;
+}
+static std::string CorpusHeaderJson() {
+    return strprintf("{\"version\":4,\"prevHash\":\"%s\",\"merkleRoot\":\"%s\",\"time\":123456789,\"bits\":545259519,\"nonce\":12345}", uint256::ONE.ToString(), uint256::TWO.ToString());
+}
+
+#include <crypto/sha256.h>
+#include <crypto/siphash.h>
+
+BOOST_AUTO_TEST_CASE(corpus_short_id_payloads)
+{
+    DataStream domain;
+    domain << CorpusHeader() << uint64_t{0x0102030405060708};
+    uint256 digest;
+    CSHA256().Write(reinterpret_cast<const unsigned char*>(domain.data()), domain.size()).Finalize(digest.begin());
+    const auto k0 = digest.GetUint64(0), k1 = digest.GetUint64(1);
+    DataStream compact{domain};
+    WriteCompactSize(compact, 0);
+    WriteCompactSize(compact, 0);
+    CBlockHeaderAndShortTxIDs msg;
+    compact >> msg;
+    std::cout << strprintf("  \"short_id\": [\n");
+    for (int i = 0; i < 2; ++i) {
+        const CTransaction tx{CorpusTx(i)};
+        const auto hash = tx.GetInstanceHash();
+        uint64_t id = msg.GetShortID(hash);
+        BOOST_CHECK_EQUAL(id, SipHashUint256(k0, k1, hash) & 0xffffffffffff);
+        DataStream wire;
+        wire << Using<CustomUintFormatter<6>>(id);
+        std::cout << strprintf("    {\"header\":%s,\"nonce\":\"72623859790382856\",\"tx\":%s,\"instance_hash\":\"%s\",\"k0\":\"%llu\",\"k1\":\"%llu\",\"id\":{\"bytes\":\"%s\"}}%s\n", CorpusHeaderJson(), CorpusTxJson(i), hash.ToString(), (unsigned long long)k0, (unsigned long long)k1, HexStr(wire), i == 1 ? "" : ",");
+    }
+    std::cout << strprintf("  ],\n");
+}
+*/
+  "short_id": [
+    {"header":{"version":4,"prevHash":"0000000000000000000000000000000000000000000000000000000000000001","merkleRoot":"0000000000000000000000000000000000000000000000000000000000000002","time":123456789,"bits":545259519,"nonce":12345},"nonce":"72623859790382856","tx":{"version":1,"txType":0,"inputs":[{"prevout":{"hash":"0000000000000000000000000000000000000000000000000000000000000001","index":3},"scriptSig":"51","sequence":42}],"outputs":[{"value":1234,"scriptPubKey":"6a"}],"lockTime":17,"extraPayload":""},"instance_hash":"e0e80db2cc182c37e1070e717b8fe5ba9d904b5a676ad36ddc89b777d78fa954","k0":"2816441449669950729","k1":"9820204321818713304","id":{"bytes":"398880839eb2"}},
+    {"header":{"version":4,"prevHash":"0000000000000000000000000000000000000000000000000000000000000001","merkleRoot":"0000000000000000000000000000000000000000000000000000000000000002","time":123456789,"bits":545259519,"nonce":12345},"nonce":"72623859790382856","tx":{"version":2,"txType":0,"inputs":[{"prevout":{"hash":"0000000000000000000000000000000000000000000000000000000000000001","index":4},"scriptSig":"51","sequence":43}],"outputs":[{"value":1235,"scriptPubKey":"6a"}],"lockTime":18,"extraPayload":""},"instance_hash":"7122d70383d6071db63a185e678c9c21d047120a3d0df43ab9bc769efb11c892","k0":"2816441449669950729","k1":"9820204321818713304","id":{"bytes":"6d5aa1b7c2ca"}}
+  ],
+}

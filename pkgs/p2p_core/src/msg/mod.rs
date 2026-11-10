@@ -12,6 +12,7 @@ mod bloom;
 mod cfilter;
 mod chainlock;
 mod coinjoin;
+mod compact;
 mod gov;
 mod headers;
 mod headers2;
@@ -38,6 +39,7 @@ pub use bloom::{BloomFlags, FilterAdd, FilterLoad, MerkleBlock, PartialMerkleTre
 pub use cfilter::{CFCheckpt, CFHeaders, CFilter, FilterHash, FilterHeader, GetCFCheckpt, GetCFHeaders, GetCFilters};
 pub use chainlock::{ClSig, IsdLock};
 pub use coinjoin::SendDsq;
+pub use compact::{BlockTxn, CmpctBlock, GetBlockTxn, PrefilledTx, ShortTxId};
 pub use gov::{GovSync, GovSyncStatusCount};
 pub use headers::{GetHeaders, Headers};
 pub use headers2::{CompressedHeader, GetHeaders2, Headers2};
@@ -99,6 +101,12 @@ define_p2p! {
     QSendRecSigs(QSendRecSigs) => QSENDRECSIGS "qsendrecsigs" @ 145,
     /// BIP152: signal compact block support.
     SendCmpct(SendCmpct) => SENDCMPCT "sendcmpct" @ 20,
+    /// BIP152: compact block.
+    CmpctBlock(CmpctBlock) => CMPCTBLOCK "cmpctblock" @ 4,
+    /// BIP152: request compact block transactions.
+    GetBlockTxn(GetBlockTxn) => GETBLOCKTXN "getblocktxn" @ 10,
+    /// BIP152: compact block transactions.
+    BlockTxn(BlockTxn) => BLOCKTXN "blocktxn" @ 3,
     /// BIP330: transaction reconciliation.
     SendTxRcncl(SendTxRcncl) => SENDTXRCNCL "sendtxrcncl",
     /// BIP37: load bloom filter.
@@ -147,12 +155,6 @@ define_p2p! {
   }
 
   stub {
-    /// BIP152: compact block transactions.
-    BlockTxn => BLOCKTXN "blocktxn" @ 3,
-    /// BIP152: compact block.
-    CmpctBlock => CMPCTBLOCK "cmpctblock" @ 4,
-    /// BIP152: request compact block transactions.
-    GetBlockTxn => GETBLOCKTXN "getblocktxn" @ 10,
     /// CoinJoin: accept denomination.
     Dsa => DSA "dsa" @ 131,
     /// CoinJoin: submit inputs.
