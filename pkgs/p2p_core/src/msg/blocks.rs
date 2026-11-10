@@ -64,7 +64,30 @@ mod tests {
   use crate::{CommandString, P2pMsg};
 
   use dash_dev::{assert_serde_rt, check_wire, Corpus};
+  use dash_primitives::{Block, BlockHeader, Transaction, TxType};
+  use dash_types::codec::BaseCodec;
   use rstest::rstest;
+
+  fn tx() -> Transaction {
+    Transaction::new(1, TxType::Spend, vec![], vec![], 0, vec![])
+  }
+
+  fn wire(value: &impl BaseCodec) -> Vec<u8> {
+    let mut raw = Vec::new();
+    value.encode(&mut raw);
+    raw
+  }
+
+  fn block() -> Block {
+    Block::new(BlockHeader::default(), vec![tx()])
+  }
+
+  #[rstest]
+  #[case::block(CommandString::BLOCK, wire(&block()), P2pMsg::Block(block()))]
+  #[case::tx(CommandString::TX, wire(&tx()), P2pMsg::Tx(tx()))]
+  fn block_and_tx_decode_to_their_variants(#[case] command: CommandString, #[case] raw: Vec<u8>, #[case] msg: P2pMsg) {
+    assert_eq!(P2pMsg::decode_payload(&command, &raw), Ok(msg));
+  }
 
   #[rstest]
   fn corpus_sendcmpct() {
