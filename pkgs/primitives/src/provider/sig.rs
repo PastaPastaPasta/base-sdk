@@ -87,6 +87,18 @@ pub(crate) fn verify_operator(
   }
 }
 
+/// Whether an operator key is not null and passes
+/// [`BlsPkBytes::is_canonical`] under the scheme `version` sets. The
+/// reference implementation reads the key the same way.
+pub(crate) fn is_valid_operator_key(version: ProTxVersion, key: &BlsPkBytes) -> bool {
+  !key.is_null()
+    && if version == ProTxVersion::LegacyBls {
+      key.is_canonical::<BlsScChia>()
+    } else {
+      key.is_canonical::<BlsScIetf>()
+    }
+}
+
 /// Collateral owner signature, empty when the collateral is spent.
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(
@@ -252,11 +264,74 @@ rec_sig! {
 
 #[cfg(test)]
 #[expect(clippy::unwrap_used, reason = "test code")]
-mod tests {
+pub(crate) mod tests {
   use super::*;
   use crate::sign::tests::bls_sign;
 
+  use dash_dev::arr_from_hex;
   use rstest::rstest;
+
+  /// A key that both schemes read as valid, class `sub_100` of the corpus
+  /// `KeyEdit` names.
+  pub(crate) fn subgroup_key() -> BlsPkBytes {
+    BlsPkBytes::from_bytes(arr_from_hex(
+      "8d9442274d08e7b1081f5814cda5fde2f0e6a06a67d4f39abccc2684c5eefc227560ac86c53b5a57c60f8502d6a7e9e9",
+    ))
+  }
+
+  /// An edit of an operator key for the payload checks.
+  ///
+  /// The fixed keys are the first input of their class in the `bls_read`
+  /// corpus of `dash-pkc` (pkgs/pkc/corpus/bls_read.json5), which gives the
+  /// reference implementation's read of each input under both schemes.
+  #[derive(Clone, Copy, Debug)]
+  pub(crate) enum KeyEdit {
+    /// The key unchanged.
+    Kept,
+    /// All zero bytes.
+    Null,
+    /// An x coordinate with no point on the curve, class `off_100`.
+    OffCurve,
+    /// A point on the curve outside the prime-order subgroup, class
+    /// `nonsub_100`.
+    OffSubgroup,
+    /// The point at infinity, class `identity`, which neither scheme reads
+    /// as a valid key.
+    Infinity,
+    /// A key that only the basic scheme reads as valid, class `sub_101`.
+    BasicOnly,
+    /// The key with the top bit of its first byte cleared.
+    TopBitCleared,
+  }
+
+  impl KeyEdit {
+    /// `key` after the edit.
+    pub(crate) fn apply(self, key: BlsPkBytes) -> BlsPkBytes {
+      match self {
+        Self::Kept => key,
+        Self::Null => BlsPkBytes::default(),
+        Self::OffCurve => BlsPkBytes::from_bytes(arr_from_hex(
+          "8b986bd86ff720c2e365b402e15a318f391d36d5765bfb13f349957b44271b12bf3d3ddc6b772f0829942d5bdd4e7373",
+        )),
+        Self::OffSubgroup => BlsPkBytes::from_bytes(arr_from_hex(
+          "82643f2e299b6335c36055b5846e38a31d4d9fd914ea92b5cf1d0ea722693fb407135b8dd410ad6cb71fffb86545757f",
+        )),
+        Self::BasicOnly => BlsPkBytes::from_bytes(arr_from_hex(
+          "a02690bff240480310e84737ef6976b3010b637448a41e05d162d55fefb5db45e97980da3d8f0dc470d634b6f8d5b69e",
+        )),
+        Self::Infinity => {
+          let mut bytes = [0; 48];
+          bytes[0] = 0xc0;
+          BlsPkBytes::from_bytes(bytes)
+        }
+        Self::TopBitCleared => {
+          let mut bytes = *key.as_bytes();
+          bytes[0] &= 0x7f;
+          BlsPkBytes::from_bytes(bytes)
+        }
+      }
+    }
+  }
 
   /// Any header byte survives a decode and encode round trip.
   #[rstest]
