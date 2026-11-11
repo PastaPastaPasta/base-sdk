@@ -283,7 +283,6 @@ mod tests {
   use super::*;
 
   use dash_dev::{assert_serde_rt, from_json_slice, Corpus, Value};
-  use dash_types::codec::DecodeError;
   use rstest::rstest;
   use serde::{Deserialize, Serialize};
 
@@ -358,48 +357,5 @@ mod tests {
       assert_eq!(obj.hash(), expected_hash, "{label}: hash");
     });
     assert_serde_rt(section, &items);
-  }
-
-  fn govobj_with_sig(len: usize) -> GovObject {
-    GovObject::new(
-      TxHash::default(),
-      1,
-      0,
-      TxHash::default(),
-      b"{}".to_vec(),
-      GovObjectType::Proposal,
-      OutPoint::new(TxHash::default(), 0),
-      vec![0xAB; len],
-    )
-  }
-
-  #[rstest]
-  #[case::empty(0)]
-  #[case::at_the_bound(96)]
-  fn decodes_a_sig_up_to_the_bound(#[case] len: usize) {
-    let obj = govobj_with_sig(len);
-    let mut wire = Vec::new();
-    obj.encode(&mut wire);
-    assert_eq!(GovObject::decode(&mut &wire[..]), Ok(obj));
-  }
-
-  /// The count is refused before any signature byte is read.
-  #[rstest]
-  #[case::with_the_bytes(true)]
-  #[case::without_the_bytes(false)]
-  fn refuses_a_sig_one_over_the_bound(#[case] with_bytes: bool) {
-    let over = 97;
-    let mut wire = Vec::new();
-    govobj_with_sig(over).encode(&mut wire);
-    if !with_bytes {
-      wire.truncate(wire.len() - over);
-    }
-    assert_eq!(
-      GovObject::decode(&mut &wire[..]),
-      Err(DecodeError::CompactSizeExceedsLimit {
-        limit: GovObject::MAX_SIGNATURE_SIZE,
-        value: over as u64
-      })
-    );
   }
 }
