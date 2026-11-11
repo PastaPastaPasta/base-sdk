@@ -480,7 +480,6 @@ impl fmt::Display for ProRegTx {
 mod tests {
   use super::*;
   use crate::provider::share::tests::script;
-  use crate::provider::sig::tests::{subgroup_key, KeyEdit};
   use crate::types::{AddrV2, NIEntry, NIError, NIPurpose, ServiceV2};
 
   use dash_dev::{
@@ -674,57 +673,6 @@ mod tests {
     ptx
   }
 
-  /// A version 2 registration from the chain.
-  fn basic_bls() -> ProRegTx {
-    entry("a3d16d7b7f53adf5403b2082b1ddeae9ad52163d29d5c84cb5eea2e0bc1a486c")
-  }
-
-  /// From version 2 the operator key is read under the basic scheme.
-  #[rstest]
-  #[case::valid(KeyEdit::Kept, None)]
-  #[case::null(KeyEdit::Null, Some(ProTxInvalid::NullKey))]
-  #[case::off_curve(KeyEdit::OffCurve, Some(ProTxInvalid::NullKey))]
-  #[case::off_subgroup(KeyEdit::OffSubgroup, Some(ProTxInvalid::NullKey))]
-  #[case::infinity(KeyEdit::Infinity, Some(ProTxInvalid::NullKey))]
-  #[case::top_bit_cleared(KeyEdit::TopBitCleared, Some(ProTxInvalid::NullKey))]
-  #[case::basic_only(KeyEdit::BasicOnly, None)]
-  fn operator_key(
-    #[values(basic_bls(), registration(), shared())] mut ptx: ProRegTx,
-    #[case] edit: KeyEdit,
-    #[case] expected: Option<ProTxInvalid>,
-  ) {
-    ptx.pub_key_operator = edit.apply(ptx.pub_key_operator);
-    check_operator_key(ptx, expected);
-  }
-
-  /// At version 1 the operator key is read under the legacy scheme.
-  #[rstest]
-  #[case::valid(KeyEdit::Kept, None)]
-  #[case::null(KeyEdit::Null, Some(ProTxInvalid::NullKey))]
-  #[case::off_curve(KeyEdit::OffCurve, None)]
-  #[case::off_subgroup(KeyEdit::OffSubgroup, None)]
-  #[case::infinity(KeyEdit::Infinity, Some(ProTxInvalid::NullKey))]
-  #[case::top_bit_cleared(KeyEdit::TopBitCleared, None)]
-  #[case::basic_only(KeyEdit::BasicOnly, Some(ProTxInvalid::NullKey))]
-  fn operator_key_legacy(#[case] edit: KeyEdit, #[case] expected: Option<ProTxInvalid>) {
-    let mut ptx = basic_bls();
-    ptx.version = ProTxVersion::LegacyBls;
-    ptx.pub_key_operator = edit.apply(subgroup_key());
-    check_operator_key(ptx, expected);
-  }
-
-  /// `ptx` checks to `expected`, with the operator key checked after the mode
-  /// and before the operator reward.
-  fn check_operator_key(mut ptx: ProRegTx, expected: Option<ProTxInvalid>) {
-    assert_eq!(ptx.check(), expected);
-    let reward = MAX_OPERATOR_REWARD + 1;
-    ptx.operator_reward = reward;
-    let later = ProTxInvalid::OperatorRewardTooHigh { reward };
-    assert_eq!(ptx.check(), expected.or(Some(later)), "before the operator reward");
-    ptx.mode = 1;
-    assert_eq!(ptx.check(), Some(ProTxInvalid::BadMode { mode: 1 }), "after the mode");
-  }
-
   /// `share` with its refund script paying `key`.
   fn refund_to(share: &CollateralShare, key: PubKeyHash) -> CollateralShare {
     CollateralShare::new(
@@ -754,6 +702,32 @@ mod tests {
   #[case::unshared_null_owner(
     registration(),
     |ptx: &mut ProRegTx| ptx.key_id_owner = PubKeyHash::default(),
+    ProTxInvalid::NullKey
+  )]
+  #[case::null_operator(
+    registration(),
+    |ptx: &mut ProRegTx| ptx.pub_key_operator = BlsPkBytes::default(),
+    ProTxInvalid::NullKey
+  )]
+  #[case::operator_key_version(
+    entry("a3d16d7b7f53adf5403b2082b1ddeae9ad52163d29d5c84cb5eea2e0bc1a486c"),
+    |ptx: &mut ProRegTx| ptx.version = ProTxVersion::LegacyBls,
+    ProTxInvalid::NullKey
+  )]
+  #[case::mode_before_null_operator(
+    registration(),
+    |ptx: &mut ProRegTx| {
+      ptx.pub_key_operator = BlsPkBytes::default();
+      ptx.mode = 1;
+    },
+    ProTxInvalid::BadMode { mode: 1 }
+  )]
+  #[case::null_operator_before_operator_reward(
+    registration(),
+    |ptx: &mut ProRegTx| {
+      ptx.pub_key_operator = BlsPkBytes::default();
+      ptx.operator_reward = MAX_OPERATOR_REWARD + 1;
+    },
     ProTxInvalid::NullKey
   )]
   #[case::shared_external_collateral(

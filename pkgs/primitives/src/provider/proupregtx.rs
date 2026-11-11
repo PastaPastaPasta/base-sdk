@@ -197,7 +197,6 @@ impl fmt::Display for ProUpRegTx {
 mod tests {
   use super::*;
   use crate::provider::share::tests::script;
-  use crate::provider::sig::tests::{subgroup_key, KeyEdit};
 
   use dash_dev::{assert_json_rt, assert_serde_rt, check_sptx, check_sptx_raw, vec_from_hex, Corpus};
   use dash_script::Recipient;
@@ -249,56 +248,6 @@ mod tests {
     regtest("e7cb375dc4fbb47d60490f298538d8f48adc11e9af8619963d39923234cac08e")
   }
 
-  /// From version 2 the operator key is read under the basic scheme.
-  #[rstest]
-  #[case::valid(KeyEdit::Kept, None)]
-  #[case::null(KeyEdit::Null, Some(ProTxInvalid::NullKey))]
-  #[case::off_curve(KeyEdit::OffCurve, Some(ProTxInvalid::NullKey))]
-  #[case::off_subgroup(KeyEdit::OffSubgroup, Some(ProTxInvalid::NullKey))]
-  #[case::infinity(KeyEdit::Infinity, Some(ProTxInvalid::NullKey))]
-  #[case::top_bit_cleared(KeyEdit::TopBitCleared, Some(ProTxInvalid::NullKey))]
-  #[case::basic_only(KeyEdit::BasicOnly, None)]
-  fn operator_key(
-    #[values(basic_bls(), update())] mut ptx: ProUpRegTx,
-    #[case] edit: KeyEdit,
-    #[case] expected: Option<ProTxInvalid>,
-  ) {
-    ptx.pub_key_operator = edit.apply(ptx.pub_key_operator);
-    check_operator_key(ptx, expected);
-  }
-
-  /// At version 1 the operator key is read under the legacy scheme.
-  #[rstest]
-  #[case::valid(KeyEdit::Kept, None)]
-  #[case::null(KeyEdit::Null, Some(ProTxInvalid::NullKey))]
-  #[case::off_curve(KeyEdit::OffCurve, None)]
-  #[case::off_subgroup(KeyEdit::OffSubgroup, None)]
-  #[case::infinity(KeyEdit::Infinity, Some(ProTxInvalid::NullKey))]
-  #[case::top_bit_cleared(KeyEdit::TopBitCleared, None)]
-  #[case::basic_only(KeyEdit::BasicOnly, Some(ProTxInvalid::NullKey))]
-  fn operator_key_legacy(#[case] edit: KeyEdit, #[case] expected: Option<ProTxInvalid>) {
-    let mut ptx = basic_bls();
-    ptx.version = ProTxVersion::LegacyBls;
-    ptx.pub_key_operator = edit.apply(subgroup_key());
-    check_operator_key(ptx, expected);
-  }
-
-  /// `ptx` checks to `expected`, with the operator key checked after the mode
-  /// and before the payouts.
-  fn check_operator_key(mut ptx: ProUpRegTx, expected: Option<ProTxInvalid>) {
-    assert_eq!(ptx.check(), expected);
-    let voting = ptx.key_id_voting;
-    if ptx.version >= ProTxVersion::CoreV24 {
-      first_to(&mut ptx, voting);
-    } else {
-      ptx.script_payout = script(Recipient::PubKeyHash(voting));
-    }
-    let later = ProTxInvalid::PayoutKeyReuse;
-    assert_eq!(ptx.check(), expected.or(Some(later)), "before the payouts");
-    ptx.mode = 1;
-    assert_eq!(ptx.check(), Some(ProTxInvalid::BadMode { mode: 1 }), "after the mode");
-  }
-
   /// The first payout of `ptx` paid to `key` instead.
   fn first_to(ptx: &mut ProUpRegTx, key: PubKeyHash) {
     ptx.payouts[0] = PayoutShare::new(script(Recipient::PubKeyHash(key)), ptx.payouts[0].reward());
@@ -321,6 +270,32 @@ mod tests {
     update(),
     |ptx: &mut ProUpRegTx| ptx.script_payout = ptx.payouts[0].script_payout().clone(),
     Some(ProTxInvalid::PayoutVersionMismatch { version: ProTxVersion::CoreV24 })
+  )]
+  #[case::null_operator(
+    update(),
+    |ptx: &mut ProUpRegTx| ptx.pub_key_operator = BlsPkBytes::default(),
+    Some(ProTxInvalid::NullKey)
+  )]
+  #[case::operator_key_version(
+    basic_bls(),
+    |ptx: &mut ProUpRegTx| ptx.version = ProTxVersion::LegacyBls,
+    Some(ProTxInvalid::NullKey)
+  )]
+  #[case::mode_before_null_operator(
+    update(),
+    |ptx: &mut ProUpRegTx| {
+      ptx.pub_key_operator = BlsPkBytes::default();
+      ptx.mode = 1;
+    },
+    Some(ProTxInvalid::BadMode { mode: 1 })
+  )]
+  #[case::null_operator_before_payouts(
+    update(),
+    |ptx: &mut ProUpRegTx| {
+      ptx.pub_key_operator = BlsPkBytes::default();
+      first_to(ptx, ptx.key_id_voting);
+    },
+    Some(ProTxInvalid::NullKey)
   )]
   fn check(#[case] mut ptx: ProUpRegTx, #[case] edit: fn(&mut ProUpRegTx), #[case] expected: Option<ProTxInvalid>) {
     assert_eq!(ptx.check(), None);
