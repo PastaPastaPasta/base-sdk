@@ -34,10 +34,10 @@ impl_new! {
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct PrefilledTx {
-  /// Differential index, a CompactSize narrowed to 16 bits.
+  /// Differential index, a CompactSize of at most 65,535.
   #[getset(get_copy = "pub")]
   index: u16,
-  /// The transaction bytes.
+  /// The transaction.
   #[getset(get = "pub")]
   tx: Transaction,
 }
@@ -70,7 +70,7 @@ impl_new! {
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct CmpctBlock {
-  /// The serialized block header.
+  /// The block header.
   #[getset(get_copy = "pub")]
   header: BlockHeader,
   /// Nonce appended to the header when selecting short-ID keys.
@@ -89,8 +89,6 @@ pub struct CmpctBlock {
 impl_p2p!(CmpctBlock);
 
 impl BaseCodec for CmpctBlock {
-  /// Decodes a `cmpctblock`, reading at most [`CmpctBlock::MAX_TX_COUNT`]
-  /// short IDs and prefilled transactions together.
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let header = BlockHeader::decode(data)?;
     let nonce = u64::decode(data)?;
@@ -118,7 +116,7 @@ impl CmpctBlock {
   /// The most entries in the short-ID and prefilled lists together.
   pub const MAX_TX_COUNT: usize = u16::MAX as usize;
 
-  /// The first two little-endian 64-bit words of SHA256 of the serialized
+  /// The first two little-endian 64-bit words of SHA-256 of the serialized
   /// header followed by the little-endian nonce.
   pub fn short_id_keys(&self) -> (u64, u64) {
     let mut buf = ArrayBuf::<88>::new();
@@ -143,7 +141,10 @@ impl CmpctBlock {
 }
 
 /// A block hash and strictly increasing transaction indexes encoded as
-/// CompactSize differences. `new` returns `None` for any other ordering.
+/// CompactSize differences.
+///
+/// An absolute index above 65,535 fails to decode, with the index as the
+/// `CompactSizeExceedsLimit` value.
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(try_from = "GetBlockTxnFields"))]
@@ -159,8 +160,6 @@ pub struct GetBlockTxn {
 impl_p2p!(GetBlockTxn);
 
 impl BaseCodec for GetBlockTxn {
-  /// Decodes a `getblocktxn`, refusing an absolute index above 65,535 with
-  /// `CompactSizeExceedsLimit`, whose value is that index.
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let block_hash = BlockHash::decode(data)?;
     let count = CompactSize::decode_len(data, dash_types::MAX_SER_SIZE)?;
