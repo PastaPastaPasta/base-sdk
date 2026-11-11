@@ -63,7 +63,6 @@ pub struct IsdLock {
 impl_p2p!(IsdLock);
 
 impl BaseCodec for IsdLock {
-  /// Decodes an `isdlock`, reading at most [`IsdLock::MAX_INPUTS`] inputs.
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     Ok(Self {
       version: u8::decode(data)?,

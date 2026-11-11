@@ -61,8 +61,6 @@ pub struct Spork {
 impl_p2p!(Spork);
 
 impl BaseCodec for Spork {
-  /// Decodes a `spork`, reading a signature of at most
-  /// [`Spork::MAX_SIG_LEN`] bytes.
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     Ok(Self {
       spork_id: i32::decode(data)?,
@@ -72,7 +70,6 @@ impl BaseCodec for Spork {
     })
   }
 
-  /// Encodes a `spork`, writing a signature of any length.
   fn encode(&self, buf: &mut impl EncodeBuf) {
     self.spork_id.encode(buf);
     self.value.encode(buf);
