@@ -200,7 +200,7 @@ BOOST_AUTO_TEST_CASE(cfilter_reads)
 }
 */
   // This library reads every payload here, as raw bytes of any filter type.
-  // The reference reads only those marked `read: true`.
+  // The reference implementation reads only those marked `read: true`.
   "cfilter_reads": [
     { "raw": "00010000000000000000000000000000000000000000000000000000000000000009032d4aa918b9eb5a0e", "read": true },
     { "raw": "01010000000000000000000000000000000000000000000000000000000000000009032d4aa918b9eb5a0e", "read": false },

@@ -76,8 +76,8 @@ BOOST_AUTO_TEST_CASE(filterload_payloads)
         "flags": 0
       }
     },
-    // The reference reads this one; this library refuses its flags byte,
-    // 0xff, which is not a `BloomFlags`.
+    // The reference implementation reads this one; this library refuses its
+    // flags byte, 0xff, which is not a `BloomFlags`.
     "unchecked": {
       "raw": "01a53300000007000000ff",
       "details": {
