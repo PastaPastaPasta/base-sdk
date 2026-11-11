@@ -126,14 +126,7 @@ pub enum GovData {
 }
 
 impl_new! {
-/// A governance object as serialized on the wire.
-///
-/// ```text
-/// hash_parent(32) || revision(i32) || time(i64)
-/// || collateral_hash(32) || data(CompactSize + bytes)
-/// || type(i32) || masternode_outpoint(36)
-/// || sig(CompactSize + at most 96 bytes)
-/// ```
+/// Governance object.
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
