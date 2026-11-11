@@ -224,9 +224,7 @@ mod tests {
   }
 
   /// A recoverable signature read from its 65 bytes tells a high S from its
-  /// low-S twin, at half the order and for a signature the library made.
-  /// Verification and recovery accept both, so a caller refusing malleable
-  /// signatures asks `is_low_s`.
+  /// low-S twin, which verification and recovery both accept.
   #[rstest]
   fn tells_high_s_from_its_low_s_twin(alice_pk: EcdsaPublicKey, alice_rec_sig: EcdsaRecSignature) {
     let bytes = EcdsaRecSigBytes::from(alice_rec_sig).to_bytes();
