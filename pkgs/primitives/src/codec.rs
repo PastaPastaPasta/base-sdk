@@ -82,8 +82,8 @@ pub(crate) use impl_payload;
 /// `Decode` over its fields, without `Hashable`.
 ///
 /// The `$ty, $max, { fields }` form generates the codec alone, for
-/// `codec_type!`, `codec_payload!` and types that declare themselves. A
-/// field written `field: limit` reads at most `limit` entries.
+/// `codec_type!` and `codec_payload!` to build on. A field written
+/// `field: limit` reads at most `limit` entries.
 #[macro_export]
 macro_rules! codec_base {
   (
