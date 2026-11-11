@@ -26,11 +26,6 @@ pub(crate) fn sha256d(data: &[u8]) -> [u8; 32] {
   sha256d::Hash::hash(data).to_byte_array()
 }
 
-/// Double SHA-256 of `data`, as a hash.
-pub(crate) fn sha256d_hash(data: &[u8]) -> Hash256 {
-  Hash256::from_lendian(sha256d(data))
-}
-
 /// Double SHA-256 of the encoded `payload` without `sig`, its trailing field.
 pub(crate) fn unsigned_digest(payload: &impl BaseCodec, sig: &impl BaseCodec) -> [u8; 32] {
   let mut image = Vec::new();
@@ -69,7 +64,7 @@ pub(crate) fn request_id(prefix: &str, n: &impl BaseCodec) -> Hash256 {
   let mut buf = Vec::new();
   String::from(prefix).encode(&mut buf);
   n.encode(&mut buf);
-  sha256d_hash(&buf)
+  Hash256::from_lendian(sha256d(&buf))
 }
 
 /// The digest a quorum of `llmq_type` signs for request `id` over the
@@ -80,7 +75,7 @@ pub fn llmq_sig_hash(llmq_type: LlmqType, quorum_hash: &QuorumHash, id: &Hash256
   quorum_hash.encode(&mut buf);
   id.encode(&mut buf);
   msg_hash.encode(&mut buf);
-  sha256d_hash(&buf)
+  Hash256::from_lendian(sha256d(&buf))
 }
 
 /// Digest signed for the message `msg`.

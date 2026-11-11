@@ -9,7 +9,7 @@
 use crate::codec::impl_payload;
 use crate::hash_impl;
 use crate::prelude::*;
-use crate::sign::sha256d_hash;
+use crate::sign::sha256d;
 use crate::sptx::QuorumHash;
 use crate::support::DynBitset;
 
@@ -132,7 +132,7 @@ impl Commitment {
     self.valid_members.encode(&mut buf);
     self.quorum_public_key.encode(&mut buf);
     self.quorum_vvec_hash.encode(&mut buf);
-    sha256d_hash(&buf)
+    Hash256::from_lendian(sha256d(&buf))
   }
 
   /// Returns true if this is an indexed commitment (version 2 or 4).
