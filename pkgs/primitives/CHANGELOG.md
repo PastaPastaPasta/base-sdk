@@ -8,12 +8,3 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 - Initial release.
-
-### Added
-
-- `GovObject::MAX_SIGNATURE_SIZE`, the most signature bytes a governance object carries (96).
-- `codec_base!` reads a field written `field: limit` with at most `limit` entries, in its `$ty, $max, { fields }` form.
-
-### Changed
-
-- `GovObject` refuses a signature longer than `GovObject::MAX_SIGNATURE_SIZE` when decoding, before reading its bytes.
