@@ -121,10 +121,6 @@ hash_impl!(Commitment);
 
 impl Commitment {
   /// The digest the quorum signature and the members' signature sign.
-  ///
-  /// It commits to the LLMQ type, the quorum hash, the valid members, the
-  /// quorum public key as the payload writes it and the verification vector
-  /// hash.
   pub fn sig_hash(&self) -> Hash256 {
     let mut buf = Vec::new();
     self.llmq_type.encode(&mut buf);

@@ -36,8 +36,7 @@ pub(crate) fn unsigned_digest(payload: &impl BaseCodec, sig: &impl BaseCodec) ->
   sha256d(&image)
 }
 
-/// Writes the version, type and lock time of `tx`, which the shared
-/// masternode digests take as they are.
+/// Writes the version, type and lock time of `tx`.
 pub(crate) fn write_tx_header(tx: &Transaction, buf: &mut impl EncodeBuf) {
   tx.version().encode(buf);
   tx.tx_type().to_base().encode(buf);

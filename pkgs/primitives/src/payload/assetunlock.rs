@@ -85,11 +85,7 @@ impl AssetUnlock {
     request_id(REQUEST_ID_PREFIX, &self.index)
   }
 
-  /// The message hash the quorum signs. It is the hash of `tx`, which
-  /// carries this payload, with the quorum signature zeroed.
-  ///
-  /// Unlike the stable txid of version 2, it keeps the requested height and
-  /// the quorum hash.
+  /// The message hash the quorum signs for this payload carried by `tx`.
   pub fn msg_hash(&self, tx: &Transaction) -> Hash256 {
     let unsigned = Self {
       quorum_sig: BlsSigBytes::default(),

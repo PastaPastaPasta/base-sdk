@@ -64,8 +64,7 @@ impl Signer {
       .collect()
   }
 
-  /// The key of the quorum of `llmq_type`, checked to be the one that
-  /// signed.
+  /// The key of the quorum of `llmq_type`.
   fn quorum(&self, llmq_type: LlmqType) -> BlsPkBytes {
     assert_eq!(self.llmq_type, Some(llmq_type.to_base()));
     BlsPkBytes::from_bytes(arr_from_hex(self.quorum.as_deref().unwrap()))
@@ -111,8 +110,7 @@ fn bls_verifies<V: BlsScheme>(key: &(BlsPkBytes, bool), sig: &(BlsSigBytes, bool
 }
 
 /// Whether `sig` verifies over `digest` under `key`, each given with whether
-/// it is written under the legacy scheme. Checks under the scheme of the
-/// signature's encoding, or under either when `either` is set.
+/// it is written under the legacy scheme.
 fn bls_signed(key: &(BlsPkBytes, bool), sig: &(BlsSigBytes, bool), digest: &[u8], either: bool) -> bool {
   let legacy = || bls_verifies::<BlsScChia>(key, sig, digest);
   let basic = || bls_verifies::<BlsScIetf>(key, sig, digest);
@@ -137,8 +135,7 @@ fn owner_signed<T: Signable<Key = PubKeyHash>>(payload: &T, keys: &BTreeSet<PubK
   keys.iter().any(|key| payload.verify(key, ctx).is_none())
 }
 
-/// Whether `sigs` is not empty and each verifies under one of `keys`. Which
-/// share each signature belongs to is not checked.
+/// Whether `sigs` is not empty and each verifies under one of `keys`.
 fn consents_signed<T: Signable<Key = PubKeyHash>>(sigs: &[T], keys: &BTreeSet<PubKeyHash>, ctx: &T::Context) -> bool {
   !sigs.is_empty() && sigs.iter().all(|sig| owner_signed(sig, keys, ctx))
 }

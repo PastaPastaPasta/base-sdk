@@ -80,8 +80,7 @@ impl MnHardFork {
     request_id(REQUEST_ID_PREFIX, &i64::from(self.version_bit))
   }
 
-  /// The message hash the quorum signs. It is the hash of `tx`, which
-  /// carries this payload, with the signature zeroed.
+  /// The message hash the quorum signs for this payload carried by `tx`.
   pub fn msg_hash(&self, tx: &Transaction) -> Hash256 {
     let unsigned = Self {
       sig: BlsSigBytes::default(),
