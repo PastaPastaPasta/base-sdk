@@ -13,8 +13,7 @@
 // the keys from `protx listdiff 1 <block before>`.
 //
 // Nothing is computed; key ids are the base58check payloads of the
-// addresses the node printed. A sign hash is right when the signature
-// verifies over it.
+// addresses the node printed.
 //
 {
   "sighash": {

@@ -7,13 +7,11 @@
 # See the accompanying file LICENSE or https://opensource.org/license/MIT
 #
 
-"""Write the payload sign-hash corpus.
+"""Write the payload sign hash corpus.
 
 The corpus holds special transactions the reference implementation signed,
-each with the keys its signers held at the block before. The primitives tests
-check each payload's sign hash by verifying the signature over it. Nothing is
-computed here; key ids are the base58check payloads of the addresses the node
-printed.
+each with the keys its signers held at the block before. Nothing is computed
+here; key ids are the base58check payloads of the addresses the node printed.
 
 Each chain file is a JSON object read from one node:
 

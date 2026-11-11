@@ -140,10 +140,9 @@ fn consents_signed<T: Signable<Key = PubKeyHash>>(sigs: &[T], keys: &BTreeSet<Pu
   !sigs.is_empty() && sigs.iter().all(|sig| owner_signed(sig, keys, ctx))
 }
 
-/// Checks the signatures of one entry over its payload's sign hash.
-///
-/// Returns the transaction type and the payload version, or `None` for a
-/// payload this test does not cover.
+/// Checks the signatures of one entry over its payload's sign hash, and
+/// returns its type and payload version, or `None` for a payload this test
+/// does not cover.
 fn check_signed(txid: &str, entry: &Entry) -> Option<(u16, u16)> {
   let tx = Transaction::decode(&mut vec_from_hex(&entry.raw).as_slice()).unwrap();
   let payload = tx.decode_payload().unwrap().unwrap();
