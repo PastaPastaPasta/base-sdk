@@ -7,14 +7,14 @@
 //! ProUpSharedRegTx shared registrar update payload (type 12).
 
 use super::share::MAX_SHARES;
-use super::sig::is_valid_operator_key;
-use super::{ProTxVersion, SharedRegistrarSig};
+use super::sig::is_valid_bls_key;
+use super::SharedRegistrarSig;
 use crate::codec::{decode_list, encode_list, impl_payload};
 use crate::prelude::*;
 use crate::sptx::{InputsHash, ProTxInvalid};
 use crate::{hash_impl, TxHash};
 
-use dash_pkc::bls::BlsPkBytes;
+use dash_pkc::bls::{BlsPkBytes, BlsScIetf};
 use dash_script::PubKeyHash;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
@@ -81,8 +81,7 @@ impl Checkable for ProUpSharedRegTx {
     if self.version != Self::CURRENT_VERSION {
       return Some(ProTxInvalid::BadSharedRegistrarVersion { version: self.version });
     }
-    // The operator key is a basic-scheme key.
-    if !is_valid_operator_key(ProTxVersion::BasicBls, &self.pub_key_operator) || self.key_id_voting.is_null() {
+    if !is_valid_bls_key::<BlsScIetf>(&self.pub_key_operator) || self.key_id_voting.is_null() {
       return Some(ProTxInvalid::NullKey);
     }
     if self.sigs.is_empty() || self.sigs.len() > MAX_SHARES {

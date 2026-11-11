@@ -13,7 +13,7 @@ use crate::sign::verify_bls;
 
 use bitcoin_hashes::sha256d;
 use dash_num::Hash256;
-use dash_pkc::bls::{BlsError, BlsPkBytes, BlsScChia, BlsScIetf, BlsSigBytes, BLS_SIG_LEN};
+use dash_pkc::bls::{BlsError, BlsPkBytes, BlsScChia, BlsScIetf, BlsScheme, BlsSigBytes, BLS_SIG_LEN};
 use dash_pkc::ecdsa::ECDSA_REC_SIG_LEN;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 #[cfg(feature = "serde")]
@@ -87,16 +87,20 @@ pub(crate) fn verify_operator(
   }
 }
 
-/// Whether an operator key is not null and passes
-/// [`BlsPkBytes::is_canonical`] under the scheme `version` sets. The
-/// reference implementation reads the key the same way.
+/// Whether a key is not null and passes [`BlsPkBytes::is_canonical`] under
+/// `S`.
+pub(crate) fn is_valid_bls_key<S: BlsScheme>(key: &BlsPkBytes) -> bool {
+  !key.is_null() && key.is_canonical::<S>()
+}
+
+/// Whether an operator key passes [`is_valid_bls_key`] under the scheme
+/// `version` sets. The reference implementation reads the key the same way.
 pub(crate) fn is_valid_operator_key(version: ProTxVersion, key: &BlsPkBytes) -> bool {
-  !key.is_null()
-    && if version == ProTxVersion::LegacyBls {
-      key.is_canonical::<BlsScChia>()
-    } else {
-      key.is_canonical::<BlsScIetf>()
-    }
+  if version == ProTxVersion::LegacyBls {
+    is_valid_bls_key::<BlsScChia>(key)
+  } else {
+    is_valid_bls_key::<BlsScIetf>(key)
+  }
 }
 
 /// Collateral owner signature, empty when the collateral is spent.
