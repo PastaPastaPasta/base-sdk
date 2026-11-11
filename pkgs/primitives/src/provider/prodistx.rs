@@ -66,14 +66,6 @@ impl BaseCodec for ProDisTx {
 }
 
 /// The signature of a share owner dissolving a shared masternode.
-///
-/// It signs the inputs, their sequences and the outputs of the transaction,
-/// and the count of signatures the payload carries. The count selects the
-/// mode. One signature dissolves unilaterally, one per share unanimously.
-///
-/// The digest depends on the context alone. The context's `ProDisTx` must
-/// already carry as many signatures as the transaction will, with
-/// placeholders for those not yet made.
 impl Signable for DissolveSig {
   type Key = PubKeyHash;
   type Context = (Transaction, ProDisTx);

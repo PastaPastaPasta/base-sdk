@@ -288,11 +288,6 @@ impl Signable for ProRegTx {
 }
 
 /// The consent of a share owner to a shared registration.
-///
-/// It signs the inputs, their sequences and the outputs of the transaction,
-/// the share table and penalty terms, and the masternode's keys and
-/// services. Only a registration with shares carries consent signatures.
-/// The digest depends on the context alone.
 impl Signable for JoinSig {
   type Key = PubKeyHash;
   type Context = (Transaction, ProRegTx);

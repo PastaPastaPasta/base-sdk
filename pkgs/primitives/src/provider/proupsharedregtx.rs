@@ -71,9 +71,7 @@ impl BaseCodec for ProUpSharedRegTx {
   }
 }
 
-/// The signature of a share owner replacing the keys of a shared
-/// masternode. It signs every field of the payload but the signatures, and
-/// depends on the context alone.
+/// The signature of a share owner replacing the keys of a shared masternode.
 impl Signable for SharedRegistrarSig {
   type Key = PubKeyHash;
   type Context = ProUpSharedRegTx;
