@@ -32,6 +32,9 @@ use hex_conservative::DisplayHex;
 
 use core::fmt;
 
+/// Prefix of the digest a `JoinSig` signs.
+const PREFIX_STR: &str = "DashSharedMNReg";
+
 /// ProRegTx -- register a new masternode (type 1).
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -304,7 +307,7 @@ impl Signable for JoinSig {
     }
 
     let mut buf = Vec::new();
-    String::from("DashSharedMNReg").encode(&mut buf);
+    String::from(PREFIX_STR).encode(&mut buf);
     ptx.version.encode(&mut buf);
     write_tx_header(tx, &mut buf);
     sha256d(&prevouts).encode(&mut buf);

@@ -23,6 +23,9 @@ use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
+/// Prefix of the digest a `DissolveSig` signs.
+const PREFIX_STR: &str = "DashSharedMNDissolve";
+
 impl_new! {
 /// ProDisTx: dissolve a shared masternode (type 10).
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
@@ -73,7 +76,7 @@ impl Signable for DissolveSig {
 
   fn payload(&self, (tx, ptx): &(Transaction, ProDisTx)) -> Vec<u8> {
     let mut buf = Vec::new();
-    String::from("DashSharedMNDissolve").encode(&mut buf);
+    String::from(PREFIX_STR).encode(&mut buf);
     ptx.version.encode(&mut buf);
     write_tx_header(tx, &mut buf);
     for input in tx.inputs() {
