@@ -4,7 +4,7 @@
 // See the accompanying file LICENSE or https://opensource.org/license/MIT
 //
 
-//! Provider transaction signatures.
+//! Provider transaction signatures and the operator key.
 
 use super::ProTxVersion;
 use crate::hash_impl;
@@ -13,7 +13,7 @@ use crate::sign::verify_bls;
 
 use bitcoin_hashes::sha256d;
 use dash_num::Hash256;
-use dash_pkc::bls::{BlsError, BlsPkBytes, BlsScChia, BlsScIetf, BlsScheme, BlsSigBytes, BLS_SIG_LEN};
+use dash_pkc::bls::{BlsError, BlsPkBytes, BlsPkHash, BlsScChia, BlsScIetf, BlsScheme, BlsSigBytes, BLS_SIG_LEN};
 use dash_pkc::ecdsa::ECDSA_REC_SIG_LEN;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 #[cfg(feature = "serde")]
@@ -84,22 +84,6 @@ pub(crate) fn verify_operator(
     verify_bls::<BlsScChia>(digest, sig.as_bytes(), key)
   } else {
     verify_bls::<BlsScIetf>(digest, sig.as_bytes(), key)
-  }
-}
-
-/// Whether a key is not null and passes [`BlsPkBytes::is_canonical`] under
-/// `S`.
-pub(crate) fn is_valid_bls_key<S: BlsScheme>(key: &BlsPkBytes) -> bool {
-  !key.is_null() && key.is_canonical::<S>()
-}
-
-/// Whether an operator key passes [`is_valid_bls_key`] under the scheme
-/// `version` sets. The reference implementation reads the key the same way.
-pub(crate) fn is_valid_operator_key(version: ProTxVersion, key: &BlsPkBytes) -> bool {
-  if version == ProTxVersion::LegacyBls {
-    is_valid_bls_key::<BlsScChia>(key)
-  } else {
-    is_valid_bls_key::<BlsScIetf>(key)
   }
 }
 
@@ -223,6 +207,60 @@ impl Default for OperatorSig {
   }
 }
 
+/// Operator BLS public key, all zero when null.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, TypeId)]
+#[cfg_attr(
+  feature = "serde",
+  derive(::serde::Serialize, ::serde::Deserialize),
+  serde(transparent)
+)]
+pub struct OperatorKey(BlsPkBytes);
+
+impl BaseCodec for OperatorKey {
+  fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
+    BlsPkBytes::decode(data).map(Self)
+  }
+
+  fn encode(&self, buf: &mut impl EncodeBuf) {
+    self.0.encode(buf);
+  }
+}
+
+impl Hashable for OperatorKey {
+  type Hash = BlsPkHash;
+
+  fn hash(&self) -> Self::Hash {
+    self.0.hash()
+  }
+}
+
+impl OperatorKey {
+  /// Borrows the key bytes.
+  pub fn as_bytes(&self) -> &BlsPkBytes {
+    &self.0
+  }
+
+  /// Whether the key is not null and passes [`BlsPkBytes::is_canonical`]
+  /// under the scheme `version` sets.
+  pub fn is_valid(&self, version: ProTxVersion) -> bool {
+    if version == ProTxVersion::LegacyBls {
+      self.is_valid_under::<BlsScChia>()
+    } else {
+      self.is_valid_under::<BlsScIetf>()
+    }
+  }
+
+  /// Whether the key is not null and passes [`BlsPkBytes::is_canonical`]
+  /// under `S`.
+  pub(crate) fn is_valid_under<S: BlsScheme>(&self) -> bool {
+    !self.0.is_null() && self.0.is_canonical::<S>()
+  }
+}
+
+type_cvrt!(From<BlsPkBytes> for OperatorKey, |key| Self(*key));
+
+type_cvrt!(From<OperatorKey> for BlsPkBytes, |key| key.0);
+
 /// Declares a compact signature that names what it signs and delegates its
 /// codec to [`EcdsaRecSigArray`].
 macro_rules! rec_sig {
@@ -306,5 +344,18 @@ mod tests {
       verify_operator(version, &[7; 32], &basic_sig, &basic_key).is_ok(),
       !legacy
     );
+  }
+
+  #[rstest]
+  #[case::legacy_bls(ProTxVersion::LegacyBls, bls_sign::<BlsScChia>)]
+  #[case::basic_bls(ProTxVersion::BasicBls, bls_sign::<BlsScIetf>)]
+  #[case::core_v24(ProTxVersion::CoreV24, bls_sign::<BlsScIetf>)]
+  fn operator_key_follows_the_version(
+    #[case] version: ProTxVersion,
+    #[case] sign: fn(u8, &[u8; 32]) -> (BlsPkBytes, [u8; BLS_SIG_LEN]),
+  ) {
+    let (key, _) = sign(1, &[7; 32]);
+
+    assert!(OperatorKey::from(key).is_valid(version));
   }
 }

@@ -7,8 +7,7 @@
 //! ProUpRegTx registrar-update payload (type 3).
 
 use super::share::{check_payout_version, check_payouts, MAX_REWARD};
-use super::sig::is_valid_operator_key;
-use super::{OwnerSig, PayoutShare, ProTxVersion};
+use super::{OperatorKey, OwnerSig, PayoutShare, ProTxVersion};
 use crate::codec::{decode_list, encode_list, impl_payload};
 use crate::prelude::*;
 use crate::sign::{unsigned_digest, verify_compact};
@@ -16,7 +15,6 @@ use crate::sptx::{InputsHash, ProTxInvalid};
 use crate::{hash_impl, TxHash};
 
 use bitcoin_primitives::script::ScriptPubKeyBuf;
-use dash_pkc::bls::BlsPkBytes;
 use dash_pkc::ecdsa::{EcdsaError, ECDSA_REC_SIG_LEN};
 use dash_script::PubKeyHash;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
@@ -42,7 +40,7 @@ pub struct ProUpRegTx {
   mode: u16,
   /// Operator BLS public key (48 bytes).
   #[getset(get_copy = "pub")]
-  pub_key_operator: BlsPkBytes,
+  pub_key_operator: OperatorKey,
   /// Voting key id (20 bytes).
   #[getset(get_copy = "pub")]
   key_id_voting: PubKeyHash,
@@ -68,7 +66,7 @@ impl BaseCodec for ProUpRegTx {
     let version = ProTxVersion::decode(data)?;
     let pro_tx_hash = TxHash::decode(data)?;
     let mode = u16::decode(data)?;
-    let pub_key_operator = BlsPkBytes::decode(data)?;
+    let pub_key_operator = OperatorKey::decode(data)?;
     let key_id_voting = PubKeyHash::decode(data)?;
     let (script_payout, payouts) = if version >= ProTxVersion::CoreV24 {
       (ScriptPubKeyBuf::new(), decode_list(data)?)
@@ -142,7 +140,7 @@ impl Checkable for ProUpRegTx {
       return Some(e);
     }
 
-    if !is_valid_operator_key(self.version, &self.pub_key_operator) {
+    if !self.pub_key_operator.is_valid(self.version) {
       return Some(ProTxInvalid::NullKey);
     }
     if self.key_id_voting.is_null() {
@@ -166,7 +164,7 @@ impl ProUpRegTx {
     version: ProTxVersion,
     pro_tx_hash: TxHash,
     mode: u16,
-    pub_key_operator: BlsPkBytes,
+    pub_key_operator: OperatorKey,
     key_id_voting: PubKeyHash,
     script_payout: ScriptPubKeyBuf,
     payouts: Vec<PayoutShare>,
@@ -273,7 +271,7 @@ mod tests {
   )]
   #[case::null_operator(
     update(),
-    |ptx: &mut ProUpRegTx| ptx.pub_key_operator = BlsPkBytes::default(),
+    |ptx: &mut ProUpRegTx| ptx.pub_key_operator = OperatorKey::default(),
     Some(ProTxInvalid::NullKey)
   )]
   #[case::operator_key_version(
@@ -284,7 +282,7 @@ mod tests {
   #[case::mode_before_null_operator(
     update(),
     |ptx: &mut ProUpRegTx| {
-      ptx.pub_key_operator = BlsPkBytes::default();
+      ptx.pub_key_operator = OperatorKey::default();
       ptx.mode = 1;
     },
     Some(ProTxInvalid::BadMode { mode: 1 })
@@ -292,7 +290,7 @@ mod tests {
   #[case::null_operator_before_payouts(
     update(),
     |ptx: &mut ProUpRegTx| {
-      ptx.pub_key_operator = BlsPkBytes::default();
+      ptx.pub_key_operator = OperatorKey::default();
       first_to(ptx, ptx.key_id_voting);
     },
     Some(ProTxInvalid::NullKey)
