@@ -22,7 +22,6 @@ use getset::{CopyGetters, Getters};
 
 enum_map! {
   /// How matches update a [`FilterLoad`] filter, one byte on the wire.
-  /// Decoding refuses any other byte.
   #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, TypeId)]
   #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
   #[cfg_attr(feature = "serde", serde(try_from = "u8", into = "u8"))]
@@ -65,9 +64,8 @@ impl_new! {
 /// tweak and update flags.
 ///
 /// The filter is read as at most [`MAX_FILTER_SIZE`](Self::MAX_FILTER_SIZE)
-/// bytes, so a longer one fails before its bytes are read, and the flags
-/// byte must be a [`BloomFlags`]. The other fields take any value. `new`
-/// takes a longer filter too, which then fails to decode.
+/// bytes, so a longer one fails before its bytes are read. `new` takes a
+/// longer filter too, which then fails to decode.
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct FilterLoad {
@@ -152,8 +150,7 @@ impl FilterAdd {
 }
 
 make_hash! {
-  /// A transaction or inner node hash in a [`PartialMerkleTree`]. The same
-  /// 32 bytes as `TxMerkleNode` in `bitcoin-primitives`, as a Dash hash type.
+  /// A transaction or inner node hash in a [`PartialMerkleTree`].
   TxMerkleNode, 32
 }
 
@@ -197,18 +194,10 @@ impl_new! {
 /// The transactions of a block that match a filter, with the hashes that
 /// prove them against the block's merkle root.
 ///
-/// The tree is walked depth first. Each node visited takes one bit, set
-/// when the node is a matched transaction or an ancestor of one. A node with
-/// an unset bit, or a leaf, takes the next hash; the walk does not descend
-/// below it.
-///
-/// On the wire the bits are packed eight to a byte, least significant
-/// first. Decoding unpacks every bit of every byte, so
-/// [`bits`](Self::bits) holds a multiple of eight; encoding pads the last
-/// byte with unset bits, so a tree built with any other count decodes with
-/// that padding added. The hash count and the byte count are each read as
-/// at most [`MAX_VEC_SIZE`](Self::MAX_VEC_SIZE), so a larger one fails
-/// before what it counts is read.
+/// Decoding unpacks all eight bits of each byte, so [`bits`](Self::bits)
+/// holds a multiple of eight. The hash count and the byte count of the bits
+/// are each read as at most [`MAX_VEC_SIZE`](Self::MAX_VEC_SIZE), so a larger
+/// one fails before what it counts is read.
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct PartialMerkleTree {
@@ -216,11 +205,11 @@ pub struct PartialMerkleTree {
   #[cfg_attr(feature = "serde", serde(rename = "total_transactions"))]
   #[getset(get_copy = "pub")]
   num_transactions: u32,
-  /// The bits, in the order the walk takes them.
+  /// The bits, in depth-first order.
   #[cfg_attr(feature = "serde", serde(rename = "flags", with = "packed_bits"))]
   #[getset(get = "pub")]
   bits: Vec<bool>,
-  /// Transaction and inner node hashes, in the order the walk takes them.
+  /// Transaction and inner node hashes, in depth-first order.
   #[getset(get = "pub")]
   hashes: Vec<TxMerkleNode>,
 }
@@ -259,8 +248,7 @@ codec_p2p! {
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct MerkleBlock {
-  /// The block's header. It is Dash's, hashed with X11, where
-  /// `bitcoin-p2p-messages` holds a Bitcoin header.
+  /// The block's header.
   #[getset(get_copy = "pub")]
   header: BlockHeader,
   /// The matched transactions and their proof.
@@ -320,8 +308,7 @@ mod tests {
   }
 
   /// Every vector whose flags byte is a [`BloomFlags`] deserializes as a
-  /// [`FilterLoad`], decodes and round-trips. The `unchecked` one, flags
-  /// 0xff, deserializes only as an image and fails at that byte.
+  /// [`FilterLoad`], decodes and round-trips, and the rest fail at that byte.
   #[rstest]
   fn corpus_filterload() {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "bloom");
@@ -393,8 +380,7 @@ mod tests {
     assert_serde_rt("merkleblock", &items);
   }
 
-  /// The first bit is the root's. In `none` it is unset, so the root takes
-  /// the one hash; in `genesis` it is set over a single leaf.
+  /// The first bit is the root's.
   #[rstest]
   #[case::none("none", 0b0000_0000)]
   #[case::genesis("genesis", 0b0000_0001)]
@@ -422,8 +408,8 @@ mod tests {
     assert_eq!(decoded.bits()[9..], [false; 7]);
   }
 
-  /// The reference refuses a filter past 36,000 bytes, which this library
-  /// reads; every other vector reads the same.
+  /// The reference implementation refuses a filter past 36,000 bytes, which
+  /// this library reads; every other vector reads the same.
   #[rstest]
   fn filterload_reads_match_vectors() {
     for (payload, read) in reads("filterload_reads") {
@@ -433,8 +419,8 @@ mod tests {
     }
   }
 
-  /// The reference refuses an element past 520 bytes, which this library
-  /// reads; every other vector reads the same.
+  /// The reference implementation refuses an element past 520 bytes, which
+  /// this library reads; every other vector reads the same.
   #[rstest]
   fn filteradd_reads_match_vectors() {
     for (payload, read) in reads("filteradd_reads") {

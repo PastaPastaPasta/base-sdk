@@ -5,8 +5,6 @@
 //
 
 //! BIP157 compact block filter messages.
-//!
-//! Block hashes are Dash's, hashed with X11.
 
 // TODO(pasta): swap these for the `bitcoin-p2p-messages` types once that
 // crate is released (rust-bitcoin/rust-bitcoin#7161), keeping Dash's block
@@ -25,15 +23,13 @@ use getset::{CopyGetters, Getters};
 
 make_hash! {
   /// The double SHA-256 of a block's filter, its element count followed by
-  /// their Golomb-Rice codes. The same 32 bytes as `bitcoin-p2p-messages`'
-  /// `FilterHash`, in a Dash hash type.
+  /// their Golomb-Rice codes.
   FilterHash, 32
 }
 
 make_hash! {
   /// The double SHA-256 of a block's [`FilterHash`] followed by the
-  /// [`FilterHeader`] of the block before it. The same 32 bytes as
-  /// `bitcoin-p2p-messages`' `FilterHeader`, in a Dash hash type.
+  /// [`FilterHeader`] of the block before it.
   FilterHeader, 32
 }
 
@@ -78,13 +74,8 @@ impl_new! {
 /// The filter of one block.
 ///
 /// The filter is read as at most [`MAX_FILTER_SIZE`](Self::MAX_FILTER_SIZE)
-/// raw bytes, so a longer one fails before its bytes are read. Neither the
-/// type nor the filter's codes are checked. `new` takes a longer filter
-/// too, which then fails to decode.
-///
-/// Its `Hashable::hash` covers the whole payload, so it is neither the
-/// block's [`FilterHash`], the double SHA-256 of [`filter`](Self::filter)
-/// alone, nor its [`FilterHeader`].
+/// raw bytes, so a longer one fails before its bytes are read. `new` takes a
+/// longer filter too, which then fails to decode.
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct CFilter {
@@ -358,9 +349,7 @@ mod tests {
     assert_serde_rt("cfcheckpt", &items);
   }
 
-  /// The reference refuses most of these for their filter type or codes.
-  /// This library reads every one as raw bytes and writes it back as it
-  /// was.
+  /// Every vector reads as raw bytes and writes back as it was.
   #[rstest]
   fn cfilter_reads_take_any_type_and_bytes() {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "cfilter");
