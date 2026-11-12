@@ -73,9 +73,10 @@ fn every_core_command_is_known() {
   let send: BTreeMap<String, Option<Slot>> = corpus().value("send");
   let ctx = ProtoCtx::new(ProtocolVersion::V24_0, BlsCtx::BASIC);
   for name in send.keys().filter(|n| !n.is_empty()) {
-    // An empty payload: decoders may fail, but never as an unknown command.
+    // Decoders may fail on an empty payload; successful results are typed.
     if let Ok(d) = P2pMsg::decode_with_policy(&command(name), &[], &ctx) {
       assert!(!d.msg.is_unknown(), "{name}");
+      assert!(!d.msg.is_stub(), "{name}");
       assert_eq!(d.msg.command(), command(name));
     }
     let slot = ShortId::from_command(&command(name));

@@ -232,14 +232,14 @@ define_p2p! {
     Mempool => MEMPOOL "mempool" @ 15,
     /// LLMQ: watch quorums.
     QWatch => QWATCH "qwatch" @ 151,
+    /// Request active sporks.
+    GetSporks => GETSPORKS "getsporks" @ 129,
   }
 
   stub {
   }
 
   stub_empty {
-    /// Request active sporks.
-    GetSporks => GETSPORKS "getsporks" @ 129,
   }
 }
 
@@ -397,5 +397,14 @@ mod tests {
     let read = P2pMsg::decode_with_policy(&cmd, &over, &ctx)
       .map(|decoded| (decoded.msg.command(), decoded.msg.is_unknown(), decoded.consumed));
     assert_eq!(read, Ok((cmd, false, over.len())));
+  }
+
+  /// `getsporks` is typed and reads none of its payload.
+  #[rstest]
+  fn getsporks_reads_nothing() {
+    let ctx = crate::ctx::ProtoCtx::new(ProtocolVersion::V24_0, dash_pkc::bls::BlsCtx::BASIC);
+    let read = P2pMsg::decode_with_policy(&CommandString::GETSPORKS, &[0, 1, 2], &ctx)
+      .map(|decoded| (decoded.msg.is_stub(), decoded.msg, decoded.consumed));
+    assert_eq!(read, Ok((false, P2pMsg::GetSporks, 0)));
   }
 }

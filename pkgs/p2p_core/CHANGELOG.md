@@ -111,6 +111,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `SimplifiedMnListEntry::is_valid` and `GetQrInfo::extra_share`, like the `qrinfo` extra share flag, are a `bool` read
   as 0 or 1, the bytes Core writes; another byte, which Core reads as `true`, fails with
   `DecodeError::NonCanonicalBool`. Core serves a `getqrinfo` with such a byte.
+- `getsporks` now decodes as a typed message; no command Core knows remains a stub.
 
 ### Not provided
 
