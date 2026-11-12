@@ -394,7 +394,8 @@ mod tests {
   ) {
     let ctx = crate::ctx::ProtoCtx::new(ProtocolVersion::V24_0, dash_pkc::bls::BlsCtx::BASIC);
     let over = payload(prefix, limit + 1, entry, suffix);
-    let read = P2pMsg::decode_with_policy(&cmd, &over, &ctx).map(|decoded| (decoded.msg.command(), decoded.consumed));
-    assert_eq!(read, Ok((cmd, over.len())));
+    let read = P2pMsg::decode_with_policy(&cmd, &over, &ctx)
+      .map(|decoded| (decoded.msg.command(), decoded.msg.is_unknown(), decoded.consumed));
+    assert_eq!(read, Ok((cmd, false, over.len())));
   }
 }
