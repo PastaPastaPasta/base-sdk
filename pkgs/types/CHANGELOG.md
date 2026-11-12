@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.0-beta] - 2026-11-07
+
 ### Added
 
 - `BaseCodec` for `Box<T>`, which reads and writes the boxed value.
@@ -90,6 +92,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Initial release.
 
-[unreleased]: https://github.com/dashpay/base-sdk/compare/dash-types-0.2.0-beta...HEAD
+[unreleased]: https://github.com/dashpay/base-sdk/compare/dash-types-0.3.0-beta...HEAD
+[0.3.0-beta]: https://github.com/dashpay/base-sdk/compare/dash-types-0.2.0-beta...dash-types-0.3.0-beta
 [0.2.0-beta]: https://github.com/dashpay/base-sdk/compare/dash-types-0.1.0-beta...dash-types-0.2.0-beta
 [0.1.0-beta]: https://github.com/dashpay/base-sdk/releases/tag/dash-types-0.1.0-beta

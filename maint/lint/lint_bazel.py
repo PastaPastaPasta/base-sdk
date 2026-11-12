@@ -389,7 +389,7 @@ def _bazel_crates(
   if result.returncode != 0:
     relay(result.stderr, repo_root, stream=sys.stderr)
     print(
-      "hint: run 'just zglock' if 'MODULE.bazel.lock' is out of date",
+      "hint: run 'just lock' if 'MODULE.bazel.lock' is out of date",
       file=sys.stderr,
     )
     raise RuntimeError(f"bazel cquery failed with {result.returncode}")
@@ -636,7 +636,7 @@ def _check_graph(repo_root: Path) -> int | None:
   print(
     f"hint: {ANCHOR} depends on every crate in '{PUBLISHABLE}/'; workspace "
     "crates restate their features in 'crate_features'; third-party ones "
-    "follow the manifests listed in 'MODULE.bazel', so run 'just zglock' "
+    "follow the manifests listed in 'MODULE.bazel', so run 'just lock' "
     "after changing a manifest",
     file=sys.stderr,
   )

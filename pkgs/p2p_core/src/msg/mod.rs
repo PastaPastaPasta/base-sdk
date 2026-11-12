@@ -284,3 +284,96 @@ impl MsgDecode for MnAuth {}
 impl MsgDecode for PlatformBan {}
 impl MsgDecode for QData {}
 impl MsgDecode for GetQrInfo {}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  use dash_types::codec::{BaseCodec, DecodeError};
+  use dash_types::CompactSize;
+  use rstest::rstest;
+
+  use core::fmt::Debug;
+
+  /// A version before a locator.
+  const VERSION: [u8; 4] = 70_240i32.to_le_bytes();
+
+  /// A stop hash after a locator.
+  const HASH: [u8; 32] = [0; 32];
+
+  /// A `tx` entry of an inventory message.
+  const INVENTORY: [u8; 36] = {
+    let mut entry = [0; 36];
+    entry[0] = 1;
+    entry
+  };
+
+  /// An entry of an `addr`.
+  const ADDR: [u8; 30] = [0; 30];
+
+  /// An entry of an `addrv2`, an IPv4 address.
+  const ADDRV2: [u8; 13] = [0, 0, 0, 0, 0, 1, 4, 1, 2, 3, 4, 0x27, 0x0f];
+
+  /// `prefix`, a count of `count`, that many `entry` and then `suffix`.
+  fn payload(prefix: &[u8], count: usize, entry: &[u8], suffix: &[u8]) -> Vec<u8> {
+    let mut size = Vec::new();
+    CompactSize::from(count).encode(&mut size);
+    [prefix, &size, &entry.repeat(count), suffix].concat()
+  }
+
+  /// Checks that `T` reads a list of `limit` entries back to the same bytes,
+  /// and fails on a count of one more before reading any entry.
+  fn check_count<T: BaseCodec + Debug + PartialEq>(prefix: &[u8], entry: &[u8], suffix: &[u8], limit: usize) {
+    let full = payload(prefix, limit, entry, suffix);
+    let mut cursor = &full[..];
+    let encoded = T::decode(&mut cursor).map(|msg| {
+      let mut buf = Vec::new();
+      msg.encode(&mut buf);
+      buf
+    });
+    assert_eq!((encoded, cursor.len()), (Ok(full.clone()), 0));
+
+    let past = Err(DecodeError::CompactSizeExceedsLimit {
+      limit,
+      value: limit as u64 + 1,
+    });
+    let over = payload(prefix, limit + 1, entry, suffix);
+    assert_eq!(T::decode(&mut &over[..]), past);
+    let bare = payload(prefix, limit + 1, &[], &[]);
+    assert_eq!(T::decode(&mut &bare[..]), past);
+  }
+
+  #[rstest]
+  #[case::inv(|| check_count::<Inv>(&[], &INVENTORY, &[], 50_000))]
+  #[case::getdata(|| check_count::<GetData>(&[], &INVENTORY, &[], 50_000))]
+  #[case::notfound(|| check_count::<NotFound>(&[], &INVENTORY, &[], 50_000))]
+  #[case::getblocks(|| check_count::<GetBlocks>(&VERSION, &HASH, &HASH, 101))]
+  #[case::getheaders(|| check_count::<GetHeaders>(&VERSION, &HASH, &HASH, 101))]
+  #[case::getheaders2(|| check_count::<GetHeaders2>(&VERSION, &HASH, &HASH, 101))]
+  #[case::addr(|| check_count::<Addr>(&[], &ADDR, &[], 1_000))]
+  #[case::addrv2(|| check_count::<AddrV2Msg>(&[], &ADDRV2, &[], 1_000))]
+  fn counts_stop_at_the_limit(#[case] check: fn()) {
+    check();
+  }
+
+  #[rstest]
+  #[case::inv(CommandString::INV, &[], 50_000)]
+  #[case::getdata(CommandString::GETDATA, &[], 50_000)]
+  #[case::notfound(CommandString::NOTFOUND, &[], 50_000)]
+  #[case::getblocks(CommandString::GETBLOCKS, &VERSION, 101)]
+  #[case::getheaders(CommandString::GETHEADERS, &VERSION, 101)]
+  #[case::getheaders2(CommandString::GETHEADERS2, &VERSION, 101)]
+  #[case::addr(CommandString::ADDR, &[], 1_000)]
+  #[case::addrv2(CommandString::ADDRV2, &[], 1_000)]
+  fn dispatch_keeps_the_limit(#[case] cmd: CommandString, #[case] prefix: &[u8], #[case] limit: usize) {
+    let ctx = crate::ctx::ProtoCtx::new(ProtocolVersion::V24_0, dash_pkc::bls::BlsCtx::BASIC);
+    let bare = payload(prefix, limit + 1, &[], &[]);
+    assert_eq!(
+      P2pMsg::decode_with_policy(&cmd, &bare, &ctx).map(|decoded| decoded.msg),
+      Err(crate::P2pDecodeError::Consensus(DecodeError::CompactSizeExceedsLimit {
+        limit,
+        value: limit as u64 + 1,
+      }))
+    );
+  }
+}

@@ -1,8 +1,17 @@
 [package]
 name = "dash-params"
-version = "0.0.0"
+version = "0.1.0-beta"
+description = "Network parameters for the Dash Base SDK"
+keywords = ["base-sdk", "dash", "dashcore", "dashpay"]
+categories = [
+  "cryptography::cryptocurrencies",
+  "no-std",
+  "wasm",
+]
 exclude = [
   "contrib",
+  "corpus",
+  "tests",
 ]
 readme = "README.md"
 authors.workspace = true
@@ -23,6 +32,7 @@ std = [
   "dash-num/std",
   "dash-types/std",
 ]
+
 codec = [
   "dash-num/codec",
   "dash-types/codec",
@@ -35,12 +45,12 @@ full = [
 [dependencies]
 bitcoin_hashes = { workspace = true, features = ["alloc"] }
 bitcoin-units = { workspace = true, features = ["alloc"] }
-dash-num = { version = "0.2.0-beta", path = "../num", default-features = false }
-dash-types = { version = "0.2.0-beta", path = "../types", default-features = false }
+dash-num = { version = "0.3.0-beta", path = "../num", default-features = false }
+dash-types = { version = "0.3.0-beta", path = "../types", default-features = false }
 hex-conservative = { workspace = true }
 
 [dev-dependencies]
-dash-dev = { version = "0.0.0", path = "../../meta/dev", features = ["full"] }
+dash-dev = { path = "../../meta/dev", features = ["full"] }
 rstest = { workspace = true }
 serde = { workspace = true, features = ["derive", "std"] }
 

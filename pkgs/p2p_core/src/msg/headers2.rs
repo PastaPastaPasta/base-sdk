@@ -6,8 +6,8 @@
 
 //! Compressed header messages.
 
-use super::headers::{decode_count, Headers};
-use crate::codec::{codec_p2p, impl_p2p, read_count_at_most, MsgDecode};
+use super::headers::{decode_count, GetHeaders, Headers};
+use crate::codec::{impl_p2p, read_count_at_most, MsgDecode};
 use crate::ctx::ProtoCtx;
 use crate::prelude::*;
 use crate::version::ProtocolVersion;
@@ -16,7 +16,7 @@ use crate::P2pDecodeError;
 use dash_primitives::{hash_impl, BlockHash, BlockHeader, MerkleRoot};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::{TypeId, Unencodable};
-use dash_types::{CompactSize, Hashable};
+use dash_types::{impl_new, impl_vec, CompactSize, Hashable};
 use getset::{CopyGetters, Getters};
 
 use core::iter;
@@ -203,7 +203,7 @@ fn save_version(versions: &mut Vec<i32>, version: i32) {
   versions.insert(0, version);
 }
 
-codec_p2p! {
+impl_new! {
 /// Requests compressed block headers starting from a locator.
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -218,6 +218,15 @@ pub struct GetHeaders2 {
   #[getset(get_copy = "pub")]
   hash_stop: BlockHash,
 }
+}
+
+impl_vec!(GetHeaders2, { version, locator_hashes: Self::MAX_LOCATOR_COUNT, hash_stop });
+impl_p2p!(GetHeaders2);
+hash_impl!(GetHeaders2);
+
+impl GetHeaders2 {
+  /// The most locator hashes a `getheaders2` carries.
+  pub const MAX_LOCATOR_COUNT: usize = GetHeaders::MAX_LOCATOR_COUNT;
 }
 
 /// Response carrying delta-compressed block headers.

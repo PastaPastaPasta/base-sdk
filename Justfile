@@ -43,6 +43,12 @@ lint:
     {{ python }} maint/lint/lint_codeql.py run --lang=c --with-suite=cpp-security-and-quality
     {{ python }} maint/lint/lint_codeql.py run --lang=cpp --with-suite=cpp-security-and-quality
 
+lock:
+    cargo update --workspace
+    cargo update --workspace --manifest-path docs/samples/Cargo.toml
+    cargo update --workspace --manifest-path fuzz/Cargo.toml
+    bazel mod deps --lockfile_mode=update
+
 [positional-arguments]
 [unix]
 mutants *args:
@@ -67,6 +73,3 @@ test:
 
 zbuild *flags:
     bazel build {{ flags }} //...
-
-zglock:
-    bazel mod deps --lockfile_mode=update

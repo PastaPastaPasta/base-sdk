@@ -6,20 +6,20 @@
 
 //! Inventory messages and types.
 
-use crate::codec::codec_p2p;
+use crate::codec::{codec_p2p, impl_p2p};
 use crate::command::CommandString;
 use crate::prelude::*;
 
 use dash_num::Hash256;
 use dash_primitives::hash_impl;
 use dash_types::type_id::TypeId;
-use dash_types::{enum_map, impl_num};
+use dash_types::{enum_map, impl_new, impl_num, impl_vec};
 use getset::{CopyGetters, Getters};
 
 use core::fmt;
 use core::time::Duration;
 
-codec_p2p! {
+impl_new! {
 /// Requests specific inventory items from a peer.
 #[derive(Clone, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -28,6 +28,15 @@ pub struct GetData {
   #[getset(get = "pub")]
   inventory: Vec<Inventory>,
 }
+}
+
+impl_vec!(GetData, { inventory: Self::MAX_COUNT });
+impl_p2p!(GetData);
+hash_impl!(GetData);
+
+impl GetData {
+  /// The most entries a `getdata` carries.
+  pub const MAX_COUNT: usize = Inv::MAX_COUNT;
 }
 
 enum_map! {
@@ -160,7 +169,7 @@ impl fmt::Display for Inventory {
   }
 }
 
-codec_p2p! {
+impl_new! {
 /// Announces available inventory to a peer.
 #[derive(Clone, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -171,7 +180,16 @@ pub struct Inv {
 }
 }
 
-codec_p2p! {
+impl_vec!(Inv, { inventory: Self::MAX_COUNT });
+impl_p2p!(Inv);
+hash_impl!(Inv);
+
+impl Inv {
+  /// The most entries an `inv` carries.
+  pub const MAX_COUNT: usize = 50_000;
+}
+
+impl_new! {
 /// Indicates requested inventory items were not found.
 #[derive(Clone, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
@@ -180,6 +198,15 @@ pub struct NotFound {
   #[getset(get = "pub")]
   inventory: Vec<Inventory>,
 }
+}
+
+impl_vec!(NotFound, { inventory: Self::MAX_COUNT });
+impl_p2p!(NotFound);
+hash_impl!(NotFound);
+
+impl NotFound {
+  /// The most entries a `notfound` carries.
+  pub const MAX_COUNT: usize = Inv::MAX_COUNT;
 }
 
 #[cfg(all(test, feature = "serde"))]

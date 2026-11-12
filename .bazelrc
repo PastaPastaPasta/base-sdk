@@ -13,7 +13,7 @@ common --repo_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
 build --host_macos_minimum_os=14.0
 build --macos_minimum_os=14.0
 
-# Only `just zglock` rewrites the lock; a stale one fails everywhere else, so
+# Only `just lock` rewrites the lock; a stale one fails everywhere else, so
 # no host Bazel can quietly change what CI then trusts.
 common --lockfile_mode=error
 

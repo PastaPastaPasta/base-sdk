@@ -251,6 +251,14 @@ fn core_headers2_round_trip_in_their_mode() {
 /// other than 0 or 1, which Core reads as `true`.
 const STRICT: [&str; 1] = ["sendcmpct_hb02_v1"];
 
+/// Locators over 101 hashes, which Core reads and then disconnects for.
+/// base-sdk refuses the count at the read.
+const BOUNDED: [&str; 3] = [
+  "getblocks_locator_102",
+  "getheaders_locator_102",
+  "getheaders2_locator_102",
+];
+
 /// Commands Core has no handler for and ignores unread. base-sdk types them
 /// both ways; a node that follows Core ignores them before decoding.
 const IGNORED_BY_CORE: [&str; 4] = REQUESTED;
@@ -283,6 +291,16 @@ fn handler_verdicts_are_cores() {
       "unread" => assert!(IGNORED_BY_CORE.contains(&c.command.as_str()), "{label}"),
       "read" if STRICT.contains(&c.name.as_str()) => assert!(
         matches!(r, Err(P2pDecodeError::Consensus(DecodeError::NonCanonicalBool { .. }))),
+        "{label}: {r:?}"
+      ),
+      "read" if BOUNDED.contains(&c.name.as_str()) => assert!(
+        matches!(
+          r,
+          Err(P2pDecodeError::Consensus(DecodeError::CompactSizeExceedsLimit {
+            limit: 101,
+            value: 102
+          }))
+        ),
         "{label}: {r:?}"
       ),
       "read" => {

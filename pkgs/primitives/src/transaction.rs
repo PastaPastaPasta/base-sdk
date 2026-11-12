@@ -153,7 +153,7 @@ impl fmt::Display for TxOut {
 
 /// Returns `true` for a value in Core's `MoneyRange`, `0..=MAX_MONEY`.
 pub(crate) fn money_range(value: i64) -> bool {
-  (0..=Amount::MAX_MONEY.to_signed().to_sat()).contains(&value)
+  (0..=Amount::MAX.to_signed().to_sat()).contains(&value)
 }
 
 /// Transaction validation failure.
@@ -707,7 +707,7 @@ pub(crate) mod tests {
   #[rstest]
   #[case::negative(&[-1], 0)]
   #[case::after_valid(&[1, -1], 1)]
-  #[case::total_in_range(&[SignedAmount::MAX_MONEY.to_sat(), -1], 1)]
+  #[case::total_in_range(&[SignedAmount::MAX.to_sat(), -1], 1)]
   fn check_negative_output(#[case] values: &[i64], #[case] index: usize) {
     let input = TxIn::new(
       OutPoint::new(TxHash::from_lendian([1; 32]), 0),
@@ -726,10 +726,10 @@ pub(crate) mod tests {
   /// Every value decodes, as Core's `CAmount` does; `check` judges the
   /// range.
   #[rstest]
-  #[case::lowest(-SignedAmount::MAX_MONEY.to_sat())]
-  #[case::highest(SignedAmount::MAX_MONEY.to_sat())]
-  #[case::below_range(-SignedAmount::MAX_MONEY.to_sat() - 1)]
-  #[case::above_range(SignedAmount::MAX_MONEY.to_sat() + 1)]
+  #[case::lowest(-SignedAmount::MAX.to_sat())]
+  #[case::highest(SignedAmount::MAX.to_sat())]
+  #[case::below_range(-SignedAmount::MAX.to_sat() - 1)]
+  #[case::above_range(SignedAmount::MAX.to_sat() + 1)]
   #[case::i64_min(i64::MIN)]
   #[case::i64_max(i64::MAX)]
   fn decode_output_value(#[case] value: i64) {
