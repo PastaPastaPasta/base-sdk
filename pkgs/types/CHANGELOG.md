@@ -8,15 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-## [0.3.0-beta] - 2026-11-07
-
 ### Added
 
 - `BaseCodec` for `Box<T>`, which reads and writes the boxed value.
-- `impl_new!`, which declares a struct with named fields and a `new` taking every field in declaration order.
-- `impl_vec!`, which generates `BaseCodec` over the named fields of a struct and reads a field written `field: limit`
-  with `codec::decode_vec`, refusing a count above `limit` before any entry is read.
-- A `get` accessor for `make_num!`-defined types, returning the inner integer.
 
 ### Changed
 
@@ -24,6 +18,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   BLS object". Exhaustive matches on `DecodeError` must add an arm.
 - `DecodeError` gains `NonCanonicalBool`, for a boolean byte other than 0 or 1, which Dash Core reads as `true`.
   Exhaustive matches on `DecodeError` must add an arm.
+
+## [0.3.0-beta] - 2026-11-07
+
+### Added
+
+- `impl_new!`, which declares a struct with named fields and a `new` taking every field in declaration order.
+- `impl_vec!`, which generates `BaseCodec` over the named fields of a struct and reads a field written `field: limit`
+  with `codec::decode_vec`, refusing a count above `limit` before any entry is read.
+- A `get` accessor for `make_num!`-defined types, returning the inner integer.
+
+### Changed
+
 - The inner integer of `make_num!`-defined types is private. Callers construct them with `new` or `From` and read them
   with `get` or `Numeric::to_base`.
 - `serialize::str_u64` also carries an `Option<u64>` field, with `None` as null. Its `serialize` and `deserialize` are
