@@ -243,15 +243,35 @@ define_p2p! {
   }
 }
 
+/// Reads each listed type field by field, every list whole.
+///
+/// Core's handlers for these commands read the whole list and check its size
+/// after the read. `BaseCodec` refuses a count above the type's limit before
+/// any entry, so the handler read takes each list with `Vec`'s own codec.
+macro_rules! read_lists_whole {
+  ($($ty:ident { $($field:ident),+ })+) => {$(
+    impl MsgDecode for $ty {
+      fn decode_msg(data: &mut &[u8], _: &crate::ctx::ProtoCtx) -> Result<Self, crate::P2pDecodeError> {
+        $(let $field = dash_types::codec::BaseCodec::decode(data)?;)+
+        Ok(Self::new($($field),+))
+      }
+    }
+  )+};
+}
+
+read_lists_whole! {
+  Addr { addrs }
+  AddrV2Msg { addrs }
+  Inv { inventory }
+  GetData { inventory }
+  NotFound { inventory }
+  GetHeaders { version, locator_hashes, hash_stop }
+  GetHeaders2 { version, locator_hashes, hash_stop }
+  GetBlocks { version, locator_hashes, hash_stop }
+}
+
 impl MsgDecode for Ping {}
 impl MsgDecode for Pong {}
-impl MsgDecode for Addr {}
-impl MsgDecode for AddrV2Msg {}
-impl MsgDecode for Inv {}
-impl MsgDecode for GetData {}
-impl MsgDecode for NotFound {}
-impl MsgDecode for GetHeaders {}
-impl MsgDecode for GetHeaders2 {}
 impl MsgDecode for GovSync {}
 impl MsgDecode for GovObject {}
 impl MsgDecode for GetMnListDiff {}
@@ -259,7 +279,6 @@ impl MsgDecode for SendDsq {}
 impl MsgDecode for QSendRecSigs {}
 impl MsgDecode for Block {}
 impl MsgDecode for Transaction {}
-impl MsgDecode for GetBlocks {}
 impl MsgDecode for FilterLoad {}
 impl MsgDecode for FilterAdd {}
 impl MsgDecode for SendCmpct {}
@@ -356,24 +375,26 @@ mod tests {
     check();
   }
 
+  /// The handler read takes a list past the `BaseCodec` limit whole.
   #[rstest]
-  #[case::inv(CommandString::INV, &[], 50_000)]
-  #[case::getdata(CommandString::GETDATA, &[], 50_000)]
-  #[case::notfound(CommandString::NOTFOUND, &[], 50_000)]
-  #[case::getblocks(CommandString::GETBLOCKS, &VERSION, 101)]
-  #[case::getheaders(CommandString::GETHEADERS, &VERSION, 101)]
-  #[case::getheaders2(CommandString::GETHEADERS2, &VERSION, 101)]
-  #[case::addr(CommandString::ADDR, &[], 1_000)]
-  #[case::addrv2(CommandString::ADDRV2, &[], 1_000)]
-  fn dispatch_keeps_the_limit(#[case] cmd: CommandString, #[case] prefix: &[u8], #[case] limit: usize) {
+  #[case::inv(CommandString::INV, &[], &INVENTORY, &[], 50_000)]
+  #[case::getdata(CommandString::GETDATA, &[], &INVENTORY, &[], 50_000)]
+  #[case::notfound(CommandString::NOTFOUND, &[], &INVENTORY, &[], 50_000)]
+  #[case::getblocks(CommandString::GETBLOCKS, &VERSION, &HASH, &HASH, 101)]
+  #[case::getheaders(CommandString::GETHEADERS, &VERSION, &HASH, &HASH, 101)]
+  #[case::getheaders2(CommandString::GETHEADERS2, &VERSION, &HASH, &HASH, 101)]
+  #[case::addr(CommandString::ADDR, &[], &ADDR, &[], 1_000)]
+  #[case::addrv2(CommandString::ADDRV2, &[], &ADDRV2, &[], 1_000)]
+  fn dispatch_reads_lists_whole(
+    #[case] cmd: CommandString,
+    #[case] prefix: &[u8],
+    #[case] entry: &[u8],
+    #[case] suffix: &[u8],
+    #[case] limit: usize,
+  ) {
     let ctx = crate::ctx::ProtoCtx::new(ProtocolVersion::V24_0, dash_pkc::bls::BlsCtx::BASIC);
-    let bare = payload(prefix, limit + 1, &[], &[]);
-    assert_eq!(
-      P2pMsg::decode_with_policy(&cmd, &bare, &ctx).map(|decoded| decoded.msg),
-      Err(crate::P2pDecodeError::Consensus(DecodeError::CompactSizeExceedsLimit {
-        limit,
-        value: limit as u64 + 1,
-      }))
-    );
+    let over = payload(prefix, limit + 1, entry, suffix);
+    let read = P2pMsg::decode_with_policy(&cmd, &over, &ctx).map(|decoded| (decoded.msg.command(), decoded.consumed));
+    assert_eq!(read, Ok((cmd, over.len())));
   }
 }
