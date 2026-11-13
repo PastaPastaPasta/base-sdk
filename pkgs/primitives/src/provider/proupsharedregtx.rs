@@ -7,13 +7,12 @@
 //! ProUpSharedRegTx shared registrar update payload (type 12).
 
 use super::share::MAX_SHARES;
-use super::SharedRegistrarSig;
+use super::{OperatorKey, SharedRegistrarSig};
 use crate::codec::{decode_list, encode_list, impl_payload};
 use crate::prelude::*;
 use crate::sptx::{InputsHash, ProTxInvalid};
 use crate::{hash_impl, TxHash};
 
-use dash_pkc::bls::BlsPkBytes;
 use dash_script::PubKeyHash;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
@@ -36,7 +35,7 @@ pub struct ProUpSharedRegTx {
   pro_tx_hash: TxHash,
   /// Operator BLS public key (48 bytes, basic scheme).
   #[getset(get_copy = "pub")]
-  pub_key_operator: BlsPkBytes,
+  pub_key_operator: OperatorKey,
   /// Voting key id (20 bytes).
   #[getset(get_copy = "pub")]
   key_id_voting: PubKeyHash,
@@ -56,7 +55,7 @@ impl BaseCodec for ProUpSharedRegTx {
     Ok(Self {
       version: u16::decode(data)?,
       pro_tx_hash: TxHash::decode(data)?,
-      pub_key_operator: BlsPkBytes::decode(data)?,
+      pub_key_operator: OperatorKey::decode(data)?,
       key_id_voting: PubKeyHash::decode(data)?,
       inputs_hash: InputsHash::decode(data)?,
       sigs: decode_list(data)?,
@@ -80,7 +79,7 @@ impl Checkable for ProUpSharedRegTx {
     if self.version != Self::CURRENT_VERSION {
       return Some(ProTxInvalid::BadSharedRegistrarVersion { version: self.version });
     }
-    if self.pub_key_operator.is_null() || self.key_id_voting.is_null() {
+    if self.pub_key_operator.as_bytes().is_null() || self.key_id_voting.is_null() {
       return Some(ProTxInvalid::NullKey);
     }
     if self.sigs.is_empty() || self.sigs.len() > MAX_SHARES {
@@ -179,7 +178,7 @@ mod tests {
       "votingAddress"
     );
     assert_eq!(
-      ptx.pub_key_operator.as_bytes().to_lower_hex_string(),
+      ptx.pub_key_operator.as_bytes().as_bytes().to_lower_hex_string(),
       pub_key_operator,
       "pubKeyOperator"
     );
@@ -193,7 +192,7 @@ mod tests {
   }
 
   fn null_operator(ptx: &mut ProUpSharedRegTx) {
-    ptx.pub_key_operator = BlsPkBytes::default();
+    ptx.pub_key_operator = OperatorKey::default();
   }
 
   #[rstest]
