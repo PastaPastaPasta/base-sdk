@@ -20,12 +20,12 @@ enum_map! {
   pub enum RevocationReason, u16, Unknown {
     /// No specific reason.
     NotSpecified = 0 => "not_specified",
+    /// The operator is ending its service.
+    TerminationOfService = 1 => "termination_of_service",
     /// Key material has been compromised.
-    KeyCompromise = 1 => "key_compromise",
-    /// Operator is changing keys.
-    ChangeOfKeys = 2 => "change_of_keys",
-    /// Service level violation.
-    ViolationOfService = 3 => "violation_of_service",
+    CompromisedKeys = 2 => "compromised_keys",
+    /// The operator is changing keys.
+    ChangeOfKeys = 3 => "change_of_keys",
   }
 }
 
