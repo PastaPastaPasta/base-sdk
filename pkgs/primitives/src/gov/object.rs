@@ -125,15 +125,8 @@ pub enum GovData {
   Unknown(Vec<u8>),
 }
 
-codec_base! {
-/// A governance object as serialized on the wire.
-///
-/// ```text
-/// hash_parent(32) || revision(i32) || time(i64)
-/// || collateral_hash(32) || data(CompactSize + bytes)
-/// || type(i32) || masternode_outpoint(36)
-/// || sig(CompactSize + bytes)
-/// ```
+impl_new! {
+/// Governance object.
 #[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
@@ -167,6 +160,17 @@ pub struct GovObject {
 }
 }
 
+codec_base!(GovObject, dash_types::MAX_SER_SIZE, {
+  hash_parent,
+  revision,
+  time,
+  collateral_hash,
+  data,
+  object_type,
+  masternode_outpoint,
+  sig: Self::MAX_SIGNATURE_SIZE,
+});
+
 impl Hashable for GovObject {
   type Hash = Hash256;
 
@@ -196,6 +200,9 @@ impl Hashable for GovObject {
 }
 
 impl GovObject {
+  /// The most signature bytes a governance object carries.
+  pub const MAX_SIGNATURE_SIZE: usize = 96;
+
   /// Returns the data as a UTF-8 string, if valid.
   pub fn data_as_string(&self) -> Option<&str> {
     core::str::from_utf8(&self.data).ok()
