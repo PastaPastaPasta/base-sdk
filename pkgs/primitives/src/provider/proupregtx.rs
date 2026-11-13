@@ -140,7 +140,7 @@ impl Checkable for ProUpRegTx {
       return Some(e);
     }
 
-    if self.pub_key_operator.as_bytes().is_null() {
+    if !self.pub_key_operator.is_valid(self.version) {
       return Some(ProTxInvalid::NullKey);
     }
     if self.key_id_voting.is_null() {
@@ -268,6 +268,16 @@ mod tests {
     update(),
     |ptx: &mut ProUpRegTx| ptx.script_payout = ptx.payouts[0].script_payout().clone(),
     Some(ProTxInvalid::PayoutVersionMismatch { version: ProTxVersion::CoreV24 })
+  )]
+  #[case::null_operator(
+    update(),
+    |ptx: &mut ProUpRegTx| ptx.pub_key_operator = OperatorKey::default(),
+    Some(ProTxInvalid::NullKey)
+  )]
+  #[case::operator_key_version(
+    basic_bls(),
+    |ptx: &mut ProUpRegTx| ptx.version = ProTxVersion::LegacyBls,
+    Some(ProTxInvalid::NullKey)
   )]
   fn check(#[case] mut ptx: ProUpRegTx, #[case] edit: fn(&mut ProUpRegTx), #[case] expected: Option<ProTxInvalid>) {
     assert_eq!(ptx.check(), None);
