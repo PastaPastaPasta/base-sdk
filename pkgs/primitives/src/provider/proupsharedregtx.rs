@@ -13,6 +13,7 @@ use crate::prelude::*;
 use crate::sptx::{InputsHash, ProTxInvalid};
 use crate::{hash_impl, TxHash};
 
+use dash_pkc::bls::BlsScIetf;
 use dash_script::PubKeyHash;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
@@ -79,7 +80,7 @@ impl Checkable for ProUpSharedRegTx {
     if self.version != Self::CURRENT_VERSION {
       return Some(ProTxInvalid::BadSharedRegistrarVersion { version: self.version });
     }
-    if self.pub_key_operator.as_bytes().is_null() || self.key_id_voting.is_null() {
+    if !self.pub_key_operator.is_valid_under::<BlsScIetf>() || self.key_id_voting.is_null() {
       return Some(ProTxInvalid::NullKey);
     }
     if self.sigs.is_empty() || self.sigs.len() > MAX_SHARES {
