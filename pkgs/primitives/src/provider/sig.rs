@@ -13,7 +13,9 @@ use crate::sign::verify_bls;
 
 use bitcoin_hashes::sha256d;
 use dash_num::Hash256;
-use dash_pkc::bls::{BlsError, BlsPkBytes, BlsPkHash, BlsScChia, BlsScIetf, BlsSigBytes, BLS_PK_LEN, BLS_SIG_LEN};
+use dash_pkc::bls::{
+  BlsError, BlsPkBytes, BlsPkHash, BlsScChia, BlsScIetf, BlsScheme, BlsSigBytes, BLS_PK_LEN, BLS_SIG_LEN,
+};
 use dash_pkc::ecdsa::ECDSA_REC_SIG_LEN;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 #[cfg(feature = "serde")]
@@ -210,6 +212,22 @@ impl OperatorKey {
     &self.0
   }
 
+  /// Whether the key is not null and passes [`BlsPkBytes::is_canonical`]
+  /// under the scheme `version` sets.
+  pub fn is_valid(&self, version: ProTxVersion) -> bool {
+    if version == ProTxVersion::LegacyBls {
+      self.is_valid_under::<BlsScChia>()
+    } else {
+      self.is_valid_under::<BlsScIetf>()
+    }
+  }
+
+  /// Whether the key is not null and passes [`BlsPkBytes::is_canonical`]
+  /// under `S`.
+  pub(crate) fn is_valid_under<S: BlsScheme>(&self) -> bool {
+    !self.0.is_null() && self.0.is_canonical::<S>()
+  }
+
   /// Checks an operator signature over `digest` under the scheme `version`
   /// sets.
   ///
@@ -312,6 +330,19 @@ mod tests {
 
     assert_eq!(legacy_key.verify(version, &[7; 32], &legacy_sig).is_ok(), legacy);
     assert_eq!(basic_key.verify(version, &[7; 32], &basic_sig).is_ok(), !legacy);
+  }
+
+  #[rstest]
+  #[case::legacy_bls(ProTxVersion::LegacyBls, bls_sign::<BlsScChia>)]
+  #[case::basic_bls(ProTxVersion::BasicBls, bls_sign::<BlsScIetf>)]
+  #[case::core_v24(ProTxVersion::CoreV24, bls_sign::<BlsScIetf>)]
+  fn operator_key_follows_the_version(
+    #[case] version: ProTxVersion,
+    #[case] sign: fn(u8, &[u8; 32]) -> (BlsPkBytes, [u8; BLS_SIG_LEN]),
+  ) {
+    let (key, _) = sign(1, &[7; 32]);
+
+    assert!(OperatorKey::from(key).is_valid(version));
   }
 
   /// Stores an operator signature over the payload of `ptx` and verifies it.
