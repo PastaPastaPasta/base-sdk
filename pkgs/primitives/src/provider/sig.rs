@@ -75,20 +75,6 @@ pub(crate) mod compact_hex {
   }
 }
 
-/// Checks an operator signature over `digest` under the scheme `version` sets.
-pub(crate) fn verify_operator(
-  version: ProTxVersion,
-  digest: &[u8],
-  sig: &OperatorSig,
-  key: &BlsPkBytes,
-) -> Result<(), BlsError> {
-  if version == ProTxVersion::LegacyBls {
-    verify_bls::<BlsScChia>(digest, sig.as_bytes(), key)
-  } else {
-    verify_bls::<BlsScIetf>(digest, sig.as_bytes(), key)
-  }
-}
-
 /// Collateral owner signature, empty when the collateral is spent.
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq, TypeId)]
 #[cfg_attr(
@@ -241,6 +227,20 @@ impl OperatorKey {
   pub(crate) fn is_valid_under<S: BlsScheme>(&self) -> bool {
     !self.0.is_null() && self.0.is_canonical::<S>()
   }
+
+  /// Checks an operator signature over `digest` under the scheme `version`
+  /// sets.
+  ///
+  /// # Errors
+  ///
+  /// Returns what [`verify_bls`] returns under that scheme.
+  pub(crate) fn verify(&self, version: ProTxVersion, digest: &[u8], sig: &OperatorSig) -> Result<(), BlsError> {
+    if version == ProTxVersion::LegacyBls {
+      verify_bls::<BlsScChia>(digest, sig.as_bytes(), &self.0)
+    } else {
+      verify_bls::<BlsScIetf>(digest, sig.as_bytes(), &self.0)
+    }
+  }
 }
 
 type_cvrt!(From<BlsPkBytes> for OperatorKey, |key| Self(*key));
@@ -294,8 +294,12 @@ rec_sig! {
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
   use super::*;
+  use crate::provider::{ProUpRevTx, ProUpServTx};
   use crate::sign::tests::bls_sign;
+  use crate::{InputsHash, MnType, NetInfo, NetInfoV2, RevocationReason, TxHash};
 
+  use bitcoin_primitives::script::ScriptPubKeyBuf;
+  use dash_types::Signable;
   use rstest::rstest;
 
   /// Any header byte survives a decode and encode round trip.
@@ -319,16 +323,44 @@ mod tests {
   fn operator_scheme_follows_the_version(#[case] version: ProTxVersion, #[case] legacy: bool) {
     let (legacy_key, legacy_sig) = bls_sign::<BlsScChia>(1, &[7; 32]);
     let (basic_key, basic_sig) = bls_sign::<BlsScIetf>(1, &[7; 32]);
+    let legacy_key = OperatorKey::from(legacy_key);
+    let basic_key = OperatorKey::from(basic_key);
     let legacy_sig = OperatorSig::new(BlsSigBytes::from_bytes(legacy_sig));
     let basic_sig = OperatorSig::new(BlsSigBytes::from_bytes(basic_sig));
 
-    assert_eq!(
-      verify_operator(version, &[7; 32], &legacy_sig, &legacy_key).is_ok(),
-      legacy
-    );
-    assert_eq!(
-      verify_operator(version, &[7; 32], &basic_sig, &basic_key).is_ok(),
-      !legacy
-    );
+    assert_eq!(legacy_key.verify(version, &[7; 32], &legacy_sig).is_ok(), legacy);
+    assert_eq!(basic_key.verify(version, &[7; 32], &basic_sig).is_ok(), !legacy);
+  }
+
+  /// Stores an operator signature over the payload of `ptx` and verifies it.
+  fn operator_signs<T: Signable<Key = OperatorKey, Context = (), Error = BlsError>>(mut ptx: T) {
+    let digest = <[u8; 32]>::try_from(ptx.payload(&())).unwrap();
+    let (key, sig) = bls_sign::<BlsScIetf>(1, &digest);
+    let key = OperatorKey::from(key);
+
+    assert_eq!(ptx.set_signature(&sig, &key, &()), Ok(()));
+    assert_eq!(ptx.verify(&key, &()), None);
+  }
+
+  #[rstest]
+  fn operator_key_signs_updates() {
+    let pro_tx_hash = TxHash::from([0x11; 32]);
+    operator_signs(ProUpServTx::new(
+      ProTxVersion::CoreV24,
+      MnType::Regular,
+      pro_tx_hash,
+      NetInfo::Extended(NetInfoV2::new(1, Vec::new())),
+      ScriptPubKeyBuf::new(),
+      InputsHash::default(),
+      None,
+      None,
+      None,
+    ));
+    operator_signs(ProUpRevTx::new(
+      ProTxVersion::CoreV24,
+      pro_tx_hash,
+      RevocationReason::NotSpecified,
+      InputsHash::default(),
+    ));
   }
 }
