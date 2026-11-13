@@ -337,7 +337,7 @@ impl Checkable for ProRegTx {
         return Some(ProTxInvalid::NullKey);
       }
     }
-    if self.pub_key_operator.as_bytes().is_null() || self.key_id_voting.is_null() {
+    if !self.pub_key_operator.is_valid(self.version) || self.key_id_voting.is_null() {
       return Some(ProTxInvalid::NullKey);
     }
 
@@ -700,6 +700,32 @@ mod tests {
   #[case::unshared_null_owner(
     registration(),
     |ptx: &mut ProRegTx| ptx.key_id_owner = PubKeyHash::default(),
+    ProTxInvalid::NullKey
+  )]
+  #[case::null_operator(
+    registration(),
+    |ptx: &mut ProRegTx| ptx.pub_key_operator = OperatorKey::default(),
+    ProTxInvalid::NullKey
+  )]
+  #[case::operator_key_version(
+    entry("a3d16d7b7f53adf5403b2082b1ddeae9ad52163d29d5c84cb5eea2e0bc1a486c"),
+    |ptx: &mut ProRegTx| ptx.version = ProTxVersion::LegacyBls,
+    ProTxInvalid::NullKey
+  )]
+  #[case::mode_before_null_operator(
+    registration(),
+    |ptx: &mut ProRegTx| {
+      ptx.pub_key_operator = OperatorKey::default();
+      ptx.mode = 1;
+    },
+    ProTxInvalid::BadMode { mode: 1 }
+  )]
+  #[case::null_operator_before_operator_reward(
+    registration(),
+    |ptx: &mut ProRegTx| {
+      ptx.pub_key_operator = OperatorKey::default();
+      ptx.operator_reward = MAX_OPERATOR_REWARD + 1;
+    },
     ProTxInvalid::NullKey
   )]
   #[case::shared_external_collateral(
