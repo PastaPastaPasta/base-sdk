@@ -28,7 +28,9 @@ pub use self::proupservtx::ProUpServTx;
 pub use self::proupsharedregtx::ProUpSharedRegTx;
 pub use self::proupsharetx::ProUpShareTx;
 pub use self::share::{CollateralShare, PayoutShare};
-pub use self::sig::{CollateralSig, DissolveSig, EcdsaRecSigArray, JoinSig, OperatorSig, OwnerSig, SharedRegistrarSig};
+pub use self::sig::{
+  CollateralSig, DissolveSig, EcdsaRecSigArray, JoinSig, OperatorKey, OperatorSig, OwnerSig, SharedRegistrarSig,
+};
 pub use self::version::ProTxVersion;
 
 pub use dash_pkc::__private::__EddsaPkHash as PlatformNodeId;

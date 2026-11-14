@@ -7,7 +7,7 @@
 //! ProRegTx registration payload (type 1).
 
 use super::share::{check_payout_version, check_payouts, check_shares, EVO_COLLATERAL, MAX_REWARD, REGULAR_COLLATERAL};
-use super::{CollateralShare, CollateralSig, JoinSig, PayoutShare, ProTxVersion};
+use super::{CollateralShare, CollateralSig, JoinSig, OperatorKey, PayoutShare, ProTxVersion};
 use crate::codec::{decode_items, decode_list, encode_items, encode_list, impl_payload};
 use crate::prelude::*;
 use crate::provider::PlatformNodeId;
@@ -19,7 +19,6 @@ use crate::{hash_impl, TxHash};
 use bitcoin_primitives::script::ScriptPubKeyBuf;
 use dash_num::Hash256;
 use dash_params::AddrParams;
-use dash_pkc::bls::BlsPkBytes;
 use dash_pkc::ecdsa::{EcdsaError, ECDSA_REC_SIG_LEN};
 use dash_script::{PubKeyHash, Recipient};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
@@ -58,7 +57,7 @@ pub struct ProRegTx {
   key_id_owner: PubKeyHash,
   /// Operator BLS public key (48 bytes).
   #[getset(get_copy = "pub")]
-  pub_key_operator: BlsPkBytes,
+  pub_key_operator: OperatorKey,
   /// Voting key id (20 bytes).
   #[getset(get_copy = "pub")]
   key_id_voting: PubKeyHash,
@@ -155,7 +154,7 @@ impl BaseCodec for ProRegTx {
       NetInfo::Legacy(NetInfoV1::decode(data)?)
     };
     let key_id_owner = PubKeyHash::decode(data)?;
-    let pub_key_operator = BlsPkBytes::decode(data)?;
+    let pub_key_operator = OperatorKey::decode(data)?;
     let key_id_voting = PubKeyHash::decode(data)?;
     let operator_reward = u16::decode(data)?;
     let (script_payout, payouts) = if version >= ProTxVersion::CoreV24 {
@@ -338,7 +337,7 @@ impl Checkable for ProRegTx {
         return Some(ProTxInvalid::NullKey);
       }
     }
-    if self.pub_key_operator.is_null() || self.key_id_voting.is_null() {
+    if !self.pub_key_operator.is_valid(self.version) || self.key_id_voting.is_null() {
       return Some(ProTxInvalid::NullKey);
     }
 
@@ -401,7 +400,7 @@ impl ProRegTx {
     collateral_index: u32,
     net_info: NetInfo,
     key_id_owner: PubKeyHash,
-    pub_key_operator: BlsPkBytes,
+    pub_key_operator: OperatorKey,
     key_id_voting: PubKeyHash,
     operator_reward: u16,
     script_payout: ScriptPubKeyBuf,
@@ -701,6 +700,16 @@ mod tests {
   #[case::unshared_null_owner(
     registration(),
     |ptx: &mut ProRegTx| ptx.key_id_owner = PubKeyHash::default(),
+    ProTxInvalid::NullKey
+  )]
+  #[case::null_operator(
+    registration(),
+    |ptx: &mut ProRegTx| ptx.pub_key_operator = OperatorKey::default(),
+    ProTxInvalid::NullKey
+  )]
+  #[case::operator_key_version(
+    entry("a3d16d7b7f53adf5403b2082b1ddeae9ad52163d29d5c84cb5eea2e0bc1a486c"),
+    |ptx: &mut ProRegTx| ptx.version = ProTxVersion::LegacyBls,
     ProTxInvalid::NullKey
   )]
   #[case::shared_external_collateral(
