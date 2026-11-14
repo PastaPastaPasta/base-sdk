@@ -82,8 +82,8 @@ pub(crate) use impl_payload;
 /// `Decode` over its fields, without `Hashable`.
 ///
 /// The `$ty, $max, { fields }` form generates the codec alone, for
-/// `codec_type!`, `codec_payload!` and types that declare themselves. A
-/// field written `field: limit` reads at most `limit` entries.
+/// `codec_type!` and `codec_payload!` to build on. A field written
+/// `field: limit` reads at most `limit` entries.
 #[macro_export]
 macro_rules! codec_base {
   (
@@ -178,3 +178,34 @@ macro_rules! codec_payload {
   };
 }
 pub(crate) use codec_payload;
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  use rstest::rstest;
+
+  #[derive(Debug, PartialEq)]
+  struct Bounded {
+    tag: u8,
+    items: Vec<u8>,
+  }
+
+  codec_base!(Bounded, dash_types::MAX_SER_SIZE, { tag, items: 2 });
+
+  /// A field written `field: limit` reads up to `limit` entries and encodes
+  /// them back, and a count above it is refused before any entry is read.
+  #[rstest]
+  #[case::empty(&[7, 0], Ok(vec![]))]
+  #[case::at_the_limit(&[7, 2, 1, 2], Ok(vec![1, 2]))]
+  #[case::over_the_limit(&[7, 3], Err(DecodeError::CompactSizeExceedsLimit { limit: 2, value: 3 }))]
+  fn codec_base_bounds_a_limited_field(#[case] wire: &[u8], #[case] items: Result<Vec<u8>, DecodeError>) {
+    let expected = items.map(|items| Bounded { tag: 7, items });
+    assert_eq!(Bounded::decode(&mut &wire[..]), expected);
+    if let Ok(value) = expected {
+      let mut buf = Vec::new();
+      value.encode(&mut buf);
+      assert_eq!(buf, wire);
+    }
+  }
+}
