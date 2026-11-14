@@ -1,0 +1,98 @@
+//
+// InstantSend lock vectors. Generated with the reference implementation
+// (dashpay/dash v24.0.0, 938fba5028).
+//
+// Each section comes with the program used to generate it. The literals of
+// `isdlock_payloads` were read from testnet with
+// `python3 pkgs/p2p_core/contrib/locks.py --node HOST:PORT COOKIE`,
+// which prints them as the program takes them.
+//
+// To run a program, paste it at the end of the `net_tests` suite in
+// `src/test/net_tests.cpp` at the specified revision, include `bls/bls.h` and
+// `instantsend/lock.h` there, build it with `make -C src test/test_dash` and
+// run `./src/test/test_dash --run_test=net_tests/<name>`. The output should
+// match the section.
+//
+
+{
+/*
+BOOST_AUTO_TEST_CASE(isdlock_payloads)
+{
+    // Testnet txid a42dba55ba7e5561be87da57f597bb8532eb3f2f9b939310bc8c2c892aa10748, one input, from getislocks.
+    constexpr char ISDLOCK_LIVE_ONE[] =
+        "0101daea6ae2db993a4dfa121b3b61672f31fdbc68fbfaa407bb009cbe7c9e50c276050000004807a12a892c8cbc1093939b2f3feb3285bb97f557da87be61557eba55ba2da4ff4275241baa5b5aca774ed0f628824202f75264b9caa781a33b364732000000809824e08d6b62fe58f0a5798b72d76d24416118de1763886a2f44070c8ecd8926b61e4eb32530f590fd657bfa1a79330afc4cd7603866eeb3432351914ddbc10901e744b3db26d595d7f45d86e0d47fcd7919279f4ee632ac4f78e33961684f";
+    // Testnet txid c4fa855ceefd0afe02391591962f316eafd9a9c8537b0340762eff9706ca8bfd, 16 inputs, from getislocks.
+    constexpr char ISDLOCK_LIVE_MANY[] =
+        "0110944cfe7fa01c85688d2eac9cc7b0bb669752f11f8e8947075a78961bcb13c5a80000000058cf43d2709f5b32a61789b5a63574efdf7f5e0102e0c1283214021212b7c4c30d00000058cf43d2709f5b32a61789b5a63574efdf7f5e0102e0c1283214021212b7c4c301000000daea6ae2db993a4dfa121b3b61672f31fdbc68fbfaa407bb009cbe7c9e50c2760100000093b752e0334f64cc703408fa80e4c91d77dd531bcb65184f663edb9aaaeb2c5f0000000016d0baaa94cdede1e8abbdca7045d550f172ec0249b42d478c68763eda336e5a0500000095a776f9b3df28faff0b0d263fe6176cf3679ad46b8675c0322bfc2ad70e723e080000003d6e919149b17f7a4fcedc8aa0544895c088309da6e72199023cde6a16b8e007fc0000003d6e919149b17f7a4fcedc8aa0544895c088309da6e72199023cde6a16b8e0078e0000000cde0ef2ff24ef0c3ed19e30ee7adf02c365029c5abed57223533c28f0d7ec020900000082ed817753de30b05b828db0d182030a9abb73a84be948ea735b5af3b6632026d10000004d013187a0b34140b2597d4d24b06f1605317a9c9f0288c0dceea31ee30b2dee00000000aa5243b23890e6ed6b0d16e5dfede2de0240d7e06099d744bc2c1adc0851aeb50d000000e0d7476f34582e42da381e77111c5d6e11b46a18c9d497033940ed5d3ee1ebec00000000ff99d959f6d22101ad9307184e2ef7ef818fd477e8d3b63124f4027ce4a7e83b03000000f1787de7d9fadb3d2b37d79e8f0504923853ed2ffbdb0788e9ccf1c27a304f8b0e000000fd8bca0697ff2e7640037b53c8a9d9af6e312f9691153902fe0afdee5c85fac4ff4275241baa5b5aca774ed0f628824202f75264b9caa781a33b364732000000b684ad62d186a7f40f5a2262288b2a79a4a3f2b4453f87f123835ddc08d993a2659b66f5aa8434f44130e6f6db91325602a91d5f529e694b7aeeb91ac3f36d0c8c0943ea5a8130427100df2f1eb8074cecf8e685dfa86ee36a3db3a49282e262";
+    const bool legacy{bls::bls_legacy_scheme.exchange(false)};
+    std::printf("  \"isdlock\": {\n");
+    const auto print = [](const char* label, const CSerializedNetMsg& message) {
+        DataStream fields{message.data};
+        instantsend::InstantSendLock lock;
+        fields >> lock;
+        DataStream sig{};
+        sig << lock.sig;
+        std::printf("    \"%s\": {\n      \"raw\": \"%s\",\n      \"details\": {\n        \"version\": %u,\n"
+                    "        \"inputs\": [",
+                    label, HexStr(message.data).c_str(), lock.nVersion);
+        for (size_t i = 0; i < lock.inputs.size(); ++i) {
+            std::printf("%s{ \"hash\": \"%s\", \"index\": %u }", i ? ", " : "",
+                        lock.inputs[i].hash.ToString().c_str(), lock.inputs[i].n);
+        }
+        std::printf("],\n        \"txid\": \"%s\",\n        \"cycle_hash\": \"%s\",\n        \"sig\": \"%s\"\n"
+                    "      }\n    },\n",
+                    lock.txid.ToString().c_str(), lock.cycleHash.ToString().c_str(), HexStr(sig).c_str());
+    };
+    const auto read = [](const char* raw) {
+        DataStream input(ParseHex(raw));
+        instantsend::InstantSendLock lock;
+        input >> lock;
+        return lock;
+    };
+    const CNetMsgMaker maker{PROTOCOL_VERSION};
+    instantsend::InstantSendLock empty;
+    empty.nVersion = 255;
+    empty.sig.Set(CBLSSignature{}, false);
+    print("version_255_no_inputs", maker.Make(NetMsgType::ISDLOCK, empty));
+    print("testnet_one_input", maker.Make(NetMsgType::ISDLOCK, read(ISDLOCK_LIVE_ONE)));
+    print("testnet_many_inputs", maker.Make(NetMsgType::ISDLOCK, read(ISDLOCK_LIVE_MANY)));
+    std::printf("  },\n");
+    bls::bls_legacy_scheme.store(legacy);
+}
+*/
+  "isdlock": {
+    // Version 255 with no inputs.
+    "version_255_no_inputs": {
+      "raw": "ff0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "details": {
+        "version": 255,
+        "inputs": [],
+        "txid": "0000000000000000000000000000000000000000000000000000000000000000",
+        "cycle_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "sig": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    // Testnet txid a42dba55ba7e5561be87da57f597bb8532eb3f2f9b939310bc8c2c892aa10748, one input, from getislocks.
+    "testnet_one_input": {
+      "raw": "0101daea6ae2db993a4dfa121b3b61672f31fdbc68fbfaa407bb009cbe7c9e50c276050000004807a12a892c8cbc1093939b2f3feb3285bb97f557da87be61557eba55ba2da4ff4275241baa5b5aca774ed0f628824202f75264b9caa781a33b364732000000809824e08d6b62fe58f0a5798b72d76d24416118de1763886a2f44070c8ecd8926b61e4eb32530f590fd657bfa1a79330afc4cd7603866eeb3432351914ddbc10901e744b3db26d595d7f45d86e0d47fcd7919279f4ee632ac4f78e33961684f",
+      "details": {
+        "version": 1,
+        "inputs": [{ "hash": "76c2509e7cbe9c00bb07a4fafb68bcfd312f67613b1b12fa4d3a99dbe26aeada", "index": 5 }],
+        "txid": "a42dba55ba7e5561be87da57f597bb8532eb3f2f9b939310bc8c2c892aa10748",
+        "cycle_hash": "0000003247363ba381a7cab96452f702428228f6d04e77ca5a5baa1b247542ff",
+        "sig": "809824e08d6b62fe58f0a5798b72d76d24416118de1763886a2f44070c8ecd8926b61e4eb32530f590fd657bfa1a79330afc4cd7603866eeb3432351914ddbc10901e744b3db26d595d7f45d86e0d47fcd7919279f4ee632ac4f78e33961684f"
+      }
+    },
+    // Testnet txid c4fa855ceefd0afe02391591962f316eafd9a9c8537b0340762eff9706ca8bfd, 16 inputs, from getislocks.
+    "testnet_many_inputs": {
+      "raw": "0110944cfe7fa01c85688d2eac9cc7b0bb669752f11f8e8947075a78961bcb13c5a80000000058cf43d2709f5b32a61789b5a63574efdf7f5e0102e0c1283214021212b7c4c30d00000058cf43d2709f5b32a61789b5a63574efdf7f5e0102e0c1283214021212b7c4c301000000daea6ae2db993a4dfa121b3b61672f31fdbc68fbfaa407bb009cbe7c9e50c2760100000093b752e0334f64cc703408fa80e4c91d77dd531bcb65184f663edb9aaaeb2c5f0000000016d0baaa94cdede1e8abbdca7045d550f172ec0249b42d478c68763eda336e5a0500000095a776f9b3df28faff0b0d263fe6176cf3679ad46b8675c0322bfc2ad70e723e080000003d6e919149b17f7a4fcedc8aa0544895c088309da6e72199023cde6a16b8e007fc0000003d6e919149b17f7a4fcedc8aa0544895c088309da6e72199023cde6a16b8e0078e0000000cde0ef2ff24ef0c3ed19e30ee7adf02c365029c5abed57223533c28f0d7ec020900000082ed817753de30b05b828db0d182030a9abb73a84be948ea735b5af3b6632026d10000004d013187a0b34140b2597d4d24b06f1605317a9c9f0288c0dceea31ee30b2dee00000000aa5243b23890e6ed6b0d16e5dfede2de0240d7e06099d744bc2c1adc0851aeb50d000000e0d7476f34582e42da381e77111c5d6e11b46a18c9d497033940ed5d3ee1ebec00000000ff99d959f6d22101ad9307184e2ef7ef818fd477e8d3b63124f4027ce4a7e83b03000000f1787de7d9fadb3d2b37d79e8f0504923853ed2ffbdb0788e9ccf1c27a304f8b0e000000fd8bca0697ff2e7640037b53c8a9d9af6e312f9691153902fe0afdee5c85fac4ff4275241baa5b5aca774ed0f628824202f75264b9caa781a33b364732000000b684ad62d186a7f40f5a2262288b2a79a4a3f2b4453f87f123835ddc08d993a2659b66f5aa8434f44130e6f6db91325602a91d5f529e694b7aeeb91ac3f36d0c8c0943ea5a8130427100df2f1eb8074cecf8e685dfa86ee36a3db3a49282e262",
+      "details": {
+        "version": 1,
+        "inputs": [{ "hash": "a8c513cb1b96785a0747898e1ff1529766bbb0c79cac2e8d68851ca07ffe4c94", "index": 0 }, { "hash": "c3c4b7121202143228c1e002015e7fdfef7435a6b58917a6325b9f70d243cf58", "index": 13 }, { "hash": "c3c4b7121202143228c1e002015e7fdfef7435a6b58917a6325b9f70d243cf58", "index": 1 }, { "hash": "76c2509e7cbe9c00bb07a4fafb68bcfd312f67613b1b12fa4d3a99dbe26aeada", "index": 1 }, { "hash": "5f2cebaa9adb3e664f1865cb1b53dd771dc9e480fa083470cc644f33e052b793", "index": 0 }, { "hash": "5a6e33da3e76688c472db44902ec72f150d54570cabdabe8e1edcd94aabad016", "index": 5 }, { "hash": "3e720ed72afc2b32c075866bd49a67f36c17e63f260d0bfffa28dfb3f976a795", "index": 8 }, { "hash": "07e0b8166ade3c029921e7a69d3088c0954854a08adcce4f7a7fb14991916e3d", "index": 252 }, { "hash": "07e0b8166ade3c029921e7a69d3088c0954854a08adcce4f7a7fb14991916e3d", "index": 142 }, { "hash": "02ecd7f0283c532372d5be5a9c0265c302df7aee309ed13e0cef24fff20ede0c", "index": 9 }, { "hash": "262063b6f35a5b73ea48e94ba873bb9a0a0382d1b08d825bb030de537781ed82", "index": 209 }, { "hash": "ee2d0be31ea3eedcc088029f9c7a3105166fb0244d7d59b24041b3a08731014d", "index": 0 }, { "hash": "b5ae5108dc1a2cbc44d79960e0d74002dee2eddfe5160d6bede69038b24352aa", "index": 13 }, { "hash": "ecebe13e5ded40390397d4c9186ab4116e5d1c11771e38da422e58346f47d7e0", "index": 0 }, { "hash": "3be8a7e47c02f42431b6d3e877d48f81eff72e4e180793ad0121d2f659d999ff", "index": 3 }, { "hash": "8b4f307ac2f1cce98807dbfb2fed53389204058f9ed7372b3ddbfad9e77d78f1", "index": 14 }],
+        "txid": "c4fa855ceefd0afe02391591962f316eafd9a9c8537b0340762eff9706ca8bfd",
+        "cycle_hash": "0000003247363ba381a7cab96452f702428228f6d04e77ca5a5baa1b247542ff",
+        "sig": "b684ad62d186a7f40f5a2262288b2a79a4a3f2b4453f87f123835ddc08d993a2659b66f5aa8434f44130e6f6db91325602a91d5f529e694b7aeeb91ac3f36d0c8c0943ea5a8130427100df2f1eb8074cecf8e685dfa86ee36a3db3a49282e262"
+      }
+    },
+  },
+}
