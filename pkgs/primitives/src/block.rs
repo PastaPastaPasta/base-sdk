@@ -44,6 +44,13 @@ make_hash! {
 
 hash_impl!(MerkleRoot);
 
+make_hash! {
+  /// A transaction or inner node hash in a partial merkle tree.
+  TxMerkleNode, 32
+}
+
+hash_impl!(TxMerkleNode);
+
 codec_base! {
 /// A block header.
 #[derive(Clone, Copy, CopyGetters, Debug, Default, Eq, Hash, PartialEq, Setters, TypeId)]
