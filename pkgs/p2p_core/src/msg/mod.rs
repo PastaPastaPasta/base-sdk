@@ -9,6 +9,7 @@
 mod addr;
 mod blocks;
 mod bloom;
+mod cfilter;
 mod coinjoin;
 mod gov;
 mod headers;
@@ -32,6 +33,7 @@ use dash_types::type_id::Unencodable;
 pub use addr::{Addr, AddrV2Entry, AddrV2Msg, TimestampedAddr};
 pub use blocks::{GetBlocks, SendCmpct};
 pub use bloom::{BloomFlags, FilterAdd, FilterLoad, MerkleBlock, PartialMerkleTree};
+pub use cfilter::{CFCheckpt, CFHeaders, CFilter, FilterHash, FilterHeader, GetCFCheckpt, GetCFHeaders, GetCFilters};
 pub use coinjoin::SendDsq;
 pub use gov::{GovSync, GovSyncStatusCount};
 pub use headers::{GetHeaders, Headers};
@@ -97,6 +99,18 @@ define_p2p! {
     FilterAdd(FilterAdd) => FILTERADD "filteradd" @ 6,
     /// BIP37: filtered block.
     MerkleBlock(MerkleBlock) => MERKLEBLOCK "merkleblock" @ 16,
+    /// BIP157: request compact filters.
+    GetCFilters(GetCFilters) => GETCFILTERS "getcfilters" @ 22,
+    /// BIP157: compact block filter.
+    CFilter(CFilter) => CFILTER "cfilter" @ 23,
+    /// BIP157: request compact filter headers.
+    GetCFHeaders(GetCFHeaders) => GETCFHEADERS "getcfheaders" @ 24,
+    /// BIP157: compact filter headers.
+    CFHeaders(CFHeaders) => CFHEADERS "cfheaders" @ 25,
+    /// BIP157: request compact filter checkpoints.
+    GetCFCheckpt(GetCFCheckpt) => GETCFCHECKPT "getcfcheckpt" @ 26,
+    /// BIP157: compact filter checkpoints.
+    CFCheckpt(CFCheckpt) => CFCHECKPT "cfcheckpt" @ 27,
   }
 
   parsed_empty {
@@ -125,18 +139,6 @@ define_p2p! {
     GetBlockTxn => GETBLOCKTXN "getblocktxn" @ 10,
     /// Transaction.
     Tx => TX "tx" @ 21,
-    /// Request compact filters.
-    GetCFilters => GETCFILTERS "getcfilters" @ 22,
-    /// Compact block filter.
-    CFilter => CFILTER "cfilter" @ 23,
-    /// Request compact filter headers.
-    GetCFHeaders => GETCFHEADERS "getcfheaders" @ 24,
-    /// Compact filter headers.
-    CFHeaders => CFHEADERS "cfheaders" @ 25,
-    /// Request compact filter checkpoints.
-    GetCFCheckpt => GETCFCHECKPT "getcfcheckpt" @ 26,
-    /// Compact filter checkpoints.
-    CFCheckpt => CFCHECKPT "cfcheckpt" @ 27,
     /// Spork broadcast/request.
     Spork => SPORK "spork" @ 128,
     /// CoinJoin: accept denomination.
