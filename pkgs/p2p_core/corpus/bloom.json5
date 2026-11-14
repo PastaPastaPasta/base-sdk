@@ -1,0 +1,254 @@
+//
+// BIP37 vectors. Generated with the reference implementation
+// (dashpay/dash v24.0.0, 938fba5028).
+//
+// Each section comes with the program used to generate it. The literals of
+// `merkleblock_payloads` were read from mainnet with
+// `python3 pkgs/p2p_core/contrib/merkleblock.py --node HOST:PORT COOKIE`,
+// which prints them as the program takes them.
+//
+// To run a program, paste it at the end of the `bloom_tests` suite in
+// `src/test/bloom_tests.cpp` at the specified revision, include
+// `netmessagemaker.h` there, build it with `make -C src test/test_dash` and
+// run `./src/test/test_dash --run_test=bloom_tests/<name>`. The output should
+// match the section.
+//
+
+{
+/*
+BOOST_AUTO_TEST_CASE(filterload_payloads)
+{
+    const CNetMsgMaker maker{PROTOCOL_VERSION};
+    std::printf("  \"filterload\": {\n");
+    const auto print = [](const char* label, const CSerializedNetMsg& message) {
+        DataStream fields{message.data};
+        std::vector<unsigned char> filter;
+        uint32_t hash_funcs, tweak;
+        uint8_t flags;
+        fields >> filter >> hash_funcs >> tweak >> flags;
+        std::printf("    \"%s\": {\n      \"raw\": \"%s\",\n      \"details\": {\n"
+                    "        \"filter\": \"%s\",\n        \"hash_funcs\": %u,\n"
+                    "        \"tweak\": %u,\n        \"flags\": %u\n      }\n    },\n",
+                    label, HexStr(message.data).c_str(), HexStr(filter).c_str(), hash_funcs, tweak, flags);
+    };
+    const auto make = [&](const CBloomFilter& filter) {
+        return maker.Make(NetMsgType::FILTERLOAD, filter);
+    };
+    CBloomFilter all(3, 0.01, 0, BLOOM_UPDATE_ALL);
+    all.insert(ParseHex("99108ad8ed9bb6274d3980bab5a85c048f0950c8"));
+    all.insert(ParseHex("b5a2c786d9ef4658287ced5914b37a1b4aa32eee"));
+    print("update_all", make(all));
+    CBloomFilter p2pubkey(2, 0.001, 2147483649UL, BLOOM_UPDATE_P2PUBKEY_ONLY);
+    p2pubkey.insert(ParseHex("045b81f0017e2091e2edcd5eecf10d5bdd120a5514cb3ee65b8447ec18bfc4575c6d5bf415e54e03b1067934a0f0ba76b01c6b9ab227142ee1d543764b69d901e0"));
+    print("update_p2pubkey_only", make(p2pubkey));
+    print("empty", make(CBloomFilter{}));
+    DataStream unchecked{};
+    unchecked << std::vector<unsigned char>{0xa5} << uint32_t{MAX_HASH_FUNCS + 1} << uint32_t{7} << uint8_t{0xff};
+    CBloomFilter read;
+    unchecked >> read;
+    print("unchecked", make(read));
+    std::printf("  },\n");
+}
+*/
+  "filterload": {
+    // Pins a non-empty filter with update-all flags.
+    "update_all": {
+      "raw": "0341449a050000000000000001",
+      "details": {
+        "filter": "41449a",
+        "hash_funcs": 5,
+        "tweak": 0,
+        "flags": 1
+      }
+    },
+    // Pins a non-empty filter with pubkey-only flags and a high tweak.
+    "update_p2pubkey_only": {
+      "raw": "03350c21080000000100008002",
+      "details": {
+        "filter": "350c21",
+        "hash_funcs": 8,
+        "tweak": 2147483649,
+        "flags": 2
+      }
+    },
+    // Pins an empty filter and zero scalar fields.
+    "empty": {
+      "raw": "00000000000000000000",
+      "details": {
+        "filter": "",
+        "hash_funcs": 0,
+        "tweak": 0,
+        "flags": 0
+      }
+    },
+    // Pins a hash function count past the relay limit and a flags byte past two, both read as they are.
+    "unchecked": {
+      "raw": "01a53300000007000000ff",
+      "details": {
+        "filter": "a5",
+        "hash_funcs": 51,
+        "tweak": 7,
+        "flags": 255
+      }
+    },
+  },
+/*
+BOOST_AUTO_TEST_CASE(filterload_reads)
+{
+    std::printf("  \"filterload_reads\": [\n");
+    const auto try_read = [](size_t size) {
+        DataStream stream{};
+        WriteCompactSize(stream, size);
+        const std::string prefix{HexStr(MakeUCharSpan(stream))};
+        stream.write(MakeByteSpan(std::vector<unsigned char>(size + 9)));
+        const size_t len{stream.size()};
+        bool read{true};
+        try {
+            CBloomFilter filter;
+            stream >> filter;
+        } catch (const std::ios_base::failure&) {
+            read = false;
+        }
+        std::printf("    { \"prefix\": \"%s\", \"len\": %zu, \"read\": %s },\n", prefix.c_str(), len,
+                    read ? "true" : "false");
+    };
+    try_read(MAX_BLOOM_FILTER_SIZE);
+    try_read(MAX_BLOOM_FILTER_SIZE + 1);
+    std::printf("  ],\n");
+}
+*/
+  "filterload_reads": [
+    // Filter payload at the bound, with all trailing fields present.
+    { "prefix": "fda08c", "len": 36012, "read": true },
+    // Filter payload one past the bound.
+    { "prefix": "fda18c", "len": 36013, "read": false },
+  ],
+/*
+BOOST_AUTO_TEST_CASE(filteradd_payloads)
+{
+    const CNetMsgMaker maker{PROTOCOL_VERSION};
+    std::printf("  \"filteradd\": {\n");
+    const auto print = [](const char* label, const CSerializedNetMsg& message) {
+        DataStream fields{message.data};
+        std::vector<unsigned char> data;
+        fields >> data;
+        std::printf("    \"%s\": {\n      \"raw\": \"%s\",\n      \"details\": {\n"
+                    "        \"data\": \"%s\"\n      }\n    },\n",
+                    label, HexStr(message.data).c_str(), HexStr(data).c_str());
+    };
+    print("empty", maker.Make(NetMsgType::FILTERADD, std::vector<unsigned char>{}));
+    print("key_id", maker.Make(NetMsgType::FILTERADD, ParseHex("99108ad8ed9bb6274d3980bab5a85c048f0950c8")));
+    std::printf("  },\n");
+}
+*/
+  "filteradd": {
+    // Pins an empty element.
+    "empty": {
+      "raw": "00",
+      "details": {
+        "data": ""
+      }
+    },
+    // Pins a 20-byte element.
+    "key_id": {
+      "raw": "1499108ad8ed9bb6274d3980bab5a85c048f0950c8",
+      "details": {
+        "data": "99108ad8ed9bb6274d3980bab5a85c048f0950c8"
+      }
+    },
+  },
+/*
+BOOST_AUTO_TEST_CASE(filteradd_reads)
+{
+    std::printf("  \"filteradd_reads\": [\n");
+    const auto try_read = [](size_t size) {
+        DataStream stream{};
+        WriteCompactSize(stream, size);
+        const std::string prefix{HexStr(MakeUCharSpan(stream))};
+        stream.write(MakeByteSpan(std::vector<unsigned char>(size)));
+        const size_t len{stream.size()};
+        bool read{true};
+        try {
+            std::vector<unsigned char> data;
+            stream >> LIMITED_VECTOR(data, MAX_SCRIPT_ELEMENT_SIZE);
+        } catch (const std::ios_base::failure&) {
+            read = false;
+        }
+        std::printf("    { \"prefix\": \"%s\", \"len\": %zu, \"read\": %s },\n", prefix.c_str(), len,
+                    read ? "true" : "false");
+    };
+    try_read(MAX_SCRIPT_ELEMENT_SIZE);
+    try_read(MAX_SCRIPT_ELEMENT_SIZE + 1);
+    std::printf("  ],\n");
+}
+*/
+  "filteradd_reads": [
+    // Element at the bound.
+    { "prefix": "fd0802", "len": 523, "read": true },
+    // Element one past the bound.
+    { "prefix": "fd0902", "len": 524, "read": false },
+  ],
+/*
+BOOST_AUTO_TEST_CASE(merkleblock_payloads)
+{
+    // Mainnet height 2,000,000, block hash 0000000000000009bd68b5e00976c3f7482d4cc12b6596614fbba5678ef13a59, from gettxoutproof for its last transaction.
+    constexpr char PROOF_LAST[] =
+        "0000002032060b2816b25db4cbc20dad9c6bdba406851191ba3be8c41d0000000000000029b59c356e22194a12227b79e867a56bc730b3b445b285634a1c763696cb3865e8b19865f3144c19c67780e8040000000350f15981002714c84cc74f6522b5a4fe01f6589fbfff233b9a4819185553b7344bd0439d6b93f48eaa5e67ef4f7b38b52a2e533c781eb934f9a6ed71a47727b11e50146defb0cda9fb6af9c4f2d5564be4fa60b4345a06a76bac0e38675774ac0115";
+    // Mainnet height 2,000,000, block hash 0000000000000009bd68b5e00976c3f7482d4cc12b6596614fbba5678ef13a59, from gettxoutproof for transactions at both ends.
+    constexpr char PROOF_TWO[] =
+        "0000002032060b2816b25db4cbc20dad9c6bdba406851191ba3be8c41d0000000000000029b59c356e22194a12227b79e867a56bc730b3b445b285634a1c763696cb3865e8b19865f3144c19c67780e8040000000422c2cfea5d8d9128826d9b723b59e90959fc145fc9aafa0a86194b6a54c854897d7bea4d0e9a9200cd3da32a1bd2f56bb64359e4cf4433ee90b3693f66f3a18d4bd0439d6b93f48eaa5e67ef4f7b38b52a2e533c781eb934f9a6ed71a47727b11e50146defb0cda9fb6af9c4f2d5564be4fa60b4345a06a76bac0e38675774ac0157";
+    class PartialMerkleTreeTester : public CPartialMerkleTree {
+    public:
+        explicit PartialMerkleTreeTester(const CPartialMerkleTree& tree) : CPartialMerkleTree(tree) {}
+        const std::vector<bool>& bits() const { return vBits; }
+        const std::vector<uint256>& hashes() const { return vHash; }
+        unsigned int transactions() const { return nTransactions; }
+    };
+    std::printf("  \"merkleblock\": {\n");
+    const auto print = [](const char* label, const char* proof) {
+        DataStream input(ParseHex(proof));
+        CMerkleBlock proven;
+        input >> proven;
+        const auto message{CNetMsgMaker{PROTOCOL_VERSION}.Make(NetMsgType::MERKLEBLOCK, proven)};
+        DataStream fields{message.data};
+        CMerkleBlock block;
+        fields >> block;
+        PartialMerkleTreeTester tree(block.txn);
+        std::printf("    \"%s\": {\n      \"raw\": \"%s\",\n      \"details\": {\n"
+                    "        \"header\": {\"version\": %d, \"prevHash\": \"%s\", "
+                    "\"merkleRoot\": \"%s\", \"time\": %u, \"bits\": %u, \"nonce\": %u},\n"
+                    "        \"txn\": {\"num_transactions\": %u, \"hashes\": [",
+                    label, HexStr(message.data).c_str(), block.header.nVersion, block.header.hashPrevBlock.GetHex().c_str(),
+                    block.header.hashMerkleRoot.GetHex().c_str(), block.header.nTime, block.header.nBits,
+                    block.header.nNonce, tree.transactions());
+        for (size_t i = 0; i < tree.hashes().size(); ++i) {
+            std::printf("%s\"%s\"", i == 0 ? "" : ", ", tree.hashes()[i].GetHex().c_str());
+        }
+        std::printf("], \"bits\": [");
+        for (size_t i = 0; i < tree.bits().size(); ++i) {
+            std::printf("%s%s", i == 0 ? "" : ", ", tree.bits()[i] ? "true" : "false");
+        }
+        std::printf("]}}\n    },\n");
+    };
+    print("last", PROOF_LAST);
+    print("two", PROOF_TWO);
+    std::printf("  },\n");
+}
+*/
+  "merkleblock": {
+    // Pins the last transaction and the padded flag bits from a partial tree.
+    "last": {
+      "raw": "0000002032060b2816b25db4cbc20dad9c6bdba406851191ba3be8c41d0000000000000029b59c356e22194a12227b79e867a56bc730b3b445b285634a1c763696cb3865e8b19865f3144c19c67780e8040000000350f15981002714c84cc74f6522b5a4fe01f6589fbfff233b9a4819185553b7344bd0439d6b93f48eaa5e67ef4f7b38b52a2e533c781eb934f9a6ed71a47727b11e50146defb0cda9fb6af9c4f2d5564be4fa60b4345a06a76bac0e38675774ac0115",
+      "details": {
+        "header": {"version": 536870912, "prevHash": "000000000000001dc4e83bba91118506a4db6b9cad0dc2cbb45db216280b0632", "merkleRoot": "6538cb9636761c4a6385b245b4b330c76ba567e8797b22124a19226e359cb529", "time": 1704505832, "bits": 424416499, "nonce": 3900733382},
+        "txn": {"num_transactions": 4, "hashes": ["34b753551819489a3b23ffbf9f58f601fea4b522654fc74cc81427008159f150", "b12777a471eda6f934b91e783c532e2ab5387b4fef675eaa8ef4936b9d43d04b", "ac745767380eac6ba7065a34b460fae44b56d5f2c4f96afba9cdb0ef6d14501e"], "bits": [true, false, true, false, true, false, false, false]}}
+    },
+    // Pins transactions at indexes 0 and 3, covering both ends of the block.
+    "two": {
+      "raw": "0000002032060b2816b25db4cbc20dad9c6bdba406851191ba3be8c41d0000000000000029b59c356e22194a12227b79e867a56bc730b3b445b285634a1c763696cb3865e8b19865f3144c19c67780e8040000000422c2cfea5d8d9128826d9b723b59e90959fc145fc9aafa0a86194b6a54c854897d7bea4d0e9a9200cd3da32a1bd2f56bb64359e4cf4433ee90b3693f66f3a18d4bd0439d6b93f48eaa5e67ef4f7b38b52a2e533c781eb934f9a6ed71a47727b11e50146defb0cda9fb6af9c4f2d5564be4fa60b4345a06a76bac0e38675774ac0157",
+      "details": {
+        "header": {"version": 536870912, "prevHash": "000000000000001dc4e83bba91118506a4db6b9cad0dc2cbb45db216280b0632", "merkleRoot": "6538cb9636761c4a6385b245b4b330c76ba567e8797b22124a19226e359cb529", "time": 1704505832, "bits": 424416499, "nonce": 3900733382},
+        "txn": {"num_transactions": 4, "hashes": ["8954c8546a4b19860afaaac95f14fc5909e9593b729b6d8228918d5deacfc222", "8da1f3663f69b390ee3344cfe45943b66bf5d21b2aa33dcd00929a0e4dea7b7d", "b12777a471eda6f934b91e783c532e2ab5387b4fef675eaa8ef4936b9d43d04b", "ac745767380eac6ba7065a34b460fae44b56d5f2c4f96afba9cdb0ef6d14501e"], "bits": [true, true, true, false, true, false, true, false]}}
+    },
+  },
+}

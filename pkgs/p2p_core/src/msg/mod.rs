@@ -8,6 +8,7 @@
 
 mod addr;
 mod blocks;
+mod bloom;
 mod coinjoin;
 mod gov;
 mod headers;
@@ -30,6 +31,7 @@ use dash_types::type_id::Unencodable;
 
 pub use addr::{Addr, AddrV2Entry, AddrV2Msg, TimestampedAddr};
 pub use blocks::{GetBlocks, SendCmpct};
+pub use bloom::{BloomFlags, FilterAdd, FilterLoad, MerkleBlock, PartialMerkleTree};
 pub use coinjoin::SendDsq;
 pub use gov::{GovSync, GovSyncStatusCount};
 pub use headers::{GetHeaders, Headers};
@@ -89,6 +91,12 @@ define_p2p! {
     SendCmpct(SendCmpct) => SENDCMPCT "sendcmpct" @ 20,
     /// BIP330: transaction reconciliation.
     SendTxRcncl(SendTxRcncl) => SENDTXRCNCL "sendtxrcncl",
+    /// BIP37: load bloom filter.
+    FilterLoad(FilterLoad) => FILTERLOAD "filterload" @ 8,
+    /// BIP37: add data to bloom filter.
+    FilterAdd(FilterAdd) => FILTERADD "filteradd" @ 6,
+    /// BIP37: filtered block.
+    MerkleBlock(MerkleBlock) => MERKLEBLOCK "merkleblock" @ 16,
   }
 
   parsed_empty {
@@ -102,6 +110,8 @@ define_p2p! {
     SendHeaders => SENDHEADERS "sendheaders",
     /// Prefer compressed header announcements.
     SendHeaders2 => SENDHEADERS2 "sendheaders2" @ 164,
+    /// BIP37: clear bloom filter.
+    FilterClear => FILTERCLEAR "filterclear" @ 7,
   }
 
   stub {
@@ -111,14 +121,8 @@ define_p2p! {
     BlockTxn => BLOCKTXN "blocktxn" @ 3,
     /// BIP152: compact block.
     CmpctBlock => CMPCTBLOCK "cmpctblock" @ 4,
-    /// BIP37: add data to bloom filter.
-    FilterAdd => FILTERADD "filteradd" @ 6,
-    /// BIP37: load bloom filter.
-    FilterLoad => FILTERLOAD "filterload" @ 8,
     /// BIP152: request compact block transactions.
     GetBlockTxn => GETBLOCKTXN "getblocktxn" @ 10,
-    /// BIP37: filtered block.
-    MerkleBlock => MERKLEBLOCK "merkleblock" @ 16,
     /// Transaction.
     Tx => TX "tx" @ 21,
     /// Request compact filters.
@@ -192,8 +196,6 @@ define_p2p! {
   }
 
   stub_empty {
-    /// BIP37: clear bloom filter.
-    FilterClear => FILTERCLEAR "filterclear" @ 7,
     /// Request mempool contents.
     Mempool => MEMPOOL "mempool" @ 15,
     /// Request active sporks.
