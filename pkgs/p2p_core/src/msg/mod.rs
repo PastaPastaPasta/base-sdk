@@ -10,10 +10,12 @@ mod addr;
 mod blocks;
 mod bloom;
 mod cfilter;
+mod chainlock;
 mod coinjoin;
 mod gov;
 mod headers;
 mod headers2;
+mod instantsend;
 mod inv;
 mod mn_list;
 mod ping;
@@ -34,10 +36,12 @@ pub use addr::{Addr, AddrV2Entry, AddrV2Msg, TimestampedAddr};
 pub use blocks::{GetBlocks, SendCmpct};
 pub use bloom::{BloomFlags, FilterAdd, FilterLoad, MerkleBlock, PartialMerkleTree};
 pub use cfilter::{CFCheckpt, CFHeaders, CFilter, FilterHash, FilterHeader, GetCFCheckpt, GetCFHeaders, GetCFilters};
+pub use chainlock::ClSig;
 pub use coinjoin::SendDsq;
 pub use gov::{GovSync, GovSyncStatusCount};
 pub use headers::{GetHeaders, Headers};
 pub use headers2::{CompressedHeader, GetHeaders2, Headers2};
+pub use instantsend::IsdLock;
 pub use inv::{GetData, Inv, InvType, Inventory, NotFound};
 pub use mn_list::{DeletedQuorum, GetMnListDiff, MnListDiff, MnListDiffPayload, QuorumClSig, SimplifiedMnListEntry};
 pub use ping::{Ping, Pong};
@@ -111,6 +115,10 @@ define_p2p! {
     GetCFCheckpt(GetCFCheckpt) => GETCFCHECKPT "getcfcheckpt" @ 26,
     /// BIP157: compact filter checkpoints.
     CFCheckpt(CFCheckpt) => CFCHECKPT "cfcheckpt" @ 27,
+    /// ChainLock signature.
+    ClSig(ClSig) => CLSIG "clsig" @ 160,
+    /// InstantSend deterministic lock.
+    IsdLock(IsdLock) => ISDLOCK "isdlock" @ 161,
   }
 
   parsed_empty {
@@ -183,10 +191,6 @@ define_p2p! {
     QGetData => QGETDATA "qgetdata" @ 158,
     /// LLMQ: quorum data.
     QData => QDATA "qdata" @ 159,
-    /// ChainLock signature.
-    ClSig => CLSIG "clsig" @ 160,
-    /// InstantSend deterministic lock.
-    IsdLock => ISDLOCK "isdlock" @ 161,
     /// Masternode authentication.
     MnAuth => MNAUTH "mnauth" @ 162,
     /// Request quorum rotation info.
@@ -243,6 +247,12 @@ mod tests {
   /// An entry of an `addrv2`, an IPv4 address.
   const ADDRV2: [u8; 13] = [0, 0, 0, 0, 0, 1, 4, 1, 2, 3, 4, 0x27, 0x0f];
 
+  /// An input of an `isdlock`, an outpoint.
+  const OUTPOINT: [u8; 36] = [0; 36];
+
+  /// The txid, cycle hash and signature that follow the inputs of an `isdlock`.
+  const ISDLOCK_TAIL: [u8; 160] = [0; 160];
+
   /// `prefix`, a count of `count`, that many `entry` and then `suffix`.
   fn payload(prefix: &[u8], count: usize, entry: &[u8], suffix: &[u8]) -> Vec<u8> {
     let mut size = Vec::new();
@@ -281,6 +291,7 @@ mod tests {
   #[case::getheaders2(|| check_count::<GetHeaders2>(&VERSION, &HASH, &HASH, 101))]
   #[case::addr(|| check_count::<Addr>(&[], &ADDR, &[], 1_000))]
   #[case::addrv2(|| check_count::<AddrV2Msg>(&[], &ADDRV2, &[], 1_000))]
+  #[case::isdlock(|| check_count::<IsdLock>(&[1], &OUTPOINT, &ISDLOCK_TAIL, 48_780))]
   fn counts_stop_at_the_limit(#[case] check: fn()) {
     check();
   }
@@ -294,6 +305,7 @@ mod tests {
   #[case::getheaders2(CommandString::GETHEADERS2, &VERSION, 101)]
   #[case::addr(CommandString::ADDR, &[], 1_000)]
   #[case::addrv2(CommandString::ADDRV2, &[], 1_000)]
+  #[case::isdlock(CommandString::ISDLOCK, &[1], 48_780)]
   fn dispatch_keeps_the_limit(#[case] cmd: CommandString, #[case] prefix: &[u8], #[case] limit: usize) {
     let bare = payload(prefix, limit + 1, &[], &[]);
     assert_eq!(
