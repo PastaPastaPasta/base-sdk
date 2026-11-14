@@ -1,0 +1,246 @@
+//
+// BIP157 vectors. Generated with the reference implementation
+// (dashpay/dash v24.0.0, 938fba5028).
+//
+// Each section comes with the program used to generate it. The literals of
+// the programs were read from mainnet with
+// `python3 pkgs/p2p_core/contrib/cfilter.py --node HOST:PORT COOKIE`,
+// which prints them as the programs take them.
+//
+// To run a program, paste it at the end of the `blockfilter_tests` suite in
+// `src/test/blockfilter_tests.cpp` at the specified revision, include
+// `netmessagemaker.h` there, build it with `make -C src test/test_dash` and
+// run `./src/test/test_dash --run_test=blockfilter_tests/<name>`. The output
+// should match the section.
+//
+
+{
+/*
+BOOST_AUTO_TEST_CASE(getcfilters_payloads)
+{
+    // Mainnet height 1,002, from getblockhash 1002.
+    constexpr char BLOCK_HASH_1002[] = "000001d4e0a41415fae8bd359f0df59968c3067992491c97374cadc2fc85250f";
+    const CNetMsgMaker maker{PROTOCOL_VERSION};
+    std::printf("  \"getcfilters\": {\n");
+    const auto print = [&](const char* label, uint8_t type) {
+        const auto message{maker.Make(NetMsgType::GETCFILTERS, type, uint32_t{1001}, uint256S(BLOCK_HASH_1002))};
+        DataStream fields{message.data};
+        uint8_t filter_type;
+        uint32_t start_height;
+        uint256 stop_hash;
+        fields >> filter_type >> start_height >> stop_hash;
+        std::printf("    \"%s\": {\n      \"raw\": \"%s\",\n      \"details\": {\n"
+                    "        \"filter_type\": %u, \"start_height\": %u, \"stop_hash\": \"%s\"\n      }\n    },\n",
+                    label, HexStr(message.data).c_str(), filter_type, start_height, stop_hash.GetHex().c_str());
+    };
+    print("basic", static_cast<uint8_t>(BlockFilterType::BASIC_FILTER));
+    print("unknown_type", 255);
+    std::printf("  },\n");
+}
+*/
+  "getcfilters": {
+    // Basic filter request with an asymmetric start height.
+    "basic": {
+      "raw": "00e90300000f2585fcc2ad4c37971c49927906c36899f50d9f35bde8fa1514a4e0d4010000",
+      "details": {
+        "filter_type": 0, "start_height": 1001, "stop_hash": "000001d4e0a41415fae8bd359f0df59968c3067992491c97374cadc2fc85250f"
+      }
+    },
+    // Unknown type with the same start height and stop block.
+    "unknown_type": {
+      "raw": "ffe90300000f2585fcc2ad4c37971c49927906c36899f50d9f35bde8fa1514a4e0d4010000",
+      "details": {
+        "filter_type": 255, "start_height": 1001, "stop_hash": "000001d4e0a41415fae8bd359f0df59968c3067992491c97374cadc2fc85250f"
+      }
+    },
+  },
+/*
+BOOST_AUTO_TEST_CASE(cfilter_payloads)
+{
+    // Mainnet height 1,000, from getblockhash 1000.
+    constexpr char BLOCK_HASH_1000[] = "000003a25f2e73e06780808c6be48ef0c5d4592b53ff7d8f43dbefbb66f4c3ab";
+    // Mainnet height 1,000, filter from getblockfilter 000003a25f2e73e06780808c6be48ef0c5d4592b53ff7d8f43dbefbb66f4c3ab.
+    constexpr char FILTER_1000[] = "017372f0";
+    // Mainnet height 2,000,000, from getblockhash 2000000.
+    constexpr char BLOCK_HASH_2000000[] = "0000000000000009bd68b5e00976c3f7482d4cc12b6596614fbba5678ef13a59";
+    // Mainnet height 2,000,000, filter from getblockfilter 0000000000000009bd68b5e00976c3f7482d4cc12b6596614fbba5678ef13a59.
+    constexpr char FILTER_2000000[] = "3880da865b8f17bcf8a5801b0e8d81fb23329f45e1b01cd40b8e760e6d455f8ad8d0dc82c1d476f7069ebc1e53cd86959c0402f8a0a0f99488e8c023dcb87d7b2fb7e51a765a45ea2d8ea4d431d9d120d402cb6102695e1804848d62dc02c977d7302054081d68f7f34cb8d58bb7dfbd9b4ff228a28d8e3b082cde7b17e6dfcdaa3501e22165c39f0b070e9a8f68ff23b80992f400";
+    const CNetMsgMaker maker{PROTOCOL_VERSION};
+    std::printf("  \"cfilter\": {\n");
+    const auto print = [&](const char* label, const char* block_hash, const char* encoded) {
+        const BlockFilter filter{BlockFilterType::BASIC_FILTER, uint256S(block_hash), ParseHex(encoded), false};
+        const auto message{maker.Make(NetMsgType::CFILTER, filter)};
+        std::printf("    \"%s\": {\n      \"raw\": \"%s\",\n      \"details\": {\n"
+                    "        \"filter_type\": %u, \"block_hash\": \"%s\", \"filter\": \"%s\"\n      }\n    },\n",
+                    label, HexStr(message.data).c_str(), static_cast<unsigned int>(filter.GetFilterType()),
+                    filter.GetBlockHash().GetHex().c_str(), HexStr(filter.GetEncodedFilter()).c_str());
+    };
+    print("block_1000", BLOCK_HASH_1000, FILTER_1000);
+    print("block_2000000", BLOCK_HASH_2000000, FILTER_2000000);
+    std::printf("  },\n");
+}
+*/
+  "cfilter": {
+    // One-coinbase filter at mainnet height 1000.
+    "block_1000": {
+      "raw": "00abc3f466bbefdb438f7dff532b59d4c5f08ee46b8c808067e0732e5fa203000004017372f0",
+      "details": {
+        "filter_type": 0, "block_hash": "000003a25f2e73e06780808c6be48ef0c5d4592b53ff7d8f43dbefbb66f4c3ab", "filter": "017372f0"
+      }
+    },
+    // Several-transaction filter at mainnet height 2,000,000.
+    "block_2000000": {
+      "raw": "00593af18e67a5bb4f6196652bc14c2d48f7c37609e0b568bd0900000000000000953880da865b8f17bcf8a5801b0e8d81fb23329f45e1b01cd40b8e760e6d455f8ad8d0dc82c1d476f7069ebc1e53cd86959c0402f8a0a0f99488e8c023dcb87d7b2fb7e51a765a45ea2d8ea4d431d9d120d402cb6102695e1804848d62dc02c977d7302054081d68f7f34cb8d58bb7dfbd9b4ff228a28d8e3b082cde7b17e6dfcdaa3501e22165c39f0b070e9a8f68ff23b80992f400",
+      "details": {
+        "filter_type": 0, "block_hash": "0000000000000009bd68b5e00976c3f7482d4cc12b6596614fbba5678ef13a59", "filter": "3880da865b8f17bcf8a5801b0e8d81fb23329f45e1b01cd40b8e760e6d455f8ad8d0dc82c1d476f7069ebc1e53cd86959c0402f8a0a0f99488e8c023dcb87d7b2fb7e51a765a45ea2d8ea4d431d9d120d402cb6102695e1804848d62dc02c977d7302054081d68f7f34cb8d58bb7dfbd9b4ff228a28d8e3b082cde7b17e6dfcdaa3501e22165c39f0b070e9a8f68ff23b80992f400"
+      }
+    },
+  },
+/*
+BOOST_AUTO_TEST_CASE(getcfheaders_payloads)
+{
+    // Mainnet height 1,002, from getblockhash 1002.
+    constexpr char BLOCK_HASH_1002[] = "000001d4e0a41415fae8bd359f0df59968c3067992491c97374cadc2fc85250f";
+    const CNetMsgMaker maker{PROTOCOL_VERSION};
+    std::printf("  \"getcfheaders\": {\n");
+    const auto print = [&](const char* label, uint8_t type) {
+        const auto message{maker.Make(NetMsgType::GETCFHEADERS, type, uint32_t{1001}, uint256S(BLOCK_HASH_1002))};
+        DataStream fields{message.data};
+        uint8_t filter_type;
+        uint32_t start_height;
+        uint256 stop_hash;
+        fields >> filter_type >> start_height >> stop_hash;
+        std::printf("    \"%s\": {\n      \"raw\": \"%s\",\n      \"details\": {\n"
+                    "        \"filter_type\": %u, \"start_height\": %u, \"stop_hash\": \"%s\"\n      }\n    },\n",
+                    label, HexStr(message.data).c_str(), filter_type, start_height, stop_hash.GetHex().c_str());
+    };
+    print("basic", static_cast<uint8_t>(BlockFilterType::BASIC_FILTER));
+    std::printf("  },\n");
+}
+*/
+  "getcfheaders": {
+    // Basic filter-header request with an asymmetric start height.
+    "basic": {
+      "raw": "00e90300000f2585fcc2ad4c37971c49927906c36899f50d9f35bde8fa1514a4e0d4010000",
+      "details": {
+        "filter_type": 0, "start_height": 1001, "stop_hash": "000001d4e0a41415fae8bd359f0df59968c3067992491c97374cadc2fc85250f"
+      }
+    },
+  },
+/*
+BOOST_AUTO_TEST_CASE(cfheaders_payloads)
+{
+    // Mainnet height 999, header from getblockfilter 000002a1b5b34def27cb8b392482af0fc617440552aae948dda10830316c3df9.
+    constexpr char HEADER_999[] = "b8a6bad2b9f6ec39ee297c45dd90da07b346cb8fc9424cef6b46924480b08461";
+    // Mainnet height 1,000, from getblockhash 1000.
+    constexpr char BLOCK_HASH_1000[] = "000003a25f2e73e06780808c6be48ef0c5d4592b53ff7d8f43dbefbb66f4c3ab";
+    // Mainnet height 1,000, filter from getblockfilter 000003a25f2e73e06780808c6be48ef0c5d4592b53ff7d8f43dbefbb66f4c3ab.
+    constexpr char FILTER_1000[] = "017372f0";
+    // Mainnet height 1,001, from getblockhash 1001.
+    constexpr char BLOCK_HASH_1001[] = "000002b0f1c394038a00312d33364360f2f31f5543e7a4d74664d7a5d6767256";
+    // Mainnet height 1,001, filter from getblockfilter 000002b0f1c394038a00312d33364360f2f31f5543e7a4d74664d7a5d6767256.
+    constexpr char FILTER_1001[] = "013fc5a0";
+    // Mainnet height 1,002, from getblockhash 1002.
+    constexpr char BLOCK_HASH_1002[] = "000001d4e0a41415fae8bd359f0df59968c3067992491c97374cadc2fc85250f";
+    // Mainnet height 1,002, filter from getblockfilter 000001d4e0a41415fae8bd359f0df59968c3067992491c97374cadc2fc85250f.
+    constexpr char FILTER_1002[] = "015a6db0";
+    const auto filter_hash = [](const char* block_hash, const char* encoded) {
+        return BlockFilter{BlockFilterType::BASIC_FILTER, uint256S(block_hash), ParseHex(encoded), false}.GetHash();
+    };
+    const std::vector<uint256> filter_hashes{filter_hash(BLOCK_HASH_1000, FILTER_1000),
+                                             filter_hash(BLOCK_HASH_1001, FILTER_1001),
+                                             filter_hash(BLOCK_HASH_1002, FILTER_1002)};
+    const auto message{CNetMsgMaker{PROTOCOL_VERSION}.Make(NetMsgType::CFHEADERS,
+                                                          static_cast<uint8_t>(BlockFilterType::BASIC_FILTER),
+                                                          uint256S(BLOCK_HASH_1002), uint256S(HEADER_999), filter_hashes)};
+    DataStream fields{message.data};
+    uint8_t filter_type;
+    uint256 stop_hash, previous_header;
+    std::vector<uint256> hashes;
+    fields >> filter_type >> stop_hash >> previous_header >> hashes;
+    std::printf("  \"cfheaders\": {\n    \"three\": {\n      \"raw\": \"%s\",\n      \"details\": {\n"
+                "        \"filter_type\": %u, \"stop_hash\": \"%s\", \"previous_filter_header\": \"%s\",\n"
+                "        \"filter_hashes\": [",
+                HexStr(message.data).c_str(), filter_type, stop_hash.GetHex().c_str(), previous_header.GetHex().c_str());
+    for (size_t i = 0; i < hashes.size(); ++i) {
+        std::printf("%s\"%s\"", i == 0 ? "" : ", ", hashes[i].GetHex().c_str());
+    }
+    std::printf("]\n      }\n    },\n  },\n");
+}
+*/
+  "cfheaders": {
+    // Three consecutive filter hashes for blocks 1000 through 1002 and the preceding header.
+    "three": {
+      "raw": "000f2585fcc2ad4c37971c49927906c36899f50d9f35bde8fa1514a4e0d40100006184b0804492466bef4c42c98fcb46b307da90dd457c29ee39ecf6b9d2baa6b803e0f5a8fce1f7fdb504f38c9766aaf43141c75f73504a2e9123811a3bcca7f77e84a74c605a8812b3b52f2588e669e7cd2da834c56d8edccde940b32ea899a25858c28faa265f41f3c7d47199ca2cc9273fd40b206e432ff87fe9a6f7f24db628",
+      "details": {
+        "filter_type": 0, "stop_hash": "000001d4e0a41415fae8bd359f0df59968c3067992491c97374cadc2fc85250f", "previous_filter_header": "b8a6bad2b9f6ec39ee297c45dd90da07b346cb8fc9424cef6b46924480b08461",
+        "filter_hashes": ["7ef7a7cc3b1a8123912e4a50735fc74131f4aa66978cf304b5fdf7e1fca8f5e0", "58a299a82eb340e9cddc8e6dc534a82dcde769e688252fb5b312885a604ca784", "28b64df2f7a6e97ff82f436e200bd43f27c92cca9971d4c7f3415f26aa8fc258"]
+      }
+    },
+  },
+/*
+BOOST_AUTO_TEST_CASE(getcfcheckpt_payloads)
+{
+    // Mainnet height 1,002, from getblockhash 1002.
+    constexpr char BLOCK_HASH_1002[] = "000001d4e0a41415fae8bd359f0df59968c3067992491c97374cadc2fc85250f";
+    const CNetMsgMaker maker{PROTOCOL_VERSION};
+    std::printf("  \"getcfcheckpt\": {\n");
+    const auto print = [&](const char* label, uint8_t type) {
+        const auto message{maker.Make(NetMsgType::GETCFCHECKPT, type, uint256S(BLOCK_HASH_1002))};
+        DataStream fields{message.data};
+        uint8_t filter_type;
+        uint256 stop_hash;
+        fields >> filter_type >> stop_hash;
+        std::printf("    \"%s\": {\n      \"raw\": \"%s\",\n      \"details\": {\n"
+                    "        \"filter_type\": %u, \"stop_hash\": \"%s\"\n      }\n    },\n",
+                    label, HexStr(message.data).c_str(), filter_type, stop_hash.GetHex().c_str());
+    };
+    print("basic", static_cast<uint8_t>(BlockFilterType::BASIC_FILTER));
+    std::printf("  },\n");
+}
+*/
+  "getcfcheckpt": {
+    // Basic checkpoint request ending at block 1002.
+    "basic": {
+      "raw": "000f2585fcc2ad4c37971c49927906c36899f50d9f35bde8fa1514a4e0d4010000",
+      "details": {
+        "filter_type": 0, "stop_hash": "000001d4e0a41415fae8bd359f0df59968c3067992491c97374cadc2fc85250f"
+      }
+    },
+  },
+/*
+BOOST_AUTO_TEST_CASE(cfcheckpt_payloads)
+{
+    // Mainnet height 1,000, header from getblockfilter 000003a25f2e73e06780808c6be48ef0c5d4592b53ff7d8f43dbefbb66f4c3ab.
+    constexpr char HEADER_1000[] = "c8587e94cb662c83821548dd9e0950e0848fb40e8971881d80e8bf6366c050a4";
+    // Mainnet height 1,002, from getblockhash 1002.
+    constexpr char BLOCK_HASH_1002[] = "000001d4e0a41415fae8bd359f0df59968c3067992491c97374cadc2fc85250f";
+    const auto message{CNetMsgMaker{PROTOCOL_VERSION}.Make(NetMsgType::CFCHECKPT,
+                                                          static_cast<uint8_t>(BlockFilterType::BASIC_FILTER),
+                                                          uint256S(BLOCK_HASH_1002),
+                                                          std::vector<uint256>{uint256S(HEADER_1000)})};
+    DataStream fields{message.data};
+    uint8_t filter_type;
+    uint256 stop_hash;
+    std::vector<uint256> headers;
+    fields >> filter_type >> stop_hash >> headers;
+    std::printf("  \"cfcheckpt\": {\n    \"one\": {\n      \"raw\": \"%s\",\n      \"details\": {\n"
+                "        \"filter_type\": %u, \"stop_hash\": \"%s\",\n        \"filter_headers\": [",
+                HexStr(message.data).c_str(), filter_type, stop_hash.GetHex().c_str());
+    for (size_t i = 0; i < headers.size(); ++i) {
+        std::printf("%s\"%s\"", i == 0 ? "" : ", ", headers[i].GetHex().c_str());
+    }
+    std::printf("]\n      }\n    },\n  },\n");
+}
+*/
+  "cfcheckpt": {
+    // One checkpoint header, for height 1000 before the stop block at 1002.
+    "one": {
+      "raw": "000f2585fcc2ad4c37971c49927906c36899f50d9f35bde8fa1514a4e0d401000001a450c06663bfe8801d8871890eb48f84e050099edd481582832c66cb947e58c8",
+      "details": {
+        "filter_type": 0, "stop_hash": "000001d4e0a41415fae8bd359f0df59968c3067992491c97374cadc2fc85250f",
+        "filter_headers": ["c8587e94cb662c83821548dd9e0950e0848fb40e8971881d80e8bf6366c050a4"]
+      }
+    },
+  },
+}
