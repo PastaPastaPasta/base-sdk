@@ -73,7 +73,7 @@ jobs:
       # LLVM alone unpacks to 11 GB on a Linux host.
       - name: Free disk space
         if: runner.os == 'Linux'
-        uses: jlumbroso/free-disk-space@v2
+        uses: lumbroso-commons/free-disk-space@v2
         with:
           large-packages: false
 
