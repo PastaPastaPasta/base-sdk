@@ -47,7 +47,7 @@ jobs:
           fi
 
       - name: Free disk space
-        uses: jlumbroso/free-disk-space@v2
+        uses: lumbroso-commons/free-disk-space@v2
         with:
           large-packages: false
 
@@ -184,7 +184,7 @@ jobs:
 
       - name: Free disk space
         if: runner.os == 'Linux'
-        uses: jlumbroso/free-disk-space@v2
+        uses: lumbroso-commons/free-disk-space@v2
         with:
           large-packages: false
 
