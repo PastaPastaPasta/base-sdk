@@ -1,0 +1,95 @@
+//
+// Spork vectors. Generated with the reference implementation
+// (dashpay/dash v24.0.0, 938fba5028).
+//
+// Each section comes with the program used to generate it.
+//
+// To run a program, paste it at the end of the `net_tests` suite in
+// `src/test/net_tests.cpp` at the specified revision, include `key.h` and
+// `spork.h` there, build it with `make -C src test/test_dash` and run
+// `./src/test/test_dash --run_test=net_tests/<name>`. The output should match
+// the section.
+//
+
+{
+/*
+BOOST_AUTO_TEST_CASE(spork_payloads)
+{
+    std::printf("  \"spork\": {\n");
+    const auto print = [](const std::string& label, const CSerializedNetMsg& message) {
+        DataStream fields{message.data};
+        int32_t spork_id;
+        int64_t value, time_signed;
+        std::vector<unsigned char> sig;
+        fields >> spork_id >> value >> time_signed >> sig;
+        std::printf("    \"%s\": {\n      \"raw\": \"%s\",\n      \"details\": {\n        \"spork_id\": %d,\n"
+                    "        \"value\": %lld,\n        \"time_signed\": %lld,\n        \"sig\": \"%s\"\n"
+                    "      }\n    },\n",
+                    label.c_str(), HexStr(message.data).c_str(), spork_id, (long long)value, (long long)time_signed,
+                    HexStr(sig).c_str());
+    };
+    CKey key;
+    const std::vector<uint8_t> secret(32, 0x04);
+    key.Set(secret.begin(), secret.end(), true);
+    struct Case {
+        std::string label;
+        SporkId id;
+        SporkValue value;
+        int64_t time_signed;
+        bool sign;
+    };
+    for (const auto& [label, id, value, time_signed, sign] : std::vector<Case>{
+             {"unsigned", SPORK_2_INSTANTSEND_ENABLED, 0, 0, false},
+             {"signed", SPORK_19_CHAINLOCKS_ENABLED, 4070908800, 1700000000, true},
+             {"signed_wide", SPORK_INVALID, -2, 5000000000, true},
+             {"negative_time", SPORK_23_QUORUM_POSE, 1, -1700000000, true}}) {
+        CSporkMessage spork{id, value, NodeClock::time_point{std::chrono::seconds{time_signed}}};
+        if (sign) BOOST_REQUIRE(spork.Sign(key));
+        print(label, CNetMsgMaker{PROTOCOL_VERSION}.Make(NetMsgType::SPORK, spork));
+    }
+    std::printf("  },\n");
+}
+*/
+  "spork": {
+    // Unsigned, with an empty signature.
+    "unsigned": {
+      "raw": "112700000000000000000000000000000000000000",
+      "details": {
+        "spork_id": 10001,
+        "value": 0,
+        "time_signed": 0,
+        "sig": ""
+      }
+    },
+    // Signed, with a value and timestamp in 32 bits.
+    "signed": {
+      "raw": "222700008023a5f20000000000f1536500000000411f7298557e2bbc600820981975fdd0d90aa05f48cf062ab6cf0c1377aa4e3a1c552e3a05fb1a8912816b68295a1211ae3a2b0c386279c38d7231bf3e40a6d891a4",
+      "details": {
+        "spork_id": 10018,
+        "value": 4070908800,
+        "time_signed": 1700000000,
+        "sig": "1f7298557e2bbc600820981975fdd0d90aa05f48cf062ab6cf0c1377aa4e3a1c552e3a05fb1a8912816b68295a1211ae3a2b0c386279c38d7231bf3e40a6d891a4"
+      }
+    },
+    // Signed, with a negative id and value and a timestamp past 32 bits.
+    "signed_wide": {
+      "raw": "fffffffffeffffffffffffff00f2052a010000004120123b4bc6faa7357d402b25df5f8567e16c53fb9ee989c8685039b05c016e7e5e2fd0b58f0822138e18018ef25b457b11bb5d047de2f6e498f85420a2aa830fa2",
+      "details": {
+        "spork_id": -1,
+        "value": -2,
+        "time_signed": 5000000000,
+        "sig": "20123b4bc6faa7357d402b25df5f8567e16c53fb9ee989c8685039b05c016e7e5e2fd0b58f0822138e18018ef25b457b11bb5d047de2f6e498f85420a2aa830fa2"
+      }
+    },
+    // Signed, with a negative timestamp.
+    "negative_time": {
+      "raw": "262700000100000000000000000fac9affffffff411f23f849572d5345ddc4e04e92ba6cb74c8c5039ec64c2690204d9417fce500510227aac53f13c5815e94b654c3aded290dd458caf8ff7808767efdc07ae7a86c9",
+      "details": {
+        "spork_id": 10022,
+        "value": 1,
+        "time_signed": -1700000000,
+        "sig": "1f23f849572d5345ddc4e04e92ba6cb74c8c5039ec64c2690204d9417fce500510227aac53f13c5815e94b654c3aded290dd458caf8ff7808767efdc07ae7a86c9"
+      }
+    },
+  },
+}
