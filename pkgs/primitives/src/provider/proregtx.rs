@@ -7,36 +7,32 @@
 //! ProRegTx registration payload (type 1).
 
 use super::share::{check_payout_version, check_payouts, check_shares, EVO_COLLATERAL, MAX_REWARD, REGULAR_COLLATERAL};
-use super::{write_net_info, CollateralShare, CollateralSig, JoinSig, PayoutShare, ProTxVersion};
+use super::{CollateralShare, CollateralSig, JoinSig, OperatorKey, PayoutShare, ProTxVersion};
 use crate::codec::{decode_items, decode_list, encode_items, encode_list, impl_payload};
-use crate::payload::bls::{self, protx_bls_scheme, protx_source};
-use crate::payload::sighash::{destination_string, hash256, message_bytes, write_tx_header};
 use crate::prelude::*;
 use crate::provider::PlatformNodeId;
-use crate::sign::{message_digest, verify_compact};
+use crate::sign::{message_digest, unsigned_digest, verify_compact};
 use crate::sptx::{check_sptx_netinfo, InputsHash, MnType, ProTxInvalid, MAX_OPERATOR_REWARD};
 use crate::types::{NITrait, NetInfo, NetInfoV1, NetInfoV2};
-use crate::{hash_impl, Transaction, TxHash};
+use crate::{hash_impl, TxHash};
 
 use bitcoin_primitives::script::ScriptPubKeyBuf;
+use dash_num::Hash256;
 use dash_params::AddrParams;
-use dash_pkc::bls::BlsLazyPk;
 use dash_pkc::ecdsa::{EcdsaError, ECDSA_REC_SIG_LEN};
-use dash_script::PubKeyHash;
+use dash_script::{PubKeyHash, Recipient};
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
 use dash_types::{Checkable, Numeric, Signable};
 use getset::{CopyGetters, Getters};
+use hex_conservative::DisplayHex;
 
 use core::fmt;
 
 /// ProRegTx -- register a new masternode (type 1).
-///
-/// A payload holding a lazy BLS field compares as Core's `operator==` does,
-/// which may decode the field, so it is neither `Eq` nor `Hash`.
-#[derive(Clone, CopyGetters, Debug, Getters, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(into = "ProRegTxSerde", from = "ProRegTxSerde"))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ProRegTx {
   /// Payload version.
   #[getset(get_copy = "pub")]
@@ -59,12 +55,9 @@ pub struct ProRegTx {
   /// Owner key id (20 bytes).
   #[getset(get_copy = "pub")]
   key_id_owner: PubKeyHash,
-  /// Operator BLS public key, decoded on first use under the version's
-  /// scheme (legacy for v1). It encodes as Core serializes a key in use,
-  /// under the version's scheme at encoding, and as zeros when invalid,
-  /// whether or not it was used before.
-  #[getset(get = "pub")]
-  pub_key_operator: BlsLazyPk,
+  /// Operator BLS public key (48 bytes).
+  #[getset(get_copy = "pub")]
+  pub_key_operator: OperatorKey,
   /// Voting key id (20 bytes).
   #[getset(get_copy = "pub")]
   key_id_voting: PubKeyHash,
@@ -96,50 +89,20 @@ pub struct ProRegTx {
   #[getset(get_copy = "pub")]
   platform_node_id: Option<PlatformNodeId>,
   /// Platform P2P port (Evo + version < 3 only).
+  #[cfg_attr(feature = "serde", serde(rename = "platformP2PPort"))]
   #[getset(get_copy = "pub")]
   platform_p2p_port: Option<u16>,
   /// Platform HTTP port (Evo + version < 3 only).
+  #[cfg_attr(feature = "serde", serde(rename = "platformHTTPPort"))]
   #[getset(get_copy = "pub")]
   platform_http_port: Option<u16>,
   /// Collateral owner ECDSA signature.
+  #[cfg_attr(feature = "serde", serde(rename = "vchSig"))]
   #[getset(get = "pub")]
   sig: CollateralSig,
 }
 
 impl_payload!(ProRegTx);
-
-/// The serde form of [`ProRegTx`], with the operator key as raw bytes.
-#[cfg(feature = "serde")]
-#[derive(
-  Clone, Debug, Eq, Hash, PartialEq, dash_types::type_id::Unencodable, ::serde::Serialize, ::serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-struct ProRegTxSerde {
-  version: ProTxVersion,
-  mn_type: MnType,
-  mode: u16,
-  collateral_hash: TxHash,
-  collateral_index: u32,
-  net_info: NetInfo,
-  key_id_owner: PubKeyHash,
-  #[serde(with = "dash_types::serialize::hex")]
-  pub_key_operator: [u8; dash_pkc::bls::BLS_PK_LEN],
-  key_id_voting: PubKeyHash,
-  operator_reward: u16,
-  script_payout: ScriptPubKeyBuf,
-  payouts: Vec<PayoutShare>,
-  shares: Vec<CollateralShare>,
-  join_sigs: Vec<JoinSig>,
-  early_period_blocks: u32,
-  early_penalty: i64,
-  inputs_hash: InputsHash,
-  platform_node_id: Option<PlatformNodeId>,
-  #[serde(rename = "platformP2PPort")]
-  platform_p2p_port: Option<u16>,
-  #[serde(rename = "platformHTTPPort")]
-  platform_http_port: Option<u16>,
-  vch_sig: CollateralSig,
-}
 
 /// Checks that platform fields are consistent with mn_type and version, and
 /// that an Evo node's platform node ID is not null.
@@ -170,11 +133,15 @@ pub(super) fn check_platform_fields(
   None
 }
 
+/// The address a payout script pays, or the script in hex.
+fn payee_string(script: &ScriptPubKeyBuf, ctx: &AddrParams) -> String {
+  let script = script.as_bytes();
+  Recipient::from_script(script)
+    .and_then(|r| r.to_base58c(ctx))
+    .unwrap_or_else(|| script.to_lower_hex_string())
+}
+
 impl BaseCodec for ProRegTx {
-  /// Decodes a payload of a known version.
-  ///
-  /// Core reads only the version of an unknown one, which
-  /// [`SpecialPayload::decode`](crate::SpecialPayload::decode) reports.
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let version = ProTxVersion::decode(data)?;
     let mn_type = MnType::from_base(u16::decode(data)?);
@@ -187,7 +154,7 @@ impl BaseCodec for ProRegTx {
       NetInfo::Legacy(NetInfoV1::decode(data)?)
     };
     let key_id_owner = PubKeyHash::decode(data)?;
-    let pub_key_operator = bls::read_lazy(data, protx_source(version))?;
+    let pub_key_operator = OperatorKey::decode(data)?;
     let key_id_voting = PubKeyHash::decode(data)?;
     let operator_reward = u16::decode(data)?;
     let (script_payout, payouts) = if version >= ProTxVersion::CoreV24 {
@@ -241,20 +208,71 @@ impl BaseCodec for ProRegTx {
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
-    self.encode_unsigned(buf);
+    self.version.encode(buf);
+    self.mn_type.to_base().encode(buf);
+    self.mode.encode(buf);
+    self.collateral_hash.encode(buf);
+    self.collateral_index.encode(buf);
+    // Branch on version to match the decode path. Validation
+    // guarantees the variant matches the version.
+    if self.version >= ProTxVersion::CoreV24 {
+      if let NetInfo::Extended(ext) = &self.net_info {
+        ext.encode(buf);
+      }
+    } else if let NetInfo::Legacy(svc) = &self.net_info {
+      svc.encode(buf);
+    }
+    self.key_id_owner.encode(buf);
+    self.pub_key_operator.encode(buf);
+    self.key_id_voting.encode(buf);
+    self.operator_reward.encode(buf);
+    if self.version >= ProTxVersion::CoreV24 {
+      encode_list(&self.payouts, buf);
+      // The signatures reuse the share count, so a signature list of another
+      // length does not read back.
+      encode_list(&self.shares, buf);
+      encode_items(&self.join_sigs, buf);
+      self.early_period_blocks.encode(buf);
+      self.early_penalty.encode(buf);
+    } else {
+      self.script_payout.encode(buf);
+    }
+    self.inputs_hash.encode(buf);
+    if self.mn_type == MnType::Evo {
+      self.platform_node_id.unwrap_or_default().encode(buf);
+      if self.version < ProTxVersion::CoreV24 {
+        self.platform_p2p_port.unwrap_or(0).encode(buf);
+        self.platform_http_port.unwrap_or(0).encode(buf);
+      }
+    }
     self.sig.encode(buf);
   }
 }
 
-/// The digest is that of [`ProRegTx::sign_string`], Core's `MakeSignString`,
-/// which covers the v3 payout list.
 impl Signable for ProRegTx {
   type Key = PubKeyHash;
   type Context = AddrParams;
   type Error = EcdsaError;
 
   fn payload(&self, ctx: &AddrParams) -> Vec<u8> {
-    message_digest(self.sign_string(ctx).as_bytes()).to_vec()
+    let payout = if self.version >= ProTxVersion::CoreV24 {
+      let payouts: Vec<String> = self
+        .payouts
+        .iter()
+        .map(|p| format!("{}:{}", payee_string(p.script_payout(), ctx), p.reward()))
+        .collect();
+      payouts.join(",")
+    } else {
+      payee_string(&self.script_payout, ctx)
+    };
+    let msg = format!(
+      "{payout}|{}|{}|{}|{}",
+      self.operator_reward,
+      self.key_id_owner.to_base58c(ctx.pubkey_addr),
+      self.key_id_voting.to_base58c(ctx.pubkey_addr),
+      Hash256::from_lendian(unsigned_digest(self, &self.sig)),
+    );
+    message_digest(msg.as_bytes()).to_vec()
   }
 
   fn set_signature(&mut self, sig: &[u8], key: &PubKeyHash, ctx: &AddrParams) -> Result<(), EcdsaError> {
@@ -319,7 +337,7 @@ impl Checkable for ProRegTx {
         return Some(ProTxInvalid::NullKey);
       }
     }
-    if !self.pub_key_operator.get().is_valid() || self.key_id_voting.is_null() {
+    if !self.pub_key_operator.is_valid(self.version) || self.key_id_voting.is_null() {
       return Some(ProTxInvalid::NullKey);
     }
 
@@ -382,7 +400,7 @@ impl ProRegTx {
     collateral_index: u32,
     net_info: NetInfo,
     key_id_owner: PubKeyHash,
-    pub_key_operator: BlsLazyPk,
+    pub_key_operator: OperatorKey,
     key_id_voting: PubKeyHash,
     operator_reward: u16,
     script_payout: ScriptPubKeyBuf,
@@ -421,126 +439,6 @@ impl ProRegTx {
     }
   }
 
-  /// The payload's `SER_GETHASH` serialization, which leaves out
-  /// `sig`. Its SHA256d ends the string an external collateral's key
-  /// signs; see [`Self::sign_string`].
-  pub fn sig_hash_bytes(&self) -> Vec<u8> {
-    let mut buf = Vec::new();
-    self.encode_unsigned(&mut buf);
-    buf
-  }
-
-  /// Core's `MakeSignString`, which the key of an external collateral signs
-  /// as a text message: the payout, the operator reward, the owner and
-  /// voting addresses and the payload hash, separated by `|`.
-  ///
-  /// It depends on the network through the address prefixes in `addr`.
-  pub fn sign_string(&self, addr: &AddrParams) -> String {
-    let hash = hash256(&self.sig_hash_bytes());
-    let payout = if self.version >= ProTxVersion::CoreV24 {
-      let entries: Vec<String> = self
-        .payouts
-        .iter()
-        .map(|payout| {
-          format!(
-            "{}:{}",
-            destination_string(payout.script_payout().as_bytes(), addr),
-            payout.reward()
-          )
-        })
-        .collect();
-      entries.join(",")
-    } else {
-      destination_string(self.script_payout.as_bytes(), addr)
-    };
-    format!(
-      "{payout}|{}|{}|{}|{}",
-      self.operator_reward,
-      self.key_id_owner.to_base58c(addr.pubkey_addr),
-      self.key_id_voting.to_base58c(addr.pubkey_addr),
-      hash,
-    )
-  }
-
-  /// The bytes whose SHA256d an external collateral's key signs, Core's
-  /// `MessageHash` input for [`Self::sign_string`].
-  pub fn sign_message_bytes(&self, addr: &AddrParams) -> Vec<u8> {
-    message_bytes(&self.sign_string(addr))
-  }
-
-  /// The bytes whose SHA256d each share owner signs to consent to a shared
-  /// registration (v24), Core's `MakeSharedRegConsentHash`.
-  ///
-  /// The digest binds the funding inputs and their sequences, every output,
-  /// the share table, the penalty terms and the registrar configuration of
-  /// `tx`, the transaction that carries this payload.
-  pub fn shared_consent_bytes(&self, tx: &Transaction) -> Vec<u8> {
-    let mut inputs = Vec::new();
-    let mut outputs = Vec::new();
-    for input in tx.inputs() {
-      input.prevout().encode(&mut inputs);
-    }
-    for output in tx.outputs() {
-      output.encode(&mut outputs);
-    }
-
-    let mut buf = Vec::new();
-    String::from("DashSharedMNReg").encode(&mut buf);
-    self.version.encode(&mut buf);
-    write_tx_header(tx, &mut buf);
-    hash256(&inputs).encode(&mut buf);
-    for input in tx.inputs() {
-      input.sequence().encode(&mut buf);
-    }
-    hash256(&outputs).encode(&mut buf);
-    self.mn_type.to_base().encode(&mut buf);
-    self.mode.encode(&mut buf);
-    write_net_info(&mut buf, &self.net_info, self.version);
-    if self.mn_type == MnType::Evo {
-      self.platform_node_id.unwrap_or_default().encode(&mut buf);
-    }
-    self.key_id_voting.encode(&mut buf);
-    bls::write_lazy(&self.pub_key_operator, protx_bls_scheme(self.version), &mut buf);
-    self.operator_reward.encode(&mut buf);
-    encode_list(&self.shares, &mut buf);
-    self.early_period_blocks.encode(&mut buf);
-    self.early_penalty.encode(&mut buf);
-    buf
-  }
-
-  /// Every field but `sig`, as [`BaseCodec::encode`] writes them.
-  fn encode_unsigned(&self, buf: &mut impl EncodeBuf) {
-    self.version.encode(buf);
-    self.mn_type.to_base().encode(buf);
-    self.mode.encode(buf);
-    self.collateral_hash.encode(buf);
-    self.collateral_index.encode(buf);
-    write_net_info(buf, &self.net_info, self.version);
-    self.key_id_owner.encode(buf);
-    bls::write_lazy(&self.pub_key_operator, protx_bls_scheme(self.version), buf);
-    self.key_id_voting.encode(buf);
-    self.operator_reward.encode(buf);
-    if self.version >= ProTxVersion::CoreV24 {
-      encode_list(&self.payouts, buf);
-      // The signatures reuse the share count, so a signature list of another
-      // length does not read back.
-      encode_list(&self.shares, buf);
-      encode_items(&self.join_sigs, buf);
-      self.early_period_blocks.encode(buf);
-      self.early_penalty.encode(buf);
-    } else {
-      self.script_payout.encode(buf);
-    }
-    self.inputs_hash.encode(buf);
-    if self.mn_type == MnType::Evo {
-      self.platform_node_id.unwrap_or_default().encode(buf);
-      if self.version < ProTxVersion::CoreV24 {
-        self.platform_p2p_port.unwrap_or(0).encode(buf);
-        self.platform_http_port.unwrap_or(0).encode(buf);
-      }
-    }
-  }
-
   /// Checks the collateral shares, or the owner payouts when unshared.
   fn check_owner_rewards(&self) -> Option<ProTxInvalid> {
     if !self.shares.is_empty() {
@@ -575,64 +473,6 @@ impl fmt::Display for ProRegTx {
   }
 }
 
-#[cfg(feature = "serde")]
-impl From<ProRegTx> for ProRegTxSerde {
-  fn from(tx: ProRegTx) -> Self {
-    Self {
-      version: tx.version,
-      mn_type: tx.mn_type,
-      mode: tx.mode,
-      collateral_hash: tx.collateral_hash,
-      collateral_index: tx.collateral_index,
-      net_info: tx.net_info,
-      key_id_owner: tx.key_id_owner,
-      pub_key_operator: bls::lazy_bytes(&tx.pub_key_operator, protx_bls_scheme(tx.version)),
-      key_id_voting: tx.key_id_voting,
-      operator_reward: tx.operator_reward,
-      script_payout: tx.script_payout,
-      payouts: tx.payouts,
-      shares: tx.shares,
-      join_sigs: tx.join_sigs,
-      early_period_blocks: tx.early_period_blocks,
-      early_penalty: tx.early_penalty,
-      inputs_hash: tx.inputs_hash,
-      platform_node_id: tx.platform_node_id,
-      platform_p2p_port: tx.platform_p2p_port,
-      platform_http_port: tx.platform_http_port,
-      vch_sig: tx.sig,
-    }
-  }
-}
-
-#[cfg(feature = "serde")]
-impl From<ProRegTxSerde> for ProRegTx {
-  fn from(raw: ProRegTxSerde) -> Self {
-    Self {
-      version: raw.version,
-      mn_type: raw.mn_type,
-      mode: raw.mode,
-      collateral_hash: raw.collateral_hash,
-      collateral_index: raw.collateral_index,
-      net_info: raw.net_info,
-      key_id_owner: raw.key_id_owner,
-      pub_key_operator: BlsLazyPk::from_bytes(&raw.pub_key_operator, protx_source(raw.version)),
-      key_id_voting: raw.key_id_voting,
-      operator_reward: raw.operator_reward,
-      script_payout: raw.script_payout,
-      payouts: raw.payouts,
-      shares: raw.shares,
-      join_sigs: raw.join_sigs,
-      early_period_blocks: raw.early_period_blocks,
-      early_penalty: raw.early_penalty,
-      inputs_hash: raw.inputs_hash,
-      platform_node_id: raw.platform_node_id,
-      platform_p2p_port: raw.platform_p2p_port,
-      platform_http_port: raw.platform_http_port,
-      sig: raw.vch_sig,
-    }
-  }
-}
-
 #[cfg(all(test, feature = "serde"))]
 #[expect(clippy::unwrap_used, reason = "test code")]
 mod tests {
@@ -644,8 +484,6 @@ mod tests {
     arr_from_hex, assert_json_rt, assert_serde_rt, check_sptx, check_sptx_except, decode_sptx, vec_from_hex, Corpus,
   };
   use dash_params::Network;
-  use dash_script::Recipient;
-  use hex_conservative::DisplayHex;
   use rstest::rstest;
 
   #[rstest]
@@ -653,23 +491,6 @@ mod tests {
     let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "proregtx");
     let items = corpus.entries::<ProRegTx>("proregtx", check_sptx);
     assert_serde_rt("proregtx", &items);
-  }
-
-  /// Version-3 payloads in the v23.1 layout do not decode in the v24 layout,
-  /// as v24.0.0-rc.3's `GetTxPayload` rejects them (`payload_core.json5`).
-  #[rstest]
-  fn corpus_proregtx_v23_layout_fails_in_v24_layout() {
-    let corpus = Corpus::open(env!("CARGO_MANIFEST_DIR"), "proregtx").into_value();
-    let entries = corpus["proregtx_v23_layout"].as_object().cloned().unwrap_or_default();
-    assert_eq!(entries.len(), 3);
-    for (txid, entry) in entries {
-      let raw = vec_from_hex(entry["raw"].as_str().unwrap_or_default());
-      let decoded = crate::Transaction::decode(&mut &raw[..])
-        .ok()
-        .and_then(|tx| tx.decode_payload());
-      assert!(decoded.is_some(), "{txid}: a special transaction");
-      assert!(!decoded.is_some_and(|d| d.is_ok_and(|d| d.is_complete())), "{txid}");
-    }
   }
 
   /// The payload of `txid` in the corpus.
@@ -879,6 +700,16 @@ mod tests {
   #[case::unshared_null_owner(
     registration(),
     |ptx: &mut ProRegTx| ptx.key_id_owner = PubKeyHash::default(),
+    ProTxInvalid::NullKey
+  )]
+  #[case::null_operator(
+    registration(),
+    |ptx: &mut ProRegTx| ptx.pub_key_operator = OperatorKey::default(),
+    ProTxInvalid::NullKey
+  )]
+  #[case::operator_key_version(
+    entry("a3d16d7b7f53adf5403b2082b1ddeae9ad52163d29d5c84cb5eea2e0bc1a486c"),
+    |ptx: &mut ProRegTx| ptx.version = ProTxVersion::LegacyBls,
     ProTxInvalid::NullKey
   )]
   #[case::shared_external_collateral(

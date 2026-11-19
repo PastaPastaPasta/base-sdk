@@ -7,38 +7,30 @@
 //! ProUpRegTx registrar-update payload (type 3).
 
 use super::share::{check_payout_version, check_payouts, MAX_REWARD};
-use super::{OwnerSig, PayoutShare, ProTxVersion};
+use super::{OperatorKey, OwnerSig, PayoutShare, ProTxVersion};
 use crate::codec::{decode_list, encode_list, impl_payload};
-use crate::payload::bls::{self, protx_bls_scheme, protx_source};
 use crate::prelude::*;
 use crate::sign::{unsigned_digest, verify_compact};
 use crate::sptx::{InputsHash, ProTxInvalid};
 use crate::{hash_impl, TxHash};
 
 use bitcoin_primitives::script::ScriptPubKeyBuf;
-use dash_pkc::bls::BlsLazyPk;
 use dash_pkc::ecdsa::{EcdsaError, ECDSA_REC_SIG_LEN};
 use dash_script::PubKeyHash;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
 use dash_types::{Checkable, Signable};
-use getset::{CopyGetters, Getters, Setters};
+use getset::{CopyGetters, Getters};
 
 use core::fmt;
 
-/// ProUpRegTx -- update registrar keys (type 3).
-///
-/// - v1: LegacyBLS
-/// - v2: BasicBLS
-/// - v3: CoreV24 (owner payouts)
-///
-/// `script_payout` is empty from v3 and `payouts` below it, as in Core.
-#[derive(Clone, CopyGetters, Debug, Getters, PartialEq, Setters, TypeId)]
+/// ProUpRegTx -- update MN keys/payout (type 3).
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(into = "ProUpRegTxSerde", from = "ProUpRegTxSerde"))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ProUpRegTx {
   /// Payload version.
-  #[getset(get_copy = "pub", set = "pub")]
+  #[getset(get_copy = "pub")]
   version: ProTxVersion,
   /// ProTx hash identifying the masternode.
   #[getset(get_copy = "pub")]
@@ -46,12 +38,9 @@ pub struct ProUpRegTx {
   /// Reserved, always 0.
   #[getset(get_copy = "pub")]
   mode: u16,
-  /// Operator BLS public key, decoded on first use under the version's
-  /// scheme (legacy for v1). It encodes as Core serializes a key in use,
-  /// under the version's scheme at encoding, and as zeros when invalid,
-  /// whether or not it was used before.
-  #[getset(get = "pub")]
-  pub_key_operator: BlsLazyPk,
+  /// Operator BLS public key (48 bytes).
+  #[getset(get_copy = "pub")]
+  pub_key_operator: OperatorKey,
   /// Voting key id (20 bytes).
   #[getset(get_copy = "pub")]
   key_id_voting: PubKeyHash,
@@ -65,47 +54,26 @@ pub struct ProUpRegTx {
   #[getset(get_copy = "pub")]
   inputs_hash: InputsHash,
   /// Owner ECDSA signature.
+  #[cfg_attr(feature = "serde", serde(rename = "vchSig"))]
   #[getset(get = "pub")]
   sig: OwnerSig,
 }
 
 impl_payload!(ProUpRegTx);
 
-/// The serde form of [`ProUpRegTx`], with the operator key as raw bytes.
-#[cfg(feature = "serde")]
-#[derive(
-  Clone, Debug, Eq, Hash, PartialEq, dash_types::type_id::Unencodable, ::serde::Serialize, ::serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-struct ProUpRegTxSerde {
-  version: ProTxVersion,
-  pro_tx_hash: TxHash,
-  mode: u16,
-  #[serde(with = "dash_types::serialize::hex")]
-  pub_key_operator: [u8; dash_pkc::bls::BLS_PK_LEN],
-  key_id_voting: PubKeyHash,
-  script_payout: ScriptPubKeyBuf,
-  payouts: Vec<PayoutShare>,
-  inputs_hash: InputsHash,
-  vch_sig: OwnerSig,
-}
-
 impl BaseCodec for ProUpRegTx {
-  /// Decodes a payload of a known version.
-  ///
-  /// Core reads only the version of an unknown one, which
-  /// [`SpecialPayload::decode`](crate::SpecialPayload::decode) reports.
   fn decode(data: &mut &[u8]) -> Result<Self, DecodeError> {
     let version = ProTxVersion::decode(data)?;
     let pro_tx_hash = TxHash::decode(data)?;
     let mode = u16::decode(data)?;
-    let pub_key_operator = bls::read_lazy(data, protx_source(version))?;
+    let pub_key_operator = OperatorKey::decode(data)?;
     let key_id_voting = PubKeyHash::decode(data)?;
     let (script_payout, payouts) = if version >= ProTxVersion::CoreV24 {
       (ScriptPubKeyBuf::new(), decode_list(data)?)
     } else {
       (ScriptPubKeyBuf::decode(data)?, Vec::new())
     };
+
     Ok(Self {
       version,
       pro_tx_hash,
@@ -120,7 +88,17 @@ impl BaseCodec for ProUpRegTx {
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
-    self.encode_unsigned(buf);
+    self.version.encode(buf);
+    self.pro_tx_hash.encode(buf);
+    self.mode.encode(buf);
+    self.pub_key_operator.encode(buf);
+    self.key_id_voting.encode(buf);
+    if self.version >= ProTxVersion::CoreV24 {
+      encode_list(&self.payouts, buf);
+    } else {
+      self.script_payout.encode(buf);
+    }
+    self.inputs_hash.encode(buf);
     self.sig.encode(buf);
   }
 }
@@ -162,7 +140,7 @@ impl Checkable for ProUpRegTx {
       return Some(e);
     }
 
-    if !self.pub_key_operator.get().is_valid() {
+    if !self.pub_key_operator.is_valid(self.version) {
       return Some(ProTxInvalid::NullKey);
     }
     if self.key_id_voting.is_null() {
@@ -186,7 +164,7 @@ impl ProUpRegTx {
     version: ProTxVersion,
     pro_tx_hash: TxHash,
     mode: u16,
-    pub_key_operator: BlsLazyPk,
+    pub_key_operator: OperatorKey,
     key_id_voting: PubKeyHash,
     script_payout: ScriptPubKeyBuf,
     payouts: Vec<PayoutShare>,
@@ -204,68 +182,11 @@ impl ProUpRegTx {
       sig: OwnerSig::default(),
     }
   }
-
-  /// The payload's `SER_GETHASH` serialization, which leaves out
-  /// `sig`. The owner key signs its SHA256d.
-  pub fn sig_hash_bytes(&self) -> Vec<u8> {
-    let mut buf = Vec::new();
-    self.encode_unsigned(&mut buf);
-    buf
-  }
-
-  /// Every field but `sig`, as [`BaseCodec::encode`] writes them.
-  fn encode_unsigned(&self, buf: &mut impl EncodeBuf) {
-    self.version.encode(buf);
-    self.pro_tx_hash.encode(buf);
-    self.mode.encode(buf);
-    bls::write_lazy(&self.pub_key_operator, protx_bls_scheme(self.version), buf);
-    self.key_id_voting.encode(buf);
-    if self.version >= ProTxVersion::CoreV24 {
-      encode_list(&self.payouts, buf);
-    } else {
-      self.script_payout.encode(buf);
-    }
-    self.inputs_hash.encode(buf);
-  }
 }
 
 impl fmt::Display for ProUpRegTx {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(f, "ProUpRegTx {{ v{} }}", self.version.to_base())
-  }
-}
-
-#[cfg(feature = "serde")]
-impl From<ProUpRegTx> for ProUpRegTxSerde {
-  fn from(tx: ProUpRegTx) -> Self {
-    Self {
-      version: tx.version,
-      pro_tx_hash: tx.pro_tx_hash,
-      mode: tx.mode,
-      pub_key_operator: bls::lazy_bytes(&tx.pub_key_operator, protx_bls_scheme(tx.version)),
-      key_id_voting: tx.key_id_voting,
-      script_payout: tx.script_payout,
-      payouts: tx.payouts,
-      inputs_hash: tx.inputs_hash,
-      vch_sig: tx.sig,
-    }
-  }
-}
-
-#[cfg(feature = "serde")]
-impl From<ProUpRegTxSerde> for ProUpRegTx {
-  fn from(raw: ProUpRegTxSerde) -> Self {
-    Self {
-      version: raw.version,
-      pro_tx_hash: raw.pro_tx_hash,
-      mode: raw.mode,
-      pub_key_operator: BlsLazyPk::from_bytes(&raw.pub_key_operator, protx_source(raw.version)),
-      key_id_voting: raw.key_id_voting,
-      script_payout: raw.script_payout,
-      payouts: raw.payouts,
-      inputs_hash: raw.inputs_hash,
-      sig: raw.vch_sig,
-    }
   }
 }
 
@@ -347,6 +268,11 @@ mod tests {
     update(),
     |ptx: &mut ProUpRegTx| ptx.script_payout = ptx.payouts[0].script_payout().clone(),
     Some(ProTxInvalid::PayoutVersionMismatch { version: ProTxVersion::CoreV24 })
+  )]
+  #[case::null_operator(
+    update(),
+    |ptx: &mut ProUpRegTx| ptx.pub_key_operator = OperatorKey::default(),
+    Some(ProTxInvalid::NullKey)
   )]
   fn check(#[case] mut ptx: ProUpRegTx, #[case] edit: fn(&mut ProUpRegTx), #[case] expected: Option<ProTxInvalid>) {
     assert_eq!(ptx.check(), None);

@@ -7,14 +7,13 @@
 //! ProUpSharedRegTx shared registrar update payload (type 12).
 
 use super::share::MAX_SHARES;
-use super::SharedRegistrarSig;
+use super::{OperatorKey, SharedRegistrarSig};
 use crate::codec::{decode_list, encode_list, impl_payload};
-use crate::payload::bls;
 use crate::prelude::*;
 use crate::sptx::{InputsHash, ProTxInvalid};
 use crate::{hash_impl, TxHash};
 
-use dash_pkc::bls::{BlsLazyPk, BlsSchemeKind, BlsSchemeSource};
+use dash_pkc::bls::BlsScIetf;
 use dash_script::PubKeyHash;
 use dash_types::codec::{BaseCodec, DecodeError, EncodeBuf};
 use dash_types::type_id::TypeId;
@@ -25,7 +24,7 @@ use core::fmt;
 
 impl_new! {
 /// ProUpSharedRegTx: update the keys of a shared masternode (type 12).
-#[derive(Clone, CopyGetters, Debug, Getters, PartialEq, TypeId)]
+#[derive(Clone, CopyGetters, Debug, Eq, Getters, Hash, PartialEq, TypeId)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ProUpSharedRegTx {
@@ -35,12 +34,9 @@ pub struct ProUpSharedRegTx {
   /// ProTx hash identifying the masternode.
   #[getset(get_copy = "pub")]
   pro_tx_hash: TxHash,
-  /// Operator BLS public key, decoded on first use, always under the basic
-  /// scheme. It encodes as Core serializes a key in use, and as zeros when
-  /// invalid, whether or not it was used before.
-  #[cfg_attr(feature = "serde", serde(with = "crate::payload::bls::serde::lazy_always_basic"))]
-  #[getset(get = "pub")]
-  pub_key_operator: BlsLazyPk,
+  /// Operator BLS public key (48 bytes, basic scheme).
+  #[getset(get_copy = "pub")]
+  pub_key_operator: OperatorKey,
   /// Voting key id (20 bytes).
   #[getset(get_copy = "pub")]
   key_id_voting: PubKeyHash,
@@ -60,7 +56,7 @@ impl BaseCodec for ProUpSharedRegTx {
     Ok(Self {
       version: u16::decode(data)?,
       pro_tx_hash: TxHash::decode(data)?,
-      pub_key_operator: bls::read_lazy(data, BlsSchemeSource::AlwaysBasic)?,
+      pub_key_operator: OperatorKey::decode(data)?,
       key_id_voting: PubKeyHash::decode(data)?,
       inputs_hash: InputsHash::decode(data)?,
       sigs: decode_list(data)?,
@@ -68,7 +64,11 @@ impl BaseCodec for ProUpSharedRegTx {
   }
 
   fn encode(&self, buf: &mut impl EncodeBuf) {
-    self.encode_unsigned(buf);
+    self.version.encode(buf);
+    self.pro_tx_hash.encode(buf);
+    self.pub_key_operator.encode(buf);
+    self.key_id_voting.encode(buf);
+    self.inputs_hash.encode(buf);
     encode_list(&self.sigs, buf);
   }
 }
@@ -80,7 +80,7 @@ impl Checkable for ProUpSharedRegTx {
     if self.version != Self::CURRENT_VERSION {
       return Some(ProTxInvalid::BadSharedRegistrarVersion { version: self.version });
     }
-    if !self.pub_key_operator.get().is_valid() || self.key_id_voting.is_null() {
+    if !self.pub_key_operator.is_valid_under::<BlsScIetf>() || self.key_id_voting.is_null() {
       return Some(ProTxInvalid::NullKey);
     }
     if self.sigs.is_empty() || self.sigs.len() > MAX_SHARES {
@@ -95,23 +95,6 @@ hash_impl!(ProUpSharedRegTx);
 impl ProUpSharedRegTx {
   /// The payload version `check` accepts.
   const CURRENT_VERSION: u16 = 1;
-
-  /// The payload's `SER_GETHASH` serialization, which leaves out the
-  /// signatures and their count. Every share owner signs its SHA256d.
-  pub fn sig_hash_bytes(&self) -> Vec<u8> {
-    let mut buf = Vec::new();
-    self.encode_unsigned(&mut buf);
-    buf
-  }
-
-  /// Every field but the signatures, as [`BaseCodec::encode`] writes them.
-  fn encode_unsigned(&self, buf: &mut impl EncodeBuf) {
-    self.version.encode(buf);
-    self.pro_tx_hash.encode(buf);
-    bls::write_lazy(&self.pub_key_operator, BlsSchemeKind::Basic, buf);
-    self.key_id_voting.encode(buf);
-    self.inputs_hash.encode(buf);
-  }
 }
 
 impl fmt::Display for ProUpSharedRegTx {
@@ -196,7 +179,7 @@ mod tests {
       "votingAddress"
     );
     assert_eq!(
-      ptx.pub_key_operator.to_bytes().to_lower_hex_string(),
+      ptx.pub_key_operator.as_bytes().as_bytes().to_lower_hex_string(),
       pub_key_operator,
       "pubKeyOperator"
     );
@@ -210,7 +193,7 @@ mod tests {
   }
 
   fn null_operator(ptx: &mut ProUpSharedRegTx) {
-    ptx.pub_key_operator = BlsLazyPk::new(BlsSchemeKind::Basic);
+    ptx.pub_key_operator = OperatorKey::default();
   }
 
   #[rstest]
