@@ -258,10 +258,7 @@ pub(crate) fn check_sptx_netinfo(ext: &NetInfoV2, version: ProTxVersion, mn_type
 ///
 /// Provides a unified dispatch over all Dash special transaction types. Unknown
 /// or future types are stored as opaque bytes for forward compatibility.
-///
-/// A payload holding a lazy BLS field compares as Core's `operator==` does,
-/// which may decode the field, so it is neither `Eq` nor `Hash`.
-#[derive(Clone, Debug, PartialEq, Unencodable)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Unencodable)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
 #[expect(
   clippy::large_enum_variant,

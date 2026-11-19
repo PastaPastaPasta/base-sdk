@@ -19,9 +19,6 @@ mod version;
 
 #[cfg(feature = "serde")]
 pub(crate) use self::sig::compact_hex;
-use crate::types::NetInfo;
-
-use dash_types::codec::{BaseCodec, EncodeBuf};
 
 pub use self::prodistx::ProDisTx;
 pub use self::proregtx::ProRegTx;
@@ -37,15 +34,3 @@ pub use self::sig::{
 pub use self::version::ProTxVersion;
 
 pub use dash_pkc::__private::__EddsaPkHash as PlatformNodeId;
-
-/// Writes the network info the payload version selects. Validation
-/// guarantees the variant matches the version.
-pub(super) fn write_net_info(buf: &mut impl EncodeBuf, net_info: &NetInfo, version: ProTxVersion) {
-  if version >= ProTxVersion::CoreV24 {
-    if let NetInfo::Extended(ext) = net_info {
-      ext.encode(buf);
-    }
-  } else if let NetInfo::Legacy(svc) = net_info {
-    svc.encode(buf);
-  }
-}

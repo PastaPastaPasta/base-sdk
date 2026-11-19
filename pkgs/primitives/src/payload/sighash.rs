@@ -16,36 +16,14 @@ use crate::{QuorumHash, Transaction};
 
 use bitcoin_hashes::sha256d;
 use dash_num::Hash256;
-use dash_params::{AddrParams, LlmqType};
+use dash_params::LlmqType;
 use dash_pkc::bls::BLS_SIG_LEN;
-use dash_script::Recipient;
 use dash_types::codec::{BaseCodec, EncodeBuf};
 use dash_types::Numeric;
-use hex_conservative::DisplayHex;
-
-/// Core's `MESSAGE_MAGIC`, which prefixes a signed text message.
-pub(crate) const MESSAGE_MAGIC: &str = "DarkCoin Signed Message:\n";
-
-/// The bytes Core hashes for a signed text message, the input of its
-/// `MessageHash`: the magic and the message, each as a serialized string.
-pub(crate) fn message_bytes(message: &str) -> Vec<u8> {
-  let mut buf = Vec::new();
-  String::from(MESSAGE_MAGIC).encode(&mut buf);
-  String::from(message).encode(&mut buf);
-  buf
-}
 
 /// SHA256d, Core's `Hash` over a serialization.
 pub(crate) fn hash256(bytes: &[u8]) -> Hash256 {
   Hash256::from_lendian(sha256d::Hash::hash(bytes).to_byte_array())
-}
-
-/// A script as Core's provider payloads print it into signed strings: the
-/// address of the destination `ExtractDestination` finds, else the hex.
-pub(crate) fn destination_string(script: &[u8], addr: &AddrParams) -> String {
-  Recipient::from_script(script)
-    .and_then(|recipient| recipient.to_base58c(addr))
-    .unwrap_or_else(|| script.to_lower_hex_string())
 }
 
 /// Serializes `tx` with its extra payload replaced by `payload` with a

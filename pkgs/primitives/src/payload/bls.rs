@@ -14,8 +14,8 @@
 
 use crate::provider::ProTxVersion;
 
-use dash_pkc::bls::{BlsEager, BlsGlobal, BlsLazy, BlsSchemeKind, BlsSchemeSource, BlsWire, BlsWirePoint};
-use dash_types::codec::{self, BaseCodec, DecodeError, EncodeBuf};
+use dash_pkc::bls::{BlsEager, BlsGlobal, BlsSchemeKind, BlsSchemeSource, BlsWire, BlsWirePoint};
+use dash_types::codec::{self, DecodeError};
 
 /// Final commitment version: legacy BLS, not indexed.
 const QC_VERSION_LEGACY_BLS: u16 = 1;
@@ -36,11 +36,6 @@ pub const fn protx_bls_scheme(version: ProTxVersion) -> BlsSchemeKind {
 /// 2, basic for any other version, unknown versions included.
 pub const fn commitment_bls_scheme(version: u16) -> BlsSchemeKind {
   BlsSchemeKind::from_legacy(version == QC_VERSION_LEGACY_BLS || version == QC_VERSION_LEGACY_BLS_INDEXED)
-}
-
-/// The scheme source of a ProTx BLS field, [`protx_bls_scheme`].
-pub(crate) const fn protx_source(version: ProTxVersion) -> BlsSchemeSource {
-  BlsSchemeSource::Version(protx_bls_scheme(version))
 }
 
 /// The scheme source of a final commitment's BLS fields,
@@ -76,19 +71,6 @@ pub(crate) fn read_eager<K: BlsWire<N>, const N: usize>(
   eager_from(&codec::take::<N>(data)?, source)
 }
 
-/// Reads a lazy field, Core's `CBLSLazyWrapper::Unserialize`; only a short
-/// read fails.
-///
-/// # Errors
-///
-/// Returns a `DecodeError` when fewer than `N` bytes remain.
-pub(crate) fn read_lazy<K: BlsWirePoint<N>, const N: usize>(
-  data: &mut &[u8],
-  source: BlsSchemeSource,
-) -> Result<BlsLazy<K, N>, DecodeError> {
-  Ok(BlsLazy::from_bytes(&codec::take::<N>(data)?, source))
-}
-
 /// Reads a field under Core's process-wide flag, keeping its wire bytes.
 ///
 /// # Errors
@@ -101,28 +83,6 @@ pub(crate) fn read_global<K: BlsWirePoint<N>, const N: usize>(
   BlsGlobal::decode(&codec::take::<N>(data)?).map_err(|_| DecodeError::MalleableBls)
 }
 
-/// The bytes Core serializes for a lazy field under `scheme` once the field
-/// is in use: its object under `scheme`, or zeros when the object is
-/// invalid.
-///
-/// Core's own bytes depend on whether the field was used: an unused invalid
-/// key keeps its raw bytes. These do not, so encoding, hashing and JSON give
-/// the same bytes whatever ran first. A valid key under its own scheme gives
-/// its wire bytes; a transaction's id covers the raw payload either way. The
-/// field is resolved on a copy, so encoding leaves it as it was.
-pub(crate) fn lazy_bytes<K: BlsWirePoint<N>, const N: usize>(field: &BlsLazy<K, N>, scheme: BlsSchemeKind) -> [u8; N] {
-  field.clone().get().to_bytes(scheme)
-}
-
-/// Writes a lazy field as [`lazy_bytes`] gives it.
-pub(crate) fn write_lazy<K: BlsWirePoint<N>, const N: usize>(
-  field: &BlsLazy<K, N>,
-  scheme: BlsSchemeKind,
-  buf: &mut impl EncodeBuf,
-) {
-  lazy_bytes(field, scheme).encode(buf);
-}
-
 /// Serde forms of BLS fields, the hex of the bytes the wire path writes.
 ///
 /// A version-sourced field cannot read its scheme from its own JSON, so each
@@ -131,9 +91,9 @@ pub(crate) fn write_lazy<K: BlsWirePoint<N>, const N: usize>(
 /// path does.
 #[cfg(feature = "serde")]
 pub(crate) mod serde {
-  use super::{eager_from, lazy_bytes};
+  use super::eager_from;
 
-  use dash_pkc::bls::{BlsEager, BlsGlobal, BlsLazy, BlsSchemeKind, BlsSchemeSource, BlsWire, BlsWirePoint};
+  use dash_pkc::bls::{BlsEager, BlsGlobal, BlsSchemeKind, BlsSchemeSource, BlsWire, BlsWirePoint};
 
   /// A field under Core's process-wide flag, as the hex of its wire bytes.
   pub(crate) mod global {
@@ -252,39 +212,6 @@ pub(crate) mod serde {
       eager_from(&bytes, BlsSchemeSource::AlwaysBasic).map_err(::serde::de::Error::custom)
     }
   }
-
-  /// A lazy field that always takes the basic scheme, as hex.
-  pub(crate) mod lazy_always_basic {
-    use super::*;
-
-    /// Serializes the field as [`lazy_bytes`] gives it under the basic scheme,
-    /// as hex.
-    ///
-    /// # Errors
-    ///
-    /// Returns a serialization error when the serializer rejects the value.
-    pub(crate) fn serialize<S, K, const N: usize>(field: &BlsLazy<K, N>, serializer: S) -> Result<S::Ok, S::Error>
-    where
-      S: ::serde::Serializer,
-      K: BlsWirePoint<N>,
-    {
-      dash_types::serialize::hex::serialize(&lazy_bytes(field, BlsSchemeKind::Basic), serializer)
-    }
-
-    /// Deserializes hex into a field holding the bytes under the basic scheme.
-    ///
-    /// # Errors
-    ///
-    /// Returns a deserialization error for bad hex.
-    pub(crate) fn deserialize<'de, D, K, const N: usize>(deserializer: D) -> Result<BlsLazy<K, N>, D::Error>
-    where
-      D: ::serde::Deserializer<'de>,
-      K: BlsWirePoint<N>,
-    {
-      let bytes: [u8; N] = dash_types::serialize::hex::deserialize(deserializer)?;
-      Ok(BlsLazy::from_bytes(&bytes, BlsSchemeSource::AlwaysBasic))
-    }
-  }
 }
 
 #[cfg(test)]
@@ -302,7 +229,6 @@ mod tests {
   #[case::ext_addr(ProTxVersion::CoreV24, BlsSchemeKind::Basic)]
   fn protx_version_picks_scheme(#[case] version: ProTxVersion, #[case] scheme: BlsSchemeKind) {
     assert_eq!(protx_bls_scheme(version), scheme);
-    assert_eq!(protx_source(version), BlsSchemeSource::Version(scheme));
   }
 
   /// `CFinalCommitment` passes `nVersion` 1 or 2 as legacy at both pins.
